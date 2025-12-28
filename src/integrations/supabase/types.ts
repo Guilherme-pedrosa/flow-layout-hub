@@ -14,6 +14,54 @@ export type Database = {
   }
   public: {
     Tables: {
+      audit_logs: {
+        Row: {
+          action: string
+          company_id: string
+          created_at: string
+          entity: string
+          entity_id: string | null
+          id: string
+          metadata_json: Json | null
+          user_id: string | null
+        }
+        Insert: {
+          action: string
+          company_id: string
+          created_at?: string
+          entity: string
+          entity_id?: string | null
+          id?: string
+          metadata_json?: Json | null
+          user_id?: string | null
+        }
+        Update: {
+          action?: string
+          company_id?: string
+          created_at?: string
+          entity?: string
+          entity_id?: string | null
+          id?: string
+          metadata_json?: Json | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "audit_logs_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "audit_logs_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       cliente_contatos: {
         Row: {
           cargo: string | null
@@ -225,12 +273,116 @@ export type Database = {
         }
         Relationships: []
       }
+      companies: {
+        Row: {
+          cnpj: string | null
+          created_at: string
+          id: string
+          name: string
+          timezone: string | null
+          updated_at: string
+        }
+        Insert: {
+          cnpj?: string | null
+          created_at?: string
+          id?: string
+          name: string
+          timezone?: string | null
+          updated_at?: string
+        }
+        Update: {
+          cnpj?: string | null
+          created_at?: string
+          id?: string
+          name?: string
+          timezone?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      system_settings: {
+        Row: {
+          company_id: string
+          id: string
+          key: string
+          updated_at: string
+          value_json: Json | null
+        }
+        Insert: {
+          company_id: string
+          id?: string
+          key: string
+          updated_at?: string
+          value_json?: Json | null
+        }
+        Update: {
+          company_id?: string
+          id?: string
+          key?: string
+          updated_at?: string
+          value_json?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "system_settings_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      users: {
+        Row: {
+          auth_id: string | null
+          company_id: string
+          created_at: string
+          email: string
+          id: string
+          is_active: boolean
+          name: string
+          role: Database["public"]["Enums"]["user_role"]
+          updated_at: string
+        }
+        Insert: {
+          auth_id?: string | null
+          company_id: string
+          created_at?: string
+          email: string
+          id?: string
+          is_active?: boolean
+          name: string
+          role?: Database["public"]["Enums"]["user_role"]
+          updated_at?: string
+        }
+        Update: {
+          auth_id?: string | null
+          company_id?: string
+          created_at?: string
+          email?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          role?: Database["public"]["Enums"]["user_role"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "users_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      get_user_company_id: { Args: never; Returns: string }
+      is_admin: { Args: never; Returns: boolean }
     }
     Enums: {
       cliente_status: "ativo" | "inativo" | "bloqueado"
@@ -241,6 +393,7 @@ export type Database = {
         | "mei"
       tipo_cliente_comercial: "avulso" | "contrato" | "grande_conta"
       tipo_pessoa: "PF" | "PJ"
+      user_role: "admin" | "financeiro" | "operador" | "tecnico"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -377,6 +530,7 @@ export const Constants = {
       ],
       tipo_cliente_comercial: ["avulso", "contrato", "grande_conta"],
       tipo_pessoa: ["PF", "PJ"],
+      user_role: ["admin", "financeiro", "operador", "tecnico"],
     },
   },
 } as const

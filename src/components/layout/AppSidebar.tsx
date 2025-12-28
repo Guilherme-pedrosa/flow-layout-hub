@@ -123,7 +123,7 @@ const menuGroups: { label: string; items: MenuItem[] }[] = [
     label: "Configurações",
     items: [
       { title: "Empresa", icon: Building, href: "/empresa" },
-      { title: "Permissões", icon: Shield, href: "/permissoes" },
+      { title: "Usuários", icon: Shield, href: "/permissoes" },
       { title: "Integrações", icon: Plug, href: "/integracoes" },
       { title: "Logs", icon: LogsIcon, href: "/logs" },
     ],

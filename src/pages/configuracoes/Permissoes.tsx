@@ -1,18 +1,15 @@
 import { PageHeader } from "@/components/shared";
+import { UsuariosList } from "@/components/configuracoes";
 
 const Permissoes = () => {
   return (
-    <div className="animate-fade-in">
+    <div className="space-y-6 animate-fade-in">
       <PageHeader
-        title="Permissões"
-        description="Controle de acessos e permissões"
-        breadcrumbs={[{ label: "Configurações" }, { label: "Permissões" }]}
+        title="Usuários e Permissões"
+        description="Gerencie usuários e controle de acessos"
+        breadcrumbs={[{ label: "Configurações" }, { label: "Usuários" }]}
       />
-      <div className="rounded-lg border border-dashed p-12 text-center">
-        <p className="text-muted-foreground">
-          Conteúdo da página de Permissões será implementado aqui
-        </p>
-      </div>
+      <UsuariosList />
     </div>
   );
 };

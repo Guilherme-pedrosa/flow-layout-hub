@@ -1,18 +1,15 @@
 import { PageHeader } from "@/components/shared";
+import { EmpresaForm } from "@/components/configuracoes";
 
 const Empresa = () => {
   return (
-    <div className="animate-fade-in">
+    <div className="space-y-6 animate-fade-in">
       <PageHeader
         title="Empresa"
         description="Dados da empresa"
         breadcrumbs={[{ label: "Configurações" }, { label: "Empresa" }]}
       />
-      <div className="rounded-lg border border-dashed p-12 text-center">
-        <p className="text-muted-foreground">
-          Conteúdo da página de Empresa será implementado aqui
-        </p>
-      </div>
+      <EmpresaForm />
     </div>
   );
 };
