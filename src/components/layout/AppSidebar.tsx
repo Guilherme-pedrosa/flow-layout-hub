@@ -49,7 +49,17 @@ interface AppSidebarProps {
   onToggle: () => void;
 }
 
-const menuGroups = [
+interface MenuItem {
+  title: string;
+  icon: React.ComponentType<{ className?: string }>;
+  href: string;
+  highlight?: boolean;
+  warning?: boolean;
+  badge?: number;
+  tooltip?: string;
+}
+
+const menuGroups: { label: string; items: MenuItem[] }[] = [
   {
     label: "Início",
     items: [
@@ -118,15 +128,6 @@ const menuGroups = [
   },
 ];
 
-interface MenuItem {
-  title: string;
-  icon: React.ComponentType<{ className?: string }>;
-  href: string;
-  highlight?: boolean;
-  warning?: boolean;
-  badge?: number;
-  tooltip?: string;
-}
 
 export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
   const renderMenuItem = (item: MenuItem) => {
