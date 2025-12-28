@@ -139,7 +139,7 @@ export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
             "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
             isActive && "bg-sidebar-primary text-sidebar-primary-foreground",
             item.highlight && !isActive && "text-primary font-semibold",
-            item.warning && !isActive && "text-orange-500",
+            item.warning && !isActive && "text-amber-400 font-semibold",
             collapsed && "justify-center px-2"
           )
         }
@@ -148,7 +148,7 @@ export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
         <item.icon className={cn(
           "h-5 w-5 shrink-0",
           item.highlight && "text-primary",
-          item.warning && "text-orange-500"
+          item.warning && "text-amber-400"
         )} />
         {!collapsed && (
           <span className="flex-1">{item.title}</span>
@@ -159,7 +159,7 @@ export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
           </Badge>
         )}
         {!collapsed && item.warning && (
-          <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-orange-500 text-orange-500 bg-orange-500/10">
+          <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-amber-400 text-amber-400 bg-amber-400/10">
             ⚠️
           </Badge>
         )}
