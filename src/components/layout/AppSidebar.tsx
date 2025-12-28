@@ -51,7 +51,7 @@ interface AppSidebarProps {
 
 interface MenuItem {
   title: string;
-  icon: React.ComponentType<{ className?: string }>;
+  icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>;
   href: string;
   highlight?: boolean;
   warning?: boolean;
@@ -131,26 +131,34 @@ const menuGroups: { label: string; items: MenuItem[] }[] = [
 
 export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
   const renderMenuItem = (item: MenuItem) => {
+    const isWarning = item.warning;
+    const isHighlight = item.highlight;
+    
     const content = (
       <NavLink
         to={item.href}
         className={({ isActive }) =>
           cn(
             "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
-            "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+            "hover:bg-sidebar-accent",
             isActive && "bg-sidebar-primary text-sidebar-primary-foreground",
-            item.highlight && !isActive && "text-emerald-400 font-semibold",
-            item.warning && !isActive && "text-amber-400 font-semibold",
+            !isActive && !isHighlight && !isWarning && "text-sidebar-foreground hover:text-sidebar-accent-foreground",
+            isHighlight && !isActive && "font-semibold",
+            isWarning && !isActive && "font-semibold",
             collapsed && "justify-center px-2"
           )
         }
         title={collapsed ? item.title : undefined}
+        style={!collapsed ? {
+          color: isWarning ? '#fbbf24' : isHighlight ? '#34d399' : undefined
+        } : undefined}
       >
-        <item.icon className={cn(
-          "h-5 w-5 shrink-0",
-          item.highlight && "text-emerald-400",
-          item.warning && "text-amber-400"
-        )} />
+        <item.icon 
+          className="h-5 w-5 shrink-0"
+          style={{
+            color: isWarning ? '#fbbf24' : isHighlight ? '#34d399' : undefined
+          }}
+        />
         {!collapsed && (
           <span className="flex-1">{item.title}</span>
         )}
@@ -159,8 +167,8 @@ export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
             {item.badge}
           </Badge>
         )}
-        {!collapsed && item.warning && (
-          <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-amber-400 text-amber-400 bg-amber-400/10">
+        {!collapsed && isWarning && (
+          <Badge variant="outline" className="text-[10px] px-1.5 py-0" style={{ borderColor: '#fbbf24', color: '#fbbf24', backgroundColor: 'rgba(251, 191, 36, 0.1)' }}>
             ⚠️
           </Badge>
         )}
