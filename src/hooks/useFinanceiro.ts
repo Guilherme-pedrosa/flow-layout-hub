@@ -41,6 +41,21 @@ export interface QuickCategory {
   cost_center?: CostCenter;
 }
 
+export interface BankAccount {
+  id: string;
+  company_id: string;
+  name: string;
+  bank_name: string | null;
+  agency: string | null;
+  account_number: string | null;
+  account_type: string;
+  initial_balance: number;
+  current_balance: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 // Helper para logar em audit_logs
 async function logAudit(action: string, entity: string, entityId: string, metadata: object) {
   try {
@@ -326,5 +341,88 @@ export function useQuickCategories() {
     createCategory,
     updateCategory,
     toggleCategoryStatus,
+  };
+}
+
+// Hook para Contas Bancárias
+export function useBankAccounts() {
+  const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  const fetchBankAccounts = useCallback(async () => {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('bank_accounts')
+        .select('*')
+        .order('name');
+
+      if (error) throw error;
+      setBankAccounts((data as BankAccount[]) || []);
+      return data as BankAccount[];
+    } catch (error) {
+      toast.error('Erro ao carregar contas bancárias');
+      console.error(error);
+      return [];
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const createBankAccount = useCallback(async (data: Omit<BankAccount, 'id' | 'created_at' | 'updated_at' | 'current_balance'>) => {
+    try {
+      const insertData = {
+        ...data,
+        current_balance: data.initial_balance,
+      };
+      
+      const { data: result, error } = await supabase
+        .from('bank_accounts')
+        .insert(insertData)
+        .select()
+        .single();
+
+      if (error) throw error;
+      
+      await logAudit('create', 'bank_accounts', result.id, { name: data.name, bank_name: data.bank_name });
+      toast.success('Conta bancária criada com sucesso');
+      return result as BankAccount;
+    } catch (error) {
+      toast.error('Erro ao criar conta bancária');
+      console.error(error);
+      return null;
+    }
+  }, []);
+
+  const updateBankAccount = useCallback(async (id: string, data: Partial<BankAccount>) => {
+    try {
+      const { error } = await supabase
+        .from('bank_accounts')
+        .update(data)
+        .eq('id', id);
+
+      if (error) throw error;
+      
+      await logAudit('update', 'bank_accounts', id, data);
+      toast.success('Conta bancária atualizada com sucesso');
+      return true;
+    } catch (error) {
+      toast.error('Erro ao atualizar conta bancária');
+      console.error(error);
+      return false;
+    }
+  }, []);
+
+  const toggleBankAccountStatus = useCallback(async (id: string, isActive: boolean) => {
+    return updateBankAccount(id, { is_active: isActive });
+  }, [updateBankAccount]);
+
+  return {
+    bankAccounts,
+    loading,
+    fetchBankAccounts,
+    createBankAccount,
+    updateBankAccount,
+    toggleBankAccountStatus,
   };
 }

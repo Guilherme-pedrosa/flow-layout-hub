@@ -62,6 +62,59 @@ export type Database = {
           },
         ]
       }
+      bank_accounts: {
+        Row: {
+          account_number: string | null
+          account_type: string | null
+          agency: string | null
+          bank_name: string | null
+          company_id: string
+          created_at: string
+          current_balance: number | null
+          id: string
+          initial_balance: number | null
+          is_active: boolean
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          account_number?: string | null
+          account_type?: string | null
+          agency?: string | null
+          bank_name?: string | null
+          company_id: string
+          created_at?: string
+          current_balance?: number | null
+          id?: string
+          initial_balance?: number | null
+          is_active?: boolean
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          account_number?: string | null
+          account_type?: string | null
+          agency?: string | null
+          bank_name?: string | null
+          company_id?: string
+          created_at?: string
+          current_balance?: number | null
+          id?: string
+          initial_balance?: number | null
+          is_active?: boolean
+          name?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bank_accounts_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       chart_of_accounts: {
         Row: {
           code: string
