@@ -1,20 +1,25 @@
 // Formatadores para campos do sistema
 
-export function formatCpfCnpj(value: string): string {
+export function formatCpfCnpj(value: string, tipoPessoa?: 'PF' | 'PJ'): string {
   const digits = value.replace(/\D/g, '');
   
-  if (digits.length <= 11) {
+  // Usa tipoPessoa se fornecido, senão decide pelo tamanho
+  const isCnpj = tipoPessoa === 'PJ' || (!tipoPessoa && digits.length > 11);
+  
+  if (!isCnpj) {
     // CPF: 000.000.000-00
     return digits
+      .slice(0, 11)
       .replace(/(\d{3})(\d)/, '$1.$2')
       .replace(/(\d{3})(\d)/, '$1.$2')
       .replace(/(\d{3})(\d{1,2})$/, '$1-$2');
   } else {
     // CNPJ: 00.000.000/0000-00
     return digits
-      .replace(/^(\d{2})(\d)/, '$1.$2')
-      .replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3')
-      .replace(/\.(\d{3})(\d)/, '.$1/$2')
+      .slice(0, 14)
+      .replace(/(\d{2})(\d)/, '$1.$2')
+      .replace(/(\d{2})\.(\d{3})(\d)/, '$1.$2.$3')
+      .replace(/(\d{3})(\d)/, '$1/$2')
       .replace(/(\d{4})(\d)/, '$1-$2');
   }
 }
