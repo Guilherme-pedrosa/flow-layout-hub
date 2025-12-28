@@ -28,6 +28,9 @@ import {
   FileText as LogsIcon,
   ChevronLeft,
   Menu,
+  BookOpen,
+  Target,
+  Tag,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -107,6 +110,9 @@ const menuGroups: { label: string; items: MenuItem[] }[] = [
       { title: "Caixa", icon: Wallet, href: "/caixa" },
       { title: "Bancos", icon: Landmark, href: "/bancos" },
       { title: "Conciliação", icon: PiggyBank, href: "/conciliacao" },
+      { title: "Plano de Contas", icon: BookOpen, href: "/plano-contas" },
+      { title: "Centros de Custo", icon: Target, href: "/centros-custo" },
+      { title: "Categorias Rápidas", icon: Tag, href: "/categorias-rapidas" },
     ],
   },
   {
