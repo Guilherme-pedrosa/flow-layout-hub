@@ -7,26 +7,46 @@ import { AppLayout } from "@/components/layout";
 
 // Pages
 import Dashboard from "./pages/Dashboard";
+import NotFound from "./pages/NotFound";
+
+// Operação
 import Vendas from "./pages/receber/Vendas";
-import Recebimentos from "./pages/receber/Recebimentos";
-import Clientes from "./pages/receber/Clientes";
-import Compras from "./pages/pagar/Compras";
-import Pagamentos from "./pages/pagar/Pagamentos";
-import Fornecedores from "./pages/pagar/Fornecedores";
-import Produtos from "./pages/estoque/Produtos";
-import Movimentacoes from "./pages/estoque/Movimentacoes";
+import Checkout from "./pages/operacao/Checkout";
 import OrdensServico from "./pages/servicos/OrdensServico";
-import Agenda from "./pages/servicos/Agenda";
-import NotasFiscais from "./pages/fiscal/NotasFiscais";
-import Impostos from "./pages/fiscal/Impostos";
+
+// Compras
+import Solicitacoes from "./pages/compras/Solicitacoes";
+import Aprovacoes from "./pages/compras/Aprovacoes";
+import NotasCompra from "./pages/compras/NotasCompra";
+
+// Estoque
+import Saldo from "./pages/estoque/Saldo";
+import Movimentacoes from "./pages/estoque/Movimentacoes";
+import Ajustes from "./pages/estoque/Ajustes";
+
+// Faturamento
+import FaturarOS from "./pages/faturamento/FaturarOS";
+
+// Financeiro
+import ContasReceber from "./pages/financeiro/ContasReceber";
+import ContasPagar from "./pages/financeiro/ContasPagar";
+import Renegociacoes from "./pages/financeiro/Renegociacoes";
 import Caixa from "./pages/financeiro/Caixa";
 import Bancos from "./pages/financeiro/Bancos";
 import Conciliacao from "./pages/financeiro/Conciliacao";
-import Relatorios from "./pages/financeiro/Relatorios";
+
+// Cadastros
+import Clientes from "./pages/cadastros/Clientes";
+import Produtos from "./pages/cadastros/Produtos";
+import Servicos from "./pages/cadastros/Servicos";
+import Fornecedores from "./pages/cadastros/Fornecedores";
+import Usuarios from "./pages/cadastros/Usuarios";
+
+// Configurações
 import Empresa from "./pages/configuracoes/Empresa";
-import Usuarios from "./pages/configuracoes/Usuarios";
 import Permissoes from "./pages/configuracoes/Permissoes";
-import NotFound from "./pages/NotFound";
+import Integracoes from "./pages/configuracoes/Integracoes";
+import Logs from "./pages/configuracoes/Logs";
 
 const queryClient = new QueryClient();
 
@@ -39,32 +59,45 @@ const App = () => (
         <Routes>
           <Route element={<AppLayout />}>
             <Route path="/" element={<Dashboard />} />
-            {/* Receber */}
+            
+            {/* Operação */}
             <Route path="/vendas" element={<Vendas />} />
-            <Route path="/recebimentos" element={<Recebimentos />} />
-            <Route path="/clientes" element={<Clientes />} />
-            {/* Pagar */}
-            <Route path="/compras" element={<Compras />} />
-            <Route path="/pagamentos" element={<Pagamentos />} />
-            <Route path="/fornecedores" element={<Fornecedores />} />
-            {/* Estoque */}
-            <Route path="/produtos" element={<Produtos />} />
-            <Route path="/movimentacoes" element={<Movimentacoes />} />
-            {/* Serviços */}
+            <Route path="/checkout" element={<Checkout />} />
             <Route path="/ordens-servico" element={<OrdensServico />} />
-            <Route path="/agenda" element={<Agenda />} />
-            {/* Fiscal */}
-            <Route path="/notas-fiscais" element={<NotasFiscais />} />
-            <Route path="/impostos" element={<Impostos />} />
+            
+            {/* Compras */}
+            <Route path="/solicitacoes" element={<Solicitacoes />} />
+            <Route path="/aprovacoes" element={<Aprovacoes />} />
+            <Route path="/notas-compra" element={<NotasCompra />} />
+            
+            {/* Estoque */}
+            <Route path="/saldo-estoque" element={<Saldo />} />
+            <Route path="/movimentacoes" element={<Movimentacoes />} />
+            <Route path="/ajustes" element={<Ajustes />} />
+            
+            {/* Faturamento */}
+            <Route path="/faturar-os" element={<FaturarOS />} />
+            
             {/* Financeiro */}
+            <Route path="/contas-receber" element={<ContasReceber />} />
+            <Route path="/contas-pagar" element={<ContasPagar />} />
+            <Route path="/renegociacoes" element={<Renegociacoes />} />
             <Route path="/caixa" element={<Caixa />} />
             <Route path="/bancos" element={<Bancos />} />
             <Route path="/conciliacao" element={<Conciliacao />} />
-            <Route path="/relatorios" element={<Relatorios />} />
+            
+            {/* Cadastros */}
+            <Route path="/clientes" element={<Clientes />} />
+            <Route path="/produtos" element={<Produtos />} />
+            <Route path="/servicos" element={<Servicos />} />
+            <Route path="/fornecedores" element={<Fornecedores />} />
+            <Route path="/usuarios" element={<Usuarios />} />
+            
             {/* Configurações */}
             <Route path="/empresa" element={<Empresa />} />
-            <Route path="/usuarios" element={<Usuarios />} />
             <Route path="/permissoes" element={<Permissoes />} />
+            <Route path="/integracoes" element={<Integracoes />} />
+            <Route path="/logs" element={<Logs />} />
           </Route>
           <Route path="*" element={<NotFound />} />
         </Routes>

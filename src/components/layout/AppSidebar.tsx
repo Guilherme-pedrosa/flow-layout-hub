@@ -1,37 +1,38 @@
 import { NavLink } from "react-router-dom";
 import {
   LayoutDashboard,
+  ShoppingCart,
+  CircleDollarSign,
+  ClipboardList,
+  FileText,
+  CheckSquare,
+  FileSpreadsheet,
+  Package,
+  ArrowRightLeft,
+  AlertTriangle,
+  Receipt,
   ArrowDownToLine,
   ArrowUpFromLine,
-  Package,
-  Wrench,
-  FileText,
+  RefreshCw,
   Wallet,
-  Settings,
-  ShoppingCart,
-  Receipt,
-  Users,
-  ShoppingBag,
-  CreditCard,
-  Building2,
-  Boxes,
-  ArrowRightLeft,
-  ClipboardList,
-  Calendar,
-  FileSpreadsheet,
-  Calculator,
   Landmark,
   PiggyBank,
-  BarChart3,
-  Building,
+  Users,
+  Boxes,
+  Wrench,
+  Building2,
   UserCog,
+  Building,
   Shield,
+  Plug,
+  FileText as LogsIcon,
   ChevronLeft,
   Menu,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Badge } from "@/components/ui/badge";
 import logoPontoAPonto from "@/assets/logo-ponto-a-ponto.png";
 
 interface AppSidebarProps {
@@ -41,63 +42,69 @@ interface AppSidebarProps {
 
 const menuGroups = [
   {
-    label: "Principal",
+    label: "Início",
     items: [
       { title: "Dashboard", icon: LayoutDashboard, href: "/" },
     ],
   },
   {
-    label: "Receber",
+    label: "Operação",
     items: [
       { title: "Vendas", icon: ShoppingCart, href: "/vendas" },
-      { title: "Recebimentos", icon: Receipt, href: "/recebimentos" },
-      { title: "Clientes", icon: Users, href: "/clientes" },
+      { title: "Checkout", icon: CircleDollarSign, href: "/checkout", highlight: true },
+      { title: "Ordens de Serviço", icon: ClipboardList, href: "/ordens-servico" },
     ],
   },
   {
-    label: "Pagar",
+    label: "Compras",
     items: [
-      { title: "Compras", icon: ShoppingBag, href: "/compras" },
-      { title: "Pagamentos", icon: CreditCard, href: "/pagamentos" },
-      { title: "Fornecedores", icon: Building2, href: "/fornecedores" },
+      { title: "Solicitações", icon: FileText, href: "/solicitacoes" },
+      { title: "Aprovações", icon: CheckSquare, href: "/aprovacoes" },
+      { title: "Notas de Compra", icon: FileSpreadsheet, href: "/notas-compra" },
     ],
   },
   {
     label: "Estoque",
     items: [
-      { title: "Produtos", icon: Boxes, href: "/produtos" },
+      { title: "Saldo", icon: Package, href: "/saldo-estoque" },
       { title: "Movimentações", icon: ArrowRightLeft, href: "/movimentacoes" },
+      { title: "Ajustes", icon: AlertTriangle, href: "/ajustes", warning: true },
     ],
   },
   {
-    label: "Serviços",
+    label: "Faturamento",
     items: [
-      { title: "Ordens de Serviço", icon: ClipboardList, href: "/ordens-servico" },
-      { title: "Agenda", icon: Calendar, href: "/agenda" },
-    ],
-  },
-  {
-    label: "Fiscal",
-    items: [
-      { title: "Notas Fiscais", icon: FileSpreadsheet, href: "/notas-fiscais" },
-      { title: "Impostos", icon: Calculator, href: "/impostos" },
+      { title: "Faturar OS", icon: Receipt, href: "/faturar-os", highlight: true },
     ],
   },
   {
     label: "Financeiro",
     items: [
+      { title: "Contas a Receber", icon: ArrowDownToLine, href: "/contas-receber" },
+      { title: "Contas a Pagar", icon: ArrowUpFromLine, href: "/contas-pagar" },
+      { title: "Renegociações", icon: RefreshCw, href: "/renegociacoes" },
       { title: "Caixa", icon: Wallet, href: "/caixa" },
       { title: "Bancos", icon: Landmark, href: "/bancos" },
       { title: "Conciliação", icon: PiggyBank, href: "/conciliacao" },
-      { title: "Relatórios", icon: BarChart3, href: "/relatorios" },
+    ],
+  },
+  {
+    label: "Cadastros",
+    items: [
+      { title: "Clientes", icon: Users, href: "/clientes" },
+      { title: "Produtos", icon: Boxes, href: "/produtos" },
+      { title: "Serviços", icon: Wrench, href: "/servicos" },
+      { title: "Fornecedores", icon: Building2, href: "/fornecedores" },
+      { title: "Usuários", icon: UserCog, href: "/usuarios" },
     ],
   },
   {
     label: "Configurações",
     items: [
       { title: "Empresa", icon: Building, href: "/empresa" },
-      { title: "Usuários", icon: UserCog, href: "/usuarios" },
       { title: "Permissões", icon: Shield, href: "/permissoes" },
+      { title: "Integrações", icon: Plug, href: "/integracoes" },
+      { title: "Logs", icon: LogsIcon, href: "/logs" },
     ],
   },
 ];
@@ -149,13 +156,26 @@ export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
                           "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
                           "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
                           isActive && "bg-sidebar-primary text-sidebar-primary-foreground",
+                          item.highlight && !isActive && "text-primary font-semibold",
+                          item.warning && !isActive && "text-destructive",
                           collapsed && "justify-center px-2"
                         )
                       }
                       title={collapsed ? item.title : undefined}
                     >
-                      <item.icon className="h-5 w-5 shrink-0" />
-                      {!collapsed && <span>{item.title}</span>}
+                      <item.icon className={cn(
+                        "h-5 w-5 shrink-0",
+                        item.highlight && "text-primary",
+                        item.warning && "text-destructive"
+                      )} />
+                      {!collapsed && (
+                        <span className="flex-1">{item.title}</span>
+                      )}
+                      {!collapsed && item.warning && (
+                        <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-destructive text-destructive">
+                          ⚠️
+                        </Badge>
+                      )}
                     </NavLink>
                   </li>
                 ))}
