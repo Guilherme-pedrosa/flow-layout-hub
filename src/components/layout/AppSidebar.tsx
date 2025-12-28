@@ -41,8 +41,10 @@ import {
 } from "@/components/ui/tooltip";
 import logoPontoAPonto from "@/assets/logo-ponto-a-ponto.png";
 
-// Mock: número de vendas pendentes no checkout (substituir por estado real depois)
+// Mock: pendências (substituir por estado real depois)
 const checkoutPendingCount = 3;
+const aprovacoesPendingCount = 5;
+const faturarOsPendingCount = 2;
 
 interface AppSidebarProps {
   collapsed: boolean;
@@ -78,7 +80,7 @@ const menuGroups: { label: string; items: MenuItem[] }[] = [
     label: "Compras",
     items: [
       { title: "Solicitações", icon: FileText, href: "/solicitacoes" },
-      { title: "Aprovações", icon: CheckSquare, href: "/aprovacoes" },
+      { title: "Aprovações", icon: CheckSquare, href: "/aprovacoes", highlight: true, badge: aprovacoesPendingCount },
       { title: "Notas de Compra", icon: FileSpreadsheet, href: "/notas-compra" },
     ],
   },
@@ -93,7 +95,7 @@ const menuGroups: { label: string; items: MenuItem[] }[] = [
   {
     label: "Faturamento",
     items: [
-      { title: "Faturar OS", icon: Receipt, href: "/faturar-os", highlight: true },
+      { title: "Faturar OS", icon: Receipt, href: "/faturar-os", highlight: true, badge: faturarOsPendingCount },
     ],
   },
   {
