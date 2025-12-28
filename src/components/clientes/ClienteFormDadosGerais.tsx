@@ -100,7 +100,7 @@ export function ClienteFormDadosGerais({ formData, setFormData, duplicateWarning
           <div className="flex gap-2">
             <Input
               id="cpf_cnpj"
-              value={formatCpfCnpj(formData.cpf_cnpj || '')}
+              value={formatCpfCnpj(formData.cpf_cnpj || '', formData.tipo_pessoa)}
               onChange={(e) => handleChange('cpf_cnpj', e.target.value.replace(/\D/g, ''))}
               placeholder={formData.tipo_pessoa === 'PJ' ? '00.000.000/0000-00' : '000.000.000-00'}
               maxLength={formData.tipo_pessoa === 'PJ' ? 18 : 14}
