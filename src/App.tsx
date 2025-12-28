@@ -34,6 +34,9 @@ import Renegociacoes from "./pages/financeiro/Renegociacoes";
 import Caixa from "./pages/financeiro/Caixa";
 import Bancos from "./pages/financeiro/Bancos";
 import Conciliacao from "./pages/financeiro/Conciliacao";
+import PlanoContas from "./pages/financeiro/PlanoContas";
+import CentrosCusto from "./pages/financeiro/CentrosCusto";
+import CategoriasRapidas from "./pages/financeiro/CategoriasRapidas";
 
 // Cadastros
 import Clientes from "./pages/cadastros/Clientes";
@@ -85,6 +88,9 @@ const App = () => (
             <Route path="/caixa" element={<Caixa />} />
             <Route path="/bancos" element={<Bancos />} />
             <Route path="/conciliacao" element={<Conciliacao />} />
+            <Route path="/plano-contas" element={<PlanoContas />} />
+            <Route path="/centros-custo" element={<CentrosCusto />} />
+            <Route path="/categorias-rapidas" element={<CategoriasRapidas />} />
             
             {/* Cadastros */}
             <Route path="/clientes" element={<Clientes />} />
