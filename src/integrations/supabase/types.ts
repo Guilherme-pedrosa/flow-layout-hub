@@ -14,7 +14,217 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      cliente_contatos: {
+        Row: {
+          cargo: string | null
+          cliente_id: string
+          created_at: string
+          email: string | null
+          id: string
+          nome: string | null
+          principal: boolean | null
+          telefone: string | null
+          updated_at: string
+        }
+        Insert: {
+          cargo?: string | null
+          cliente_id: string
+          created_at?: string
+          email?: string | null
+          id?: string
+          nome?: string | null
+          principal?: boolean | null
+          telefone?: string | null
+          updated_at?: string
+        }
+        Update: {
+          cargo?: string | null
+          cliente_id?: string
+          created_at?: string
+          email?: string | null
+          id?: string
+          nome?: string | null
+          principal?: boolean | null
+          telefone?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cliente_contatos_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cliente_historico: {
+        Row: {
+          campo_alterado: string
+          cliente_id: string
+          created_at: string
+          id: string
+          usuario_id: string | null
+          valor_anterior: string | null
+          valor_novo: string | null
+        }
+        Insert: {
+          campo_alterado: string
+          cliente_id: string
+          created_at?: string
+          id?: string
+          usuario_id?: string | null
+          valor_anterior?: string | null
+          valor_novo?: string | null
+        }
+        Update: {
+          campo_alterado?: string
+          cliente_id?: string
+          created_at?: string
+          id?: string
+          usuario_id?: string | null
+          valor_anterior?: string | null
+          valor_novo?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cliente_historico_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      clientes: {
+        Row: {
+          bairro: string | null
+          cep: string | null
+          cidade: string | null
+          cnae_principal: string | null
+          complemento: string | null
+          condicao_pagamento: string | null
+          contribuinte_icms: boolean | null
+          cpf_cnpj: string | null
+          created_at: string
+          created_by: string | null
+          data_abertura: string | null
+          email: string | null
+          estado: string | null
+          id: string
+          inscricao_estadual: string | null
+          inscricao_municipal: string | null
+          limite_credito: number | null
+          logradouro: string | null
+          nome_fantasia: string | null
+          numero: string | null
+          observacoes_comerciais: string | null
+          observacoes_fiscais: string | null
+          observacoes_internas: string | null
+          razao_social: string | null
+          regime_tributario:
+            | Database["public"]["Enums"]["regime_tributario"]
+            | null
+          responsavel_comercial: string | null
+          responsavel_tecnico: string | null
+          retencao_impostos: boolean | null
+          situacao_cadastral: string | null
+          sla_padrao: string | null
+          status: Database["public"]["Enums"]["cliente_status"]
+          telefone: string | null
+          tipo_cliente:
+            | Database["public"]["Enums"]["tipo_cliente_comercial"]
+            | null
+          tipo_pessoa: Database["public"]["Enums"]["tipo_pessoa"]
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          bairro?: string | null
+          cep?: string | null
+          cidade?: string | null
+          cnae_principal?: string | null
+          complemento?: string | null
+          condicao_pagamento?: string | null
+          contribuinte_icms?: boolean | null
+          cpf_cnpj?: string | null
+          created_at?: string
+          created_by?: string | null
+          data_abertura?: string | null
+          email?: string | null
+          estado?: string | null
+          id?: string
+          inscricao_estadual?: string | null
+          inscricao_municipal?: string | null
+          limite_credito?: number | null
+          logradouro?: string | null
+          nome_fantasia?: string | null
+          numero?: string | null
+          observacoes_comerciais?: string | null
+          observacoes_fiscais?: string | null
+          observacoes_internas?: string | null
+          razao_social?: string | null
+          regime_tributario?:
+            | Database["public"]["Enums"]["regime_tributario"]
+            | null
+          responsavel_comercial?: string | null
+          responsavel_tecnico?: string | null
+          retencao_impostos?: boolean | null
+          situacao_cadastral?: string | null
+          sla_padrao?: string | null
+          status?: Database["public"]["Enums"]["cliente_status"]
+          telefone?: string | null
+          tipo_cliente?:
+            | Database["public"]["Enums"]["tipo_cliente_comercial"]
+            | null
+          tipo_pessoa?: Database["public"]["Enums"]["tipo_pessoa"]
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          bairro?: string | null
+          cep?: string | null
+          cidade?: string | null
+          cnae_principal?: string | null
+          complemento?: string | null
+          condicao_pagamento?: string | null
+          contribuinte_icms?: boolean | null
+          cpf_cnpj?: string | null
+          created_at?: string
+          created_by?: string | null
+          data_abertura?: string | null
+          email?: string | null
+          estado?: string | null
+          id?: string
+          inscricao_estadual?: string | null
+          inscricao_municipal?: string | null
+          limite_credito?: number | null
+          logradouro?: string | null
+          nome_fantasia?: string | null
+          numero?: string | null
+          observacoes_comerciais?: string | null
+          observacoes_fiscais?: string | null
+          observacoes_internas?: string | null
+          razao_social?: string | null
+          regime_tributario?:
+            | Database["public"]["Enums"]["regime_tributario"]
+            | null
+          responsavel_comercial?: string | null
+          responsavel_tecnico?: string | null
+          retencao_impostos?: boolean | null
+          situacao_cadastral?: string | null
+          sla_padrao?: string | null
+          status?: Database["public"]["Enums"]["cliente_status"]
+          telefone?: string | null
+          tipo_cliente?:
+            | Database["public"]["Enums"]["tipo_cliente_comercial"]
+            | null
+          tipo_pessoa?: Database["public"]["Enums"]["tipo_pessoa"]
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -23,7 +233,14 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
-      [_ in never]: never
+      cliente_status: "ativo" | "inativo" | "bloqueado"
+      regime_tributario:
+        | "simples_nacional"
+        | "lucro_presumido"
+        | "lucro_real"
+        | "mei"
+      tipo_cliente_comercial: "avulso" | "contrato" | "grande_conta"
+      tipo_pessoa: "PF" | "PJ"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +367,16 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      cliente_status: ["ativo", "inativo", "bloqueado"],
+      regime_tributario: [
+        "simples_nacional",
+        "lucro_presumido",
+        "lucro_real",
+        "mei",
+      ],
+      tipo_cliente_comercial: ["avulso", "contrato", "grande_conta"],
+      tipo_pessoa: ["PF", "PJ"],
+    },
   },
 } as const
