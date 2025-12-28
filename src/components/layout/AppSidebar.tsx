@@ -33,7 +33,16 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import logoPontoAPonto from "@/assets/logo-ponto-a-ponto.png";
+
+// Mock: número de vendas pendentes no checkout (substituir por estado real depois)
+const checkoutPendingCount = 3;
 
 interface AppSidebarProps {
   collapsed: boolean;
@@ -51,7 +60,7 @@ const menuGroups = [
     label: "Operação",
     items: [
       { title: "Vendas", icon: ShoppingCart, href: "/vendas" },
-      { title: "Checkout", icon: CircleDollarSign, href: "/checkout", highlight: true },
+      { title: "Checkout", icon: CircleDollarSign, href: "/checkout", highlight: true, badge: checkoutPendingCount },
       { title: "Ordens de Serviço", icon: ClipboardList, href: "/ordens-servico" },
     ],
   },
@@ -68,7 +77,7 @@ const menuGroups = [
     items: [
       { title: "Saldo", icon: Package, href: "/saldo-estoque" },
       { title: "Movimentações", icon: ArrowRightLeft, href: "/movimentacoes" },
-      { title: "Ajustes", icon: AlertTriangle, href: "/ajustes", warning: true },
+      { title: "Ajustes", icon: AlertTriangle, href: "/ajustes", warning: true, tooltip: "Ajustes de estoque são auditados" },
     ],
   },
   {
@@ -109,7 +118,72 @@ const menuGroups = [
   },
 ];
 
+interface MenuItem {
+  title: string;
+  icon: React.ComponentType<{ className?: string }>;
+  href: string;
+  highlight?: boolean;
+  warning?: boolean;
+  badge?: number;
+  tooltip?: string;
+}
+
 export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
+  const renderMenuItem = (item: MenuItem) => {
+    const content = (
+      <NavLink
+        to={item.href}
+        className={({ isActive }) =>
+          cn(
+            "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
+            "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+            isActive && "bg-sidebar-primary text-sidebar-primary-foreground",
+            item.highlight && !isActive && "text-primary font-semibold",
+            item.warning && !isActive && "text-orange-500",
+            collapsed && "justify-center px-2"
+          )
+        }
+        title={collapsed ? item.title : undefined}
+      >
+        <item.icon className={cn(
+          "h-5 w-5 shrink-0",
+          item.highlight && "text-primary",
+          item.warning && "text-orange-500"
+        )} />
+        {!collapsed && (
+          <span className="flex-1">{item.title}</span>
+        )}
+        {!collapsed && item.badge && item.badge > 0 && (
+          <Badge className="bg-primary text-primary-foreground text-[10px] px-1.5 py-0 min-w-[20px] h-5 flex items-center justify-center">
+            {item.badge}
+          </Badge>
+        )}
+        {!collapsed && item.warning && (
+          <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-orange-500 text-orange-500 bg-orange-500/10">
+            ⚠️
+          </Badge>
+        )}
+      </NavLink>
+    );
+
+    if (item.tooltip) {
+      return (
+        <TooltipProvider key={item.href}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              {content}
+            </TooltipTrigger>
+            <TooltipContent side="right" className="bg-orange-500 text-white border-orange-500">
+              <p>{item.tooltip}</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      );
+    }
+
+    return content;
+  };
+
   return (
     <aside
       className={cn(
@@ -149,34 +223,7 @@ export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
               <ul className="space-y-1">
                 {group.items.map((item) => (
                   <li key={item.href}>
-                    <NavLink
-                      to={item.href}
-                      className={({ isActive }) =>
-                        cn(
-                          "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
-                          "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-                          isActive && "bg-sidebar-primary text-sidebar-primary-foreground",
-                          item.highlight && !isActive && "text-primary font-semibold",
-                          item.warning && !isActive && "text-destructive",
-                          collapsed && "justify-center px-2"
-                        )
-                      }
-                      title={collapsed ? item.title : undefined}
-                    >
-                      <item.icon className={cn(
-                        "h-5 w-5 shrink-0",
-                        item.highlight && "text-primary",
-                        item.warning && "text-destructive"
-                      )} />
-                      {!collapsed && (
-                        <span className="flex-1">{item.title}</span>
-                      )}
-                      {!collapsed && item.warning && (
-                        <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-destructive text-destructive">
-                          ⚠️
-                        </Badge>
-                      )}
-                    </NavLink>
+                    {renderMenuItem(item)}
                   </li>
                 ))}
               </ul>
