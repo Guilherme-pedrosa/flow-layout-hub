@@ -138,7 +138,7 @@ export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
             "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
             "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
             isActive && "bg-sidebar-primary text-sidebar-primary-foreground",
-            item.highlight && !isActive && "text-primary font-semibold",
+            item.highlight && !isActive && "text-emerald-400 font-semibold",
             item.warning && !isActive && "text-amber-400 font-semibold",
             collapsed && "justify-center px-2"
           )
@@ -147,7 +147,7 @@ export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
       >
         <item.icon className={cn(
           "h-5 w-5 shrink-0",
-          item.highlight && "text-primary",
+          item.highlight && "text-emerald-400",
           item.warning && "text-amber-400"
         )} />
         {!collapsed && (
