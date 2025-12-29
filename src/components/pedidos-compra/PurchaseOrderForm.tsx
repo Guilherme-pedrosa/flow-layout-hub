@@ -13,7 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2, Save, X, FileUp, AlertTriangle, Package, FileText, Truck, DollarSign, Plus, Trash2 } from "lucide-react";
+import { Loader2, Save, X, FileUp, AlertTriangle, Package, FileText, Truck, DollarSign, Plus, Trash2, CheckCircle } from "lucide-react";
 import { usePurchaseOrders, PurchaseOrder, PurchaseOrderInsert, PurchaseOrderItemInsert } from "@/hooks/usePurchaseOrders";
 import { usePurchaseOrderStatuses } from "@/hooks/usePurchaseOrderStatuses";
 import { usePessoas } from "@/hooks/usePessoas";
@@ -21,6 +21,7 @@ import { useChartOfAccounts, useCostCenters } from "@/hooks/useFinanceiro";
 import { toast } from "sonner";
 import { PurchaseOrderItems, LocalItem } from "./PurchaseOrderItems";
 import { CadastrarPessoaDialog } from "@/components/shared/CadastrarPessoaDialog";
+import { XMLUploadButton } from "./XMLUploadButton";
 import {
   Table,
   TableBody,
@@ -575,7 +576,7 @@ export function PurchaseOrderForm({ order, onClose }: PurchaseOrderFormProps) {
               {order?.nfe_imported_at ? (
                 <div className="space-y-4">
                   <div className="flex items-center gap-2 text-green-600">
-                    <FileUp className="h-5 w-5" />
+                    <CheckCircle className="h-5 w-5" />
                     <span>NF-e importada em {new Date(order.nfe_imported_at).toLocaleString()}</span>
                   </div>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -598,20 +599,45 @@ export function PurchaseOrderForm({ order, onClose }: PurchaseOrderFormProps) {
                       <p className="font-mono text-xs break-all">{order.nfe_key || "-"}</p>
                     </div>
                   </div>
+                  <div className="pt-4 border-t">
+                    <XMLUploadButton
+                      type="nfe"
+                      orderId={order.id}
+                      onSuccess={() => {
+                        refetch();
+                        loadExistingItems();
+                      }}
+                    />
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      Reimporte para atualizar os dados da NF-e
+                    </p>
+                  </div>
+                </div>
+              ) : order ? (
+                <div className="text-center py-8 space-y-4">
+                  <FileUp className="mx-auto h-12 w-12 text-muted-foreground" />
+                  <div>
+                    <h3 className="text-lg font-medium">Nenhuma NF-e importada</h3>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      Importe o XML da NF-e para vincular ao pedido
+                    </p>
+                  </div>
+                  <XMLUploadButton
+                    type="nfe"
+                    orderId={order.id}
+                    onSuccess={() => {
+                      refetch();
+                      loadExistingItems();
+                    }}
+                  />
                 </div>
               ) : (
                 <div className="text-center py-8">
                   <FileUp className="mx-auto h-12 w-12 text-muted-foreground" />
-                  <h3 className="mt-4 text-lg font-medium">Nenhuma NF-e importada</h3>
+                  <h3 className="mt-4 text-lg font-medium">Salve o pedido primeiro</h3>
                   <p className="mt-2 text-sm text-muted-foreground">
-                    {order ? "Importe o XML da NF-e para vincular ao pedido" : "Salve o pedido primeiro para importar o XML da NF-e"}
+                    É necessário salvar o pedido antes de importar o XML
                   </p>
-                  {order && (
-                    <Button className="mt-4" variant="outline">
-                      <FileUp className="mr-2 h-4 w-4" />
-                      Importar XML NF-e
-                    </Button>
-                  )}
                 </div>
               )}
             </CardContent>
@@ -636,7 +662,7 @@ export function PurchaseOrderForm({ order, onClose }: PurchaseOrderFormProps) {
               ) : order?.cte_imported_at ? (
                 <div className="space-y-4">
                   <div className="flex items-center gap-2 text-blue-600">
-                    <Truck className="h-5 w-5" />
+                    <CheckCircle className="h-5 w-5" />
                     <span>CT-e importado em {new Date(order.cte_imported_at).toLocaleString()}</span>
                   </div>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -659,20 +685,43 @@ export function PurchaseOrderForm({ order, onClose }: PurchaseOrderFormProps) {
                       <p className="font-mono text-xs break-all">{order.cte_key || "-"}</p>
                     </div>
                   </div>
+                  <div className="pt-4 border-t">
+                    <XMLUploadButton
+                      type="cte"
+                      orderId={order.id}
+                      onSuccess={() => {
+                        refetch();
+                      }}
+                    />
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      Reimporte para atualizar os dados do CT-e
+                    </p>
+                  </div>
+                </div>
+              ) : order ? (
+                <div className="text-center py-8 space-y-4">
+                  <Truck className="mx-auto h-12 w-12 text-muted-foreground" />
+                  <div>
+                    <h3 className="text-lg font-medium">Nenhum CT-e importado</h3>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      Importe o XML do CT-e para vincular ao pedido
+                    </p>
+                  </div>
+                  <XMLUploadButton
+                    type="cte"
+                    orderId={order.id}
+                    onSuccess={() => {
+                      refetch();
+                    }}
+                  />
                 </div>
               ) : (
                 <div className="text-center py-8">
                   <Truck className="mx-auto h-12 w-12 text-muted-foreground" />
-                  <h3 className="mt-4 text-lg font-medium">Nenhum CT-e importado</h3>
+                  <h3 className="mt-4 text-lg font-medium">Salve o pedido primeiro</h3>
                   <p className="mt-2 text-sm text-muted-foreground">
-                    {order ? "Importe o XML do CT-e para vincular ao pedido" : "Salve o pedido primeiro para importar o XML do CT-e"}
+                    É necessário salvar o pedido antes de importar o XML
                   </p>
-                  {order && (
-                    <Button className="mt-4" variant="outline">
-                      <FileUp className="mr-2 h-4 w-4" />
-                      Importar XML CT-e
-                    </Button>
-                  )}
                 </div>
               )}
             </CardContent>
