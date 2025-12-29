@@ -48,10 +48,6 @@ interface Payable {
   is_paid: boolean;
   paid_at: string | null;
   supplier_id: string;
-  supplier?: {
-    razao_social: string | null;
-    nome_fantasia: string | null;
-  };
 }
 
 export function PayablesList() {
@@ -67,14 +63,11 @@ export function PayablesList() {
     try {
       const { data, error } = await supabase
         .from("payables")
-        .select(`
-          *,
-          supplier:pessoas(razao_social, nome_fantasia)
-        `)
+        .select("*")
         .order("due_date", { ascending: true });
 
       if (error) throw error;
-      setPayables((data as unknown as Payable[]) || []);
+      setPayables((data as Payable[]) || []);
     } catch (error) {
       console.error("Erro ao carregar contas a pagar:", error);
     } finally {
@@ -100,10 +93,8 @@ export function PayablesList() {
   }, []);
 
   const filteredPayables = payables.filter((p) => {
-    const supplierName = p.supplier?.razao_social || p.supplier?.nome_fantasia || "";
     const searchLower = searchTerm.toLowerCase();
     return (
-      supplierName.toLowerCase().includes(searchLower) ||
       p.description?.toLowerCase().includes(searchLower) ||
       p.document_number?.toLowerCase().includes(searchLower)
     );
@@ -165,7 +156,6 @@ export function PayablesList() {
     <Table>
       <TableHeader>
         <TableRow>
-          <TableHead>Fornecedor</TableHead>
           <TableHead>Descrição</TableHead>
           <TableHead>Documento</TableHead>
           <TableHead>Vencimento</TableHead>
@@ -177,7 +167,7 @@ export function PayablesList() {
       <TableBody>
         {items.length === 0 ? (
           <TableRow>
-            <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+            <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
               Nenhum registro encontrado
             </TableCell>
           </TableRow>
@@ -185,9 +175,9 @@ export function PayablesList() {
           items.map((payable) => (
             <TableRow key={payable.id}>
               <TableCell className="font-medium">
-                {payable.supplier?.razao_social || payable.supplier?.nome_fantasia || "-"}
+                {payable.description || "-"}
               </TableCell>
-              <TableCell>{payable.description || "-"}</TableCell>
+              <TableCell>{payable.document_number || "-"}</TableCell>
               <TableCell>{payable.document_number || "-"}</TableCell>
               <TableCell>
                 {format(new Date(payable.due_date), "dd/MM/yyyy", { locale: ptBR })}
