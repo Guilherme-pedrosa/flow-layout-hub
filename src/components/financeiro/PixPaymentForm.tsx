@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -18,7 +18,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Loader2, Send, CheckCircle, AlertCircle } from "lucide-react";
+import { Loader2, Send, CheckCircle, AlertCircle, Clock } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -38,16 +38,36 @@ type PixKeyType = "cpf" | "cnpj" | "email" | "telefone" | "aleatorio";
 
 export function PixPaymentForm({ open, onOpenChange, payable, onSuccess }: PixPaymentFormProps) {
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<{ success: boolean; message: string; endToEndId?: string } | null>(null);
+  const [result, setResult] = useState<{ success: boolean; message: string } | null>(null);
   
   const [formData, setFormData] = useState({
     recipientName: "",
     recipientDocument: "",
     pixKey: "",
     pixKeyType: "cpf" as PixKeyType,
-    amount: payable?.amount?.toString() || "",
-    description: payable?.description || "",
+    amount: "",
+    description: "",
   });
+
+  // Reset form when payable changes
+  useEffect(() => {
+    if (open) {
+      setFormData({
+        recipientName: "",
+        recipientDocument: "",
+        pixKey: "",
+        pixKeyType: "cpf",
+        amount: payable?.amount ? formatCurrencyInput(payable.amount * 100) : "",
+        description: payable?.description || "",
+      });
+      setResult(null);
+    }
+  }, [open, payable]);
+
+  const formatCurrencyInput = (cents: number) => {
+    const amount = cents / 100;
+    return amount.toLocaleString("pt-BR", { minimumFractionDigits: 2 });
+  };
 
   const formatCurrency = (value: string) => {
     const numbers = value.replace(/\D/g, "");
@@ -84,9 +104,10 @@ export function PixPaymentForm({ open, onOpenChange, payable, onSuccess }: PixPa
         throw new Error("Empresa não configurada");
       }
 
-      // Chamar Edge Function
-      const { data, error } = await supabase.functions.invoke("inter-pix-payment", {
-        body: {
+      // Criar registro do pagamento como PENDENTE (aguardando aprovação)
+      const { error } = await supabase
+        .from("inter_pix_payments")
+        .insert({
           company_id: companyId,
           payable_id: payable?.id || null,
           recipient_name: formData.recipientName,
@@ -94,25 +115,20 @@ export function PixPaymentForm({ open, onOpenChange, payable, onSuccess }: PixPa
           pix_key: formData.pixKey,
           pix_key_type: formData.pixKeyType,
           amount: amount,
-          description: formData.description,
-        },
-      });
+          description: formData.description || `PIX para ${formData.recipientName}`,
+          status: "pending", // Aguardando aprovação
+        });
 
       if (error) throw error;
 
-      if (data.success) {
-        setResult({
-          success: true,
-          message: "PIX enviado com sucesso!",
-          endToEndId: data.end_to_end_id,
-        });
-        toast.success("PIX enviado com sucesso!");
-        onSuccess?.();
-      } else {
-        throw new Error(data.error || "Erro ao processar PIX");
-      }
+      setResult({
+        success: true,
+        message: "PIX lançado com sucesso! Aguardando aprovação.",
+      });
+      toast.success("PIX lançado! Aguarde aprovação.");
+      onSuccess?.();
     } catch (error) {
-      const msg = error instanceof Error ? error.message : "Erro ao processar PIX";
+      const msg = error instanceof Error ? error.message : "Erro ao lançar PIX";
       setResult({ success: false, message: msg });
       toast.error(msg);
     } finally {
@@ -139,10 +155,10 @@ export function PixPaymentForm({ open, onOpenChange, payable, onSuccess }: PixPa
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Send className="h-5 w-5 text-primary" />
-            Pagar com PIX
+            Lançar Pagamento PIX
           </DialogTitle>
           <DialogDescription>
-            Envie um PIX para o favorecido. O valor será debitado da conta Inter.
+            Registre um pagamento PIX para aprovação. Após aprovado, será enviado automaticamente.
           </DialogDescription>
         </DialogHeader>
 
@@ -150,13 +166,11 @@ export function PixPaymentForm({ open, onOpenChange, payable, onSuccess }: PixPa
           <div className="py-8 text-center">
             {result.success ? (
               <>
-                <CheckCircle className="mx-auto h-16 w-16 text-green-500" />
+                <Clock className="mx-auto h-16 w-16 text-yellow-500" />
                 <h3 className="mt-4 text-lg font-semibold text-foreground">{result.message}</h3>
-                {result.endToEndId && (
-                  <p className="mt-2 text-sm text-muted-foreground">
-                    ID da transação: <code className="bg-muted px-2 py-1 rounded">{result.endToEndId}</code>
-                  </p>
-                )}
+                <p className="mt-2 text-sm text-muted-foreground">
+                  O pagamento aparecerá na aba "Aprovar PIX" para confirmação.
+                </p>
                 <Button className="mt-6" onClick={handleClose}>
                   Fechar
                 </Button>
@@ -164,7 +178,7 @@ export function PixPaymentForm({ open, onOpenChange, payable, onSuccess }: PixPa
             ) : (
               <>
                 <AlertCircle className="mx-auto h-16 w-16 text-destructive" />
-                <h3 className="mt-4 text-lg font-semibold text-foreground">Erro no pagamento</h3>
+                <h3 className="mt-4 text-lg font-semibold text-foreground">Erro no lançamento</h3>
                 <p className="mt-2 text-sm text-muted-foreground">{result.message}</p>
                 <Button className="mt-6" variant="outline" onClick={() => setResult(null)}>
                   Tentar novamente
@@ -260,12 +274,12 @@ export function PixPaymentForm({ open, onOpenChange, payable, onSuccess }: PixPa
                 {loading ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Processando...
+                    Lançando...
                   </>
                 ) : (
                   <>
-                    <Send className="mr-2 h-4 w-4" />
-                    Pagar com PIX
+                    <Clock className="mr-2 h-4 w-4" />
+                    Lançar para Aprovação
                   </>
                 )}
               </Button>

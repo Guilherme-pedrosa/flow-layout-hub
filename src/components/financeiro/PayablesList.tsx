@@ -16,7 +16,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Search,
@@ -28,12 +28,16 @@ import {
   AlertCircle,
   Plus,
   ArrowUpFromLine,
+  ShieldCheck,
+  XCircle,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { PixPaymentForm } from "./PixPaymentForm";
 import { PixPaymentsList } from "./PixPaymentsList";
+import { PixApprovalList } from "./PixApprovalList";
+import { toast } from "sonner";
 
 interface Payable {
   id: string;
@@ -56,6 +60,7 @@ export function PayablesList() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedPayable, setSelectedPayable] = useState<Payable | null>(null);
   const [showPixForm, setShowPixForm] = useState(false);
+  const [pendingCount, setPendingCount] = useState(0);
 
   const fetchPayables = async () => {
     setLoading(true);
@@ -77,8 +82,21 @@ export function PayablesList() {
     }
   };
 
+  const fetchPendingCount = async () => {
+    try {
+      const { count } = await supabase
+        .from("inter_pix_payments")
+        .select("*", { count: "exact", head: true })
+        .eq("status", "pending");
+      setPendingCount(count || 0);
+    } catch (error) {
+      console.error("Erro ao contar pendentes:", error);
+    }
+  };
+
   useEffect(() => {
     fetchPayables();
+    fetchPendingCount();
   }, []);
 
   const filteredPayables = payables.filter((p) => {
@@ -137,6 +155,12 @@ export function PayablesList() {
     setShowPixForm(true);
   };
 
+  const handlePixCreated = () => {
+    fetchPayables();
+    fetchPendingCount();
+    setSelectedPayable(null);
+  };
+
   const PayablesTable = ({ items }: { items: Payable[] }) => (
     <Table>
       <TableHeader>
@@ -187,7 +211,7 @@ export function PayablesList() {
                     {!payable.is_paid && (
                       <DropdownMenuItem onClick={() => handlePayWithPix(payable)}>
                         <Send className="mr-2 h-4 w-4" />
-                        Pagar com PIX
+                        Lançar PIX
                       </DropdownMenuItem>
                     )}
                   </DropdownMenuContent>
@@ -209,13 +233,18 @@ export function PayablesList() {
               <Clock className="h-4 w-4" />
               Pendentes ({pendingPayables.length})
             </TabsTrigger>
-            <TabsTrigger value="pagas" className="gap-2">
-              <CheckCircle className="h-4 w-4" />
-              Pagas ({paidPayables.length})
+            <TabsTrigger value="aprovar" className="gap-2 relative">
+              <ShieldCheck className="h-4 w-4" />
+              Aprovar PIX
+              {pendingCount > 0 && (
+                <span className="ml-1 flex h-5 w-5 items-center justify-center rounded-full bg-destructive text-xs text-destructive-foreground">
+                  {pendingCount}
+                </span>
+              )}
             </TabsTrigger>
-            <TabsTrigger value="pix" className="gap-2">
-              <Send className="h-4 w-4" />
-              Pagamentos PIX
+            <TabsTrigger value="historico" className="gap-2">
+              <CheckCircle className="h-4 w-4" />
+              Histórico
             </TabsTrigger>
           </TabsList>
 
@@ -229,9 +258,9 @@ export function PayablesList() {
                 className="pl-9 w-[250px]"
               />
             </div>
-            <Button onClick={() => setShowPixForm(true)}>
+            <Button onClick={() => { setSelectedPayable(null); setShowPixForm(true); }}>
               <Plus className="mr-2 h-4 w-4" />
-              Novo PIX
+              Lançar PIX
             </Button>
           </div>
         </div>
@@ -243,6 +272,9 @@ export function PayablesList() {
                 <ArrowUpFromLine className="h-5 w-5 text-primary" />
                 Contas Pendentes
               </CardTitle>
+              <CardDescription>
+                Contas a pagar aguardando pagamento. Clique em "Lançar PIX" para agendar um pagamento.
+              </CardDescription>
             </CardHeader>
             <CardContent>
               {loading ? (
@@ -254,25 +286,11 @@ export function PayablesList() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="pagas">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-lg">
-                <CheckCircle className="h-5 w-5 text-green-500" />
-                Contas Pagas
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {loading ? (
-                <div className="text-center py-8 text-muted-foreground">Carregando...</div>
-              ) : (
-                <PayablesTable items={paidPayables} />
-              )}
-            </CardContent>
-          </Card>
+        <TabsContent value="aprovar">
+          <PixApprovalList onApproved={handlePixCreated} />
         </TabsContent>
 
-        <TabsContent value="pix">
+        <TabsContent value="historico">
           <PixPaymentsList />
         </TabsContent>
       </Tabs>
@@ -281,10 +299,7 @@ export function PayablesList() {
         open={showPixForm}
         onOpenChange={setShowPixForm}
         payable={selectedPayable}
-        onSuccess={() => {
-          fetchPayables();
-          setSelectedPayable(null);
-        }}
+        onSuccess={handlePixCreated}
       />
     </>
   );

@@ -7,3 +7,4 @@ export { ReconciliationReverseModal } from './ReconciliationReverseModal';
 export { PayablesList } from './PayablesList';
 export { PixPaymentForm } from './PixPaymentForm';
 export { PixPaymentsList } from './PixPaymentsList';
+export { PixApprovalList } from './PixApprovalList';
