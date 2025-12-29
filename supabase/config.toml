@@ -14,3 +14,9 @@ verify_jwt = false
 
 [functions.generate-document-pdf]
 verify_jwt = false
+
+[functions.inter-sync]
+verify_jwt = false
+
+[functions.reconciliation-engine]
+verify_jwt = false
