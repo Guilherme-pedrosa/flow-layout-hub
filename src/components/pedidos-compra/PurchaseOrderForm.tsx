@@ -16,6 +16,7 @@ import {
 import { Loader2, Save, X, FileUp, AlertTriangle, Package, FileText, Truck, DollarSign, Plus, Trash2, CheckCircle } from "lucide-react";
 import { usePurchaseOrders, PurchaseOrder, PurchaseOrderInsert, PurchaseOrderItemInsert } from "@/hooks/usePurchaseOrders";
 import { usePurchaseOrderStatuses } from "@/hooks/usePurchaseOrderStatuses";
+import { usePurchaseOrderLimits } from "@/hooks/usePurchaseOrderLimits";
 import { usePessoas } from "@/hooks/usePessoas";
 import { useChartOfAccounts, useCostCenters } from "@/hooks/useFinanceiro";
 import { toast } from "sonner";
@@ -81,6 +82,7 @@ export function PurchaseOrderForm({ order, onClose }: PurchaseOrderFormProps) {
 
   const { createOrder, updateOrder, getOrderItems, createOrderItems, deleteOrderItems, refetch } = usePurchaseOrders();
   const { statuses } = usePurchaseOrderStatuses();
+  const { checkOrderLimits } = usePurchaseOrderLimits();
   const { activeFornecedores, refetch: refetchPessoas } = usePessoas();
   const { accounts: chartOfAccounts, fetchAccounts } = useChartOfAccounts();
   const { costCenters, fetchCostCenters } = useCostCenters();
@@ -185,6 +187,16 @@ export function PurchaseOrderForm({ order, onClose }: PurchaseOrderFormProps) {
 
     setSaving(true);
     try {
+      // Verificar limites de valor
+      const companyId = COMPANY_ID;
+      const limitCheck = await checkOrderLimits(companyId, null, totalValue, order?.id);
+      
+      if (!limitCheck.allowed) {
+        toast.error(limitCheck.message || "Valor do pedido excede os limites configurados");
+        setSaving(false);
+        return;
+      }
+
       const data: PurchaseOrderInsert = {
         supplier_id: supplierId,
         purpose,

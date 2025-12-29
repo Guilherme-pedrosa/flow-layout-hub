@@ -45,9 +45,13 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Pencil, Trash2, GripVertical, Package, CircleDollarSign } from "lucide-react";
+import { Plus, Pencil, Trash2, GripVertical, Package, CircleDollarSign, ShieldAlert, Users } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { usePurchaseOrderStatuses, PurchaseOrderStatus, StockBehavior, FinancialBehavior } from "@/hooks/usePurchaseOrderStatuses";
+import { usePurchaseOrderLimits, PurchaseOrderLimit } from "@/hooks/usePurchaseOrderLimits";
+import { useSystemUsers } from "@/hooks/useConfiguracoes";
+import { NumericInput } from "@/components/ui/numeric-input";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const STOCK_BEHAVIOR_OPTIONS = [
   { value: 'none', label: 'Nenhum', description: 'Não afeta o estoque' },
@@ -90,8 +94,25 @@ const initialFormData: StatusFormData = {
   is_active: true,
 };
 
+interface LimitFormData {
+  user_id: string | null;
+  max_per_transaction: number | null;
+  max_monthly_total: number | null;
+  is_active: boolean;
+}
+
+const initialLimitFormData: LimitFormData = {
+  user_id: null,
+  max_per_transaction: null,
+  max_monthly_total: null,
+  is_active: true,
+};
+
 export default function ConfiguracoesCompras() {
   const { statuses, isLoading, createStatus, updateStatus, deleteStatus } = usePurchaseOrderStatuses();
+  const { limits, isLoading: isLoadingLimits, createLimit, updateLimit, deleteLimit } = usePurchaseOrderLimits();
+  const { fetchUsers } = useSystemUsers();
+  
   const [dialogOpen, setDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [editingStatus, setEditingStatus] = useState<PurchaseOrderStatus | null>(null);
@@ -99,8 +120,15 @@ export default function ConfiguracoesCompras() {
   const [formData, setFormData] = useState<StatusFormData>(initialFormData);
   const [companyId, setCompanyId] = useState<string | null>(null);
 
+  // State for limits
+  const [limitDialogOpen, setLimitDialogOpen] = useState(false);
+  const [deleteLimitDialogOpen, setDeleteLimitDialogOpen] = useState(false);
+  const [editingLimit, setEditingLimit] = useState<PurchaseOrderLimit | null>(null);
+  const [limitToDelete, setLimitToDelete] = useState<PurchaseOrderLimit | null>(null);
+  const [limitFormData, setLimitFormData] = useState<LimitFormData>(initialLimitFormData);
+  const [users, setUsers] = useState<Array<{ id: string; name: string; email: string }>>([]);
+
   useEffect(() => {
-    // Buscar company_id
     const fetchCompanyId = async () => {
       const { data } = await supabase.from("companies").select("id").limit(1);
       if (data?.[0]) {
@@ -110,6 +138,15 @@ export default function ConfiguracoesCompras() {
     fetchCompanyId();
   }, []);
 
+  useEffect(() => {
+    const loadUsers = async () => {
+      const data = await fetchUsers();
+      setUsers(data || []);
+    };
+    loadUsers();
+  }, []);
+
+  // Status handlers
   const handleOpenCreate = () => {
     setEditingStatus(null);
     setFormData(initialFormData);
@@ -163,6 +200,64 @@ export default function ConfiguracoesCompras() {
     setStatusToDelete(null);
   };
 
+  // Limit handlers
+  const handleOpenCreateLimit = () => {
+    setEditingLimit(null);
+    setLimitFormData(initialLimitFormData);
+    setLimitDialogOpen(true);
+  };
+
+  const handleOpenEditLimit = (limit: PurchaseOrderLimit) => {
+    setEditingLimit(limit);
+    setLimitFormData({
+      user_id: limit.user_id,
+      max_per_transaction: limit.max_per_transaction,
+      max_monthly_total: limit.max_monthly_total,
+      is_active: limit.is_active,
+    });
+    setLimitDialogOpen(true);
+  };
+
+  const handleOpenDeleteLimit = (limit: PurchaseOrderLimit) => {
+    setLimitToDelete(limit);
+    setDeleteLimitDialogOpen(true);
+  };
+
+  const handleSaveLimit = async () => {
+    if (!companyId) return;
+    if (!limitFormData.max_per_transaction && !limitFormData.max_monthly_total) return;
+
+    if (editingLimit) {
+      await updateLimit.mutateAsync({
+        id: editingLimit.id,
+        data: {
+          max_per_transaction: limitFormData.max_per_transaction,
+          max_monthly_total: limitFormData.max_monthly_total,
+          is_active: limitFormData.is_active,
+        },
+      });
+    } else {
+      await createLimit.mutateAsync({
+        company_id: companyId,
+        user_id: limitFormData.user_id,
+        max_per_transaction: limitFormData.max_per_transaction,
+        max_monthly_total: limitFormData.max_monthly_total,
+        is_active: limitFormData.is_active,
+      });
+    }
+
+    setLimitDialogOpen(false);
+    setEditingLimit(null);
+    setLimitFormData(initialLimitFormData);
+  };
+
+  const handleDeleteLimit = async () => {
+    if (!limitToDelete) return;
+    await deleteLimit.mutateAsync(limitToDelete.id);
+    setDeleteLimitDialogOpen(false);
+    setLimitToDelete(null);
+  };
+
   const getStockBehaviorBadge = (behavior: StockBehavior) => {
     const option = STOCK_BEHAVIOR_OPTIONS.find(o => o.value === behavior);
     if (behavior === 'none') return null;
@@ -185,112 +280,225 @@ export default function ConfiguracoesCompras() {
     );
   };
 
+  const formatCurrency = (value: number | null) => {
+    if (!value) return "-";
+    return value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  };
+
   return (
     <div className="space-y-6">
       <PageHeader
         title="Configurações de Compras"
-        description="Gerencie os status de pedidos de compra e suas regras de movimentação"
+        description="Gerencie os status de pedidos de compra, limites de valor e regras de movimentação"
         breadcrumbs={[{ label: "Compras" }, { label: "Configurações" }]}
       />
 
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle>Status de Pedidos de Compra</CardTitle>
-              <CardDescription>
-                Configure os status disponíveis e defina o comportamento para estoque e financeiro
-              </CardDescription>
-            </div>
-            <Button onClick={handleOpenCreate}>
-              <Plus className="h-4 w-4 mr-2" />
-              Novo Status
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {isLoading ? (
-            <p className="text-muted-foreground">Carregando...</p>
-          ) : statuses.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              <p>Nenhum status cadastrado.</p>
-              <p className="text-sm mt-1">Crie status para gerenciar os pedidos de compra.</p>
-            </div>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-8"></TableHead>
-                  <TableHead>Nome</TableHead>
-                  <TableHead>Estoque</TableHead>
-                  <TableHead>Financeiro</TableHead>
-                  <TableHead className="text-center">Padrão</TableHead>
-                  <TableHead className="text-center">Ativo</TableHead>
-                  <TableHead className="w-24">Ações</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {statuses.map((status) => (
-                  <TableRow key={status.id}>
-                    <TableCell>
-                      <GripVertical className="h-4 w-4 text-muted-foreground cursor-grab" />
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <div
-                          className="w-3 h-3 rounded-full"
-                          style={{ backgroundColor: status.color }}
-                        />
-                        <span className="font-medium">{status.name}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      {getStockBehaviorBadge(status.stock_behavior) || (
-                        <span className="text-muted-foreground text-sm">Nenhum</span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      {getFinancialBehaviorBadge(status.financial_behavior) || (
-                        <span className="text-muted-foreground text-sm">Nenhum</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-center">
-                      {status.is_default && (
-                        <Badge variant="secondary">Padrão</Badge>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <Badge variant={status.is_active ? "default" : "secondary"}>
-                        {status.is_active ? "Ativo" : "Inativo"}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleOpenEdit(status)}
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleOpenDelete(status)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
+      <Tabs defaultValue="status" className="space-y-4">
+        <TabsList>
+          <TabsTrigger value="status" className="gap-2">
+            <GripVertical className="h-4 w-4" />
+            Status
+          </TabsTrigger>
+          <TabsTrigger value="limits" className="gap-2">
+            <ShieldAlert className="h-4 w-4" />
+            Limites de Valor
+          </TabsTrigger>
+        </TabsList>
 
-      {/* Dialog de criação/edição */}
+        <TabsContent value="status">
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle>Status de Pedidos de Compra</CardTitle>
+                  <CardDescription>
+                    Configure os status disponíveis e defina o comportamento para estoque e financeiro
+                  </CardDescription>
+                </div>
+                <Button onClick={handleOpenCreate}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Novo Status
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {isLoading ? (
+                <p className="text-muted-foreground">Carregando...</p>
+              ) : statuses.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <p>Nenhum status cadastrado.</p>
+                  <p className="text-sm mt-1">Crie status para gerenciar os pedidos de compra.</p>
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-8"></TableHead>
+                      <TableHead>Nome</TableHead>
+                      <TableHead>Estoque</TableHead>
+                      <TableHead>Financeiro</TableHead>
+                      <TableHead className="text-center">Padrão</TableHead>
+                      <TableHead className="text-center">Ativo</TableHead>
+                      <TableHead className="w-24">Ações</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {statuses.map((status) => (
+                      <TableRow key={status.id}>
+                        <TableCell>
+                          <GripVertical className="h-4 w-4 text-muted-foreground cursor-grab" />
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <div
+                              className="w-3 h-3 rounded-full"
+                              style={{ backgroundColor: status.color }}
+                            />
+                            <span className="font-medium">{status.name}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          {getStockBehaviorBadge(status.stock_behavior) || (
+                            <span className="text-muted-foreground text-sm">Nenhum</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {getFinancialBehaviorBadge(status.financial_behavior) || (
+                            <span className="text-muted-foreground text-sm">Nenhum</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {status.is_default && (
+                            <Badge variant="secondary">Padrão</Badge>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <Badge variant={status.is_active ? "default" : "secondary"}>
+                            {status.is_active ? "Ativo" : "Inativo"}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-1">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleOpenEdit(status)}
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleOpenDelete(status)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="limits">
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle>Limites de Valor para Pedidos</CardTitle>
+                  <CardDescription>
+                    Configure limites máximos por transação e por mês para cada usuário ou para todos
+                  </CardDescription>
+                </div>
+                <Button onClick={handleOpenCreateLimit}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Novo Limite
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {isLoadingLimits ? (
+                <p className="text-muted-foreground">Carregando...</p>
+              ) : limits.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <p>Nenhum limite configurado.</p>
+                  <p className="text-sm mt-1">Configure limites de valor para controlar as compras.</p>
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Usuário</TableHead>
+                      <TableHead className="text-right">Limite por Transação</TableHead>
+                      <TableHead className="text-right">Limite Mensal</TableHead>
+                      <TableHead className="text-center">Ativo</TableHead>
+                      <TableHead className="w-24">Ações</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {limits.map((limit) => (
+                      <TableRow key={limit.id}>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <Users className="h-4 w-4 text-muted-foreground" />
+                            {limit.user ? (
+                              <div>
+                                <span className="font-medium">{limit.user.name}</span>
+                                <span className="text-xs text-muted-foreground ml-2">
+                                  {limit.user.email}
+                                </span>
+                              </div>
+                            ) : (
+                              <span className="font-medium text-primary">
+                                Todos os usuários (Global)
+                              </span>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right font-mono">
+                          {formatCurrency(limit.max_per_transaction)}
+                        </TableCell>
+                        <TableCell className="text-right font-mono">
+                          {formatCurrency(limit.max_monthly_total)}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <Badge variant={limit.is_active ? "default" : "secondary"}>
+                            {limit.is_active ? "Ativo" : "Inativo"}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-1">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleOpenEditLimit(limit)}
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleOpenDeleteLimit(limit)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
+
+      {/* Dialog de criação/edição de Status */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
@@ -427,7 +635,112 @@ export default function ConfiguracoesCompras() {
         </DialogContent>
       </Dialog>
 
-      {/* Dialog de confirmação de exclusão */}
+      {/* Dialog de criação/edição de Limite */}
+      <Dialog open={limitDialogOpen} onOpenChange={setLimitDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>
+              {editingLimit ? "Editar Limite" : "Novo Limite de Valor"}
+            </DialogTitle>
+            <DialogDescription>
+              Configure limites de valor máximo por transação e/ou por mês.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label className="flex items-center gap-2">
+                <Users className="h-4 w-4" />
+                Usuário
+              </Label>
+              <Select
+                value={limitFormData.user_id || "global"}
+                onValueChange={(value) => setLimitFormData({ 
+                  ...limitFormData, 
+                  user_id: value === "global" ? null : value 
+                })}
+                disabled={!!editingLimit}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione um usuário" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="global">
+                    <span className="font-medium">Todos os usuários (Global)</span>
+                  </SelectItem>
+                  {users.map((user) => (
+                    <SelectItem key={user.id} value={user.id}>
+                      <div className="flex items-center gap-2">
+                        <span>{user.name}</span>
+                        <span className="text-xs text-muted-foreground">{user.email}</span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                O limite específico do usuário tem prioridade sobre o limite global.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Limite por Transação</Label>
+                <NumericInput
+                  value={limitFormData.max_per_transaction ?? 0}
+                  onChange={(value) => setLimitFormData({ 
+                    ...limitFormData, 
+                    max_per_transaction: value || null 
+                  })}
+                  placeholder="Ex: 10000"
+                  decimalPlaces={2}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Valor máximo por pedido individual
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Limite Mensal</Label>
+                <NumericInput
+                  value={limitFormData.max_monthly_total ?? 0}
+                  onChange={(value) => setLimitFormData({ 
+                    ...limitFormData, 
+                    max_monthly_total: value || null 
+                  })}
+                  placeholder="Ex: 50000"
+                  decimalPlaces={2}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Soma máxima de todos os pedidos no mês
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 pt-2">
+              <Switch
+                checked={limitFormData.is_active}
+                onCheckedChange={(checked) => setLimitFormData({ ...limitFormData, is_active: checked })}
+              />
+              <Label>Ativo</Label>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setLimitDialogOpen(false)}>
+              Cancelar
+            </Button>
+            <Button 
+              onClick={handleSaveLimit} 
+              disabled={!limitFormData.max_per_transaction && !limitFormData.max_monthly_total}
+            >
+              {editingLimit ? "Salvar" : "Criar"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog de confirmação de exclusão de Status */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -443,6 +756,31 @@ export default function ConfiguracoesCompras() {
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground">
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Dialog de confirmação de exclusão de Limite */}
+      <AlertDialog open={deleteLimitDialogOpen} onOpenChange={setDeleteLimitDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir Limite</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja excluir este limite de valor?
+              <br />
+              <span className="text-muted-foreground">
+                {limitToDelete?.user 
+                  ? `Usuário: ${limitToDelete.user.name}`
+                  : "Limite global para todos os usuários"
+                }
+              </span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteLimit} className="bg-destructive text-destructive-foreground">
               Excluir
             </AlertDialogAction>
           </AlertDialogFooter>
