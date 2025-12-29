@@ -7,7 +7,7 @@ export type StockBehavior = 'none' | 'reserve' | 'move';
 export type FinancialBehavior = 'none' | 'forecast' | 'effective';
 export type CheckoutBehavior = 'none' | 'required';
 
-export interface SaleStatus {
+export interface ServiceOrderStatus {
   id: string;
   company_id: string;
   name: string;
@@ -22,9 +22,9 @@ export interface SaleStatus {
   updated_at: string;
 }
 
-export interface SaleProductItem {
+export interface ServiceOrderProductItem {
   id?: string;
-  sale_id?: string;
+  service_order_id?: string;
   product_id: string;
   product?: {
     id: string;
@@ -32,21 +32,23 @@ export interface SaleProductItem {
     description: string;
     quantity: number;
     sale_price: number;
+    purchase_price: number;
     unit: string;
     barcode?: string | null;
   };
   details?: string;
   quantity: number;
   unit_price: number;
+  purchase_price: number;
   discount_value: number;
   discount_type: 'value' | 'percent';
   subtotal: number;
   price_table_id?: string;
 }
 
-export interface SaleServiceItem {
+export interface ServiceOrderServiceItem {
   id?: string;
-  sale_id?: string;
+  service_order_id?: string;
   service_id?: string;
   service?: {
     id: string;
@@ -59,15 +61,16 @@ export interface SaleServiceItem {
   details?: string;
   quantity: number;
   unit_price: number;
+  cost_price: number;
   discount_value: number;
   discount_type: 'value' | 'percent';
   subtotal: number;
 }
 
-export interface Sale {
+export interface ServiceOrder {
   id: string;
   company_id: string;
-  sale_number: number;
+  order_number: number;
   client_id?: string;
   client?: {
     id: string;
@@ -76,16 +79,35 @@ export interface Sale {
     cpf_cnpj: string;
   } | null;
   seller_id?: string;
+  technician_id?: string;
   status_id?: string;
-  status?: SaleStatus | null;
-  sale_date: string;
+  status?: ServiceOrderStatus | null;
+  order_date: string;
   delivery_date?: string;
   sales_channel: string;
   cost_center_id?: string;
-  quote_number?: string;
-  os_number?: string;
-  os_gc?: string;
-  extra_observation?: string;
+  
+  // Equipamento
+  equipment_type?: string;
+  equipment_brand?: string;
+  equipment_model?: string;
+  equipment_serial?: string;
+  reported_issue?: string;
+  diagnosis?: string;
+  solution?: string;
+  
+  // Datas de execução
+  started_at?: string;
+  finished_at?: string;
+  warranty_until?: string;
+  
+  // Custos
+  labor_cost: number;
+  parts_cost: number;
+  external_service_cost: number;
+  total_cost: number;
+  
+  // Valores
   freight_value: number;
   carrier?: string;
   delivery_address?: Json;
@@ -94,54 +116,63 @@ export interface Sale {
   discount_value: number;
   discount_percent: number;
   total_value: number;
+  
+  // Pagamento
   payment_type: string;
   installments: number;
+  
+  // Observações
   observations?: string;
   internal_observations?: string;
+  
+  // Checkout
+  checkout_status: string;
   tracking_token: string;
+  
   created_by?: string;
   created_at: string;
   updated_at: string;
-  product_items?: SaleProductItem[];
-  service_items?: SaleServiceItem[];
+  
+  product_items?: ServiceOrderProductItem[];
+  service_items?: ServiceOrderServiceItem[];
 }
 
-export function useSaleStatuses() {
+export function useServiceOrderStatuses() {
   const queryClient = useQueryClient();
 
   const statusesQuery = useQuery({
-    queryKey: ["sale_statuses"],
+    queryKey: ["service_order_statuses"],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("sale_statuses")
+        .from("service_order_statuses")
         .select("*")
         .order("display_order", { ascending: true });
 
       if (error) throw error;
-      return data as SaleStatus[];
+      return data as ServiceOrderStatus[];
     },
   });
 
   const createStatus = useMutation({
-    mutationFn: async (status: Omit<SaleStatus, 'id' | 'created_at' | 'updated_at'>) => {
+    mutationFn: async (status: Omit<ServiceOrderStatus, 'id' | 'created_at' | 'updated_at'>) => {
       if (status.is_default) {
         await supabase
-          .from("sale_statuses")
+          .from("service_order_statuses")
           .update({ is_default: false })
           .eq("company_id", status.company_id);
       }
 
       const { data, error } = await supabase
-        .from("sale_statuses")
+        .from("service_order_statuses")
         .insert(status)
         .select()
         .single();
 
       if (error) throw error;
-      return data as SaleStatus;
+      return data as ServiceOrderStatus;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["sale_statuses"] });
+      queryClient.invalidateQueries({ queryKey: ["service_order_statuses"] });
       toast.success("Status criado com sucesso!");
     },
     onError: (error) => {
@@ -150,19 +181,19 @@ export function useSaleStatuses() {
   });
 
   const updateStatus = useMutation({
-    mutationFn: async ({ id, data }: { id: string; data: Partial<SaleStatus> }) => {
+    mutationFn: async ({ id, data }: { id: string; data: Partial<ServiceOrderStatus> }) => {
       const { data: result, error } = await supabase
-        .from("sale_statuses")
+        .from("service_order_statuses")
         .update(data)
         .eq("id", id)
         .select()
         .single();
 
       if (error) throw error;
-      return result as SaleStatus;
+      return result as ServiceOrderStatus;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["sale_statuses"] });
+      queryClient.invalidateQueries({ queryKey: ["service_order_statuses"] });
       toast.success("Status atualizado!");
     },
   });
@@ -170,14 +201,14 @@ export function useSaleStatuses() {
   const deleteStatus = useMutation({
     mutationFn: async (id: string) => {
       const { error } = await supabase
-        .from("sale_statuses")
+        .from("service_order_statuses")
         .delete()
         .eq("id", id);
 
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["sale_statuses"] });
+      queryClient.invalidateQueries({ queryKey: ["service_order_statuses"] });
       toast.success("Status excluído!");
     },
   });
@@ -194,88 +225,88 @@ export function useSaleStatuses() {
   };
 }
 
-export function useSales() {
+export function useServiceOrders() {
   const queryClient = useQueryClient();
 
-  const salesQuery = useQuery({
-    queryKey: ["sales"],
+  const ordersQuery = useQuery({
+    queryKey: ["service_orders"],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("sales")
+        .from("service_orders")
         .select(`
           *,
           client:clientes(id, razao_social, nome_fantasia, cpf_cnpj),
-          status:sale_statuses(*)
+          status:service_order_statuses(*)
         `)
-        .order("sale_number", { ascending: false });
+        .order("order_number", { ascending: false });
 
       if (error) throw error;
-      return data as unknown as Sale[];
+      return data as unknown as ServiceOrder[];
     },
   });
 
-  const createSale = useMutation({
+  const createOrder = useMutation({
     mutationFn: async ({
-      sale,
+      order,
       productItems,
       serviceItems,
       installments = [],
       attachments = []
     }: {
-      sale: Record<string, unknown>;
-      productItems: Omit<SaleProductItem, 'id' | 'sale_id' | 'product'>[];
-      serviceItems: Omit<SaleServiceItem, 'id' | 'sale_id' | 'service'>[];
+      order: Record<string, unknown>;
+      productItems: Omit<ServiceOrderProductItem, 'id' | 'service_order_id' | 'product'>[];
+      serviceItems: Omit<ServiceOrderServiceItem, 'id' | 'service_order_id' | 'service'>[];
       installments?: { installment_number: number; due_date: string; amount: number; payment_method: string }[];
       attachments?: { file_name: string; file_url: string; file_size?: number }[];
     }) => {
-      const { data: saleData, error: saleError } = await supabase
-        .from("sales")
-        .insert(sale as any)
+      const { data: orderData, error: orderError } = await supabase
+        .from("service_orders")
+        .insert(order as any)
         .select()
         .single();
 
-      if (saleError) throw saleError;
+      if (orderError) throw orderError;
 
       if (productItems.length > 0) {
-        await supabase.from("sale_product_items").insert(
-          productItems.map(item => ({ ...item, sale_id: saleData.id }))
+        await supabase.from("service_order_product_items").insert(
+          productItems.map(item => ({ ...item, service_order_id: orderData.id }))
         );
       }
 
       if (serviceItems.length > 0) {
-        await supabase.from("sale_service_items").insert(
-          serviceItems.map(item => ({ ...item, sale_id: saleData.id }))
+        await supabase.from("service_order_service_items").insert(
+          serviceItems.map(item => ({ ...item, service_order_id: orderData.id }))
         );
       }
 
       if (installments.length > 0) {
-        await supabase.from("sale_installments").insert(
-          installments.map(item => ({ ...item, sale_id: saleData.id }))
+        await supabase.from("service_order_installments").insert(
+          installments.map(item => ({ ...item, service_order_id: orderData.id }))
         );
       }
 
       if (attachments.length > 0) {
-        await supabase.from("sale_attachments").insert(
-          attachments.map(item => ({ ...item, sale_id: saleData.id }))
+        await supabase.from("service_order_attachments").insert(
+          attachments.map(item => ({ ...item, service_order_id: orderData.id }))
         );
       }
 
-      return saleData;
+      return orderData;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["sales"] });
-      toast.success("Venda criada com sucesso!");
+      queryClient.invalidateQueries({ queryKey: ["service_orders"] });
+      toast.success("Ordem de serviço criada com sucesso!");
     },
     onError: (error) => {
-      toast.error(`Erro ao criar venda: ${error.message}`);
+      toast.error(`Erro ao criar OS: ${error.message}`);
     },
   });
 
-  const updateSale = useMutation({
-    mutationFn: async ({ id, sale }: { id: string; sale: Record<string, unknown> }) => {
+  const updateOrder = useMutation({
+    mutationFn: async ({ id, order }: { id: string; order: Record<string, unknown> }) => {
       const { data, error } = await supabase
-        .from("sales")
-        .update(sale as any)
+        .from("service_orders")
+        .update(order as any)
         .eq("id", id)
         .select()
         .single();
@@ -284,72 +315,28 @@ export function useSales() {
       return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["sales"] });
-      toast.success("Venda atualizada!");
+      queryClient.invalidateQueries({ queryKey: ["service_orders"] });
+      toast.success("OS atualizada!");
     },
   });
 
-  const deleteSale = useMutation({
+  const deleteOrder = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("sales").delete().eq("id", id);
+      const { error } = await supabase.from("service_orders").delete().eq("id", id);
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["sales"] });
-      toast.success("Venda excluída!");
+      queryClient.invalidateQueries({ queryKey: ["service_orders"] });
+      toast.success("OS excluída!");
     },
   });
 
   return {
-    sales: salesQuery.data ?? [],
-    isLoading: salesQuery.isLoading,
-    createSale,
-    updateSale,
-    deleteSale,
-    refetch: salesQuery.refetch,
+    orders: ordersQuery.data ?? [],
+    isLoading: ordersQuery.isLoading,
+    createOrder,
+    updateOrder,
+    deleteOrder,
+    refetch: ordersQuery.refetch,
   };
-}
-
-export function useInTransitStock(productId: string) {
-  return useQuery({
-    queryKey: ["in_transit_stock", productId],
-    queryFn: async () => {
-      if (!productId) return { quantity: 0, nextArrivalDate: null };
-
-      // Buscar apenas itens cujo pedido de compra tem status com stock_behavior = 'forecast'
-      // Isso significa que a mercadoria está em trânsito mas ainda não deu entrada no estoque
-      const { data, error } = await supabase
-        .from("purchase_order_items")
-        .select(`
-          quantity, 
-          purchase_order:purchase_orders!inner(
-            id,
-            invoice_date,
-            status_id,
-            purchase_status:purchase_order_statuses!inner(stock_behavior)
-          )
-        `)
-        .eq("product_id", productId);
-
-      if (error || !data) return { quantity: 0, nextArrivalDate: null };
-
-      // Filtrar apenas itens com stock_behavior = 'forecast' (em trânsito)
-      const inTransitItems = data.filter((item: any) => {
-        const stockBehavior = item.purchase_order?.purchase_status?.stock_behavior;
-        return stockBehavior === 'forecast';
-      });
-
-      const totalInTransit = inTransitItems.reduce((sum: number, item: any) => 
-        sum + Number(item.quantity || 0), 0
-      );
-
-      const nextArrival = inTransitItems
-        .map((item: any) => item.purchase_order?.invoice_date)
-        .filter(Boolean)
-        .sort()[0] || null;
-
-      return { quantity: totalInTransit, nextArrivalDate: nextArrival };
-    },
-    enabled: !!productId
-  });
 }

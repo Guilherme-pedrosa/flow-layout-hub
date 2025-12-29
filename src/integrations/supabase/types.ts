@@ -1506,6 +1506,501 @@ export type Database = {
           },
         ]
       }
+      service_order_attachments: {
+        Row: {
+          created_at: string
+          file_name: string
+          file_size: number | null
+          file_url: string
+          id: string
+          service_order_id: string
+        }
+        Insert: {
+          created_at?: string
+          file_name: string
+          file_size?: number | null
+          file_url: string
+          id?: string
+          service_order_id: string
+        }
+        Update: {
+          created_at?: string
+          file_name?: string
+          file_size?: number | null
+          file_url?: string
+          id?: string
+          service_order_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "service_order_attachments_service_order_id_fkey"
+            columns: ["service_order_id"]
+            isOneToOne: false
+            referencedRelation: "service_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      service_order_checkout_items: {
+        Row: {
+          barcode_scanned: string | null
+          checked_at: string | null
+          checked_by: string | null
+          created_at: string
+          id: string
+          quantity_checked: number
+          quantity_pending: number
+          service_order_product_item_id: string
+          updated_at: string
+        }
+        Insert: {
+          barcode_scanned?: string | null
+          checked_at?: string | null
+          checked_by?: string | null
+          created_at?: string
+          id?: string
+          quantity_checked?: number
+          quantity_pending?: number
+          service_order_product_item_id: string
+          updated_at?: string
+        }
+        Update: {
+          barcode_scanned?: string | null
+          checked_at?: string | null
+          checked_by?: string | null
+          created_at?: string
+          id?: string
+          quantity_checked?: number
+          quantity_pending?: number
+          service_order_product_item_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "service_order_checkout_items_checked_by_fkey"
+            columns: ["checked_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "service_order_checkout_items_service_order_product_item_id_fkey"
+            columns: ["service_order_product_item_id"]
+            isOneToOne: false
+            referencedRelation: "service_order_product_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      service_order_installments: {
+        Row: {
+          amount: number
+          created_at: string
+          due_date: string
+          id: string
+          installment_number: number
+          is_paid: boolean | null
+          paid_at: string | null
+          payment_method: string | null
+          service_order_id: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          due_date: string
+          id?: string
+          installment_number: number
+          is_paid?: boolean | null
+          paid_at?: string | null
+          payment_method?: string | null
+          service_order_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          due_date?: string
+          id?: string
+          installment_number?: number
+          is_paid?: boolean | null
+          paid_at?: string | null
+          payment_method?: string | null
+          service_order_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "service_order_installments_service_order_id_fkey"
+            columns: ["service_order_id"]
+            isOneToOne: false
+            referencedRelation: "service_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      service_order_product_items: {
+        Row: {
+          created_at: string
+          details: string | null
+          discount_type: string | null
+          discount_value: number | null
+          id: string
+          price_table_id: string | null
+          product_id: string | null
+          purchase_price: number | null
+          quantity: number
+          service_order_id: string
+          subtotal: number
+          unit_price: number
+        }
+        Insert: {
+          created_at?: string
+          details?: string | null
+          discount_type?: string | null
+          discount_value?: number | null
+          id?: string
+          price_table_id?: string | null
+          product_id?: string | null
+          purchase_price?: number | null
+          quantity?: number
+          service_order_id: string
+          subtotal?: number
+          unit_price?: number
+        }
+        Update: {
+          created_at?: string
+          details?: string | null
+          discount_type?: string | null
+          discount_value?: number | null
+          id?: string
+          price_table_id?: string | null
+          product_id?: string | null
+          purchase_price?: number | null
+          quantity?: number
+          service_order_id?: string
+          subtotal?: number
+          unit_price?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "service_order_product_items_price_table_id_fkey"
+            columns: ["price_table_id"]
+            isOneToOne: false
+            referencedRelation: "price_tables"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "service_order_product_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "service_order_product_items_service_order_id_fkey"
+            columns: ["service_order_id"]
+            isOneToOne: false
+            referencedRelation: "service_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      service_order_service_items: {
+        Row: {
+          cost_price: number | null
+          created_at: string
+          details: string | null
+          discount_type: string | null
+          discount_value: number | null
+          id: string
+          quantity: number
+          service_description: string
+          service_id: string | null
+          service_order_id: string
+          subtotal: number
+          unit_price: number
+        }
+        Insert: {
+          cost_price?: number | null
+          created_at?: string
+          details?: string | null
+          discount_type?: string | null
+          discount_value?: number | null
+          id?: string
+          quantity?: number
+          service_description: string
+          service_id?: string | null
+          service_order_id: string
+          subtotal?: number
+          unit_price?: number
+        }
+        Update: {
+          cost_price?: number | null
+          created_at?: string
+          details?: string | null
+          discount_type?: string | null
+          discount_value?: number | null
+          id?: string
+          quantity?: number
+          service_description?: string
+          service_id?: string | null
+          service_order_id?: string
+          subtotal?: number
+          unit_price?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "service_order_service_items_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "services"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "service_order_service_items_service_order_id_fkey"
+            columns: ["service_order_id"]
+            isOneToOne: false
+            referencedRelation: "service_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      service_order_statuses: {
+        Row: {
+          checkout_behavior: string
+          color: string | null
+          company_id: string
+          created_at: string
+          display_order: number | null
+          financial_behavior: string
+          id: string
+          is_active: boolean
+          is_default: boolean | null
+          name: string
+          stock_behavior: string
+          updated_at: string
+        }
+        Insert: {
+          checkout_behavior?: string
+          color?: string | null
+          company_id: string
+          created_at?: string
+          display_order?: number | null
+          financial_behavior?: string
+          id?: string
+          is_active?: boolean
+          is_default?: boolean | null
+          name: string
+          stock_behavior?: string
+          updated_at?: string
+        }
+        Update: {
+          checkout_behavior?: string
+          color?: string | null
+          company_id?: string
+          created_at?: string
+          display_order?: number | null
+          financial_behavior?: string
+          id?: string
+          is_active?: boolean
+          is_default?: boolean | null
+          name?: string
+          stock_behavior?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "service_order_statuses_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      service_orders: {
+        Row: {
+          carrier: string | null
+          checkout_status: string | null
+          client_id: string | null
+          company_id: string
+          cost_center_id: string | null
+          created_at: string
+          created_by: string | null
+          delivery_address: Json | null
+          delivery_date: string | null
+          diagnosis: string | null
+          discount_percent: number | null
+          discount_value: number | null
+          equipment_brand: string | null
+          equipment_model: string | null
+          equipment_serial: string | null
+          equipment_type: string | null
+          external_service_cost: number | null
+          finished_at: string | null
+          freight_value: number | null
+          id: string
+          installments: number | null
+          internal_observations: string | null
+          labor_cost: number | null
+          observations: string | null
+          order_date: string
+          order_number: number
+          parts_cost: number | null
+          payment_type: string | null
+          products_total: number | null
+          reported_issue: string | null
+          sales_channel: string | null
+          seller_id: string | null
+          services_total: number | null
+          solution: string | null
+          started_at: string | null
+          status_id: string | null
+          technician_id: string | null
+          total_cost: number | null
+          total_value: number | null
+          tracking_token: string | null
+          updated_at: string
+          warranty_until: string | null
+        }
+        Insert: {
+          carrier?: string | null
+          checkout_status?: string | null
+          client_id?: string | null
+          company_id: string
+          cost_center_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          delivery_address?: Json | null
+          delivery_date?: string | null
+          diagnosis?: string | null
+          discount_percent?: number | null
+          discount_value?: number | null
+          equipment_brand?: string | null
+          equipment_model?: string | null
+          equipment_serial?: string | null
+          equipment_type?: string | null
+          external_service_cost?: number | null
+          finished_at?: string | null
+          freight_value?: number | null
+          id?: string
+          installments?: number | null
+          internal_observations?: string | null
+          labor_cost?: number | null
+          observations?: string | null
+          order_date?: string
+          order_number?: number
+          parts_cost?: number | null
+          payment_type?: string | null
+          products_total?: number | null
+          reported_issue?: string | null
+          sales_channel?: string | null
+          seller_id?: string | null
+          services_total?: number | null
+          solution?: string | null
+          started_at?: string | null
+          status_id?: string | null
+          technician_id?: string | null
+          total_cost?: number | null
+          total_value?: number | null
+          tracking_token?: string | null
+          updated_at?: string
+          warranty_until?: string | null
+        }
+        Update: {
+          carrier?: string | null
+          checkout_status?: string | null
+          client_id?: string | null
+          company_id?: string
+          cost_center_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          delivery_address?: Json | null
+          delivery_date?: string | null
+          diagnosis?: string | null
+          discount_percent?: number | null
+          discount_value?: number | null
+          equipment_brand?: string | null
+          equipment_model?: string | null
+          equipment_serial?: string | null
+          equipment_type?: string | null
+          external_service_cost?: number | null
+          finished_at?: string | null
+          freight_value?: number | null
+          id?: string
+          installments?: number | null
+          internal_observations?: string | null
+          labor_cost?: number | null
+          observations?: string | null
+          order_date?: string
+          order_number?: number
+          parts_cost?: number | null
+          payment_type?: string | null
+          products_total?: number | null
+          reported_issue?: string | null
+          sales_channel?: string | null
+          seller_id?: string | null
+          services_total?: number | null
+          solution?: string | null
+          started_at?: string | null
+          status_id?: string | null
+          technician_id?: string | null
+          total_cost?: number | null
+          total_value?: number | null
+          tracking_token?: string | null
+          updated_at?: string
+          warranty_until?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "service_orders_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "service_orders_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "service_orders_cost_center_id_fkey"
+            columns: ["cost_center_id"]
+            isOneToOne: false
+            referencedRelation: "cost_centers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "service_orders_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "service_orders_seller_id_fkey"
+            columns: ["seller_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "service_orders_status_id_fkey"
+            columns: ["status_id"]
+            isOneToOne: false
+            referencedRelation: "service_order_statuses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "service_orders_technician_id_fkey"
+            columns: ["technician_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       services: {
         Row: {
           code: string
