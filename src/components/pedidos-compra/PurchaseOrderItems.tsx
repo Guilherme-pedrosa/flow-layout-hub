@@ -60,7 +60,7 @@ const formatCurrency = (value: number) => {
 };
 
 export function PurchaseOrderItems({ items, onItemsChange, purpose }: PurchaseOrderItemsProps) {
-  const { products } = useProducts();
+  const { products, isLoading: productsLoading } = useProducts();
   const { accounts: chartOfAccounts, fetchAccounts } = useChartOfAccounts();
   const { costCenters, fetchCostCenters } = useCostCenters();
   const [openProductPopover, setOpenProductPopover] = useState<number | null>(null);
@@ -70,6 +70,17 @@ export function PurchaseOrderItems({ items, onItemsChange, purpose }: PurchaseOr
     fetchAccounts();
     fetchCostCenters();
   }, []);
+
+  // Helper function to get product display name
+  const getProductDisplayName = (productId: string, maxLength: number = 20) => {
+    if (!productId) return null;
+    const product = products?.find(p => p.id === productId);
+    if (!product) return null;
+    const desc = product.description.length > maxLength 
+      ? product.description.substring(0, maxLength) + "..." 
+      : product.description;
+    return `${product.code} - ${desc}`;
+  };
 
   const handleAddItem = () => {
     onItemsChange([
@@ -160,12 +171,7 @@ export function PurchaseOrderItems({ items, onItemsChange, purpose }: PurchaseOr
                               className="w-full justify-between text-left font-normal h-auto py-2"
                             >
                               <span className="truncate">
-                                {item.product_id
-                                  ? (() => {
-                                      const product = products.find(p => p.id === item.product_id);
-                                      return product ? `${product.code} - ${product.description.substring(0, 25)}` : "Selecione";
-                                    })()
-                                  : "Selecione produto..."}
+                                {getProductDisplayName(item.product_id, 25) || "Selecione produto..."}
                               </span>
                               <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                             </Button>
@@ -174,9 +180,12 @@ export function PurchaseOrderItems({ items, onItemsChange, purpose }: PurchaseOr
                             <Command>
                               <CommandInput placeholder="Buscar produto..." />
                               <CommandList>
-                                <CommandEmpty>Nenhum produto encontrado.</CommandEmpty>
-                                <CommandGroup>
-                                  {products.map((product) => (
+                              <CommandEmpty>Nenhum produto encontrado.</CommandEmpty>
+                              <CommandGroup>
+                                {productsLoading ? (
+                                  <CommandItem disabled>Carregando produtos...</CommandItem>
+                                ) : products && products.length > 0 ? (
+                                  products.map((product) => (
                                     <CommandItem
                                       key={product.id}
                                       value={`${product.code} ${product.description}`}
@@ -198,12 +207,15 @@ export function PurchaseOrderItems({ items, onItemsChange, purpose }: PurchaseOr
                                         </span>
                                       </div>
                                     </CommandItem>
-                                  ))}
-                                </CommandGroup>
-                              </CommandList>
-                            </Command>
-                          </PopoverContent>
-                        </Popover>
+                                  ))
+                                ) : (
+                                  <CommandItem disabled>Nenhum produto cadastrado</CommandItem>
+                                )}
+                              </CommandGroup>
+                            </CommandList>
+                          </Command>
+                        </PopoverContent>
+                      </Popover>
                       )}
                     </div>
                     <Button
@@ -324,14 +336,9 @@ export function PurchaseOrderItems({ items, onItemsChange, purpose }: PurchaseOr
                                 variant="outline"
                                 role="combobox"
                                 aria-expanded={openProductPopover === index}
-                                className="w-full justify-between text-left font-normal"
+                              className="w-full justify-between text-left font-normal"
                               >
-                                {item.product_id
-                                  ? (() => {
-                                      const product = products.find(p => p.id === item.product_id);
-                                      return product ? `${product.code} - ${product.description.substring(0, 20)}` : "Selecione";
-                                    })()
-                                  : "Selecione produto..."}
+                                {getProductDisplayName(item.product_id, 20) || "Selecione produto..."}
                                 <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                               </Button>
                             </PopoverTrigger>
@@ -341,29 +348,35 @@ export function PurchaseOrderItems({ items, onItemsChange, purpose }: PurchaseOr
                                 <CommandList>
                                   <CommandEmpty>Nenhum produto encontrado.</CommandEmpty>
                                   <CommandGroup>
-                                    {products.map((product) => (
-                                      <CommandItem
-                                        key={product.id}
-                                        value={`${product.code} ${product.description}`}
-                                        onSelect={() => {
-                                          handleItemChange(index, "product_id", product.id);
-                                          setOpenProductPopover(null);
-                                        }}
-                                      >
-                                        <Check
-                                          className={cn(
-                                            "mr-2 h-4 w-4",
-                                            item.product_id === product.id ? "opacity-100" : "opacity-0"
-                                          )}
-                                        />
-                                        <div className="flex flex-col">
-                                          <span className="font-medium">{product.code}</span>
-                                          <span className="text-xs text-muted-foreground truncate max-w-[220px]">
-                                            {product.description}
-                                          </span>
-                                        </div>
-                                      </CommandItem>
-                                    ))}
+                                    {productsLoading ? (
+                                      <CommandItem disabled>Carregando produtos...</CommandItem>
+                                    ) : products && products.length > 0 ? (
+                                      products.map((product) => (
+                                        <CommandItem
+                                          key={product.id}
+                                          value={`${product.code} ${product.description}`}
+                                          onSelect={() => {
+                                            handleItemChange(index, "product_id", product.id);
+                                            setOpenProductPopover(null);
+                                          }}
+                                        >
+                                          <Check
+                                            className={cn(
+                                              "mr-2 h-4 w-4",
+                                              item.product_id === product.id ? "opacity-100" : "opacity-0"
+                                            )}
+                                          />
+                                          <div className="flex flex-col">
+                                            <span className="font-medium">{product.code}</span>
+                                            <span className="text-xs text-muted-foreground truncate max-w-[220px]">
+                                              {product.description}
+                                            </span>
+                                          </div>
+                                        </CommandItem>
+                                      ))
+                                    ) : (
+                                      <CommandItem disabled>Nenhum produto cadastrado</CommandItem>
+                                    )}
                                   </CommandGroup>
                                 </CommandList>
                               </Command>
