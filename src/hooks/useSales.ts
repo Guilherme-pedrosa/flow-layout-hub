@@ -314,44 +314,34 @@ export function useInTransitStock(productId: string) {
     queryFn: async () => {
       if (!productId) return { quantity: 0, nextArrivalDate: null };
 
+      // Buscar apenas itens cujo pedido de compra tem status com stock_behavior = 'forecast'
+      // Isso significa que a mercadoria está em trânsito mas ainda não deu entrada no estoque
       const { data, error } = await supabase
         .from("purchase_order_items")
         .select(`
           quantity, 
-          purchase_order:purchase_orders(
+          purchase_order:purchase_orders!inner(
             id,
-            invoice_date, 
-            status,
+            invoice_date,
             status_id,
-            purchase_status:purchase_order_statuses(stock_behavior)
+            purchase_status:purchase_order_statuses!inner(stock_behavior)
           )
         `)
         .eq("product_id", productId);
 
       if (error || !data) return { quantity: 0, nextArrivalDate: null };
 
-      // Filtrar apenas pedidos que ainda não deram entrada no estoque
-      // Considera pendentes aqueles cujo status não é "finalizado", "concluido" ou "cancelado"
-      // ou cujo stock_behavior não é "move"
-      const pendingItems = data.filter((item: any) => {
-        const status = item.purchase_order?.status?.toLowerCase() || '';
+      // Filtrar apenas itens com stock_behavior = 'forecast' (em trânsito)
+      const inTransitItems = data.filter((item: any) => {
         const stockBehavior = item.purchase_order?.purchase_status?.stock_behavior;
-        
-        // Se tem status configurado com comportamento de estoque, usa ele
-        if (stockBehavior) {
-          return stockBehavior !== 'move'; // Ainda não moveu para o estoque
-        }
-        
-        // Senão, filtra por status textual
-        const finishedStatuses = ['finalizado', 'concluido', 'concluído', 'cancelado'];
-        return !finishedStatuses.includes(status);
+        return stockBehavior === 'forecast';
       });
 
-      const totalInTransit = pendingItems.reduce((sum: number, item: any) => 
+      const totalInTransit = inTransitItems.reduce((sum: number, item: any) => 
         sum + Number(item.quantity || 0), 0
       );
 
-      const nextArrival = pendingItems
+      const nextArrival = inTransitItems
         .map((item: any) => item.purchase_order?.invoice_date)
         .filter(Boolean)
         .sort()[0] || null;
