@@ -50,7 +50,7 @@ const originOptions = [
 ];
 
 const specificProductOptions = [
-  { value: '', label: 'Não usar' },
+  { value: 'nenhum', label: 'Não usar' },
   { value: 'medicamento', label: 'Medicamento' },
   { value: 'combustivel', label: 'Combustível' },
   { value: 'veiculo', label: 'Veículo' },

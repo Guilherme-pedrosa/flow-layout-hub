@@ -132,7 +132,7 @@ const initialFormData: ProductFormData = {
   net_weight: 0,
   gross_weight: 0,
   fci_number: '',
-  specific_product: '',
+  specific_product: 'nenhum',
   benefit_code: '',
   icms_rate: 0,
   images: [],
