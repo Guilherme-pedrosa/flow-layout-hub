@@ -6,15 +6,13 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Checkbox } from "@/components/ui/checkbox";
 import { PageHeader } from "@/components/shared";
+import { ReconciliationModal, ReconciliationReverseModal } from "@/components/financeiro";
 import {
   RefreshCw,
   Download,
   Check,
-  X,
   ArrowUpCircle,
   ArrowDownCircle,
   Loader2,
@@ -23,7 +21,7 @@ import {
   Link2,
   Zap,
   FileText,
-  Users
+  Undo2
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -41,6 +39,8 @@ interface BankTransaction {
   is_reconciled: boolean;
   reconciled_at: string | null;
   reconciled_with_id: string | null;
+  reconciled_with_type: string | null;
+  bank_account_id: string | null;
 }
 
 interface AccountReceivable {
@@ -53,6 +53,7 @@ interface AccountReceivable {
   paid_at: string | null;
   payment_method: string | null;
   client_id: string | null;
+  reconciliation_id: string | null;
   clientes?: {
     razao_social: string | null;
     nome_fantasia: string | null;
@@ -62,17 +63,16 @@ interface AccountReceivable {
 export default function Conciliacao() {
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
-  const [reconciling, setReconciling] = useState(false);
   const [transactions, setTransactions] = useState<BankTransaction[]>([]);
   const [receivables, setReceivables] = useState<AccountReceivable[]>([]);
   const [hasCredentials, setHasCredentials] = useState(false);
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [receivableFilter, setReceivableFilter] = useState<string>("all");
   
-  // Modal de conciliação manual
-  const [manualDialogOpen, setManualDialogOpen] = useState(false);
+  // Modais
+  const [reconcileModalOpen, setReconcileModalOpen] = useState(false);
+  const [reverseModalOpen, setReverseModalOpen] = useState(false);
   const [selectedTransaction, setSelectedTransaction] = useState<BankTransaction | null>(null);
-  const [selectedReceivableId, setSelectedReceivableId] = useState<string>("");
 
   // Período
   const today = new Date();
@@ -157,119 +157,14 @@ export default function Conciliacao() {
     }
   };
 
-  const handleAutoReconcile = async () => {
-    setReconciling(true);
-    try {
-      const { data, error } = await supabase.functions.invoke("reconciliation-engine", {
-        body: {
-          company_id: TEMP_COMPANY_ID,
-          tolerance_days: 5,
-          tolerance_amount: 0.10,
-        },
-      });
-
-      if (error) throw error;
-
-      toast.success(`Conciliação automática: ${data?.matched || 0} títulos conciliados!`);
-      loadData();
-    } catch (error: any) {
-      console.error("Erro na conciliação:", error);
-      toast.error(error.message || "Erro na conciliação automática");
-    } finally {
-      setReconciling(false);
-    }
-  };
-
-  const handleManualReconcile = async () => {
-    if (!selectedTransaction || !selectedReceivableId) return;
-
-    try {
-      // Buscar o título selecionado
-      const receivable = receivables.find(r => r.id === selectedReceivableId);
-      if (!receivable) return;
-
-      // Atualizar transação bancária
-      const { error: txError } = await supabase
-        .from("bank_transactions")
-        .update({
-          is_reconciled: true,
-          reconciled_at: new Date().toISOString(),
-          reconciled_with_id: receivable.id,
-          reconciled_with_type: "accounts_receivable",
-        })
-        .eq("id", selectedTransaction.id);
-
-      if (txError) throw txError;
-
-      // Atualizar título
-      const { error: recError } = await supabase
-        .from("accounts_receivable")
-        .update({
-          is_paid: true,
-          paid_at: selectedTransaction.transaction_date,
-          paid_amount: Math.abs(selectedTransaction.amount),
-          bank_transaction_id: selectedTransaction.id,
-          reconciled_at: new Date().toISOString(),
-          payment_method: "transferencia",
-        })
-        .eq("id", receivable.id);
-
-      if (recError) throw recError;
-
-      toast.success("Conciliação manual realizada com sucesso!");
-      setManualDialogOpen(false);
-      setSelectedTransaction(null);
-      setSelectedReceivableId("");
-      loadData();
-    } catch (error) {
-      console.error("Erro na conciliação manual:", error);
-      toast.error("Erro ao realizar conciliação manual");
-    }
-  };
-
-  const handleRemoveReconciliation = async (transactionId: string, receivableId: string | null) => {
-    try {
-      // Remover conciliação da transação
-      const { error: txError } = await supabase
-        .from("bank_transactions")
-        .update({
-          is_reconciled: false,
-          reconciled_at: null,
-          reconciled_with_id: null,
-          reconciled_with_type: null,
-        })
-        .eq("id", transactionId);
-
-      if (txError) throw txError;
-
-      // Se tiver título vinculado, remover pagamento
-      if (receivableId) {
-        const { error: recError } = await supabase
-          .from("accounts_receivable")
-          .update({
-            is_paid: false,
-            paid_at: null,
-            paid_amount: 0,
-            bank_transaction_id: null,
-            reconciled_at: null,
-          })
-          .eq("id", receivableId);
-
-        if (recError) throw recError;
-      }
-
-      toast.success("Conciliação removida");
-      loadData();
-    } catch (error) {
-      console.error("Erro ao remover conciliação:", error);
-      toast.error("Erro ao remover conciliação");
-    }
-  };
-
-  const openManualDialog = (tx: BankTransaction) => {
+  const openReconcileModal = (tx: BankTransaction) => {
     setSelectedTransaction(tx);
-    setSelectedReceivableId("");
-    setManualDialogOpen(true);
+    setReconcileModalOpen(true);
+  };
+
+  const openReverseModal = (tx: BankTransaction) => {
+    setSelectedTransaction(tx);
+    setReverseModalOpen(true);
   };
 
   // Filtros
@@ -285,19 +180,21 @@ export default function Conciliacao() {
     return true;
   });
 
-  const pendingTransactions = transactions.filter(tx => !tx.is_reconciled && tx.type === "CREDIT");
-  const openReceivables = receivables.filter(r => !r.is_paid);
+  const pendingCreditTransactions = transactions.filter(tx => !tx.is_reconciled && tx.type === "CREDIT");
+  const pendingDebitTransactions = transactions.filter(tx => !tx.is_reconciled && tx.type === "DEBIT");
+  const allPendingTransactions = transactions.filter(tx => !tx.is_reconciled);
 
   // Totais
   const totalCredits = transactions.filter(t => t.type === "CREDIT").reduce((sum, t) => sum + t.amount, 0);
   const totalDebits = transactions.filter(t => t.type === "DEBIT").reduce((sum, t) => sum + Math.abs(t.amount), 0);
   const totalReceivables = receivables.filter(r => !r.is_paid).reduce((sum, r) => sum + r.amount, 0);
+  const reconciledCount = transactions.filter(t => t.is_reconciled).length;
 
   return (
     <div className="animate-fade-in space-y-6">
       <PageHeader
         title="Conciliação Bancária"
-        description="Concilie transações do extrato com títulos a receber"
+        description="Vincule transações do extrato a títulos financeiros"
         breadcrumbs={[{ label: "Financeiro" }, { label: "Conciliação" }]}
       />
 
@@ -375,10 +272,10 @@ export default function Conciliacao() {
         <Card>
           <CardContent className="pt-4 flex flex-col justify-between h-full">
             <div className="flex items-center gap-2">
-              <FileText className="h-6 w-6 text-amber-500" />
+              <Link2 className="h-6 w-6 text-blue-500" />
               <div>
-                <p className="text-xs text-muted-foreground">A Receber (Aberto)</p>
-                <p className="text-lg font-bold text-amber-600">{formatCurrency(totalReceivables)}</p>
+                <p className="text-xs text-muted-foreground">Conciliados</p>
+                <p className="text-lg font-bold text-blue-600">{reconciledCount} / {transactions.length}</p>
               </div>
             </div>
           </CardContent>
@@ -390,30 +287,97 @@ export default function Conciliacao() {
               {syncing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Download className="h-4 w-4 mr-2" />}
               Sincronizar Inter
             </Button>
-            <Button onClick={handleAutoReconcile} disabled={reconciling} variant="secondary" className="w-full" size="sm">
-              {reconciling ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Zap className="h-4 w-4 mr-2" />}
-              Conciliar Auto
+            <Button onClick={loadData} variant="outline" className="w-full" size="sm" disabled={loading}>
+              <RefreshCw className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`} />
+              Atualizar
             </Button>
           </CardContent>
         </Card>
       </div>
 
       {/* Tabs */}
-      <Tabs defaultValue="extrato" className="space-y-4">
+      <Tabs defaultValue="pendentes" className="space-y-4">
         <TabsList>
+          <TabsTrigger value="pendentes">
+            Pendentes de Conciliação
+            <Badge variant="destructive" className="ml-2">{allPendingTransactions.length}</Badge>
+          </TabsTrigger>
           <TabsTrigger value="extrato">
             Extrato Bancário
             <Badge variant="secondary" className="ml-2">{transactions.length}</Badge>
-          </TabsTrigger>
-          <TabsTrigger value="pendentes">
-            Conciliação Pendente
-            <Badge variant="destructive" className="ml-2">{pendingTransactions.length}</Badge>
           </TabsTrigger>
           <TabsTrigger value="titulos">
             Boletos e Títulos
             <Badge variant="secondary" className="ml-2">{receivables.length}</Badge>
           </TabsTrigger>
         </TabsList>
+
+        {/* Tab: Pendentes de Conciliação */}
+        <TabsContent value="pendentes" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle>Transações Não Conciliadas</CardTitle>
+                  <CardDescription>
+                    Clique em "Conciliar" para vincular a transação com títulos financeiros
+                  </CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {loading ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                </div>
+              ) : allPendingTransactions.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-12 text-center">
+                  <Check className="h-12 w-12 text-green-500/50 mb-4" />
+                  <p className="font-medium text-green-600">Tudo conciliado!</p>
+                  <p className="text-sm text-muted-foreground">
+                    Não há transações pendentes de conciliação
+                  </p>
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Data</TableHead>
+                      <TableHead>Descrição</TableHead>
+                      <TableHead>Tipo</TableHead>
+                      <TableHead className="text-right">Valor</TableHead>
+                      <TableHead className="text-right">Ação</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {allPendingTransactions.map((tx) => (
+                      <TableRow key={tx.id}>
+                        <TableCell className="font-medium">{formatDate(tx.transaction_date)}</TableCell>
+                        <TableCell className="max-w-[400px] truncate">{tx.description}</TableCell>
+                        <TableCell>
+                          <Badge variant={tx.type === "CREDIT" ? "default" : "secondary"}>
+                            {tx.type === "CREDIT" ? "Crédito" : "Débito"}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <span className={`font-medium ${tx.type === "CREDIT" ? "text-green-600" : "text-red-600"}`}>
+                            {tx.type === "CREDIT" ? "+" : "-"}{formatCurrency(Math.abs(tx.amount))}
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Button size="sm" onClick={() => openReconcileModal(tx)}>
+                            <Link2 className="h-4 w-4 mr-2" />
+                            Conciliar
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
 
         {/* Tab: Extrato Bancário */}
         <TabsContent value="extrato" className="space-y-4">
@@ -432,9 +396,6 @@ export default function Conciliacao() {
                       <SelectItem value="debit">Débitos</SelectItem>
                     </SelectContent>
                   </Select>
-                  <Button variant="outline" size="icon" onClick={loadData} disabled={loading}>
-                    <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-                  </Button>
                 </div>
               </div>
             </CardHeader>
@@ -479,6 +440,9 @@ export default function Conciliacao() {
                             <Badge className="bg-green-500">
                               <Check className="h-3 w-3 mr-1" />
                               Conciliado
+                              {tx.reconciled_with_type === "MULTI" && (
+                                <span className="ml-1">(N)</span>
+                              )}
                             </Badge>
                           ) : (
                             <Badge variant="outline">Pendente</Badge>
@@ -489,76 +453,18 @@ export default function Conciliacao() {
                             <Button
                               variant="ghost"
                               size="sm"
-                              onClick={() => handleRemoveReconciliation(tx.id, tx.reconciled_with_id)}
+                              onClick={() => openReverseModal(tx)}
+                              className="text-amber-600 hover:text-amber-700"
                             >
-                              <X className="h-4 w-4" />
+                              <Undo2 className="h-4 w-4 mr-1" />
+                              Estornar
                             </Button>
-                          ) : tx.type === "CREDIT" ? (
-                            <Button variant="ghost" size="sm" onClick={() => openManualDialog(tx)}>
-                              <Link2 className="h-4 w-4" />
+                          ) : (
+                            <Button variant="ghost" size="sm" onClick={() => openReconcileModal(tx)}>
+                              <Link2 className="h-4 w-4 mr-1" />
+                              Conciliar
                             </Button>
-                          ) : null}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* Tab: Conciliação Pendente */}
-        <TabsContent value="pendentes" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle>Transações Não Conciliadas</CardTitle>
-                  <CardDescription>
-                    Créditos do extrato que ainda não foram vinculados a títulos
-                  </CardDescription>
-                </div>
-                <Button onClick={handleAutoReconcile} disabled={reconciling}>
-                  {reconciling ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Zap className="h-4 w-4 mr-2" />}
-                  Rodar Conciliação Automática
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent>
-              {pendingTransactions.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-12 text-center">
-                  <Check className="h-12 w-12 text-green-500/50 mb-4" />
-                  <p className="font-medium text-green-600">Tudo conciliado!</p>
-                  <p className="text-sm text-muted-foreground">
-                    Não há transações de crédito pendentes de conciliação
-                  </p>
-                </div>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Data</TableHead>
-                      <TableHead>Descrição</TableHead>
-                      <TableHead className="text-right">Valor</TableHead>
-                      <TableHead className="text-right">Ação</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {pendingTransactions.map((tx) => (
-                      <TableRow key={tx.id}>
-                        <TableCell className="font-medium">{formatDate(tx.transaction_date)}</TableCell>
-                        <TableCell className="max-w-[400px] truncate">{tx.description}</TableCell>
-                        <TableCell className="text-right">
-                          <span className="font-medium text-green-600">
-                            +{formatCurrency(Math.abs(tx.amount))}
-                          </span>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <Button size="sm" variant="outline" onClick={() => openManualDialog(tx)}>
-                            <Link2 className="h-4 w-4 mr-2" />
-                            Conciliar Manualmente
-                          </Button>
+                          )}
                         </TableCell>
                       </TableRow>
                     ))}
@@ -593,7 +499,11 @@ export default function Conciliacao() {
               </div>
             </CardHeader>
             <CardContent>
-              {filteredReceivables.length === 0 ? (
+              {loading ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                </div>
+              ) : filteredReceivables.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-12 text-center">
                   <FileText className="h-12 w-12 text-muted-foreground/50 mb-4" />
                   <p className="font-medium">Nenhum título encontrado</p>
@@ -610,7 +520,7 @@ export default function Conciliacao() {
                       <TableHead>Vencimento</TableHead>
                       <TableHead className="text-right">Valor</TableHead>
                       <TableHead className="text-center">Status</TableHead>
-                      <TableHead>Pagamento</TableHead>
+                      <TableHead>Conciliação</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -632,12 +542,13 @@ export default function Conciliacao() {
                           )}
                         </TableCell>
                         <TableCell>
-                          {rec.is_paid && rec.paid_at ? (
-                            <span className="text-sm text-muted-foreground">
-                              {formatDate(rec.paid_at)} - {rec.payment_method || "N/D"}
-                            </span>
+                          {rec.reconciliation_id ? (
+                            <Badge variant="secondary" className="gap-1">
+                              <Link2 className="h-3 w-3" />
+                              Vinculado
+                            </Badge>
                           ) : (
-                            "-"
+                            <span className="text-sm text-muted-foreground">-</span>
                           )}
                         </TableCell>
                       </TableRow>
@@ -650,111 +561,21 @@ export default function Conciliacao() {
         </TabsContent>
       </Tabs>
 
-      {/* Modal de Conciliação Manual */}
-      <Dialog open={manualDialogOpen} onOpenChange={setManualDialogOpen}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>Conciliação Manual</DialogTitle>
-            <DialogDescription>
-              Vincule esta transação bancária a um título a receber
-            </DialogDescription>
-          </DialogHeader>
+      {/* Modais */}
+      <ReconciliationModal
+        open={reconcileModalOpen}
+        onOpenChange={setReconcileModalOpen}
+        transaction={selectedTransaction}
+        companyId={TEMP_COMPANY_ID}
+        onSuccess={loadData}
+      />
 
-          {selectedTransaction && (
-            <div className="space-y-4">
-              <Card className="bg-muted/50">
-                <CardContent className="pt-4">
-                  <div className="grid grid-cols-3 gap-4">
-                    <div>
-                      <p className="text-xs text-muted-foreground">Data</p>
-                      <p className="font-medium">{formatDate(selectedTransaction.transaction_date)}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground">Valor</p>
-                      <p className="font-medium text-green-600">
-                        +{formatCurrency(Math.abs(selectedTransaction.amount))}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground">NSU</p>
-                      <p className="font-mono">{selectedTransaction.nsu || "-"}</p>
-                    </div>
-                  </div>
-                  <div className="mt-2">
-                    <p className="text-xs text-muted-foreground">Descrição</p>
-                    <p className="text-sm">{selectedTransaction.description}</p>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <div>
-                <Label className="mb-2 block">Selecione o título a receber:</Label>
-                {openReceivables.length === 0 ? (
-                  <p className="text-sm text-muted-foreground py-4 text-center">
-                    Não há títulos em aberto para conciliar
-                  </p>
-                ) : (
-                  <div className="max-h-[300px] overflow-y-auto border rounded-md">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead className="w-[40px]"></TableHead>
-                          <TableHead>Cliente</TableHead>
-                          <TableHead>Vencimento</TableHead>
-                          <TableHead className="text-right">Valor</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {openReceivables.map((rec) => {
-                          const valueDiff = Math.abs(rec.amount - Math.abs(selectedTransaction.amount));
-                          const isMatch = valueDiff < 1; // Match se diferença < R$1
-
-                          return (
-                            <TableRow
-                              key={rec.id}
-                              className={`cursor-pointer ${selectedReceivableId === rec.id ? "bg-primary/10" : ""} ${isMatch ? "bg-green-50 dark:bg-green-950/20" : ""}`}
-                              onClick={() => setSelectedReceivableId(rec.id)}
-                            >
-                              <TableCell>
-                                <Checkbox
-                                  checked={selectedReceivableId === rec.id}
-                                  onCheckedChange={() => setSelectedReceivableId(rec.id)}
-                                />
-                              </TableCell>
-                              <TableCell className="font-medium">
-                                {rec.clientes?.nome_fantasia || rec.clientes?.razao_social || "-"}
-                              </TableCell>
-                              <TableCell>{formatDate(rec.due_date)}</TableCell>
-                              <TableCell className="text-right">
-                                <span className={isMatch ? "text-green-600 font-medium" : ""}>
-                                  {formatCurrency(rec.amount)}
-                                </span>
-                                {isMatch && (
-                                  <Badge className="ml-2 bg-green-500" variant="secondary">Match!</Badge>
-                                )}
-                              </TableCell>
-                            </TableRow>
-                          );
-                        })}
-                      </TableBody>
-                    </Table>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setManualDialogOpen(false)}>
-              Cancelar
-            </Button>
-            <Button onClick={handleManualReconcile} disabled={!selectedReceivableId}>
-              <Check className="h-4 w-4 mr-2" />
-              Confirmar Conciliação
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ReconciliationReverseModal
+        open={reverseModalOpen}
+        onOpenChange={setReverseModalOpen}
+        transaction={selectedTransaction}
+        onSuccess={loadData}
+      />
     </div>
   );
 }

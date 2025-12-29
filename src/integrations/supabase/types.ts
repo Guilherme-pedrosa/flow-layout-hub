@@ -37,6 +37,7 @@ export type Database = {
           paid_at: string | null
           payment_method: string | null
           reconciled_at: string | null
+          reconciliation_id: string | null
           sale_id: string | null
           updated_at: string
         }
@@ -62,6 +63,7 @@ export type Database = {
           paid_at?: string | null
           payment_method?: string | null
           reconciled_at?: string | null
+          reconciliation_id?: string | null
           sale_id?: string | null
           updated_at?: string
         }
@@ -87,6 +89,7 @@ export type Database = {
           paid_at?: string | null
           payment_method?: string | null
           reconciled_at?: string | null
+          reconciliation_id?: string | null
           sale_id?: string | null
           updated_at?: string
         }
@@ -110,6 +113,13 @@ export type Database = {
             columns: ["company_id"]
             isOneToOne: false
             referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "accounts_receivable_reconciliation_id_fkey"
+            columns: ["reconciliation_id"]
+            isOneToOne: false
+            referencedRelation: "bank_reconciliations"
             referencedColumns: ["id"]
           },
           {
@@ -218,6 +228,121 @@ export type Database = {
             columns: ["company_id"]
             isOneToOne: false
             referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      bank_reconciliation_items: {
+        Row: {
+          amount_used: number
+          created_at: string
+          financial_id: string
+          financial_type: string
+          id: string
+          reconciliation_id: string
+        }
+        Insert: {
+          amount_used: number
+          created_at?: string
+          financial_id: string
+          financial_type: string
+          id?: string
+          reconciliation_id: string
+        }
+        Update: {
+          amount_used?: number
+          created_at?: string
+          financial_id?: string
+          financial_type?: string
+          id?: string
+          reconciliation_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bank_reconciliation_items_reconciliation_id_fkey"
+            columns: ["reconciliation_id"]
+            isOneToOne: false
+            referencedRelation: "bank_reconciliations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      bank_reconciliations: {
+        Row: {
+          bank_transaction_id: string
+          company_id: string
+          created_at: string
+          id: string
+          is_reversed: boolean
+          method: string
+          notes: string | null
+          reconciled_at: string
+          reconciled_by: string | null
+          reversal_notes: string | null
+          reversed_at: string | null
+          reversed_by: string | null
+          total_reconciled_amount: number
+          updated_at: string
+        }
+        Insert: {
+          bank_transaction_id: string
+          company_id: string
+          created_at?: string
+          id?: string
+          is_reversed?: boolean
+          method?: string
+          notes?: string | null
+          reconciled_at?: string
+          reconciled_by?: string | null
+          reversal_notes?: string | null
+          reversed_at?: string | null
+          reversed_by?: string | null
+          total_reconciled_amount: number
+          updated_at?: string
+        }
+        Update: {
+          bank_transaction_id?: string
+          company_id?: string
+          created_at?: string
+          id?: string
+          is_reversed?: boolean
+          method?: string
+          notes?: string | null
+          reconciled_at?: string
+          reconciled_by?: string | null
+          reversal_notes?: string | null
+          reversed_at?: string | null
+          reversed_by?: string | null
+          total_reconciled_amount?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bank_reconciliations_bank_transaction_id_fkey"
+            columns: ["bank_transaction_id"]
+            isOneToOne: false
+            referencedRelation: "bank_transactions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bank_reconciliations_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bank_reconciliations_reconciled_by_fkey"
+            columns: ["reconciled_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bank_reconciliations_reversed_by_fkey"
+            columns: ["reversed_by"]
+            isOneToOne: false
+            referencedRelation: "users"
             referencedColumns: ["id"]
           },
         ]
@@ -817,6 +942,7 @@ export type Database = {
           paid_at: string | null
           payment_method: string | null
           purchase_order_id: string | null
+          reconciliation_id: string | null
           supplier_id: string
           updated_at: string
         }
@@ -840,6 +966,7 @@ export type Database = {
           paid_at?: string | null
           payment_method?: string | null
           purchase_order_id?: string | null
+          reconciliation_id?: string | null
           supplier_id: string
           updated_at?: string
         }
@@ -863,6 +990,7 @@ export type Database = {
           paid_at?: string | null
           payment_method?: string | null
           purchase_order_id?: string | null
+          reconciliation_id?: string | null
           supplier_id?: string
           updated_at?: string
         }
@@ -900,6 +1028,13 @@ export type Database = {
             columns: ["purchase_order_id"]
             isOneToOne: false
             referencedRelation: "purchase_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payables_reconciliation_id_fkey"
+            columns: ["reconciliation_id"]
+            isOneToOne: false
+            referencedRelation: "bank_reconciliations"
             referencedColumns: ["id"]
           },
           {
