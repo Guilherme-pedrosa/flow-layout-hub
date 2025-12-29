@@ -921,6 +921,87 @@ export type Database = {
           },
         ]
       }
+      inter_pix_payments: {
+        Row: {
+          amount: number
+          company_id: string
+          created_at: string
+          created_by: string | null
+          description: string | null
+          error_message: string | null
+          id: string
+          inter_end_to_end_id: string | null
+          inter_response: Json | null
+          inter_status: string | null
+          inter_transaction_id: string | null
+          payable_id: string | null
+          pix_key: string
+          pix_key_type: string
+          processed_at: string | null
+          recipient_document: string
+          recipient_name: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          amount: number
+          company_id: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          error_message?: string | null
+          id?: string
+          inter_end_to_end_id?: string | null
+          inter_response?: Json | null
+          inter_status?: string | null
+          inter_transaction_id?: string | null
+          payable_id?: string | null
+          pix_key: string
+          pix_key_type: string
+          processed_at?: string | null
+          recipient_document: string
+          recipient_name: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          company_id?: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          error_message?: string | null
+          id?: string
+          inter_end_to_end_id?: string | null
+          inter_response?: Json | null
+          inter_status?: string | null
+          inter_transaction_id?: string | null
+          payable_id?: string | null
+          pix_key?: string
+          pix_key_type?: string
+          processed_at?: string | null
+          recipient_document?: string
+          recipient_name?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inter_pix_payments_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inter_pix_payments_payable_id_fkey"
+            columns: ["payable_id"]
+            isOneToOne: false
+            referencedRelation: "payables"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       payables: {
         Row: {
           amount: number
