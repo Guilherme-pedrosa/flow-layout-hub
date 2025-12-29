@@ -129,15 +129,23 @@ export function useCheckout() {
       .eq("reference_type", "venda")
       .eq("type", "SAIDA_VENDA");
 
+    // Agrupa movimentações por product_id (pode haver múltiplas movimentações por produto)
+    const movementsByProduct: Record<string, number> = {};
+    (stockMovements || []).forEach(sm => {
+      const productId = sm.product_id || '';
+      movementsByProduct[productId] = (movementsByProduct[productId] || 0) + (sm.quantity || 0);
+    });
+
     const items: CheckoutItem[] = (productItems || []).map(item => {
       const checkoutItem = checkoutItems?.find(ci => ci.sale_product_item_id === item.id);
       
-      // Verifica se há movimentação de estoque para este produto (já foi baixado)
-      const stockMovement = stockMovements?.find(sm => sm.product_id === item.product_id);
-      const quantityFromMovement = stockMovement?.quantity || 0;
+      // Quantidade da movimentação de estoque (agregada)
+      const quantityFromMovement = movementsByProduct[item.product_id || ''] || 0;
       
-      // Usa checkout_item se existir, senão usa movimentação de estoque
-      const quantityChecked = checkoutItem?.quantity_checked ?? quantityFromMovement;
+      // Usa checkout_item se existir E tiver valor, senão usa movimentação de estoque
+      const quantityChecked = (checkoutItem?.quantity_checked != null && checkoutItem.quantity_checked > 0) 
+        ? checkoutItem.quantity_checked 
+        : quantityFromMovement;
       
       return {
         id: checkoutItem?.id || item.id,
@@ -209,14 +217,23 @@ export function useCheckout() {
       .eq("reference_type", "os")
       .eq("type", "SAIDA_VENDA");
 
+    // Agrupa movimentações por product_id
+    const movementsByProduct: Record<string, number> = {};
+    (stockMovements || []).forEach(sm => {
+      const productId = sm.product_id || '';
+      movementsByProduct[productId] = (movementsByProduct[productId] || 0) + (sm.quantity || 0);
+    });
+
     const items: CheckoutItem[] = (productItems || []).map(item => {
       const checkoutItem = checkoutItems?.find(ci => ci.service_order_product_item_id === item.id);
       
-      // Verifica se há movimentação de estoque para este produto
-      const stockMovement = stockMovements?.find(sm => sm.product_id === item.product_id);
-      const quantityFromMovement = stockMovement?.quantity || 0;
+      // Quantidade da movimentação de estoque (agregada)
+      const quantityFromMovement = movementsByProduct[item.product_id || ''] || 0;
       
-      const quantityChecked = checkoutItem?.quantity_checked ?? quantityFromMovement;
+      // Usa checkout_item se existir E tiver valor, senão usa movimentação de estoque
+      const quantityChecked = (checkoutItem?.quantity_checked != null && checkoutItem.quantity_checked > 0) 
+        ? checkoutItem.quantity_checked 
+        : quantityFromMovement;
       
       return {
         id: checkoutItem?.id || item.id,
