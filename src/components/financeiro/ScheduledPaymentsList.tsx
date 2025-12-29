@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -55,6 +56,7 @@ interface Payable {
   description: string | null;
   document_number: string | null;
   supplier_id: string;
+  purchase_order_id: string | null;
   payment_method_type: string | null;
   boleto_barcode: string | null;
   pix_key: string | null;
@@ -65,6 +67,9 @@ interface Payable {
     razao_social: string | null;
     nome_fantasia: string | null;
   };
+  purchase_order?: {
+    order_number: number;
+  } | null;
 }
 
 interface ScheduledPaymentsListProps {
@@ -95,7 +100,8 @@ export function ScheduledPaymentsList({ onSubmitted }: ScheduledPaymentsListProp
         .from("payables")
         .select(`
           *,
-          supplier:pessoas!payables_supplier_id_fkey(razao_social, nome_fantasia)
+          supplier:pessoas!payables_supplier_id_fkey(razao_social, nome_fantasia),
+          purchase_order:purchase_orders!payables_purchase_order_id_fkey(order_number)
         `)
         .eq("is_paid", false)
         .in("payment_status", ["open", "ready_to_pay"])
@@ -370,6 +376,7 @@ export function ScheduledPaymentsList({ onSubmitted }: ScheduledPaymentsListProp
                     />
                   </TableHead>
                   <TableHead>Fornecedor</TableHead>
+                  <TableHead>Origem</TableHead>
                   <TableHead>Vencimento</TableHead>
                   <TableHead>Método</TableHead>
                   <TableHead className="text-right">Valor</TableHead>
@@ -401,6 +408,19 @@ export function ScheduledPaymentsList({ onSubmitted }: ScheduledPaymentsListProp
                           </span>
                         )}
                       </div>
+                    </TableCell>
+                    <TableCell>
+                      {payable.purchase_order_id && payable.purchase_order ? (
+                        <Link 
+                          to={`/pedidos-compra?edit=${payable.purchase_order_id}`}
+                          className="inline-flex items-center gap-1 text-primary hover:underline font-medium"
+                        >
+                          <Receipt className="h-3 w-3" />
+                          PC #{payable.purchase_order.order_number}
+                        </Link>
+                      ) : (
+                        <span className="text-muted-foreground text-sm">Manual</span>
+                      )}
                     </TableCell>
                     <TableCell>
                       {format(parseISO(payable.due_date), "dd/MM/yyyy", { locale: ptBR })}
