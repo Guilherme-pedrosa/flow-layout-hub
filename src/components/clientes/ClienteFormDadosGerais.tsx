@@ -35,6 +35,7 @@ export function ClienteFormDadosGerais({ formData, setFormData, duplicateWarning
           situacao_cadastral: data.situacao || formData.situacao_cadastral,
           data_abertura: data.abertura ? data.abertura.split('/').reverse().join('-') : formData.data_abertura,
           cnae_principal: data.atividade_principal?.[0]?.text || formData.cnae_principal,
+          inscricao_estadual: data.inscricao_estadual || formData.inscricao_estadual,
           email: data.email || formData.email,
           telefone: data.telefone || formData.telefone,
           cep: data.cep?.replace(/\D/g, '') || formData.cep,

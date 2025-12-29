@@ -19,6 +19,10 @@ export interface CnpjData {
   cep: string;
   email: string;
   telefone: string;
+  // Campos de QSA (Quadro de Sócios e Administradores)
+  qsa?: { nome: string; qual: string }[];
+  // Inscrição Estadual - nem sempre disponível
+  inscricao_estadual?: string;
 }
 
 export async function consultarCnpj(cnpj: string): Promise<CnpjData | null> {
