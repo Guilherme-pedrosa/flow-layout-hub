@@ -85,18 +85,19 @@ function StockHoverCard({ productId, currentStock, unit, requestedQuantity }: {
   
   return (
     <HoverCard openDelay={100} closeDelay={100}>
-      <HoverCardTrigger asChild>
-        <span 
+      <HoverCardTrigger>
+        <button 
+          type="button"
           className={cn(
-            "inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded cursor-pointer",
+            "inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded cursor-pointer border-0 bg-transparent",
             isOutOfStock ? "bg-destructive/10 text-destructive" : "bg-green-100 text-green-700"
           )}
         >
           <Package className="h-3 w-3" />
           {currentStock.toLocaleString('pt-BR')} {unit}
-        </span>
+        </button>
       </HoverCardTrigger>
-      <HoverCardContent className="w-auto p-3" align="start">
+      <HoverCardContent className="w-auto p-3 z-50" align="start" side="top" sideOffset={5}>
         <StockContent productId={productId} currentStock={currentStock} unit={unit} requestedQuantity={requestedQuantity} />
       </HoverCardContent>
     </HoverCard>
