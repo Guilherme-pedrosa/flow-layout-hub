@@ -16,7 +16,7 @@ import {
 import { Loader2, Save, X, FileUp, AlertTriangle, Package, FileText, Truck, DollarSign } from "lucide-react";
 import { usePurchaseOrders, PurchaseOrder, PurchaseOrderInsert } from "@/hooks/usePurchaseOrders";
 import { usePurchaseOrderStatuses } from "@/hooks/usePurchaseOrderStatuses";
-import { useSuppliers } from "@/hooks/useSuppliers";
+import { usePessoas } from "@/hooks/usePessoas";
 import { useChartOfAccounts, useCostCenters } from "@/hooks/useFinanceiro";
 import { toast } from "sonner";
 import { PurchaseOrderItems } from "./PurchaseOrderItems";
@@ -47,7 +47,7 @@ export function PurchaseOrderForm({ order, onClose }: PurchaseOrderFormProps) {
 
   const { createOrder, updateOrder, refetch } = usePurchaseOrders();
   const { statuses } = usePurchaseOrderStatuses();
-  const { activeSuppliers } = useSuppliers();
+  const { activeFornecedores } = usePessoas();
   const { accounts: chartOfAccounts, fetchAccounts } = useChartOfAccounts();
   const { costCenters, fetchCostCenters } = useCostCenters();
 
@@ -167,9 +167,9 @@ export function PurchaseOrderForm({ order, onClose }: PurchaseOrderFormProps) {
                       <SelectValue placeholder="Selecione o fornecedor" />
                     </SelectTrigger>
                     <SelectContent>
-                      {activeSuppliers.map((supplier) => (
-                        <SelectItem key={supplier.id} value={supplier.id}>
-                          {supplier.razao_social}
+                      {activeFornecedores.map((fornecedor) => (
+                        <SelectItem key={fornecedor.id} value={fornecedor.id}>
+                          {fornecedor.razao_social || fornecedor.nome_fantasia}
                         </SelectItem>
                       ))}
                     </SelectContent>
