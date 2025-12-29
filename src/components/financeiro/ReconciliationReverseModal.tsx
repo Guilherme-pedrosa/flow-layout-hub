@@ -119,25 +119,59 @@ export function ReconciliationReverseModal({
   };
 
   const handleReverse = async () => {
-    if (!transaction?.reconciled_with_id) return;
+    if (!transaction) return;
     
     setSaving(true);
     try {
-      const reconciliationId = transaction.reconciled_with_id;
+      // Se tem reconciled_with_id, é modelo novo com bank_reconciliations
+      if (transaction.reconciled_with_id) {
+        const reconciliationId = transaction.reconciled_with_id;
 
-      // 1. Marcar conciliação como estornada
-      const { error: recError } = await supabase
-        .from("bank_reconciliations")
-        .update({
-          is_reversed: true,
-          reversed_at: new Date().toISOString(),
-          reversal_notes: reason || null
-        })
-        .eq("id", reconciliationId);
+        // 1. Marcar conciliação como estornada
+        const { error: recError } = await supabase
+          .from("bank_reconciliations")
+          .update({
+            is_reversed: true,
+            reversed_at: new Date().toISOString(),
+            reversal_notes: reason || null
+          })
+          .eq("id", reconciliationId);
 
-      if (recError) throw recError;
+        if (recError) throw recError;
 
-      // 2. Reverter transação bancária
+        // 2. Reverter títulos financeiros vinculados
+        for (const item of items) {
+          if (item.financial_type === 'receivable') {
+            const { error } = await supabase
+              .from("accounts_receivable")
+              .update({
+                is_paid: false,
+                paid_at: null,
+                paid_amount: 0,
+                bank_transaction_id: null,
+                reconciled_at: null,
+                reconciliation_id: null
+              })
+              .eq("id", item.financial_id);
+            
+            if (error) throw error;
+          } else {
+            const { error } = await supabase
+              .from("payables")
+              .update({
+                is_paid: false,
+                paid_at: null,
+                paid_amount: 0,
+                reconciliation_id: null
+              })
+              .eq("id", item.financial_id);
+            
+            if (error) throw error;
+          }
+        }
+      }
+
+      // 3. Reverter transação bancária (sempre)
       const { error: txError } = await supabase
         .from("bank_transactions")
         .update({
@@ -149,37 +183,6 @@ export function ReconciliationReverseModal({
         .eq("id", transaction.id);
 
       if (txError) throw txError;
-
-      // 3. Reverter títulos financeiros
-      for (const item of items) {
-        if (item.financial_type === 'receivable') {
-          const { error } = await supabase
-            .from("accounts_receivable")
-            .update({
-              is_paid: false,
-              paid_at: null,
-              paid_amount: 0,
-              bank_transaction_id: null,
-              reconciled_at: null,
-              reconciliation_id: null
-            })
-            .eq("id", item.financial_id);
-          
-          if (error) throw error;
-        } else {
-          const { error } = await supabase
-            .from("payables")
-            .update({
-              is_paid: false,
-              paid_at: null,
-              paid_amount: 0,
-              reconciliation_id: null
-            })
-            .eq("id", item.financial_id);
-          
-          if (error) throw error;
-        }
-      }
 
       toast.success("Conciliação estornada com sucesso!");
       onOpenChange(false);
