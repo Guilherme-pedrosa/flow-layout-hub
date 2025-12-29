@@ -484,7 +484,8 @@ function generateDocumentHTML(data: DocumentData, pdfType: 'complete' | 'summary
     </div>
     ` : ''}
 
-    <!-- Logs/Histórico -->
+    <!-- Logs/Histórico - apenas no completo -->
+    ${pdfType === 'complete' ? `
     <div class="logs-section">
       <h3 style="font-size: 12px; font-weight: 600; margin: 0 0 12px 0; color: #92400e;">Histórico do Documento</h3>
       <div class="log-item">
@@ -506,6 +507,7 @@ function generateDocumentHTML(data: DocumentData, pdfType: 'complete' | 'summary
       </div>
       ` : ''}
     </div>
+    ` : ''}
 
     <!-- Rodapé -->
     <div class="footer">
