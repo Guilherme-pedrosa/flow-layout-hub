@@ -206,14 +206,14 @@ export function SaleFormProdutos({ items, onChange }: SaleFormProdutosProps) {
                   </TableCell>
                   <TableCell>
                     <Select
-                      value={item.price_table_id || ''}
-                      onValueChange={(value) => updateItem(index, 'price_table_id', value)}
+                      value={item.price_table_id || 'default'}
+                      onValueChange={(value) => updateItem(index, 'price_table_id', value === 'default' ? '' : value)}
                     >
                       <SelectTrigger>
                         <SelectValue placeholder="Padrão" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">Preço padrão</SelectItem>
+                        <SelectItem value="default">Preço padrão</SelectItem>
                         {activePriceTables.map(pt => (
                           <SelectItem key={pt.id} value={pt.id}>{pt.name}</SelectItem>
                         ))}
