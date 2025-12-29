@@ -182,7 +182,40 @@ serve(async (req) => {
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
   try {
-    const payload: PixPaymentRequest = await req.json();
+    const rawPayload = await req.json();
+    let payload: PixPaymentRequest;
+    
+    // Modo de retry: se receber apenas paymentId, buscar dados do pagamento existente
+    if (rawPayload.paymentId && !rawPayload.company_id) {
+      console.log(`[inter-pix-payment] Modo retry - buscando pagamento ${rawPayload.paymentId}`);
+      
+      const { data: existingPayment, error: fetchError } = await supabase
+        .from("inter_pix_payments")
+        .select("*")
+        .eq("id", rawPayload.paymentId)
+        .single();
+      
+      if (fetchError || !existingPayment) {
+        throw new Error("Pagamento não encontrado para reprocessamento");
+      }
+      
+      payload = {
+        company_id: existingPayment.company_id,
+        payment_id: existingPayment.id,
+        payable_id: existingPayment.payable_id,
+        recipient_name: existingPayment.recipient_name,
+        recipient_document: existingPayment.recipient_document,
+        pix_key: existingPayment.pix_key,
+        pix_key_type: existingPayment.pix_key_type,
+        amount: existingPayment.amount,
+        description: existingPayment.description,
+      };
+      
+      console.log(`[inter-pix-payment] Dados recuperados para retry: R$ ${payload.amount} para ${payload.recipient_name}`);
+    } else {
+      payload = rawPayload as PixPaymentRequest;
+    }
+    
     console.log(`[inter-pix-payment] Processando PIX: R$ ${payload.amount} para ${payload.recipient_name}`);
 
     if (!payload.company_id || !payload.recipient_name || !payload.pix_key || !payload.amount) {
