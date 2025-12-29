@@ -115,6 +115,91 @@ export type Database = {
           },
         ]
       }
+      bank_transactions: {
+        Row: {
+          amount: number
+          bank_account_id: string | null
+          category: string | null
+          company_id: string
+          created_at: string
+          description: string | null
+          external_id: string | null
+          id: string
+          is_reconciled: boolean
+          nsu: string | null
+          raw_data: Json | null
+          reconciled_at: string | null
+          reconciled_by: string | null
+          reconciled_with_id: string | null
+          reconciled_with_type: string | null
+          transaction_date: string
+          type: string | null
+          updated_at: string
+        }
+        Insert: {
+          amount: number
+          bank_account_id?: string | null
+          category?: string | null
+          company_id: string
+          created_at?: string
+          description?: string | null
+          external_id?: string | null
+          id?: string
+          is_reconciled?: boolean
+          nsu?: string | null
+          raw_data?: Json | null
+          reconciled_at?: string | null
+          reconciled_by?: string | null
+          reconciled_with_id?: string | null
+          reconciled_with_type?: string | null
+          transaction_date: string
+          type?: string | null
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          bank_account_id?: string | null
+          category?: string | null
+          company_id?: string
+          created_at?: string
+          description?: string | null
+          external_id?: string | null
+          id?: string
+          is_reconciled?: boolean
+          nsu?: string | null
+          raw_data?: Json | null
+          reconciled_at?: string | null
+          reconciled_by?: string | null
+          reconciled_with_id?: string | null
+          reconciled_with_type?: string | null
+          transaction_date?: string
+          type?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bank_transactions_bank_account_id_fkey"
+            columns: ["bank_account_id"]
+            isOneToOne: false
+            referencedRelation: "bank_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bank_transactions_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bank_transactions_reconciled_by_fkey"
+            columns: ["reconciled_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       chart_of_accounts: {
         Row: {
           code: string
@@ -549,6 +634,56 @@ export type Database = {
             foreignKeyName: "cost_centers_company_id_fkey"
             columns: ["company_id"]
             isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      inter_credentials: {
+        Row: {
+          account_number: string | null
+          certificate_file_path: string
+          client_id: string
+          client_secret: string
+          company_id: string
+          created_at: string
+          id: string
+          is_active: boolean
+          last_sync_at: string | null
+          private_key_file_path: string
+          updated_at: string
+        }
+        Insert: {
+          account_number?: string | null
+          certificate_file_path: string
+          client_id: string
+          client_secret: string
+          company_id: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          last_sync_at?: string | null
+          private_key_file_path: string
+          updated_at?: string
+        }
+        Update: {
+          account_number?: string | null
+          certificate_file_path?: string
+          client_id?: string
+          client_secret?: string
+          company_id?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          last_sync_at?: string | null
+          private_key_file_path?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inter_credentials_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: true
             referencedRelation: "companies"
             referencedColumns: ["id"]
           },

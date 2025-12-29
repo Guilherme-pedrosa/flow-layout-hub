@@ -1,0 +1,424 @@
+import { useState, useEffect } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Checkbox } from "@/components/ui/checkbox";
+import { 
+  RefreshCw, 
+  Download, 
+  Check, 
+  X, 
+  ArrowUpCircle, 
+  ArrowDownCircle,
+  Loader2,
+  AlertCircle,
+  Calendar
+} from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
+import { formatCurrency, formatDate } from "@/lib/formatters";
+
+const TEMP_COMPANY_ID = "7875af52-18d0-434e-8ae9-97981bd668e7";
+
+interface BankTransaction {
+  id: string;
+  transaction_date: string;
+  description: string | null;
+  amount: number;
+  type: string | null;
+  nsu: string | null;
+  is_reconciled: boolean;
+  reconciled_at: string | null;
+}
+
+export default function ExtratoBancario() {
+  const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
+  const [transactions, setTransactions] = useState<BankTransaction[]>([]);
+  const [hasCredentials, setHasCredentials] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  
+  // Período padrão: últimos 30 dias
+  const today = new Date();
+  const thirtyDaysAgo = new Date(today);
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+  
+  const [dateFrom, setDateFrom] = useState(thirtyDaysAgo.toISOString().split("T")[0]);
+  const [dateTo, setDateTo] = useState(today.toISOString().split("T")[0]);
+
+  useEffect(() => {
+    checkCredentials();
+    loadTransactions();
+  }, [dateFrom, dateTo]);
+
+  const checkCredentials = async () => {
+    const { data } = await supabase
+      .from("inter_credentials")
+      .select("id")
+      .eq("company_id", TEMP_COMPANY_ID)
+      .maybeSingle();
+    
+    setHasCredentials(!!data);
+  };
+
+  const loadTransactions = async () => {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from("bank_transactions")
+        .select("*")
+        .eq("company_id", TEMP_COMPANY_ID)
+        .gte("transaction_date", dateFrom)
+        .lte("transaction_date", dateTo)
+        .order("transaction_date", { ascending: false });
+
+      if (error) throw error;
+      setTransactions(data || []);
+    } catch (error) {
+      console.error("Erro ao carregar transações:", error);
+      toast.error("Erro ao carregar extrato");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSync = async () => {
+    if (!hasCredentials) {
+      toast.error("Configure as credenciais do Banco Inter primeiro");
+      return;
+    }
+
+    setSyncing(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("inter-sync", {
+        body: {
+          company_id: TEMP_COMPANY_ID,
+          date_from: dateFrom,
+          date_to: dateTo,
+        },
+      });
+
+      if (error) throw error;
+
+      toast.success(`Sincronização concluída! ${data?.imported || 0} transações importadas.`);
+      loadTransactions();
+    } catch (error: any) {
+      console.error("Erro na sincronização:", error);
+      toast.error(error.message || "Erro ao sincronizar com Banco Inter");
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  const handleReconcile = async (id: string, reconciled: boolean) => {
+    try {
+      const { error } = await supabase
+        .from("bank_transactions")
+        .update({
+          is_reconciled: reconciled,
+          reconciled_at: reconciled ? new Date().toISOString() : null,
+        })
+        .eq("id", id);
+
+      if (error) throw error;
+
+      setTransactions(prev =>
+        prev.map(t => t.id === id ? { ...t, is_reconciled: reconciled } : t)
+      );
+
+      toast.success(reconciled ? "Transação conciliada" : "Conciliação removida");
+    } catch (error) {
+      console.error("Erro ao conciliar:", error);
+      toast.error("Erro ao atualizar conciliação");
+    }
+  };
+
+  const handleBulkReconcile = async () => {
+    if (selectedIds.length === 0) return;
+
+    try {
+      const { error } = await supabase
+        .from("bank_transactions")
+        .update({
+          is_reconciled: true,
+          reconciled_at: new Date().toISOString(),
+        })
+        .in("id", selectedIds);
+
+      if (error) throw error;
+
+      setTransactions(prev =>
+        prev.map(t => selectedIds.includes(t.id) ? { ...t, is_reconciled: true } : t)
+      );
+      setSelectedIds([]);
+
+      toast.success(`${selectedIds.length} transações conciliadas`);
+    } catch (error) {
+      console.error("Erro ao conciliar em lote:", error);
+      toast.error("Erro ao conciliar transações");
+    }
+  };
+
+  const toggleSelectAll = () => {
+    const pendingIds = transactions.filter(t => !t.is_reconciled).map(t => t.id);
+    if (selectedIds.length === pendingIds.length) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(pendingIds);
+    }
+  };
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds(prev =>
+      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+    );
+  };
+
+  // Totais
+  const totalCredits = transactions
+    .filter(t => t.type === "CREDIT")
+    .reduce((sum, t) => sum + t.amount, 0);
+  const totalDebits = transactions
+    .filter(t => t.type === "DEBIT")
+    .reduce((sum, t) => sum + Math.abs(t.amount), 0);
+  const pendingCount = transactions.filter(t => !t.is_reconciled).length;
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold">Extrato Bancário</h1>
+          <p className="text-muted-foreground">
+            Conciliação de transações com o Banco Inter
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={loadTransactions} disabled={loading}>
+            <RefreshCw className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`} />
+            Atualizar
+          </Button>
+          <Button onClick={handleSync} disabled={syncing || !hasCredentials}>
+            {syncing ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Sincronizando...
+              </>
+            ) : (
+              <>
+                <Download className="h-4 w-4 mr-2" />
+                Sincronizar com Inter
+              </>
+            )}
+          </Button>
+        </div>
+      </div>
+
+      {!hasCredentials && (
+        <Card className="border-amber-500 bg-amber-50 dark:bg-amber-950/20">
+          <CardContent className="flex items-center gap-3 py-4">
+            <AlertCircle className="h-5 w-5 text-amber-500" />
+            <div>
+              <p className="font-medium">Configuração pendente</p>
+              <p className="text-sm text-muted-foreground">
+                Configure as credenciais do Banco Inter em{" "}
+                <a href="/financeiro/configuracao-bancaria" className="text-primary underline">
+                  Configuração Bancária
+                </a>
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Filtros e Resumo */}
+      <div className="grid gap-4 md:grid-cols-4">
+        <Card>
+          <CardContent className="pt-6">
+            <div className="space-y-2">
+              <Label className="flex items-center gap-2">
+                <Calendar className="h-4 w-4" />
+                Data Inicial
+              </Label>
+              <Input
+                type="date"
+                value={dateFrom}
+                onChange={(e) => setDateFrom(e.target.value)}
+              />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="pt-6">
+            <div className="space-y-2">
+              <Label className="flex items-center gap-2">
+                <Calendar className="h-4 w-4" />
+                Data Final
+              </Label>
+              <Input
+                type="date"
+                value={dateTo}
+                onChange={(e) => setDateTo(e.target.value)}
+              />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-3">
+              <ArrowUpCircle className="h-8 w-8 text-green-500" />
+              <div>
+                <p className="text-sm text-muted-foreground">Entradas</p>
+                <p className="text-xl font-bold text-green-600">
+                  {formatCurrency(totalCredits)}
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-3">
+              <ArrowDownCircle className="h-8 w-8 text-red-500" />
+              <div>
+                <p className="text-sm text-muted-foreground">Saídas</p>
+                <p className="text-xl font-bold text-red-600">
+                  {formatCurrency(totalDebits)}
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Ações em Lote */}
+      {selectedIds.length > 0 && (
+        <Card className="bg-primary/5 border-primary">
+          <CardContent className="flex items-center justify-between py-3">
+            <span className="text-sm">
+              {selectedIds.length} transação(ões) selecionada(s)
+            </span>
+            <Button size="sm" onClick={handleBulkReconcile}>
+              <Check className="h-4 w-4 mr-2" />
+              Conciliar Selecionadas
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Tabela de Transações */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle>Transações</CardTitle>
+            <Badge variant="outline">
+              {pendingCount} pendente(s) de conciliação
+            </Badge>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {loading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            </div>
+          ) : transactions.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-12 text-center">
+              <Download className="h-12 w-12 text-muted-foreground/50 mb-4" />
+              <p className="font-medium">Nenhuma transação encontrada</p>
+              <p className="text-sm text-muted-foreground">
+                Sincronize com o Banco Inter para importar o extrato
+              </p>
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-[50px]">
+                    <Checkbox
+                      checked={
+                        selectedIds.length > 0 &&
+                        selectedIds.length === transactions.filter(t => !t.is_reconciled).length
+                      }
+                      onCheckedChange={toggleSelectAll}
+                    />
+                  </TableHead>
+                  <TableHead>Data</TableHead>
+                  <TableHead>Descrição</TableHead>
+                  <TableHead>NSU</TableHead>
+                  <TableHead className="text-right">Valor</TableHead>
+                  <TableHead className="text-center">Status</TableHead>
+                  <TableHead className="text-right">Ações</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {transactions.map((tx) => (
+                  <TableRow key={tx.id} className={tx.is_reconciled ? "opacity-60" : ""}>
+                    <TableCell>
+                      <Checkbox
+                        checked={selectedIds.includes(tx.id)}
+                        onCheckedChange={() => toggleSelect(tx.id)}
+                        disabled={tx.is_reconciled}
+                      />
+                    </TableCell>
+                    <TableCell className="font-medium">
+                      {formatDate(tx.transaction_date)}
+                    </TableCell>
+                    <TableCell className="max-w-[300px] truncate">
+                      {tx.description}
+                    </TableCell>
+                    <TableCell className="font-mono text-sm">
+                      {tx.nsu || "-"}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <span
+                        className={`font-medium ${
+                          tx.type === "CREDIT" ? "text-green-600" : "text-red-600"
+                        }`}
+                      >
+                        {tx.type === "CREDIT" ? "+" : "-"}{formatCurrency(Math.abs(tx.amount))}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-center">
+                      {tx.is_reconciled ? (
+                        <Badge variant="default" className="bg-green-500">
+                          <Check className="h-3 w-3 mr-1" />
+                          Conciliado
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline">Pendente</Badge>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {tx.is_reconciled ? (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleReconcile(tx.id, false)}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleReconcile(tx.id, true)}
+                        >
+                          <Check className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
