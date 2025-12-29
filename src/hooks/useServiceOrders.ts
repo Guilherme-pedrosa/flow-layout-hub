@@ -235,7 +235,7 @@ export function useServiceOrders() {
         .from("service_orders")
         .select(`
           *,
-          client:clientes(id, razao_social, nome_fantasia, cpf_cnpj),
+          client:pessoas!service_orders_client_id_fkey(id, razao_social, nome_fantasia, cpf_cnpj),
           status:service_order_statuses(*)
         `)
         .order("order_number", { ascending: false });
