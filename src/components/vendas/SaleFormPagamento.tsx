@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -34,6 +34,61 @@ const paymentMethods = [
   { value: 'cheque', label: 'Cheque' },
 ];
 
+// Componente para input de valor monetário
+function CurrencyInput({ 
+  value, 
+  onChange 
+}: { 
+  value: number; 
+  onChange: (value: number) => void;
+}) {
+  const [isFocused, setIsFocused] = useState(false);
+  const [displayValue, setDisplayValue] = useState('');
+
+  useEffect(() => {
+    if (!isFocused) {
+      // Quando não está em foco, mostra o valor formatado (apenas números)
+      setDisplayValue(value === 0 ? '' : value.toFixed(2).replace('.', ','));
+    }
+  }, [value, isFocused]);
+
+  const handleFocus = () => {
+    setIsFocused(true);
+    // Ao focar, mostra o valor numérico para edição
+    setDisplayValue(value === 0 ? '' : value.toFixed(2).replace('.', ','));
+  };
+
+  const handleBlur = () => {
+    setIsFocused(false);
+    // Ao sair, converte para número
+    const numericValue = parseFloat(displayValue.replace(',', '.')) || 0;
+    onChange(numericValue);
+  };
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    // Permite apenas números, vírgula e ponto
+    if (val === '' || /^[\d.,]*$/.test(val)) {
+      setDisplayValue(val);
+    }
+  };
+
+  return (
+    <div className="relative">
+      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">R$</span>
+      <Input
+        type="text"
+        inputMode="decimal"
+        value={displayValue}
+        onChange={handleChange}
+        onFocus={handleFocus}
+        onBlur={handleBlur}
+        className="pl-9"
+      />
+    </div>
+  );
+}
+
 export function SaleFormPagamento({ 
   paymentType, 
   installmentsCount, 
@@ -46,7 +101,8 @@ export function SaleFormPagamento({
   // Gerar parcelas quando mudar o número de parcelas ou o valor total
   useEffect(() => {
     if (paymentType === 'parcelado' && installmentsCount >= 2) {
-      const installmentValue = totalValue / installmentsCount;
+      // Arredonda o valor de cada parcela para 2 casas decimais
+      const installmentValue = Math.round((totalValue / installmentsCount) * 100) / 100;
       const today = new Date();
       
       const newInstallments: Installment[] = [];
@@ -122,7 +178,7 @@ export function SaleFormPagamento({
                     <TableRow>
                       <TableHead className="w-[80px]">Parcela</TableHead>
                       <TableHead className="w-[150px]">Vencimento</TableHead>
-                      <TableHead className="w-[150px]">Valor</TableHead>
+                      <TableHead className="w-[180px]">Valor</TableHead>
                       <TableHead>Forma de Pagamento</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -140,16 +196,9 @@ export function SaleFormPagamento({
                           />
                         </TableCell>
                         <TableCell>
-                          <Input
-                            type="text"
-                            inputMode="decimal"
-                            value={inst.amount === 0 ? '' : inst.amount.toString()}
-                            onChange={(e) => {
-                              const val = e.target.value;
-                              if (val === '' || /^\d*\.?\d*$/.test(val)) {
-                                updateInstallment(index, 'amount', val === '' ? 0 : parseFloat(val));
-                              }
-                            }}
+                          <CurrencyInput
+                            value={inst.amount}
+                            onChange={(value) => updateInstallment(index, 'amount', value)}
                           />
                         </TableCell>
                         <TableCell>
