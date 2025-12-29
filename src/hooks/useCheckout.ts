@@ -244,7 +244,7 @@ export function useCheckout() {
     }
   };
 
-  // Confirmar item (bipagem)
+  // Confirmar item (bipagem) - COM validação de estoque
   const confirmItem = useMutation({
     mutationFn: async ({
       source,
@@ -257,6 +257,28 @@ export function useCheckout() {
       quantity: number;
       barcode?: string;
     }) => {
+      // VALIDAÇÃO CRÍTICA: Verificar estoque disponível
+      const { data: productData } = await supabase
+        .from("products")
+        .select("quantity")
+        .eq("id", item.product_id)
+        .single();
+
+      const currentStock = productData?.quantity ?? 0;
+      
+      // Calcular quanto já foi separado + quanto quer separar agora
+      const totalToCheck = item.quantity_checked + quantity;
+      
+      // Se o estoque atual é menor que a quantidade que será separada, bloquear
+      if (currentStock < totalToCheck) {
+        // Se não tem estoque suficiente para separar nem 1 unidade
+        if (currentStock <= item.quantity_checked) {
+          throw new Error(`Estoque insuficiente! Disponível: ${currentStock}, já separado: ${item.quantity_checked}`);
+        }
+        // Se tem estoque parcial, informar
+        throw new Error(`Estoque insuficiente para separar ${quantity} unidades. Disponível para separação: ${currentStock - item.quantity_checked}`);
+      }
+
       const newChecked = item.quantity_checked + quantity;
       const newPending = item.quantity_total - newChecked;
 
@@ -325,11 +347,37 @@ export function useCheckout() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["checkout"] });
     },
+    onError: (error) => {
+      toast.error(error.message);
+    },
   });
 
-  // Finalizar checkout (baixa estoque COM movimentação)
+  // Finalizar checkout (baixa estoque COM movimentação E validação)
   const finalizeCheckout = useMutation({
     mutationFn: async (source: CheckoutSource) => {
+      // VALIDAÇÃO CRÍTICA: Verificar estoque de TODOS os itens antes de começar
+      const stockErrors: string[] = [];
+      
+      for (const item of source.items) {
+        if (item.quantity_checked > 0) {
+          const { data: productData } = await supabase
+            .from("products")
+            .select("quantity")
+            .eq("id", item.product_id)
+            .single();
+
+          const currentQty = productData?.quantity ?? 0;
+          
+          if (currentQty < item.quantity_checked) {
+            stockErrors.push(`${item.product_description}: disponível ${currentQty}, tentando baixar ${item.quantity_checked}`);
+          }
+        }
+      }
+
+      if (stockErrors.length > 0) {
+        throw new Error(`Estoque insuficiente para os seguintes itens:\n${stockErrors.join('\n')}`);
+      }
+
       // Atualiza estoque de cada produto E cria movimentação
       for (const item of source.items) {
         if (item.quantity_checked > 0) {

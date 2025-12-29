@@ -40,6 +40,7 @@ interface SeparatedItem {
   quantity_checked: number;
   quantity_total: number;
   checked_at: string | null;
+  checked_by_name: string | null;
 }
 
 interface SeparatedSource {
@@ -89,7 +90,10 @@ export default function ItensSeparados() {
 
         const { data: checkoutItems } = await supabase
           .from("sale_checkout_items")
-          .select("*")
+          .select(`
+            *,
+            checked_by_user:users!sale_checkout_items_checked_by_fkey(name)
+          `)
           .in("sale_product_item_id", productItems.map(p => p.id));
 
         const items: SeparatedItem[] = productItems
@@ -104,6 +108,7 @@ export default function ItensSeparados() {
               quantity_checked: checkout.quantity_checked,
               quantity_total: item.quantity,
               checked_at: checkout.checked_at,
+              checked_by_name: (checkout as any).checked_by_user?.name || null,
             };
           })
           .filter(Boolean) as SeparatedItem[];
@@ -157,7 +162,10 @@ export default function ItensSeparados() {
 
         const { data: checkoutItems } = await supabase
           .from("service_order_checkout_items")
-          .select("*")
+          .select(`
+            *,
+            checked_by_user:users!service_order_checkout_items_checked_by_fkey(name)
+          `)
           .in("service_order_product_item_id", productItems.map(p => p.id));
 
         const items: SeparatedItem[] = productItems
@@ -172,6 +180,7 @@ export default function ItensSeparados() {
               quantity_checked: checkout.quantity_checked,
               quantity_total: item.quantity,
               checked_at: checkout.checked_at,
+              checked_by_name: (checkout as any).checked_by_user?.name || null,
             };
           })
           .filter(Boolean) as SeparatedItem[];
@@ -341,7 +350,8 @@ export default function ItensSeparados() {
                               <TableHead>Produto</TableHead>
                               <TableHead className="text-center">Separado</TableHead>
                               <TableHead className="text-center">Total</TableHead>
-                              <TableHead className="text-right">Data Conferência</TableHead>
+                              <TableHead>Separado por</TableHead>
+                              <TableHead className="text-right">Data/Hora</TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
@@ -353,6 +363,9 @@ export default function ItensSeparados() {
                                   {item.quantity_checked}
                                 </TableCell>
                                 <TableCell className="text-center">{item.quantity_total}</TableCell>
+                                <TableCell className="text-muted-foreground">
+                                  {item.checked_by_name || '-'}
+                                </TableCell>
                                 <TableCell className="text-right text-muted-foreground">
                                   {item.checked_at 
                                     ? new Date(item.checked_at).toLocaleString('pt-BR')
