@@ -17,6 +17,7 @@ import OrdensServico from "./pages/servicos/OrdensServico";
 import ConfiguracoesOS from "./pages/servicos/ConfiguracoesOS";
 
 // Compras
+import PedidosCompra from "./pages/compras/PedidosCompra";
 import Solicitacoes from "./pages/compras/Solicitacoes";
 import Aprovacoes from "./pages/compras/Aprovacoes";
 import NotasCompra from "./pages/compras/NotasCompra";
@@ -75,6 +76,7 @@ const App = () => (
             <Route path="/ordens-servico-config" element={<ConfiguracoesOS />} />
             
             {/* Compras */}
+            <Route path="/pedidos-compra" element={<PedidosCompra />} />
             <Route path="/solicitacoes" element={<Solicitacoes />} />
             <Route path="/aprovacoes" element={<Aprovacoes />} />
             <Route path="/notas-compra" element={<NotasCompra />} />
