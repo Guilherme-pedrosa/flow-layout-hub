@@ -1,4 +1,7 @@
 project_id = "qxxhwzxxneciskhemqmi"
 
+[functions.consultar-cnpj]
+verify_jwt = false
+
 [functions.parse-xml-nfe]
 verify_jwt = false

@@ -30,7 +30,13 @@ export async function consultarCnpj(cnpj: string): Promise<CnpjData | null> {
   }
 
   try {
-    const response = await fetch(`https://www.receitaws.com.br/v1/cnpj/${cnpjLimpo}`);
+    const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/consultar-cnpj`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ cnpj: cnpjLimpo }),
+    });
     
     if (!response.ok) {
       throw new Error('Erro na consulta');
@@ -38,7 +44,7 @@ export async function consultarCnpj(cnpj: string): Promise<CnpjData | null> {
 
     const data = await response.json();
 
-    if (data.status === 'ERROR') {
+    if (data.error) {
       return null;
     }
 
