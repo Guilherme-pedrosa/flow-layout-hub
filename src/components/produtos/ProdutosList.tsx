@@ -1,8 +1,7 @@
 import { useState } from "react";
-import { useProducts, Product, ProductInsert } from "@/hooks/useProducts";
+import { useProducts, ProductInsert } from "@/hooks/useProducts";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import {
   Table,
@@ -15,40 +14,21 @@ import {
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Plus, Search, Edit, Power } from "lucide-react";
 import { formatCurrency } from "@/lib/formatters";
-
-interface ProductFormData {
-  code: string;
-  description: string;
-  ncm: string;
-  unit: string;
-  purchase_price: string;
-  sale_price: string;
-  min_stock: string;
-}
-
-const initialFormData: ProductFormData = {
-  code: "",
-  description: "",
-  ncm: "",
-  unit: "UN",
-  purchase_price: "0",
-  sale_price: "0",
-  min_stock: "0",
-};
+import { ProductForm, ProductFormData } from "./ProductForm";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 export function ProdutosList() {
   const { products, isLoading, createProduct, updateProduct, toggleProductStatus } = useProducts();
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
-  const [formData, setFormData] = useState<ProductFormData>(initialFormData);
+  const [editingProductId, setEditingProductId] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const filteredProducts = products.filter(
     (p) =>
@@ -57,53 +37,162 @@ export function ProdutosList() {
   );
 
   const handleOpenNew = () => {
-    setEditingProduct(null);
-    setFormData(initialFormData);
+    setEditingProductId(null);
     setDialogOpen(true);
   };
 
-  const handleOpenEdit = (product: Product) => {
-    setEditingProduct(product);
-    setFormData({
+  const handleOpenEdit = (productId: string) => {
+    setEditingProductId(productId);
+    setDialogOpen(true);
+  };
+
+  const getEditingProduct = () => {
+    if (!editingProductId) return undefined;
+    const product = products.find(p => p.id === editingProductId);
+    if (!product) return undefined;
+    
+    return {
       code: product.code,
       description: product.description,
-      ncm: product.ncm || "",
-      unit: product.unit || "UN",
-      purchase_price: String(product.purchase_price || 0),
-      sale_price: String(product.sale_price || 0),
-      min_stock: String(product.min_stock || 0),
-    });
-    setDialogOpen(true);
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    const productData: ProductInsert = {
-      code: formData.code,
-      description: formData.description,
-      ncm: formData.ncm || null,
-      unit: formData.unit,
-      purchase_price: parseFloat(formData.purchase_price) || 0,
-      sale_price: parseFloat(formData.sale_price) || 0,
-      min_stock: parseFloat(formData.min_stock) || 0,
-      quantity: editingProduct?.quantity ?? 0,
-      is_active: true,
+      barcode: product.barcode || '',
+      product_group: product.product_group || '',
+      controls_stock: product.controls_stock ?? true,
+      has_invoice: product.has_invoice ?? true,
+      has_variations: product.has_variations ?? false,
+      has_composition: product.has_composition ?? false,
+      unit: product.unit || 'UN',
+      unit_conversions: (product.unit_conversions as any[]) || [],
+      supplier_code: '',
+      weight: product.weight || 0,
+      width: product.width || 0,
+      height: product.height || 0,
+      length: product.length || 0,
+      description_long: product.description_long || '',
+      is_active: product.is_active,
+      is_sold_separately: product.is_sold_separately ?? true,
+      is_pdv_available: product.is_pdv_available ?? true,
+      extra_fields: (product.extra_fields as any[]) || [],
+      purchase_price: product.purchase_price || 0,
+      accessory_expenses: product.accessory_expenses || 0,
+      other_expenses: product.other_expenses || 0,
+      final_cost: product.final_cost || 0,
+      min_stock: product.min_stock || 0,
+      max_stock: product.max_stock || 0,
+      quantity: product.quantity || 0,
+      ncm: product.ncm || '',
+      ncm_validated: product.ncm_validated ?? false,
+      ncm_description: product.ncm_description || '',
+      cest: product.cest || '',
+      origin: product.origin || '0',
+      net_weight: product.net_weight || 0,
+      gross_weight: product.gross_weight || 0,
+      fci_number: product.fci_number || '',
+      specific_product: product.specific_product || '',
+      benefit_code: product.benefit_code || '',
+      icms_rate: 0,
+      images: [],
+      suppliers: [],
     };
-
-    if (editingProduct) {
-      await updateProduct.mutateAsync({ id: editingProduct.id, ...productData });
-    } else {
-      await createProduct.mutateAsync(productData);
-    }
-
-    setDialogOpen(false);
   };
 
-  const handleToggleStatus = async (product: Product) => {
+  const handleSubmit = async (data: ProductFormData) => {
+    setIsSubmitting(true);
+    
+    try {
+      const productData: ProductInsert = {
+        code: data.code,
+        description: data.description,
+        barcode: data.barcode || null,
+        product_group: data.product_group || null,
+        controls_stock: data.controls_stock,
+        has_invoice: data.has_invoice,
+        has_variations: data.has_variations,
+        has_composition: data.has_composition,
+        unit: data.unit,
+        unit_conversions: data.unit_conversions as any,
+        weight: data.weight,
+        width: data.width,
+        height: data.height,
+        length: data.length,
+        description_long: data.description_long || null,
+        is_active: data.is_active,
+        is_sold_separately: data.is_sold_separately,
+        is_pdv_available: data.is_pdv_available,
+        extra_fields: data.extra_fields as any,
+        purchase_price: data.purchase_price,
+        accessory_expenses: data.accessory_expenses,
+        other_expenses: data.other_expenses,
+        final_cost: data.final_cost,
+        min_stock: data.min_stock,
+        max_stock: data.max_stock,
+        quantity: data.quantity,
+        ncm: data.ncm || null,
+        ncm_validated: data.ncm_validated,
+        ncm_description: data.ncm_description || null,
+        cest: data.cest || null,
+        origin: data.origin,
+        net_weight: data.net_weight,
+        gross_weight: data.gross_weight,
+        fci_number: data.fci_number || null,
+        specific_product: data.specific_product || null,
+        benefit_code: data.benefit_code || null,
+      };
+
+      if (editingProductId) {
+        await updateProduct.mutateAsync({ id: editingProductId, ...productData });
+      } else {
+        const result = await createProduct.mutateAsync(productData);
+        
+        // Salvar imagens se houver
+        if (data.images.length > 0 && result?.id) {
+          for (const img of data.images) {
+            if (img.file) {
+              const fileName = `${result.id}/${Date.now()}-${img.file.name}`;
+              const { error: uploadError } = await supabase.storage
+                .from('product-images')
+                .upload(fileName, img.file);
+              
+              if (!uploadError) {
+                const { data: publicUrl } = supabase.storage
+                  .from('product-images')
+                  .getPublicUrl(fileName);
+                
+                await supabase.from('product_images').insert({
+                  product_id: result.id,
+                  url: publicUrl.publicUrl,
+                  is_main: img.is_main,
+                  display_order: img.display_order,
+                });
+              }
+            }
+          }
+        }
+        
+        // Salvar fornecedores se houver
+        if (data.suppliers.length > 0 && result?.id) {
+          for (const supplier of data.suppliers) {
+            await supabase.from('product_suppliers').insert({
+              product_id: result.id,
+              supplier_name: supplier.supplier_name,
+              supplier_cnpj: supplier.supplier_cnpj || null,
+              supplier_code: supplier.supplier_code || null,
+            });
+          }
+        }
+      }
+
+      setDialogOpen(false);
+    } catch (error) {
+      console.error('Error saving product:', error);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleToggleStatus = async (productId: string, currentStatus: boolean) => {
     await toggleProductStatus.mutateAsync({ 
-      id: product.id, 
-      is_active: !product.is_active 
+      id: productId, 
+      is_active: !currentStatus 
     });
   };
 
@@ -137,8 +226,7 @@ export function ProdutosList() {
               <TableHead>Descrição</TableHead>
               <TableHead>NCM</TableHead>
               <TableHead>Unidade</TableHead>
-              <TableHead className="text-right">Preço Compra</TableHead>
-              <TableHead className="text-right">Preço Venda</TableHead>
+              <TableHead className="text-right">Custo Final</TableHead>
               <TableHead className="text-right">Estoque</TableHead>
               <TableHead>Status</TableHead>
               <TableHead className="w-[100px]">Ações</TableHead>
@@ -147,7 +235,7 @@ export function ProdutosList() {
           <TableBody>
             {filteredProducts.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={9} className="text-center text-muted-foreground">
+                <TableCell colSpan={8} className="text-center text-muted-foreground">
                   Nenhum produto encontrado
                 </TableCell>
               </TableRow>
@@ -159,10 +247,7 @@ export function ProdutosList() {
                   <TableCell>{product.ncm || "-"}</TableCell>
                   <TableCell>{product.unit}</TableCell>
                   <TableCell className="text-right">
-                    {formatCurrency(product.purchase_price || 0)}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    {formatCurrency(product.sale_price || 0)}
+                    {formatCurrency(product.final_cost || product.purchase_price || 0)}
                   </TableCell>
                   <TableCell className="text-right">
                     <span
@@ -185,14 +270,14 @@ export function ProdutosList() {
                       <Button
                         variant="ghost"
                         size="icon"
-                        onClick={() => handleOpenEdit(product)}
+                        onClick={() => handleOpenEdit(product.id)}
                       >
                         <Edit className="h-4 w-4" />
                       </Button>
                       <Button
                         variant="ghost"
                         size="icon"
-                        onClick={() => handleToggleStatus(product)}
+                        onClick={() => handleToggleStatus(product.id, product.is_active)}
                       >
                         <Power
                           className={`h-4 w-4 ${
@@ -210,111 +295,19 @@ export function ProdutosList() {
       </div>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
-              {editingProduct ? "Editar Produto" : "Novo Produto"}
+              {editingProductId ? "Editar Produto" : "Adicionar Produto"}
             </DialogTitle>
-            <DialogDescription>
-              Preencha os dados do produto
-            </DialogDescription>
           </DialogHeader>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="code">Código *</Label>
-                <Input
-                  id="code"
-                  value={formData.code}
-                  onChange={(e) =>
-                    setFormData({ ...formData, code: e.target.value })
-                  }
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="ncm">NCM</Label>
-                <Input
-                  id="ncm"
-                  value={formData.ncm}
-                  onChange={(e) =>
-                    setFormData({ ...formData, ncm: e.target.value })
-                  }
-                  placeholder="0000.00.00"
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="description">Descrição *</Label>
-              <Input
-                id="description"
-                value={formData.description}
-                onChange={(e) =>
-                  setFormData({ ...formData, description: e.target.value })
-                }
-                required
-              />
-            </div>
-
-            <div className="grid grid-cols-4 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="unit">Unidade</Label>
-                <Input
-                  id="unit"
-                  value={formData.unit}
-                  onChange={(e) =>
-                    setFormData({ ...formData, unit: e.target.value })
-                  }
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="purchase_price">Preço Compra</Label>
-                <Input
-                  id="purchase_price"
-                  type="number"
-                  step="0.01"
-                  value={formData.purchase_price}
-                  onChange={(e) =>
-                    setFormData({ ...formData, purchase_price: e.target.value })
-                  }
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="sale_price">Preço Venda</Label>
-                <Input
-                  id="sale_price"
-                  type="number"
-                  step="0.01"
-                  value={formData.sale_price}
-                  onChange={(e) =>
-                    setFormData({ ...formData, sale_price: e.target.value })
-                  }
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="min_stock">Estoque Mínimo</Label>
-                <Input
-                  id="min_stock"
-                  type="number"
-                  value={formData.min_stock}
-                  onChange={(e) =>
-                    setFormData({ ...formData, min_stock: e.target.value })
-                  }
-                />
-              </div>
-            </div>
-
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
-                Cancelar
-              </Button>
-              <Button type="submit" disabled={createProduct.isPending || updateProduct.isPending}>
-                {editingProduct ? "Salvar" : "Cadastrar"}
-              </Button>
-            </DialogFooter>
-          </form>
+          <ProductForm
+            initialData={getEditingProduct()}
+            onSubmit={handleSubmit}
+            onCancel={() => setDialogOpen(false)}
+            isLoading={isSubmitting}
+          />
         </DialogContent>
       </Dialog>
     </div>
