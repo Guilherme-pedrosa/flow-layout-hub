@@ -45,13 +45,17 @@ export function useCheckout() {
           client:clientes(id, razao_social, nome_fantasia, cpf_cnpj),
           status:sale_statuses(checkout_behavior)
         `)
-        .or('checkout_status.eq.pending,checkout_status.eq.partial')
         .order("created_at", { ascending: false });
 
       if (error) throw error;
       
-      // Filtra somente as que têm status com checkout_behavior = 'required'
-      return (data || []).filter(s => s.status?.checkout_behavior === 'required');
+      // Filtra vendas que:
+      // 1. Têm status com checkout_behavior = 'required'
+      // 2. E checkout_status não está 'completed'
+      return (data || []).filter(s => 
+        s.status?.checkout_behavior === 'required' && 
+        s.checkout_status !== 'completed'
+      );
     },
   });
 
@@ -66,13 +70,17 @@ export function useCheckout() {
           client:pessoas!service_orders_client_id_fkey(id, razao_social, nome_fantasia, cpf_cnpj),
           status:service_order_statuses(checkout_behavior)
         `)
-        .or('checkout_status.eq.pending,checkout_status.eq.partial')
         .order("created_at", { ascending: false });
 
       if (error) throw error;
       
-      // Filtra somente as que têm status com checkout_behavior = 'required'
-      return (data || []).filter(s => s.status?.checkout_behavior === 'required');
+      // Filtra OS que:
+      // 1. Têm status com checkout_behavior = 'required'
+      // 2. E checkout_status não está 'completed'
+      return (data || []).filter(s => 
+        s.status?.checkout_behavior === 'required' && 
+        s.checkout_status !== 'completed'
+      );
     },
   });
 

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -11,21 +11,27 @@ import { SaleFormServicos } from "./SaleFormServicos";
 import { SaleFormTransporte } from "./SaleFormTransporte";
 import { SaleFormPagamento, Installment } from "./SaleFormPagamento";
 import { SaleFormAnexos, SaleAttachment } from "./SaleFormAnexos";
-import { useSales, SaleProductItem, SaleServiceItem } from "@/hooks/useSales";
+import { useSales, Sale, SaleProductItem, SaleServiceItem } from "@/hooks/useSales";
 import { formatCurrency } from "@/lib/formatters";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 interface SaleFormProps {
   onClose: () => void;
-  initialData?: any;
+  initialData?: Sale | null;
 }
 
+const TEMP_COMPANY_ID = "7875af52-18d0-434e-8ae9-97981bd668e7";
+
 export function SaleForm({ onClose, initialData }: SaleFormProps) {
-  const { createSale } = useSales();
+  const { createSale, updateSale } = useSales();
+  const isEditing = !!initialData?.id;
+  
   const [formData, setFormData] = useState({
-    client_id: initialData?.client_id ?? '',
+    client_id: '',
     seller_id: '',
     technician_id: '',
-    status_id: initialData?.status_id ?? '',
+    status_id: '',
     sale_date: new Date().toISOString().split('T')[0],
     delivery_date: '',
     sales_channel: 'presencial',
@@ -37,7 +43,7 @@ export function SaleForm({ onClose, initialData }: SaleFormProps) {
     freight_value: '',
     carrier: '',
     show_delivery_address: false,
-    delivery_address: {},
+    delivery_address: {} as Record<string, any>,
     discount_value: '',
     discount_percent: '',
     payment_type: 'avista',
@@ -50,6 +56,134 @@ export function SaleForm({ onClose, initialData }: SaleFormProps) {
   const [serviceItems, setServiceItems] = useState<SaleServiceItem[]>([]);
   const [installments, setInstallments] = useState<Installment[]>([]);
   const [attachments, setAttachments] = useState<SaleAttachment[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  // Load data when editing
+  useEffect(() => {
+    if (initialData?.id) {
+      loadSaleData(initialData.id);
+    }
+  }, [initialData?.id]);
+
+  const loadSaleData = async (saleId: string) => {
+    setLoading(true);
+    try {
+      // Load sale details
+      const { data: sale } = await supabase
+        .from("sales")
+        .select("*")
+        .eq("id", saleId)
+        .single();
+
+      if (sale) {
+        setFormData({
+          client_id: sale.client_id || '',
+          seller_id: sale.seller_id || '',
+          technician_id: sale.technician_id || '',
+          status_id: sale.status_id || '',
+          sale_date: sale.sale_date || new Date().toISOString().split('T')[0],
+          delivery_date: sale.delivery_date || '',
+          sales_channel: sale.sales_channel || 'presencial',
+          cost_center_id: sale.cost_center_id || '',
+          quote_number: sale.quote_number || '',
+          os_number: sale.os_number || '',
+          os_gc: sale.os_gc || '',
+          extra_observation: sale.extra_observation || '',
+          freight_value: sale.freight_value?.toString() || '',
+          carrier: sale.carrier || '',
+          show_delivery_address: !!sale.delivery_address,
+          delivery_address: (sale.delivery_address as Record<string, any>) || {},
+          discount_value: sale.discount_value?.toString() || '',
+          discount_percent: sale.discount_percent?.toString() || '',
+          payment_type: sale.payment_type || 'avista',
+          installments: sale.installments?.toString() || '',
+          observations: sale.observations || '',
+          internal_observations: sale.internal_observations || '',
+        });
+      }
+
+      // Load product items
+      const { data: products } = await supabase
+        .from("sale_product_items")
+        .select("*, product:products(id, code, description, quantity, sale_price, unit, barcode)")
+        .eq("sale_id", saleId);
+
+      if (products) {
+        setProductItems(products.map((p: any) => ({
+          id: p.id,
+          sale_id: p.sale_id,
+          product_id: p.product_id,
+          product: p.product,
+          details: p.details || '',
+          quantity: p.quantity,
+          unit_price: p.unit_price,
+          discount_value: p.discount_value || 0,
+          discount_type: p.discount_type || 'value',
+          subtotal: p.subtotal,
+          price_table_id: p.price_table_id,
+        })));
+      }
+
+      // Load service items
+      const { data: services } = await supabase
+        .from("sale_service_items")
+        .select("*, service:services(id, code, description, unit, sale_price)")
+        .eq("sale_id", saleId);
+
+      if (services) {
+        setServiceItems(services.map((s: any) => ({
+          id: s.id,
+          sale_id: s.sale_id,
+          service_id: s.service_id,
+          service: s.service,
+          service_description: s.service_description,
+          details: s.details || '',
+          quantity: s.quantity,
+          unit_price: s.unit_price,
+          discount_value: s.discount_value || 0,
+          discount_type: s.discount_type || 'value',
+          subtotal: s.subtotal,
+        })));
+      }
+
+      // Load attachments
+      const { data: atts } = await supabase
+        .from("sale_attachments")
+        .select("*")
+        .eq("sale_id", saleId);
+
+      if (atts) {
+        setAttachments(atts.map((a: any) => ({
+          id: a.id,
+          file_name: a.file_name,
+          file_url: a.file_url,
+          file_size: a.file_size,
+        })));
+      }
+
+      // Load installments
+      const { data: insts } = await supabase
+        .from("sale_installments")
+        .select("*")
+        .eq("sale_id", saleId)
+        .order("installment_number");
+
+      if (insts && insts.length > 0) {
+        setInstallments(insts.map((i: any) => ({
+          installment_number: i.installment_number,
+          due_date: i.due_date,
+          amount: i.amount,
+          payment_method: i.payment_method || 'boleto',
+        })));
+      }
+
+    } catch (error) {
+      console.error("Erro ao carregar venda:", error);
+      toast.error("Erro ao carregar dados da venda");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const freightValue = parseFloat(formData.freight_value) || 0;
   const discountValue = parseFloat(formData.discount_value) || 0;
@@ -68,9 +202,23 @@ export function SaleForm({ onClose, initialData }: SaleFormProps) {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
+  const logAudit = async (saleId: string, action: string, metadata: Record<string, any>) => {
+    try {
+      await supabase.from("audit_logs").insert({
+        company_id: TEMP_COMPANY_ID,
+        entity: "sales",
+        entity_id: saleId,
+        action,
+        metadata_json: metadata,
+      });
+    } catch (error) {
+      console.error("Erro ao registrar auditoria:", error);
+    }
+  };
+
   const handleSave = async () => {
-    const sale = {
-      company_id: '7875af52-18d0-434e-8ae9-97981bd668e7', // TODO: pegar da empresa do usuário logado
+    const saleData = {
+      company_id: TEMP_COMPANY_ID,
       client_id: formData.client_id || null,
       seller_id: formData.seller_id || null,
       technician_id: formData.technician_id || null,
@@ -97,15 +245,92 @@ export function SaleForm({ onClose, initialData }: SaleFormProps) {
       internal_observations: formData.internal_observations || null,
     };
 
-    await createSale.mutateAsync({
-      sale,
-      productItems: productItems.map(({ product, ...item }) => item),
-      serviceItems: serviceItems.map(({ service, ...item }) => item),
-      installments: formData.payment_type === 'parcelado' ? installments : [],
-      attachments,
-    });
-    onClose();
+    try {
+      if (isEditing && initialData?.id) {
+        // Update existing sale
+        await updateSale.mutateAsync({ id: initialData.id, sale: saleData });
+
+        // Delete and re-insert items
+        await supabase.from("sale_product_items").delete().eq("sale_id", initialData.id);
+        await supabase.from("sale_service_items").delete().eq("sale_id", initialData.id);
+        await supabase.from("sale_installments").delete().eq("sale_id", initialData.id);
+        await supabase.from("sale_attachments").delete().eq("sale_id", initialData.id);
+
+        if (productItems.length > 0) {
+          await supabase.from("sale_product_items").insert(
+            productItems.map(({ product, id, sale_id, ...item }) => ({ 
+              ...item, 
+              sale_id: initialData.id 
+            }))
+          );
+        }
+
+        if (serviceItems.length > 0) {
+          await supabase.from("sale_service_items").insert(
+            serviceItems.map(({ service, id, sale_id, ...item }) => ({ 
+              ...item, 
+              sale_id: initialData.id 
+            }))
+          );
+        }
+
+        if (formData.payment_type === 'parcelado' && installments.length > 0) {
+          await supabase.from("sale_installments").insert(
+            installments.map(item => ({ ...item, sale_id: initialData.id }))
+          );
+        }
+
+        if (attachments.length > 0) {
+          await supabase.from("sale_attachments").insert(
+            attachments.map(({ id, ...item }) => ({ 
+              file_name: item.file_name,
+              file_url: item.file_url,
+              file_size: item.file_size || null,
+              sale_id: initialData.id 
+            }))
+          );
+        }
+
+        // Log audit
+        await logAudit(initialData.id, "update", {
+          updated_fields: Object.keys(saleData),
+          products_count: productItems.length,
+          services_count: serviceItems.length,
+        });
+
+        toast.success("Venda atualizada com sucesso!");
+      } else {
+        // Create new sale
+        const result = await createSale.mutateAsync({
+          sale: saleData,
+          productItems: productItems.map(({ product, ...item }) => item),
+          serviceItems: serviceItems.map(({ service, ...item }) => item),
+          installments: formData.payment_type === 'parcelado' ? installments : [],
+          attachments: attachments.map(({ id, ...item }) => item),
+        });
+
+        // Log audit for creation
+        if (result?.id) {
+          await logAudit(result.id, "create", {
+            products_count: productItems.length,
+            services_count: serviceItems.length,
+            total_value: total,
+          });
+        }
+      }
+      onClose();
+    } catch (error) {
+      console.error("Erro ao salvar venda:", error);
+    }
   };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="text-muted-foreground">Carregando dados da venda...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -207,9 +432,9 @@ export function SaleForm({ onClose, initialData }: SaleFormProps) {
 
       {/* Ações */}
       <div className="flex gap-3">
-        <Button onClick={handleSave} disabled={createSale.isPending}>
+        <Button onClick={handleSave} disabled={createSale.isPending || updateSale.isPending}>
           <Save className="h-4 w-4 mr-2" />
-          Cadastrar
+          {isEditing ? 'Salvar Alterações' : 'Cadastrar'}
         </Button>
         <Button variant="destructive" onClick={onClose}>
           <X className="h-4 w-4 mr-2" />

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -76,18 +76,40 @@ export function StatusConfigForm({
   onSave,
   title = "Status"
 }: StatusConfigFormProps) {
+  const getDefaultFormData = (): StatusFormData => ({
+    name: '',
+    color: '#6b7280',
+    is_default: false,
+    is_active: true,
+    stock_behavior: 'none',
+    financial_behavior: 'none',
+    checkout_behavior: 'none',
+    display_order: 0,
+  });
+
   const [formData, setFormData] = useState<StatusFormData>(
-    initialData || {
-      name: '',
-      color: '#6b7280',
-      is_default: false,
-      is_active: true,
-      stock_behavior: 'none',
-      financial_behavior: 'none',
-      checkout_behavior: 'none',
-      display_order: 0,
-    }
+    initialData || getDefaultFormData()
   );
+
+  // Sync form data when initialData changes or dialog opens
+  useEffect(() => {
+    if (open) {
+      if (initialData) {
+        setFormData({
+          name: initialData.name || '',
+          color: initialData.color || '#6b7280',
+          is_default: initialData.is_default ?? false,
+          is_active: initialData.is_active ?? true,
+          stock_behavior: initialData.stock_behavior || 'none',
+          financial_behavior: initialData.financial_behavior || 'none',
+          checkout_behavior: initialData.checkout_behavior || 'none',
+          display_order: initialData.display_order || 0,
+        });
+      } else {
+        setFormData(getDefaultFormData());
+      }
+    }
+  }, [open, initialData]);
 
   const handleSave = () => {
     if (!formData.name.trim()) return;
