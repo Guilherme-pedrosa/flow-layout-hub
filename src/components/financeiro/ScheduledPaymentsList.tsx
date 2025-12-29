@@ -77,7 +77,7 @@ export function ScheduledPaymentsList({ onSubmitted }: ScheduledPaymentsListProp
   const [searchTerm, setSearchTerm] = useState("");
   const [dateFilter, setDateFilter] = useState<"all" | "today" | "week">("all");
   const [methodFilter, setMethodFilter] = useState<"all" | "boleto" | "pix">("all");
-  const [statusFilter, setStatusFilter] = useState<"all" | "open" | "ready_to_pay">("ready_to_pay");
+  const [statusFilter, setStatusFilter] = useState<"all" | "open" | "ready_to_pay">("all");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [processing, setProcessing] = useState(false);
   const [showSubmitDialog, setShowSubmitDialog] = useState(false);
