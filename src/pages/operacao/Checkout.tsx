@@ -243,10 +243,19 @@ export default function Checkout() {
                             className={`w-full text-left p-3 rounded-lg border transition-colors hover:bg-accent/10 ${
                               selectedSource?.id === sale.id && selectedSource?.type === 'venda'
                                 ? 'border-primary bg-primary/5'
-                                : 'border-border'
+                                : sale.checkout_status === 'partial'
+                                  ? 'border-yellow-400 bg-yellow-50 dark:bg-yellow-950/30'
+                                  : 'border-border'
                             }`}
                           >
-                            <div className="font-medium">Venda #{sale.sale_number}</div>
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="font-medium">Venda #{sale.sale_number}</div>
+                              {sale.checkout_status === 'partial' && (
+                                <Badge variant="outline" className="bg-yellow-100 text-yellow-700 border-yellow-300 text-xs">
+                                  Parcial
+                                </Badge>
+                              )}
+                            </div>
                             <div className="text-xs text-muted-foreground truncate">
                               {sale.client?.razao_social || sale.client?.nome_fantasia || 'Cliente não informado'}
                             </div>
@@ -275,10 +284,19 @@ export default function Checkout() {
                             className={`w-full text-left p-3 rounded-lg border transition-colors hover:bg-accent/10 ${
                               selectedSource?.id === os.id && selectedSource?.type === 'os'
                                 ? 'border-primary bg-primary/5'
-                                : 'border-border'
+                                : os.checkout_status === 'partial'
+                                  ? 'border-yellow-400 bg-yellow-50 dark:bg-yellow-950/30'
+                                  : 'border-border'
                             }`}
                           >
-                            <div className="font-medium">OS #{os.order_number}</div>
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="font-medium">OS #{os.order_number}</div>
+                              {os.checkout_status === 'partial' && (
+                                <Badge variant="outline" className="bg-yellow-100 text-yellow-700 border-yellow-300 text-xs">
+                                  Parcial
+                                </Badge>
+                              )}
+                            </div>
                             <div className="text-xs text-muted-foreground truncate">
                               {os.client?.razao_social || os.client?.nome_fantasia || 'Cliente não informado'}
                             </div>
