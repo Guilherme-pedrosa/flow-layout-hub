@@ -11,6 +11,7 @@ import { ClienteFormContatos, Contato } from "./ClienteFormContatos";
 import { ClienteFormComercial } from "./ClienteFormComercial";
 import { ClienteFormOperacional } from "./ClienteFormOperacional";
 import { ClienteFormFiscal } from "./ClienteFormFiscal";
+import { HistoricoAlteracoes } from "@/components/shared/HistoricoAlteracoes";
 import { useToast } from "@/hooks/use-toast";
 
 interface ClienteFormProps {
@@ -227,6 +228,9 @@ export function ClienteForm({ clienteId, onSave }: ClienteFormProps) {
           Salvar
         </Button>
       </div>
+
+      {/* Histórico de alterações */}
+      <HistoricoAlteracoes entityId={clienteId} entityType="cliente" />
     </div>
   );
 }

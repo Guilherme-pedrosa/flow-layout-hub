@@ -124,6 +124,13 @@ export function useClientes() {
   const updateCliente = async (id: string, cliente: ClienteUpdate, contatos: ClienteContatoInsert[]) => {
     setLoading(true);
     try {
+      // Buscar dados atuais para comparar
+      const { data: clienteAtual } = await supabase
+        .from("clientes")
+        .select("*")
+        .eq("id", id)
+        .single();
+
       const { data, error } = await supabase
         .from("clientes")
         .update(cliente)
@@ -132,6 +139,49 @@ export function useClientes() {
         .single();
 
       if (error) throw error;
+
+      // Registrar histórico de alterações
+      if (clienteAtual && data) {
+        const alteracoes: { campo_alterado: string; valor_anterior: string | null; valor_novo: string | null }[] = [];
+        
+        const camposParaMonitorar = [
+          'razao_social', 'nome_fantasia', 'cpf_cnpj', 'email', 'telefone', 'status',
+          'logradouro', 'numero', 'bairro', 'cidade', 'estado', 'cep', 'complemento',
+          'inscricao_estadual', 'inscricao_municipal', 'regime_tributario',
+          'tipo_cliente', 'limite_credito', 'condicao_pagamento',
+          'responsavel_comercial', 'responsavel_tecnico', 'sla_padrao',
+          'contribuinte_icms', 'retencao_impostos',
+          'observacoes_comerciais', 'observacoes_fiscais', 'observacoes_internas'
+        ];
+
+        for (const campo of camposParaMonitorar) {
+          const valorAnterior = (clienteAtual as any)[campo];
+          const valorNovo = (cliente as any)[campo];
+          
+          // Converter para string para comparação
+          const strAnterior = valorAnterior?.toString() || '';
+          const strNovo = valorNovo?.toString() || '';
+          
+          if (strAnterior !== strNovo) {
+            alteracoes.push({
+              campo_alterado: campo,
+              valor_anterior: strAnterior || null,
+              valor_novo: strNovo || null,
+            });
+          }
+        }
+
+        // Inserir alterações no histórico
+        if (alteracoes.length > 0) {
+          await supabase.from("cliente_historico").insert(
+            alteracoes.map(alt => ({
+              ...alt,
+              cliente_id: id,
+              usuario_id: null, // TODO: pegar do usuário logado quando tiver auth
+            }))
+          );
+        }
+      }
 
       // Atualizar contatos: deletar existentes e inserir novos
       const { error: deleteError } = await supabase
