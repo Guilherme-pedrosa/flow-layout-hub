@@ -18,6 +18,7 @@ import OrdensServico from "./pages/servicos/OrdensServico";
 import Solicitacoes from "./pages/compras/Solicitacoes";
 import Aprovacoes from "./pages/compras/Aprovacoes";
 import NotasCompra from "./pages/compras/NotasCompra";
+import ImportarXML from "./pages/compras/ImportarXML";
 
 // Estoque
 import Saldo from "./pages/estoque/Saldo";
@@ -72,6 +73,7 @@ const App = () => (
             <Route path="/solicitacoes" element={<Solicitacoes />} />
             <Route path="/aprovacoes" element={<Aprovacoes />} />
             <Route path="/notas-compra" element={<NotasCompra />} />
+            <Route path="/importar-xml" element={<ImportarXML />} />
             
             {/* Estoque */}
             <Route path="/saldo-estoque" element={<Saldo />} />
