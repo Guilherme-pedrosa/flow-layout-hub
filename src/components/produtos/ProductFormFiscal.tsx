@@ -32,6 +32,7 @@ interface ProductFormFiscalProps {
     specific_product: string;
     benefit_code: string;
     description: string;
+    icms_rate: number;
   };
   onChange: (field: string, value: any) => void;
 }
@@ -122,9 +123,12 @@ export function ProductFormFiscal({ formData, onChange }: ProductFormFiscalProps
       </Alert>
 
       {/* Campos fiscais principais */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="space-y-2">
-          <Label className="text-sm">Cód. benefício</Label>
+          <LabelWithTooltip 
+            label="Cód. benefício" 
+            tooltip="Código de benefício fiscal para redução de ICMS (ex: SC123456)" 
+          />
           <Input
             value={formData.benefit_code}
             onChange={(e) => onChange('benefit_code', e.target.value)}
@@ -148,7 +152,7 @@ export function ProductFormFiscal({ formData, onChange }: ProductFormFiscalProps
                 onChange('ncm', e.target.value);
                 onChange('ncm_validated', false);
               }}
-              placeholder="Digite para buscar"
+              placeholder="00000000"
               className={formData.ncm_validated ? 'border-green-500' : ''}
             />
             <Button 
@@ -176,7 +180,7 @@ export function ProductFormFiscal({ formData, onChange }: ProductFormFiscalProps
           <Input
             value={formData.cest}
             onChange={(e) => onChange('cest', e.target.value)}
-            placeholder="Digite para buscar"
+            placeholder="0000000"
           />
         </div>
 
@@ -191,6 +195,85 @@ export function ProductFormFiscal({ formData, onChange }: ProductFormFiscalProps
             </SelectTrigger>
             <SelectContent>
               {originOptions.map((opt) => (
+                <SelectItem key={opt.value} value={opt.value}>
+                  {opt.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      {/* ICMS e outros campos fiscais */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="space-y-2">
+          <LabelWithTooltip 
+            label="Alíquota ICMS" 
+            tooltip="Alíquota de ICMS para emissão da nota fiscal de venda (%)" 
+          />
+          <Input
+            type="number"
+            step="0.01"
+            value={formData.icms_rate || 0}
+            onChange={(e) => onChange('icms_rate', parseFloat(e.target.value) || 0)}
+            placeholder="0,00"
+            className="text-right"
+          />
+        </div>
+
+        <div className="space-y-2">
+          <LabelWithTooltip 
+            label="Peso líquido" 
+            tooltip="Peso líquido do produto em kg para nota fiscal" 
+          />
+          <Input
+            type="number"
+            step="0.001"
+            value={formData.net_weight}
+            onChange={(e) => onChange('net_weight', parseFloat(e.target.value) || 0)}
+            placeholder="0,000"
+            className="text-right"
+          />
+        </div>
+
+        <div className="space-y-2">
+          <LabelWithTooltip 
+            label="Peso bruto" 
+            tooltip="Peso bruto do produto com embalagem em kg para nota fiscal" 
+          />
+          <Input
+            type="number"
+            step="0.001"
+            value={formData.gross_weight}
+            onChange={(e) => onChange('gross_weight', parseFloat(e.target.value) || 0)}
+            placeholder="0,000"
+            className="text-right"
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label className="text-sm">Número FCI</Label>
+          <Input
+            value={formData.fci_number}
+            onChange={(e) => onChange('fci_number', e.target.value)}
+            placeholder="Ficha de Conteúdo de Importação"
+          />
+        </div>
+      </div>
+
+      {/* Produto específico */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="space-y-2">
+          <Label className="text-sm">Produto específico</Label>
+          <Select
+            value={formData.specific_product}
+            onValueChange={(v) => onChange('specific_product', v)}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Não usar" />
+            </SelectTrigger>
+            <SelectContent>
+              {specificProductOptions.map((opt) => (
                 <SelectItem key={opt.value} value={opt.value}>
                   {opt.label}
                 </SelectItem>
@@ -235,63 +318,6 @@ export function ProductFormFiscal({ formData, onChange }: ProductFormFiscalProps
           </CardContent>
         </Card>
       )}
-
-      {/* Pesos e outros campos */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="space-y-2">
-          <LabelWithTooltip 
-            label="Peso líquido" 
-            tooltip="Peso líquido do produto em kg para nota fiscal" 
-          />
-          <Input
-            type="number"
-            step="0.001"
-            value={formData.net_weight}
-            onChange={(e) => onChange('net_weight', parseFloat(e.target.value) || 0)}
-          />
-        </div>
-
-        <div className="space-y-2">
-          <LabelWithTooltip 
-            label="Peso bruto" 
-            tooltip="Peso bruto do produto com embalagem em kg para nota fiscal" 
-          />
-          <Input
-            type="number"
-            step="0.001"
-            value={formData.gross_weight}
-            onChange={(e) => onChange('gross_weight', parseFloat(e.target.value) || 0)}
-          />
-        </div>
-
-        <div className="space-y-2">
-          <Label className="text-sm">Número FCI</Label>
-          <Input
-            value={formData.fci_number}
-            onChange={(e) => onChange('fci_number', e.target.value)}
-            placeholder="Ficha de Conteúdo de Importação"
-          />
-        </div>
-
-        <div className="space-y-2">
-          <Label className="text-sm">Produto específico</Label>
-          <Select
-            value={formData.specific_product}
-            onValueChange={(v) => onChange('specific_product', v)}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Não usar" />
-            </SelectTrigger>
-            <SelectContent>
-              {specificProductOptions.map((opt) => (
-                <SelectItem key={opt.value} value={opt.value}>
-                  {opt.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
 
       {/* Regras fiscais */}
       <Card>

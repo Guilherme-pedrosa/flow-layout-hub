@@ -26,9 +26,13 @@ interface ProductFormDadosProps {
     has_composition: boolean;
     unit: string;
     unit_conversions: UnitConversion[];
+    supplier_code: string; // Referência (código do fornecedor)
   };
   onChange: (field: string, value: any) => void;
   onGenerateCode: () => void;
+  onGenerateBarcode: () => void;
+  isCodeLoading?: boolean;
+  isBarcodeLoading?: boolean;
 }
 
 const LabelWithTooltip = ({ label, tooltip, required }: { label: string; tooltip: string; required?: boolean }) => (
@@ -47,7 +51,14 @@ const LabelWithTooltip = ({ label, tooltip, required }: { label: string; tooltip
   </div>
 );
 
-export function ProductFormDados({ formData, onChange, onGenerateCode }: ProductFormDadosProps) {
+export function ProductFormDados({ 
+  formData, 
+  onChange, 
+  onGenerateCode, 
+  onGenerateBarcode,
+  isCodeLoading,
+  isBarcodeLoading 
+}: ProductFormDadosProps) {
   const addUnitConversion = () => {
     const newConversion: UnitConversion = {
       inputQty: 1,
@@ -71,7 +82,7 @@ export function ProductFormDados({ formData, onChange, onGenerateCode }: Product
   return (
     <div className="space-y-6">
       {/* Dados principais */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="space-y-2">
           <LabelWithTooltip 
             label="Nome" 
@@ -87,19 +98,20 @@ export function ProductFormDados({ formData, onChange, onGenerateCode }: Product
 
         <div className="space-y-2">
           <LabelWithTooltip 
-            label="Código interno" 
-            tooltip="Código único de identificação do produto" 
+            label="Código" 
+            tooltip="Código único de 5 dígitos gerado automaticamente pelo sistema" 
             required 
           />
           <div className="flex gap-2">
             <Input
               value={formData.code}
               onChange={(e) => onChange('code', e.target.value)}
-              placeholder="Código"
-              className="flex-1"
+              placeholder="00000"
+              maxLength={5}
+              className="flex-1 font-mono"
             />
-            <Button type="button" variant="outline" onClick={onGenerateCode}>
-              <RefreshCw className="h-4 w-4 mr-1" />
+            <Button type="button" variant="outline" onClick={onGenerateCode} disabled={isCodeLoading}>
+              <RefreshCw className={`h-4 w-4 mr-1 ${isCodeLoading ? 'animate-spin' : ''}`} />
               Gerar
             </Button>
           </div>
@@ -107,16 +119,38 @@ export function ProductFormDados({ formData, onChange, onGenerateCode }: Product
 
         <div className="space-y-2">
           <LabelWithTooltip 
-            label="Código de barra" 
-            tooltip="Código de barras EAN-13 ou similar para identificação do produto" 
+            label="Referência" 
+            tooltip="Código do fornecedor para identificação do produto" 
           />
           <Input
-            value={formData.barcode}
-            onChange={(e) => onChange('barcode', e.target.value)}
-            placeholder="Código de barras"
+            value={formData.supplier_code}
+            onChange={(e) => onChange('supplier_code', e.target.value)}
+            placeholder="Código do fornecedor"
           />
         </div>
 
+        <div className="space-y-2">
+          <LabelWithTooltip 
+            label="Código de barra" 
+            tooltip="Código de barras EAN-13 para etiqueta do produto. Pode ser gerado automaticamente caso não tenha." 
+          />
+          <div className="flex gap-2">
+            <Input
+              value={formData.barcode}
+              onChange={(e) => onChange('barcode', e.target.value)}
+              placeholder="7890000000000"
+              className="flex-1 font-mono"
+            />
+            <Button type="button" variant="outline" onClick={onGenerateBarcode} disabled={isBarcodeLoading}>
+              <RefreshCw className={`h-4 w-4 mr-1 ${isBarcodeLoading ? 'animate-spin' : ''}`} />
+              Gerar
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      {/* Segunda linha */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="space-y-2">
           <LabelWithTooltip 
             label="Grupo do produto" 
@@ -128,10 +162,22 @@ export function ProductFormDados({ formData, onChange, onGenerateCode }: Product
             placeholder="Digite para buscar"
           />
         </div>
+
+        <div className="space-y-2">
+          <LabelWithTooltip 
+            label="Unidade" 
+            tooltip="Unidade de medida padrão do produto" 
+          />
+          <Input
+            value={formData.unit}
+            onChange={(e) => onChange('unit', e.target.value)}
+            placeholder="UN"
+          />
+        </div>
       </div>
 
       {/* Opções de controle */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="space-y-2">
           <LabelWithTooltip 
             label="Movimenta estoque?" 

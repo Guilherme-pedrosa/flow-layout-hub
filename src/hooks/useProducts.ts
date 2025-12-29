@@ -1,24 +1,11 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { Tables, TablesInsert, TablesUpdate } from "@/integrations/supabase/types";
 
-export interface Product {
-  id: string;
-  code: string;
-  description: string;
-  ncm: string | null;
-  unit: string | null;
-  purchase_price: number | null;
-  sale_price: number | null;
-  quantity: number | null;
-  min_stock: number | null;
-  is_active: boolean;
-  created_at: string;
-  updated_at: string;
-}
-
-export type ProductInsert = Omit<Product, 'id' | 'created_at' | 'updated_at'>;
-export type ProductUpdate = Partial<ProductInsert>;
+export type Product = Tables<"products">;
+export type ProductInsert = TablesInsert<"products">;
+export type ProductUpdate = TablesUpdate<"products">;
 
 export function useProducts() {
   const queryClient = useQueryClient();
@@ -35,6 +22,43 @@ export function useProducts() {
       return data as Product[];
     },
   });
+
+  // Buscar próximo código sequencial (5 dígitos)
+  const getNextCode = async (): Promise<string> => {
+    const { data, error } = await supabase
+      .from("products")
+      .select("code")
+      .order("code", { ascending: false })
+      .limit(100);
+
+    if (error) throw error;
+
+    // Filtrar apenas códigos numéricos de 5 dígitos
+    const numericCodes = (data || [])
+      .map(p => parseInt(p.code, 10))
+      .filter(n => !isNaN(n) && n >= 1 && n <= 99999)
+      .sort((a, b) => b - a);
+
+    const nextNum = numericCodes.length > 0 ? numericCodes[0] + 1 : 1;
+    return nextNum.toString().padStart(5, '0');
+  };
+
+  // Gerar código de barras EAN-13
+  const generateBarcode = async (): Promise<string> => {
+    // Prefixo Brasil (789) + código de empresa fictício (0000) + sequencial
+    const prefix = "7890000";
+    const timestamp = Date.now().toString().slice(-5);
+    const partial = prefix + timestamp;
+    
+    // Calcular dígito verificador EAN-13
+    let sum = 0;
+    for (let i = 0; i < 12; i++) {
+      sum += parseInt(partial[i]) * (i % 2 === 0 ? 1 : 3);
+    }
+    const checkDigit = (10 - (sum % 10)) % 10;
+    
+    return partial + checkDigit;
+  };
 
   const createProduct = useMutation({
     mutationFn: async (product: ProductInsert) => {
@@ -77,6 +101,57 @@ export function useProducts() {
     },
   });
 
+  // Atualizar preço de compra (apenas se aumentar)
+  const updatePurchasePrice = useMutation({
+    mutationFn: async ({ id, newPrice, accessoryExpenses, otherExpenses }: { 
+      id: string; 
+      newPrice: number;
+      accessoryExpenses?: number;
+      otherExpenses?: number;
+    }) => {
+      // Buscar produto atual
+      const { data: currentProduct, error: fetchError } = await supabase
+        .from("products")
+        .select("purchase_price")
+        .eq("id", id)
+        .single();
+
+      if (fetchError) throw fetchError;
+
+      // Só atualiza se o novo preço for maior
+      if (newPrice > (currentProduct.purchase_price || 0)) {
+        const updates: ProductUpdate = {
+          purchase_price: newPrice,
+        };
+        
+        if (accessoryExpenses !== undefined) {
+          updates.accessory_expenses = accessoryExpenses;
+        }
+        if (otherExpenses !== undefined) {
+          updates.other_expenses = otherExpenses;
+        }
+        
+        // Recalcular custo final
+        updates.final_cost = newPrice + (accessoryExpenses || 0) + (otherExpenses || 0);
+
+        const { data, error } = await supabase
+          .from("products")
+          .update(updates)
+          .eq("id", id)
+          .select()
+          .single();
+
+        if (error) throw error;
+        return data;
+      }
+
+      return currentProduct;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["products"] });
+    },
+  });
+
   const toggleProductStatus = useMutation({
     mutationFn: async ({ id, is_active }: { id: string; is_active: boolean }) => {
       const { data, error } = await supabase
@@ -106,7 +181,10 @@ export function useProducts() {
     error: productsQuery.error,
     createProduct,
     updateProduct,
+    updatePurchasePrice,
     toggleProductStatus,
+    getNextCode,
+    generateBarcode,
     refetch: productsQuery.refetch,
   };
 }

@@ -10,6 +10,7 @@ import { ProductFormFotos } from "./ProductFormFotos";
 import { ProductFormFiscal } from "./ProductFormFiscal";
 import { ProductFormFornecedores } from "./ProductFormFornecedores";
 import { toast } from "sonner";
+import { useProducts } from "@/hooks/useProducts";
 
 interface ProductImage {
   id?: string;
@@ -50,6 +51,7 @@ export interface ProductFormData {
   has_composition: boolean;
   unit: string;
   unit_conversions: UnitConversion[];
+  supplier_code: string; // Referência (código do fornecedor)
   
   // Detalhes
   weight: number;
@@ -67,7 +69,6 @@ export interface ProductFormData {
   accessory_expenses: number;
   other_expenses: number;
   final_cost: number;
-  sale_price: number;
   
   // Estoque
   min_stock: number;
@@ -85,6 +86,7 @@ export interface ProductFormData {
   fci_number: string;
   specific_product: string;
   benefit_code: string;
+  icms_rate: number;
   
   // Images e fornecedores (manejados separadamente)
   images: ProductImage[];
@@ -105,6 +107,7 @@ const initialFormData: ProductFormData = {
   has_composition: false,
   unit: 'UN',
   unit_conversions: [],
+  supplier_code: '',
   weight: 0,
   width: 0,
   height: 0,
@@ -118,7 +121,6 @@ const initialFormData: ProductFormData = {
   accessory_expenses: 0,
   other_expenses: 0,
   final_cost: 0,
-  sale_price: 0,
   min_stock: 0,
   max_stock: 0,
   quantity: 0,
@@ -132,6 +134,7 @@ const initialFormData: ProductFormData = {
   fci_number: '',
   specific_product: '',
   benefit_code: '',
+  icms_rate: 0,
   images: [],
   suppliers: [],
   isFromXml: false,
@@ -160,14 +163,37 @@ export function ProductForm({ initialData, onSubmit, onCancel, isLoading }: Prod
     ...initialData,
   });
   const [activeTab, setActiveTab] = useState('dados');
+  const [isCodeLoading, setIsCodeLoading] = useState(false);
+  const [isBarcodeLoading, setIsBarcodeLoading] = useState(false);
+  
+  const { getNextCode, generateBarcode } = useProducts();
 
   const handleChange = (field: string, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
-  const generateCode = () => {
-    const code = `PROD${Date.now().toString().slice(-8)}`;
-    handleChange('code', code);
+  const handleGenerateCode = async () => {
+    setIsCodeLoading(true);
+    try {
+      const code = await getNextCode();
+      handleChange('code', code);
+    } catch (error) {
+      toast.error('Erro ao gerar código');
+    } finally {
+      setIsCodeLoading(false);
+    }
+  };
+
+  const handleGenerateBarcode = async () => {
+    setIsBarcodeLoading(true);
+    try {
+      const barcode = await generateBarcode();
+      handleChange('barcode', barcode);
+    } catch (error) {
+      toast.error('Erro ao gerar código de barras');
+    } finally {
+      setIsBarcodeLoading(false);
+    }
   };
 
   const handleSubmit = async () => {
@@ -224,7 +250,10 @@ export function ProductForm({ initialData, onSubmit, onCancel, isLoading }: Prod
           <ProductFormDados
             formData={formData}
             onChange={handleChange}
-            onGenerateCode={generateCode}
+            onGenerateCode={handleGenerateCode}
+            onGenerateBarcode={handleGenerateBarcode}
+            isCodeLoading={isCodeLoading}
+            isBarcodeLoading={isBarcodeLoading}
           />
         </TabsContent>
 

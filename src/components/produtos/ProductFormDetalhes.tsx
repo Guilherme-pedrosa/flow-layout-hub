@@ -4,8 +4,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Trash2, Plus, Info } from "lucide-react";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Trash2, Plus } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
 interface ExtraField {
@@ -51,12 +50,13 @@ export function ProductFormDetalhes({ formData, onChange }: ProductFormDetalhesP
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-      {/* Pesos e dimensões */}
+      {/* Pesos e dimensões - Padrão Correios */}
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-base flex items-center gap-2">
             ✚ Pesos e dimensões
           </CardTitle>
+          <p className="text-xs text-muted-foreground">Padrão Correios para integrações</p>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
@@ -67,39 +67,43 @@ export function ProductFormDetalhes({ formData, onChange }: ProductFormDetalhesP
               value={formData.weight}
               onChange={(e) => onChange('weight', parseFloat(e.target.value) || 0)}
               className="text-right"
+              placeholder="0,000"
             />
           </div>
 
           <div className="space-y-2">
-            <LabelWithUnit label="Largura" unit="m" />
+            <LabelWithUnit label="Largura" unit="cm" />
             <Input
               type="number"
-              step="0.001"
+              step="0.1"
               value={formData.width}
               onChange={(e) => onChange('width', parseFloat(e.target.value) || 0)}
               className="text-right"
+              placeholder="0,0"
             />
           </div>
 
           <div className="space-y-2">
-            <LabelWithUnit label="Altura" unit="m" />
+            <LabelWithUnit label="Altura" unit="cm" />
             <Input
               type="number"
-              step="0.001"
+              step="0.1"
               value={formData.height}
               onChange={(e) => onChange('height', parseFloat(e.target.value) || 0)}
               className="text-right"
+              placeholder="0,0"
             />
           </div>
 
           <div className="space-y-2">
-            <LabelWithUnit label="Comprimento" unit="m" />
+            <LabelWithUnit label="Comprimento" unit="cm" />
             <Input
               type="number"
-              step="0.001"
+              step="0.1"
               value={formData.length}
               onChange={(e) => onChange('length', parseFloat(e.target.value) || 0)}
               className="text-right"
+              placeholder="0,0"
             />
           </div>
         </CardContent>
@@ -163,7 +167,7 @@ export function ProductFormDetalhes({ formData, onChange }: ProductFormDetalhesP
             <Textarea
               value={formData.description_long}
               onChange={(e) => onChange('description_long', e.target.value)}
-              placeholder="Descrição detalhada do produto..."
+              placeholder="Descrição detalhada do produto (será exibida nos orçamentos)..."
               rows={5}
             />
           </CardContent>
