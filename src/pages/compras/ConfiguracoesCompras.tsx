@@ -48,7 +48,7 @@ import { Badge } from "@/components/ui/badge";
 import { Plus, Pencil, Trash2, GripVertical, Package, CircleDollarSign, ShieldAlert, Users } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { usePurchaseOrderStatuses, PurchaseOrderStatus, StockBehavior, FinancialBehavior } from "@/hooks/usePurchaseOrderStatuses";
-import { usePurchaseOrderLimits, PurchaseOrderLimit } from "@/hooks/usePurchaseOrderLimits";
+import { usePurchaseOrderLimits, PurchaseOrderLimit, PURPOSE_OPTIONS } from "@/hooks/usePurchaseOrderLimits";
 import { useSystemUsers } from "@/hooks/useConfiguracoes";
 import { NumericInput } from "@/components/ui/numeric-input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -96,6 +96,7 @@ const initialFormData: StatusFormData = {
 
 interface LimitFormData {
   user_id: string | null;
+  purpose: string | null;
   max_per_transaction: number | null;
   max_monthly_total: number | null;
   is_active: boolean;
@@ -103,6 +104,7 @@ interface LimitFormData {
 
 const initialLimitFormData: LimitFormData = {
   user_id: null,
+  purpose: null,
   max_per_transaction: null,
   max_monthly_total: null,
   is_active: true,
@@ -211,6 +213,7 @@ export default function ConfiguracoesCompras() {
     setEditingLimit(limit);
     setLimitFormData({
       user_id: limit.user_id,
+      purpose: limit.purpose,
       max_per_transaction: limit.max_per_transaction,
       max_monthly_total: limit.max_monthly_total,
       is_active: limit.is_active,
@@ -240,6 +243,7 @@ export default function ConfiguracoesCompras() {
       await createLimit.mutateAsync({
         company_id: companyId,
         user_id: limitFormData.user_id,
+        purpose: limitFormData.purpose,
         max_per_transaction: limitFormData.max_per_transaction,
         max_monthly_total: limitFormData.max_monthly_total,
         is_active: limitFormData.is_active,
@@ -433,6 +437,7 @@ export default function ConfiguracoesCompras() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Usuário</TableHead>
+                      <TableHead>Tipo</TableHead>
                       <TableHead className="text-right">Limite por Transação</TableHead>
                       <TableHead className="text-right">Limite Mensal</TableHead>
                       <TableHead className="text-center">Ativo</TableHead>
@@ -458,6 +463,15 @@ export default function ConfiguracoesCompras() {
                               </span>
                             )}
                           </div>
+                        </TableCell>
+                        <TableCell>
+                          {limit.purpose ? (
+                            <Badge variant="outline">
+                              {PURPOSE_OPTIONS.find(p => p.value === limit.purpose)?.label || limit.purpose}
+                            </Badge>
+                          ) : (
+                            <span className="text-muted-foreground text-sm">Todos</span>
+                          )}
                         </TableCell>
                         <TableCell className="text-right font-mono">
                           {formatCurrency(limit.max_per_transaction)}
@@ -677,9 +691,41 @@ export default function ConfiguracoesCompras() {
                     </SelectItem>
                   ))}
                 </SelectContent>
-              </Select>
+                </Select>
               <p className="text-xs text-muted-foreground">
                 O limite específico do usuário tem prioridade sobre o limite global.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="flex items-center gap-2">
+                <Package className="h-4 w-4" />
+                Tipo de Pedido
+              </Label>
+              <Select
+                value={limitFormData.purpose || "all"}
+                onValueChange={(value) => setLimitFormData({ 
+                  ...limitFormData, 
+                  purpose: value === "all" ? null : value 
+                })}
+                disabled={!!editingLimit}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione um tipo" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">
+                    <span className="font-medium">Todos os tipos</span>
+                  </SelectItem>
+                  {PURPOSE_OPTIONS.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Limite aplicado apenas para o tipo de pedido selecionado.
               </p>
             </div>
 

@@ -1286,6 +1286,7 @@ export type Database = {
           is_active: boolean
           max_monthly_total: number | null
           max_per_transaction: number | null
+          purpose: string | null
           updated_at: string
           user_id: string | null
         }
@@ -1296,6 +1297,7 @@ export type Database = {
           is_active?: boolean
           max_monthly_total?: number | null
           max_per_transaction?: number | null
+          purpose?: string | null
           updated_at?: string
           user_id?: string | null
         }
@@ -1306,6 +1308,7 @@ export type Database = {
           is_active?: boolean
           max_monthly_total?: number | null
           max_per_transaction?: number | null
+          purpose?: string | null
           updated_at?: string
           user_id?: string | null
         }
