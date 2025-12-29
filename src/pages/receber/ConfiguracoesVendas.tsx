@@ -3,7 +3,7 @@ import { StatusConfigList } from "@/components/configuracoes/StatusConfigList";
 import { useSaleStatuses } from "@/hooks/useSales";
 import { StatusFormData } from "@/components/configuracoes/StatusConfigForm";
 
-const TEMP_COMPANY_ID = "00000000-0000-0000-0000-000000000001";
+const TEMP_COMPANY_ID = "7875af52-18d0-434e-8ae9-97981bd668e7";
 
 const ConfiguracoesVendas = () => {
   const { statuses, isLoading, createStatus, updateStatus, deleteStatus } = useSaleStatuses();
