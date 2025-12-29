@@ -64,6 +64,8 @@ interface Payable {
   pix_key_type: string | null;
   payment_status: string;
   recipient_name: string | null;
+  installment_number?: number;
+  total_installments?: number;
   supplier?: {
     razao_social: string | null;
     nome_fantasia: string | null;
@@ -109,7 +111,24 @@ export function ScheduledPaymentsList({ onSubmitted }: ScheduledPaymentsListProp
         .order("due_date", { ascending: true });
 
       if (error) throw error;
-      setPayables((data as unknown as Payable[]) || []);
+
+      // Calculate installment numbers for payables from same purchase order
+      const payablesWithInstallments = (data || []).map((p: any) => {
+        if (p.purchase_order_id) {
+          // Find all payables from the same purchase order
+          const sameOrderPayables = (data || [])
+            .filter((x: any) => x.purchase_order_id === p.purchase_order_id)
+            .sort((a: any, b: any) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime());
+          
+          const installmentNumber = sameOrderPayables.findIndex((x: any) => x.id === p.id) + 1;
+          const totalInstallments = sameOrderPayables.length;
+          
+          return { ...p, installment_number: installmentNumber, total_installments: totalInstallments };
+        }
+        return p;
+      });
+
+      setPayables(payablesWithInstallments as Payable[]);
     } catch (error) {
       console.error("Erro ao carregar títulos:", error);
     } finally {
@@ -412,15 +431,21 @@ export function ScheduledPaymentsList({ onSubmitted }: ScheduledPaymentsListProp
                     </TableCell>
                     <TableCell>
                       {payable.purchase_order_id && payable.purchase_order ? (
-                        <Link 
-                          to={`/pedidos-compra?edit=${payable.purchase_order_id}`}
-                          className="inline-flex items-center gap-1.5 text-primary hover:text-primary/80 transition-colors"
-                          title={`Abrir Pedido de Compra #${payable.purchase_order.order_number}`}
-                        >
-                          <ShoppingCart className="h-4 w-4" />
-                        </Link>
+                        <div className="flex flex-col">
+                          <span className="text-sm font-medium">
+                            Compra de nº {payable.purchase_order.order_number}
+                          </span>
+                          <Link 
+                            to={`/pedidos-compra?edit=${payable.purchase_order_id}`}
+                            className="inline-flex items-center gap-1 text-primary hover:text-primary/80 transition-colors text-sm"
+                            title={`Abrir Pedido de Compra #${payable.purchase_order.order_number}`}
+                          >
+                            ({payable.installment_number || 1}/{payable.total_installments || 1})
+                            <ShoppingCart className="h-4 w-4" />
+                          </Link>
+                        </div>
                       ) : (
-                        <span className="text-muted-foreground">—</span>
+                        <span className="text-muted-foreground text-sm">Manual</span>
                       )}
                     </TableCell>
                     <TableCell>
