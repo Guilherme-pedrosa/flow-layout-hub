@@ -96,7 +96,7 @@ export function ServiceOrderForm({ onClose, initialData }: ServiceOrderFormProps
     const externalCost = parseFloat(formData.external_service_cost) || 0;
 
     const order = {
-      company_id: '00000000-0000-0000-0000-000000000001',
+      company_id: '7875af52-18d0-434e-8ae9-97981bd668e7',
       client_id: formData.client_id || null,
       seller_id: formData.seller_id || null,
       technician_id: formData.technician_id || null,
