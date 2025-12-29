@@ -1,12 +1,10 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
+import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.7.1";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
-
-const INTER_API_URL = "https://cdpj.partners.bancointer.com.br";
 
 interface PixPaymentRequest {
   company_id: string;
@@ -29,21 +27,128 @@ interface InterCredentials {
   account_number: string | null;
 }
 
+// Helper function to read HTTP response from TLS connection
+async function readHttpResponse(conn: Deno.TlsConn): Promise<{ statusCode: number; headers: string; body: string }> {
+  const chunks: Uint8Array[] = [];
+  const buf = new Uint8Array(4096);
+  let fullResponse = "";
+  
+  while (true) {
+    try {
+      const n = await conn.read(buf);
+      if (n === null) break;
+      
+      chunks.push(buf.slice(0, n));
+      fullResponse = new TextDecoder().decode(concatUint8Arrays(chunks));
+      
+      // Check if we have complete headers
+      if (fullResponse.includes("\r\n\r\n")) {
+        const headerEndIndex = fullResponse.indexOf("\r\n\r\n");
+        const headers = fullResponse.substring(0, headerEndIndex);
+        const body = fullResponse.substring(headerEndIndex + 4);
+        
+        // Check Content-Length
+        const contentLengthMatch = headers.match(/Content-Length:\s*(\d+)/i);
+        if (contentLengthMatch) {
+          const contentLength = parseInt(contentLengthMatch[1], 10);
+          const bodyBytes = new TextEncoder().encode(body).length;
+          if (bodyBytes >= contentLength) break;
+        }
+        
+        // Check for chunked encoding end
+        if (headers.toLowerCase().includes("transfer-encoding: chunked")) {
+          if (body.includes("0\r\n\r\n") || body.endsWith("0\r\n\r\n")) {
+            break;
+          }
+        }
+        
+        // For responses without Content-Length, try to detect complete JSON
+        if (!contentLengthMatch && body.trim()) {
+          const trimmedBody = body.trim();
+          if ((trimmedBody.startsWith("{") && trimmedBody.endsWith("}")) ||
+              (trimmedBody.startsWith("[") && trimmedBody.endsWith("]"))) {
+            try {
+              JSON.parse(trimmedBody);
+              break;
+            } catch {
+              // Continue reading
+            }
+          }
+        }
+      }
+    } catch (e: unknown) {
+      const errorMsg = e instanceof Error ? e.message : String(e);
+      console.log("[inter-pix-payment] Conexão encerrada:", errorMsg);
+      break;
+    }
+  }
+  
+  // Parse the response
+  const headerEndIndex = fullResponse.indexOf("\r\n\r\n");
+  if (headerEndIndex === -1) {
+    throw new Error(`Resposta HTTP inválida: ${fullResponse.substring(0, 200)}`);
+  }
+  
+  const headers = fullResponse.substring(0, headerEndIndex);
+  let body = fullResponse.substring(headerEndIndex + 4);
+  
+  // Handle chunked encoding
+  if (headers.toLowerCase().includes("transfer-encoding: chunked")) {
+    body = parseChunkedBody(body);
+  }
+  
+  // Extract status code
+  const statusLine = headers.split("\r\n")[0];
+  const statusMatch = statusLine.match(/HTTP\/\d\.\d\s+(\d+)/);
+  const statusCode = statusMatch ? parseInt(statusMatch[1], 10) : 0;
+  
+  return { statusCode, headers, body };
+}
+
+function parseChunkedBody(chunkedBody: string): string {
+  let result = "";
+  let remaining = chunkedBody;
+  
+  while (remaining.length > 0) {
+    const lineEnd = remaining.indexOf("\r\n");
+    if (lineEnd === -1) break;
+    
+    const chunkSizeHex = remaining.substring(0, lineEnd).trim();
+    const chunkSize = parseInt(chunkSizeHex, 16);
+    
+    if (chunkSize === 0 || isNaN(chunkSize)) break;
+    
+    const chunkData = remaining.substring(lineEnd + 2, lineEnd + 2 + chunkSize);
+    result += chunkData;
+    remaining = remaining.substring(lineEnd + 2 + chunkSize + 2);
+  }
+  
+  return result || chunkedBody;
+}
+
+function concatUint8Arrays(arrays: Uint8Array[]): Uint8Array {
+  const totalLength = arrays.reduce((sum, arr) => sum + arr.length, 0);
+  const result = new Uint8Array(totalLength);
+  let offset = 0;
+  for (const arr of arrays) {
+    result.set(arr, offset);
+    offset += arr.length;
+  }
+  return result;
+}
+
 function normalizePEM(content: string, type: 'CERTIFICATE' | 'PRIVATE KEY'): string {
-  // Remove espaços em branco extras e normaliza
   let cleaned = content.trim();
   
-  // Se já está no formato PEM correto, retorna
-  if (cleaned.includes(`-----BEGIN ${type}-----`)) {
+  // If already in correct PEM format, return as-is
+  if (cleaned.includes(`-----BEGIN ${type}-----`) && cleaned.includes(`-----END ${type}-----`)) {
     return cleaned;
   }
   
-  // Tenta detectar se é base64 puro sem headers
+  // Try to detect pure base64 without headers
   const base64Regex = /^[A-Za-z0-9+/=\s]+$/;
   if (base64Regex.test(cleaned)) {
-    // Remove quebras de linha e espaços
     cleaned = cleaned.replace(/\s/g, '');
-    // Adiciona headers PEM
     const chunks = cleaned.match(/.{1,64}/g) || [];
     return `-----BEGIN ${type}-----\n${chunks.join('\n')}\n-----END ${type}-----`;
   }
@@ -51,129 +156,219 @@ function normalizePEM(content: string, type: 'CERTIFICATE' | 'PRIVATE KEY'): str
   return cleaned;
 }
 
+// Função para obter credenciais e certificados
+async function getCredentials(supabase: SupabaseClient, companyId: string): Promise<{
+  credentials: InterCredentials;
+  cert: string;
+  key: string;
+}> {
+  console.log("[inter-pix-payment] Buscando credenciais para company:", companyId);
+  
+  const { data: credentials, error: credError } = await supabase
+    .from("inter_credentials")
+    .select("*")
+    .eq("company_id", companyId)
+    .eq("is_active", true)
+    .single();
+
+  if (credError || !credentials) {
+    throw new Error("Credenciais do Banco Inter não configuradas ou inativas");
+  }
+
+  console.log("[inter-pix-payment] Buscando certificados do storage...");
+  
+  const [certResult, keyResult] = await Promise.all([
+    supabase.storage.from("inter-certs").download(credentials.certificate_file_path),
+    supabase.storage.from("inter-certs").download(credentials.private_key_file_path),
+  ]);
+
+  if (certResult.error || !certResult.data) {
+    throw new Error(`Certificado não encontrado: ${certResult.error?.message}`);
+  }
+  if (keyResult.error || !keyResult.data) {
+    throw new Error(`Chave privada não encontrada: ${keyResult.error?.message}`);
+  }
+
+  const cert = normalizePEM(await certResult.data.text(), 'CERTIFICATE');
+  const key = normalizePEM(await keyResult.data.text(), 'PRIVATE KEY');
+
+  console.log("[inter-pix-payment] Certificados carregados");
+  console.log("[inter-pix-payment] Cert starts with:", cert.substring(0, 50));
+  console.log("[inter-pix-payment] Key starts with:", key.substring(0, 50));
+
+  return { credentials, cert, key };
+}
+
+// Função para obter token OAuth usando mTLS via Deno.connectTls
 async function getOAuthToken(
   credentials: InterCredentials,
   cert: string,
   key: string
 ): Promise<string> {
-  console.log("[inter-pix-payment] Obtendo token OAuth...");
-  
-  const tokenUrl = `${INTER_API_URL}/oauth/v2/token`;
-  
-  // Normalizar certificado e chave
-  const normalizedCert = normalizePEM(cert, 'CERTIFICATE');
-  const normalizedKey = normalizePEM(key, 'PRIVATE KEY');
-  
-  console.log("[inter-pix-payment] Cert starts with:", normalizedCert.substring(0, 50));
-  console.log("[inter-pix-payment] Key starts with:", normalizedKey.substring(0, 50));
-  
-  // Criar cliente HTTP com certificado mTLS
-  const httpClient = Deno.createHttpClient({
-    cert: normalizedCert,
-    key: normalizedKey,
-  });
+  const hostname = "cdpj.partners.bancointer.com.br";
+  const port = 443;
 
-  const params = new URLSearchParams();
-  params.append("client_id", credentials.client_id);
-  params.append("client_secret", credentials.client_secret);
-  params.append("grant_type", "client_credentials");
-  params.append("scope", "pagamento-pix.write pagamento-pix.read");
+  console.log("[inter-pix-payment] Conectando via mTLS para obter token...");
 
-  const response = await fetch(tokenUrl, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
-    body: params.toString(),
-    client: httpClient,
-  });
-
-  httpClient.close();
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error("[inter-pix-payment] Erro ao obter token:", errorText);
-    throw new Error(`Erro ao obter token OAuth: ${response.status} - ${errorText}`);
+  let conn: Deno.TlsConn;
+  try {
+    conn = await Deno.connectTls({ 
+      hostname, 
+      port, 
+      cert, 
+      key 
+    });
+  } catch (e: unknown) {
+    const errorMsg = e instanceof Error ? e.message : String(e);
+    console.error("[inter-pix-payment] Erro ao conectar TLS:", errorMsg);
+    throw new Error(`Falha na conexão mTLS: ${errorMsg}. Verifique se os certificados estão corretos.`);
   }
 
-  const data = await response.json();
-  console.log("[inter-pix-payment] Token obtido com sucesso");
-  return data.access_token;
+  try {
+    const body = new URLSearchParams({
+      client_id: credentials.client_id,
+      client_secret: credentials.client_secret,
+      grant_type: "client_credentials",
+      scope: "pagamento-pix.write pagamento-pix.read",
+    }).toString();
+
+    const request = [
+      `POST /oauth/v2/token HTTP/1.1`,
+      `Host: ${hostname}`,
+      `Content-Type: application/x-www-form-urlencoded`,
+      `Content-Length: ${new TextEncoder().encode(body).length}`,
+      `Connection: close`,
+      "",
+      body,
+    ].join("\r\n");
+
+    console.log("[inter-pix-payment] Enviando requisição OAuth...");
+    await conn.write(new TextEncoder().encode(request));
+    
+    const { statusCode, body: responseBody } = await readHttpResponse(conn);
+    
+    console.log("[inter-pix-payment] Status OAuth:", statusCode);
+
+    if (!responseBody) {
+      throw new Error("Resposta vazia do servidor OAuth");
+    }
+
+    const tokenData = JSON.parse(responseBody);
+
+    if (statusCode !== 200 || !tokenData.access_token) {
+      console.error("[inter-pix-payment] Erro OAuth:", JSON.stringify(tokenData));
+      throw new Error(`Falha ao obter token: ${tokenData.error_description || tokenData.error || JSON.stringify(tokenData)}`);
+    }
+
+    console.log("[inter-pix-payment] Token OAuth obtido com sucesso");
+    return tokenData.access_token;
+  } finally {
+    conn.close();
+  }
 }
 
+// Função para enviar pagamento PIX usando mTLS via Deno.connectTls
 async function sendPixPayment(
-  token: string,
   credentials: InterCredentials,
   cert: string,
   key: string,
+  token: string,
   payload: PixPaymentRequest
 ): Promise<{ endToEndId: string; codigoSolicitacao: string; status: string }> {
-  console.log("[inter-pix-payment] Enviando PIX...");
-  
-  const pixUrl = `${INTER_API_URL}/banking/v2/pix`;
-  
-  // Normalizar certificado e chave
-  const normalizedCert = normalizePEM(cert, 'CERTIFICATE');
-  const normalizedKey = normalizePEM(key, 'PRIVATE KEY');
-  
-  const httpClient = Deno.createHttpClient({
-    cert: normalizedCert,
-    key: normalizedKey,
-  });
+  const hostname = "cdpj.partners.bancointer.com.br";
+  const port = 443;
 
-  const pixBody = {
-    valor: payload.amount.toFixed(2),
-    dataPagamento: new Date().toISOString().split("T")[0],
-    descricao: payload.description || `PIX para ${payload.recipient_name}`,
-    destinatario: {
-      tipo: "CHAVE",
-      chave: payload.pix_key,
-      contaBanco: {
-        cpfCnpj: payload.recipient_document.replace(/\D/g, ""),
-        nome: payload.recipient_name,
-        tipoConta: "CONTA_CORRENTE",
-      },
-    },
-  };
+  console.log("[inter-pix-payment] Conectando via mTLS para enviar PIX...");
 
-  console.log("[inter-pix-payment] Payload:", JSON.stringify(pixBody, null, 2));
-
-  const response = await fetch(pixUrl, {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${token}`,
-      "Content-Type": "application/json",
-      "x-conta-corrente": credentials.account_number || "",
-    },
-    body: JSON.stringify(pixBody),
-    client: httpClient,
-  });
-
-  httpClient.close();
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error("[inter-pix-payment] Erro ao enviar PIX:", errorText);
-    
-    try {
-      const errorJson = JSON.parse(errorText);
-      throw new Error(errorJson.message || errorJson.title || `Erro ${response.status}`);
-    } catch {
-      throw new Error(`Erro ao enviar PIX: ${response.status} - ${errorText}`);
-    }
+  let conn: Deno.TlsConn;
+  try {
+    conn = await Deno.connectTls({ 
+      hostname, 
+      port, 
+      cert, 
+      key 
+    });
+  } catch (e: unknown) {
+    const errorMsg = e instanceof Error ? e.message : String(e);
+    console.error("[inter-pix-payment] Erro ao conectar TLS para PIX:", errorMsg);
+    throw new Error(`Falha na conexão mTLS para PIX: ${errorMsg}`);
   }
 
-  const result = await response.json();
-  console.log("[inter-pix-payment] Resposta PIX:", JSON.stringify(result, null, 2));
-  
-  // Detectar status da resposta (pode ser AGUARDANDO_APROVACAO, REALIZADO, etc.)
-  const interStatus = result.status || result.situacao || "AGUARDANDO_APROVACAO";
-  
-  return {
-    endToEndId: result.endToEndId || result.e2eId || null,
-    codigoSolicitacao: result.codigoSolicitacao || result.txid || result.id || null,
-    status: interStatus,
-  };
+  try {
+    const pixBody = {
+      valor: payload.amount.toFixed(2),
+      dataPagamento: new Date().toISOString().split("T")[0],
+      descricao: (payload.description || `PIX para ${payload.recipient_name}`).substring(0, 140),
+      destinatario: {
+        tipo: "CHAVE",
+        chave: payload.pix_key,
+        contaBanco: {
+          cpfCnpj: payload.recipient_document.replace(/\D/g, ""),
+          nome: payload.recipient_name,
+          tipoConta: "CONTA_CORRENTE",
+        },
+      },
+    };
+
+    const bodyJson = JSON.stringify(pixBody);
+    const bodyBytes = new TextEncoder().encode(bodyJson);
+
+    console.log("[inter-pix-payment] Payload PIX:", bodyJson);
+
+    const accountHeader = credentials.account_number 
+      ? `x-conta-corrente: ${credentials.account_number}\r\n` 
+      : "";
+
+    const request = [
+      `POST /banking/v2/pix HTTP/1.1`,
+      `Host: ${hostname}`,
+      `Authorization: Bearer ${token}`,
+      `Content-Type: application/json`,
+      `Content-Length: ${bodyBytes.length}`,
+      accountHeader ? accountHeader.trim() : null,
+      `Connection: close`,
+      "",
+      bodyJson,
+    ].filter(Boolean).join("\r\n");
+
+    console.log("[inter-pix-payment] Enviando requisição PIX...");
+    await conn.write(new TextEncoder().encode(request));
+    
+    const { statusCode, body: responseBody } = await readHttpResponse(conn);
+    
+    console.log("[inter-pix-payment] Status PIX:", statusCode);
+    console.log("[inter-pix-payment] Resposta PIX:", responseBody.substring(0, 500));
+
+    if (!responseBody) {
+      throw new Error("Resposta vazia do servidor PIX");
+    }
+
+    let result;
+    try {
+      result = JSON.parse(responseBody);
+    } catch (e) {
+      console.error("[inter-pix-payment] Erro ao parsear resposta:", responseBody);
+      throw new Error(`Resposta inválida do Inter: ${responseBody.substring(0, 200)}`);
+    }
+
+    // Status 200 = sucesso, 202 = aceito/aguardando aprovação
+    if (statusCode !== 200 && statusCode !== 202) {
+      const errorMsg = result.message || result.title || result.error || JSON.stringify(result);
+      console.error("[inter-pix-payment] Erro PIX:", errorMsg);
+      throw new Error(errorMsg);
+    }
+
+    const interStatus = result.status || result.situacao || 
+      (statusCode === 202 ? "AGUARDANDO_APROVACAO" : "REALIZADO");
+
+    return {
+      endToEndId: result.endToEndId || result.e2eId || null,
+      codigoSolicitacao: result.codigoSolicitacao || result.txid || result.id || null,
+      status: interStatus,
+    };
+  } finally {
+    conn.close();
+  }
 }
 
 serve(async (req) => {
@@ -230,41 +425,8 @@ serve(async (req) => {
       throw new Error("O valor deve ser maior que zero");
     }
 
-    // Buscar credenciais do Banco Inter
-    const { data: credentials, error: credError } = await supabase
-      .from("inter_credentials")
-      .select("*")
-      .eq("company_id", payload.company_id)
-      .eq("is_active", true)
-      .single();
-
-    if (credError || !credentials) {
-      throw new Error("Credenciais do Banco Inter não configuradas ou inativas");
-    }
-
-    // Buscar certificado e chave privada do storage
-    console.log("[inter-pix-payment] Buscando certificados...");
-    
-    const { data: certData, error: certError } = await supabase.storage
-      .from("inter-certs")
-      .download(credentials.certificate_file_path);
-
-    if (certError || !certData) {
-      console.error("[inter-pix-payment] Erro ao buscar certificado:", certError);
-      throw new Error("Certificado não encontrado");
-    }
-
-    const { data: keyData, error: keyError } = await supabase.storage
-      .from("inter-certs")
-      .download(credentials.private_key_file_path);
-
-    if (keyError || !keyData) {
-      console.error("[inter-pix-payment] Erro ao buscar chave privada:", keyError);
-      throw new Error("Chave privada não encontrada");
-    }
-
-    const cert = await certData.text();
-    const key = await keyData.text();
+    // Buscar credenciais e certificados
+    const { credentials, cert, key } = await getCredentials(supabase, payload.company_id);
 
     let paymentId = payload.payment_id;
 
@@ -301,8 +463,13 @@ serve(async (req) => {
     console.log(`[inter-pix-payment] Pagamento ID: ${paymentId}`);
 
     try {
+      // Obter token OAuth via mTLS
       const token = await getOAuthToken(credentials, cert, key);
-      const pixResult = await sendPixPayment(token, credentials, cert, key, payload);
+      
+      // Enviar pagamento PIX via mTLS
+      const pixResult = await sendPixPayment(credentials, cert, key, token, payload);
+
+      console.log("[inter-pix-payment] Resultado PIX:", JSON.stringify(pixResult));
 
       // Mapear status do Inter para status interno
       const isApprovalPending = ["AGUARDANDO_APROVACAO", "PENDENTE", "EM_PROCESSAMENTO", "AGENDADO"].includes(pixResult.status);
@@ -330,6 +497,7 @@ serve(async (req) => {
             paid_at: new Date().toISOString(),
             paid_amount: payload.amount,
             payment_method: "pix",
+            payment_status: "paid",
           })
           .eq("id", payload.payable_id);
       }
