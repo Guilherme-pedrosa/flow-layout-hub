@@ -442,22 +442,38 @@ export default function Checkout() {
               ) : (
                 <ScrollArea className="h-full">
                   <div className="space-y-2 pr-2">
-                    {checkedItems.map((item) => (
-                      <div 
-                        key={item.id} 
-                        className="p-3 rounded-lg border bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-900"
-                      >
-                        <div className="font-medium text-sm">{item.product_description}</div>
-                        <div className="flex items-center justify-between mt-1">
-                          <span className="text-xs text-muted-foreground">
-                            Cód: {item.product_code}
-                          </span>
-                          <Badge variant="secondary" className="bg-green-100 text-green-700">
-                            {item.quantity_checked} / {item.quantity_total}
-                          </Badge>
+                    {checkedItems.map((item) => {
+                      // Item parcial: conferido algo mas não completou (falta estoque ou não bipou tudo)
+                      const isPartial = item.quantity_checked > 0 && item.quantity_checked < item.quantity_total;
+                      
+                      return (
+                        <div 
+                          key={item.id} 
+                          className={`p-3 rounded-lg border ${
+                            isPartial 
+                              ? 'bg-yellow-50 dark:bg-yellow-950/30 border-yellow-300 dark:border-yellow-800'
+                              : 'bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-900'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="font-medium text-sm">{item.product_description}</div>
+                            {isPartial && (
+                              <Badge variant="outline" className="bg-yellow-100 text-yellow-700 border-yellow-300">
+                                Parcial
+                              </Badge>
+                            )}
+                          </div>
+                          <div className="flex items-center justify-between mt-1">
+                            <span className="text-xs text-muted-foreground">
+                              Cód: {item.product_code}
+                            </span>
+                            <Badge variant="secondary" className={isPartial ? "bg-yellow-100 text-yellow-700" : "bg-green-100 text-green-700"}>
+                              {item.quantity_checked} / {item.quantity_total}
+                            </Badge>
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </ScrollArea>
               )}

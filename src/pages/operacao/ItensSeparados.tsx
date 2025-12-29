@@ -355,25 +355,35 @@ export default function ItensSeparados() {
                             </TableRow>
                           </TableHeader>
                           <TableBody>
-                            {source.items.map((item) => (
-                              <TableRow key={item.id}>
-                                <TableCell className="font-mono text-sm">{item.product_code}</TableCell>
-                                <TableCell>{item.product_description}</TableCell>
-                                <TableCell className="text-center font-medium text-green-600">
-                                  {item.quantity_checked}
-                                </TableCell>
-                                <TableCell className="text-center">{item.quantity_total}</TableCell>
-                                <TableCell className="text-muted-foreground">
-                                  {item.checked_by_name || '-'}
-                                </TableCell>
-                                <TableCell className="text-right text-muted-foreground">
-                                  {item.checked_at 
-                                    ? new Date(item.checked_at).toLocaleString('pt-BR')
-                                    : '-'
-                                  }
-                                </TableCell>
-                              </TableRow>
-                            ))}
+                            {source.items.map((item) => {
+                              const isPartial = item.quantity_checked < item.quantity_total;
+                              return (
+                                <TableRow key={item.id} className={isPartial ? 'bg-yellow-50 dark:bg-yellow-950/20' : ''}>
+                                  <TableCell className="font-mono text-sm">{item.product_code}</TableCell>
+                                  <TableCell>
+                                    {item.product_description}
+                                    {isPartial && (
+                                      <Badge variant="outline" className="ml-2 bg-yellow-100 text-yellow-700 border-yellow-300 text-xs">
+                                        Parcial
+                                      </Badge>
+                                    )}
+                                  </TableCell>
+                                  <TableCell className={`text-center font-medium ${isPartial ? 'text-yellow-600' : 'text-green-600'}`}>
+                                    {item.quantity_checked}
+                                  </TableCell>
+                                  <TableCell className="text-center">{item.quantity_total}</TableCell>
+                                  <TableCell className="text-muted-foreground">
+                                    {item.checked_by_name || '-'}
+                                  </TableCell>
+                                  <TableCell className="text-right text-muted-foreground">
+                                    {item.checked_at 
+                                      ? new Date(item.checked_at).toLocaleString('pt-BR')
+                                      : '-'
+                                    }
+                                  </TableCell>
+                                </TableRow>
+                              );
+                            })}
                           </TableBody>
                         </Table>
                       </div>
