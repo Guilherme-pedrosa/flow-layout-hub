@@ -188,8 +188,7 @@ export function usePurchaseOrders() {
         .select(`
           *,
           purchase_order_status:purchase_order_statuses(*),
-          supplier:suppliers!purchase_orders_supplier_id_fkey(*),
-          cte_carrier:suppliers!purchase_orders_cte_carrier_id_fkey(*)
+          supplier:pessoas!purchase_orders_supplier_id_fkey(*)
         `)
         .order("created_at", { ascending: false });
 
@@ -477,8 +476,7 @@ export function usePurchaseOrders() {
       .select(`
         *,
         purchase_order_status:purchase_order_statuses(*),
-        supplier:suppliers!purchase_orders_supplier_id_fkey(*),
-        cte_carrier:suppliers!purchase_orders_cte_carrier_id_fkey(*)
+        supplier:pessoas!purchase_orders_supplier_id_fkey(*)
       `)
       .eq("id", orderId)
       .single();
