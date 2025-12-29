@@ -18,7 +18,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 
-export type StockBehavior = 'none' | 'reserve' | 'move';
+export type StockBehavior = 'none' | 'reserve';
 export type FinancialBehavior = 'none' | 'forecast' | 'effective';
 export type CheckoutBehavior = 'none' | 'required';
 
@@ -44,7 +44,6 @@ interface StatusConfigFormProps {
 const STOCK_BEHAVIOR_OPTIONS = [
   { value: 'none', label: 'Nenhum', description: 'Não afeta o estoque' },
   { value: 'reserve', label: 'Reservar', description: 'Reserva o estoque (previsão)' },
-  { value: 'move', label: 'Movimentar', description: 'Efetiva a movimentação' },
 ];
 
 const FINANCIAL_BEHAVIOR_OPTIONS = [
@@ -137,7 +136,31 @@ export function StatusConfigForm({
           </div>
 
           <div className="space-y-2">
-            <Label>Comportamento de Estoque</Label>
+            <Label>Enviar para Checkout?</Label>
+            <Select
+              value={formData.checkout_behavior}
+              onValueChange={(value: CheckoutBehavior) => 
+                setFormData({ ...formData, checkout_behavior: value })
+              }
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {CHECKOUT_BEHAVIOR_OPTIONS.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    <div className="flex flex-col">
+                      <span>{option.label}</span>
+                      <span className="text-xs text-muted-foreground">{option.description}</span>
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Reservar Estoque?</Label>
             <Select
               value={formData.stock_behavior}
               onValueChange={(value: StockBehavior) => 
@@ -184,29 +207,6 @@ export function StatusConfigForm({
             </Select>
           </div>
 
-          <div className="space-y-2">
-            <Label>Exigir Checkout?</Label>
-            <Select
-              value={formData.checkout_behavior}
-              onValueChange={(value: CheckoutBehavior) => 
-                setFormData({ ...formData, checkout_behavior: value })
-              }
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {CHECKOUT_BEHAVIOR_OPTIONS.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>
-                    <div className="flex flex-col">
-                      <span>{option.label}</span>
-                      <span className="text-xs text-muted-foreground">{option.description}</span>
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
 
           <div className="space-y-2">
             <Label htmlFor="display_order">Ordem de Exibição</Label>

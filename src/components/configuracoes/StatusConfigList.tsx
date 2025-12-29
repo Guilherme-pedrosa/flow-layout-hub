@@ -53,9 +53,8 @@ interface StatusConfigListProps {
 }
 
 const STOCK_LABELS: Record<string, string> = {
-  'none': 'Nenhum',
-  'reserve': 'Reservar',
-  'move': 'Movimentar',
+  'none': 'Não',
+  'reserve': 'Sim',
 };
 
 const FINANCIAL_LABELS: Record<string, string> = {
@@ -130,9 +129,9 @@ export function StatusConfigList({
                 <TableRow>
                   <TableHead className="w-8"></TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead>Estoque</TableHead>
-                  <TableHead>Financeiro</TableHead>
                   <TableHead>Checkout</TableHead>
+                  <TableHead>Reserva Estoque</TableHead>
+                  <TableHead>Financeiro</TableHead>
                   <TableHead>Ativo</TableHead>
                   <TableHead className="w-8"></TableHead>
                 </TableRow>
@@ -159,13 +158,13 @@ export function StatusConfigList({
                       </div>
                     </TableCell>
                     <TableCell className="text-muted-foreground">
+                      {CHECKOUT_LABELS[status.checkout_behavior] || status.checkout_behavior}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
                       {STOCK_LABELS[status.stock_behavior] || status.stock_behavior}
                     </TableCell>
                     <TableCell className="text-muted-foreground">
                       {FINANCIAL_LABELS[status.financial_behavior] || status.financial_behavior}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {CHECKOUT_LABELS[status.checkout_behavior] || status.checkout_behavior}
                     </TableCell>
                     <TableCell>
                       <Badge variant={status.is_active ? "default" : "secondary"}>
