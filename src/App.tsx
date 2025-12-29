@@ -47,6 +47,8 @@ import Conciliacao from "./pages/financeiro/Conciliacao";
 import PlanoContas from "./pages/financeiro/PlanoContas";
 import CentrosCusto from "./pages/financeiro/CentrosCusto";
 import CategoriasRapidas from "./pages/financeiro/CategoriasRapidas";
+import ConfiguracaoBancaria from "./pages/financeiro/ConfiguracaoBancaria";
+import ExtratoBancario from "./pages/financeiro/ExtratoBancario";
 
 // Cadastros
 import Clientes from "./pages/cadastros/Clientes";
@@ -112,6 +114,8 @@ const App = () => (
             <Route path="/plano-contas" element={<PlanoContas />} />
             <Route path="/centros-custo" element={<CentrosCusto />} />
             <Route path="/categorias-rapidas" element={<CategoriasRapidas />} />
+            <Route path="/configuracao-bancaria" element={<ConfiguracaoBancaria />} />
+            <Route path="/extrato-bancario" element={<ExtratoBancario />} />
             
             {/* Cadastros */}
             <Route path="/clientes" element={<Clientes />} />
