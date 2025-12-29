@@ -1310,7 +1310,6 @@ export type Database = {
           is_active: boolean
           is_default: boolean | null
           name: string
-          requires_completed_checkout: boolean | null
           stock_behavior: string
           updated_at: string
         }
@@ -1325,7 +1324,6 @@ export type Database = {
           is_active?: boolean
           is_default?: boolean | null
           name: string
-          requires_completed_checkout?: boolean | null
           stock_behavior?: string
           updated_at?: string
         }
@@ -1340,7 +1338,6 @@ export type Database = {
           is_active?: boolean
           is_default?: boolean | null
           name?: string
-          requires_completed_checkout?: boolean | null
           stock_behavior?: string
           updated_at?: string
         }
@@ -1787,7 +1784,6 @@ export type Database = {
           is_active: boolean
           is_default: boolean | null
           name: string
-          requires_completed_checkout: boolean | null
           stock_behavior: string
           updated_at: string
         }
@@ -1802,7 +1798,6 @@ export type Database = {
           is_active?: boolean
           is_default?: boolean | null
           name: string
-          requires_completed_checkout?: boolean | null
           stock_behavior?: string
           updated_at?: string
         }
@@ -1817,7 +1812,6 @@ export type Database = {
           is_active?: boolean
           is_default?: boolean | null
           name?: string
-          requires_completed_checkout?: boolean | null
           stock_behavior?: string
           updated_at?: string
         }
@@ -2160,6 +2154,7 @@ export type Database = {
           id: string
           is_active: boolean
           name: string
+          permissions: Json | null
           role: Database["public"]["Enums"]["user_role"]
           updated_at: string
         }
@@ -2171,6 +2166,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           name: string
+          permissions?: Json | null
           role?: Database["public"]["Enums"]["user_role"]
           updated_at?: string
         }
@@ -2182,6 +2178,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           name?: string
+          permissions?: Json | null
           role?: Database["public"]["Enums"]["user_role"]
           updated_at?: string
         }

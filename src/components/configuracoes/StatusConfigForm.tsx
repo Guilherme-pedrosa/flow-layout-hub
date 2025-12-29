@@ -30,7 +30,6 @@ export interface StatusFormData {
   stock_behavior: StockBehavior;
   financial_behavior: FinancialBehavior;
   checkout_behavior: CheckoutBehavior;
-  requires_completed_checkout: boolean;
   display_order: number;
 }
 
@@ -86,7 +85,6 @@ export function StatusConfigForm({
       stock_behavior: 'none',
       financial_behavior: 'none',
       checkout_behavior: 'none',
-      requires_completed_checkout: false,
       display_order: 0,
     }
   );
@@ -219,36 +217,23 @@ export function StatusConfigForm({
             />
           </div>
 
-          <div className="flex flex-col gap-4">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:justify-between">
             <div className="flex items-center gap-2">
               <Switch
-                id="requires_completed_checkout"
-                checked={formData.requires_completed_checkout}
-                onCheckedChange={(checked) => setFormData({ ...formData, requires_completed_checkout: checked })}
+                id="is_default"
+                checked={formData.is_default}
+                onCheckedChange={(checked) => setFormData({ ...formData, is_default: checked })}
               />
-              <Label htmlFor="requires_completed_checkout" className="text-sm">
-                Exige checkout completo (só pode ser selecionado após conferência)
-              </Label>
+              <Label htmlFor="is_default">Status padrão</Label>
             </div>
 
-            <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:justify-between">
-              <div className="flex items-center gap-2">
-                <Switch
-                  id="is_default"
-                  checked={formData.is_default}
-                  onCheckedChange={(checked) => setFormData({ ...formData, is_default: checked })}
-                />
-                <Label htmlFor="is_default">Status padrão</Label>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <Switch
-                  id="is_active"
-                  checked={formData.is_active}
-                  onCheckedChange={(checked) => setFormData({ ...formData, is_active: checked })}
-                />
-                <Label htmlFor="is_active">Ativo</Label>
-              </div>
+            <div className="flex items-center gap-2">
+              <Switch
+                id="is_active"
+                checked={formData.is_active}
+                onCheckedChange={(checked) => setFormData({ ...formData, is_active: checked })}
+              />
+              <Label htmlFor="is_active">Ativo</Label>
             </div>
           </div>
         </div>
