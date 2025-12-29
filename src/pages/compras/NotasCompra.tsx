@@ -47,11 +47,14 @@ import {
   Upload,
   Package,
   CircleDollarSign,
+  Printer,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { usePurchaseOrders, PurchaseOrder, PurchaseOrderItem } from "@/hooks/usePurchaseOrders";
 import { usePurchaseOrderStatuses } from "@/hooks/usePurchaseOrderStatuses";
 import { useStockMovements } from "@/hooks/useStockMovements";
+import { useProducts } from "@/hooks/useProducts";
+import { PrintLabelDialog } from "@/components/compras";
 import { formatCurrency } from "@/lib/formatters";
 import { toast } from "sonner";
 
@@ -60,6 +63,7 @@ export default function NotasCompra() {
   const { orders, isLoading, updateOrderStatus, getOrderItems, refetch } = usePurchaseOrders();
   const { statuses, getActiveStatuses } = usePurchaseOrderStatuses();
   const { createMovement } = useStockMovements();
+  const { products } = useProducts();
 
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -67,6 +71,7 @@ export default function NotasCompra() {
   const [orderItems, setOrderItems] = useState<PurchaseOrderItem[]>([]);
   const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
   const [loadingItems, setLoadingItems] = useState(false);
+  const [printDialogOpen, setPrintDialogOpen] = useState(false);
 
   const activeStatuses = getActiveStatuses();
 
@@ -96,6 +101,34 @@ export default function NotasCompra() {
       setLoadingItems(false);
     }
   };
+
+  const handlePrintLabels = async (order: PurchaseOrder) => {
+    setSelectedOrder(order);
+    setLoadingItems(true);
+    
+    try {
+      const items = await getOrderItems(order.id);
+      setOrderItems(items);
+      setPrintDialogOpen(true);
+    } catch (error) {
+      console.error("Erro ao carregar itens:", error);
+      toast.error("Erro ao carregar itens do pedido");
+    } finally {
+      setLoadingItems(false);
+    }
+  };
+
+  // Preparar itens para impressão de etiquetas
+  const labelItems = orderItems.map(item => {
+    const product = products.find(p => p.id === item.product_id);
+    return {
+      id: item.id,
+      code: product?.code || item.xml_code || "",
+      description: product?.description || item.xml_description || "",
+      barcode: product?.barcode || undefined,
+      quantity: item.quantity,
+    };
+  });
 
   const handleChangeStatus = async (orderId: string, newStatusId: string) => {
     const order = orders.find(o => o.id === orderId);
@@ -305,6 +338,10 @@ export default function NotasCompra() {
                             <Eye className="h-4 w-4 mr-2" />
                             Ver Detalhes
                           </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handlePrintLabels(order)}>
+                            <Printer className="h-4 w-4 mr-2" />
+                            Imprimir Etiquetas
+                          </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </TableCell>
@@ -404,6 +441,16 @@ export default function NotasCompra() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Dialog de impressão de etiquetas */}
+      <PrintLabelDialog
+        open={printDialogOpen}
+        onOpenChange={setPrintDialogOpen}
+        items={labelItems}
+        nfNumber={selectedOrder?.invoice_number || ""}
+        nfSeries={selectedOrder?.invoice_series || ""}
+        supplierAddress={selectedOrder?.supplier_address || undefined}
+      />
     </div>
   );
 }
