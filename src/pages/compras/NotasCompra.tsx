@@ -98,37 +98,42 @@ export default function NotasCompra() {
   };
 
   const handleChangeStatus = async (orderId: string, newStatusId: string) => {
+    const order = orders.find(o => o.id === orderId);
+    const oldStatus = order?.purchase_order_status;
     const newStatus = statuses.find(s => s.id === newStatusId);
     if (!newStatus) return;
 
     try {
       await updateOrderStatus.mutateAsync({ id: orderId, status_id: newStatusId });
 
-      // Se o status tem comportamento de estoque, processar movimentações
-      if (newStatus.stock_behavior === 'entry') {
-        const order = orders.find(o => o.id === orderId);
-        if (order) {
-          const items = await getOrderItems(orderId);
-          for (const item of items) {
-            if (item.product_id) {
-              await createMovement.mutateAsync({
-                product_id: item.product_id,
-                type: "ENTRADA_COMPRA",
-                quantity: item.quantity,
-                unit_price: item.unit_price || 0,
-                total_value: item.total_value || 0,
-                reason: `NF ${order.invoice_number} - Status: ${newStatus.name}`,
-                reference_type: "purchase_order",
-                reference_id: orderId,
-              });
-            }
+      // Só criar movimentação de estoque se:
+      // 1. O NOVO status tem stock_behavior = 'entry' (dá entrada no estoque)
+      // 2. O status ANTERIOR não tinha stock_behavior = 'entry' (para não duplicar)
+      const shouldCreateStockEntry = 
+        newStatus.stock_behavior === 'entry' && 
+        oldStatus?.stock_behavior !== 'entry';
+
+      if (shouldCreateStockEntry) {
+        const items = await getOrderItems(orderId);
+        for (const item of items) {
+          if (item.product_id) {
+            await createMovement.mutateAsync({
+              product_id: item.product_id,
+              type: "ENTRADA_COMPRA",
+              quantity: item.quantity,
+              unit_price: item.unit_price || 0,
+              total_value: item.total_value || 0,
+              reason: `NF ${order?.invoice_number} - Status: ${newStatus.name}`,
+              reference_type: "purchase_order",
+              reference_id: orderId,
+            });
           }
-          toast.success("Movimentação de estoque criada!");
         }
+        toast.success("Entrada de estoque registrada!");
       }
 
       // TODO: Implementar comportamento financeiro quando houver tabela de contas a pagar
-      if (newStatus.financial_behavior === 'payable') {
+      if (newStatus.financial_behavior === 'payable' && oldStatus?.financial_behavior !== 'payable') {
         toast.info("Contas a pagar serão geradas quando o módulo estiver disponível.");
       }
     } catch (error) {

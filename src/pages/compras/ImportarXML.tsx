@@ -237,22 +237,27 @@ export default function ImportarXML() {
 
       await createOrderItems.mutateAsync(orderItems);
 
-      // Criar movimentações de estoque para produtos vinculados
-      for (let i = 0; i < nfeData.itens.length; i++) {
-        const item = nfeData.itens[i];
-        const productId = item.productId || produtosCriados[i];
-        
-        if (productId) {
-          await createMovement.mutateAsync({
-            product_id: productId,
-            type: "ENTRADA_COMPRA",
-            quantity: item.quantidade,
-            unit_price: item.valorUnitario,
-            total_value: item.valorTotal,
-            reason: `NF ${nfeData.nota.numero}`,
-            reference_type: "purchase_order",
-            reference_id: orderData.id,
-          });
+      // IMPORTANTE: Só criar movimentação de estoque se o status tiver stock_behavior = 'entry'
+      // Se for 'forecast' (em trânsito), não dá entrada no estoque - fica só como previsão
+      const shouldCreateStockMovement = defaultStatus?.stock_behavior === 'entry';
+
+      if (shouldCreateStockMovement) {
+        for (let i = 0; i < nfeData.itens.length; i++) {
+          const item = nfeData.itens[i];
+          const productId = item.productId || produtosCriados[i];
+          
+          if (productId) {
+            await createMovement.mutateAsync({
+              product_id: productId,
+              type: "ENTRADA_COMPRA",
+              quantity: item.quantidade,
+              unit_price: item.valorUnitario,
+              total_value: item.valorTotal,
+              reason: `NF ${nfeData.nota.numero}`,
+              reference_type: "purchase_order",
+              reference_id: orderData.id,
+            });
+          }
         }
       }
 
