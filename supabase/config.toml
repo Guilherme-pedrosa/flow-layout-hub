@@ -20,3 +20,6 @@ verify_jwt = false
 
 [functions.reconciliation-engine]
 verify_jwt = false
+
+[functions.inter-pix-payment]
+verify_jwt = false

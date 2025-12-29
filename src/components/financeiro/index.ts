@@ -4,3 +4,6 @@ export { CategoriasRapidasList } from './CategoriasRapidasList';
 export { BancosList } from './BancosList';
 export { ReconciliationModal } from './ReconciliationModal';
 export { ReconciliationReverseModal } from './ReconciliationReverseModal';
+export { PayablesList } from './PayablesList';
+export { PixPaymentForm } from './PixPaymentForm';
+export { PixPaymentsList } from './PixPaymentsList';
