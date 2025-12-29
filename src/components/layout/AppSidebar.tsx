@@ -31,6 +31,7 @@ import {
   BookOpen,
   Target,
   Tag,
+  Printer,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -97,6 +98,7 @@ const menuGroups: { label: string; items: MenuItem[] }[] = [
     items: [
       { title: "Saldo", icon: Package, href: "/saldo-estoque" },
       { title: "Movimentações", icon: ArrowRightLeft, href: "/movimentacoes" },
+      { title: "Imprimir Etiquetas", icon: Printer, href: "/imprimir-etiquetas" },
       { title: "Ajustes", icon: AlertTriangle, href: "/ajustes", warning: true, tooltip: "Ajustes de estoque são auditados" },
     ],
   },
