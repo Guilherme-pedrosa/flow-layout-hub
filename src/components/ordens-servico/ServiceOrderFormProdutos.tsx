@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Package, Plus, Trash2, Truck, ChevronsUpDown, Check, PlusCircle } from "lucide-react";
@@ -24,7 +25,7 @@ interface ServiceOrderFormProdutosProps {
   onChange: (items: ServiceOrderProductItem[]) => void;
 }
 
-function StockPopover({ productId, currentStock, unit, requestedQuantity }: { 
+function StockContent({ productId, currentStock, unit, requestedQuantity }: { 
   productId: string; 
   currentStock: number; 
   unit: string;
@@ -36,31 +37,70 @@ function StockPopover({ productId, currentStock, unit, requestedQuantity }: {
   const hasInTransit = inTransit && inTransit.quantity > 0;
 
   return (
-    <PopoverContent className="w-auto p-3" align="start">
-      <div className="space-y-2">
-        <div 
-          className={`text-xs px-2 py-1 rounded ${
-            isOutOfStock 
-              ? 'bg-destructive text-destructive-foreground' 
-              : 'bg-green-600 text-white'
-          }`}
-        >
-          Estoque: {currentStock.toLocaleString('pt-BR')} {unit}
-        </div>
-
-        {hasInTransit && (
-          <div className="text-xs px-2 py-1 rounded bg-blue-500 text-white flex items-center gap-1">
-            <Truck className="h-3 w-3" />
-            Em trânsito: {inTransit.quantity.toLocaleString('pt-BR')}
-            {inTransit.nextArrivalDate && (
-              <span className="ml-1">
-                (Prev: {new Date(inTransit.nextArrivalDate).toLocaleDateString('pt-BR')})
-              </span>
-            )}
-          </div>
-        )}
+    <div className="space-y-2">
+      <div 
+        className={`text-xs px-2 py-1 rounded ${
+          isOutOfStock 
+            ? 'bg-destructive text-destructive-foreground' 
+            : 'bg-green-600 text-white'
+        }`}
+      >
+        Estoque: {currentStock.toLocaleString('pt-BR')} {unit}
       </div>
+
+      {hasInTransit && (
+        <div className="text-xs px-2 py-1 rounded bg-blue-500 text-white flex items-center gap-1">
+          <Truck className="h-3 w-3" />
+          Em trânsito: {inTransit.quantity.toLocaleString('pt-BR')}
+          {inTransit.nextArrivalDate && (
+            <span className="ml-1">
+              (Prev: {new Date(inTransit.nextArrivalDate).toLocaleDateString('pt-BR')})
+            </span>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function StockPopover({ productId, currentStock, unit, requestedQuantity }: { 
+  productId: string; 
+  currentStock: number; 
+  unit: string;
+  requestedQuantity: number;
+}) {
+  return (
+    <PopoverContent className="w-auto p-3" align="start">
+      <StockContent productId={productId} currentStock={currentStock} unit={unit} requestedQuantity={requestedQuantity} />
     </PopoverContent>
+  );
+}
+
+function StockHoverCard({ productId, currentStock, unit, requestedQuantity }: { 
+  productId: string; 
+  currentStock: number; 
+  unit: string;
+  requestedQuantity: number;
+}) {
+  const isOutOfStock = currentStock < requestedQuantity;
+  
+  return (
+    <HoverCard openDelay={100} closeDelay={100}>
+      <HoverCardTrigger asChild>
+        <span 
+          className={cn(
+            "inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded cursor-pointer",
+            isOutOfStock ? "bg-destructive/10 text-destructive" : "bg-green-100 text-green-700"
+          )}
+        >
+          <Package className="h-3 w-3" />
+          {currentStock.toLocaleString('pt-BR')} {unit}
+        </span>
+      </HoverCardTrigger>
+      <HoverCardContent className="w-auto p-3" align="start">
+        <StockContent productId={productId} currentStock={currentStock} unit={unit} requestedQuantity={requestedQuantity} />
+      </HoverCardContent>
+    </HoverCard>
   );
 }
 
@@ -458,13 +498,23 @@ export function ServiceOrderFormProdutos({ items, onChange }: ServiceOrderFormPr
                 return (
                   <TableRow key={index}>
                     <TableCell>
-                      <ProductCombobox
-                        value={item.product_id}
-                        onSelect={(productId) => updateItem(index, 'product_id', productId)}
-                        products={activeProducts}
-                        isOutOfStock={isOutOfStock}
-                        onRefetch={refetchProducts}
-                      />
+                      <div className="space-y-1">
+                        <ProductCombobox
+                          value={item.product_id}
+                          onSelect={(productId) => updateItem(index, 'product_id', productId)}
+                          products={activeProducts}
+                          isOutOfStock={isOutOfStock}
+                          onRefetch={refetchProducts}
+                        />
+                        {product && (
+                          <StockHoverCard
+                            productId={product.id}
+                            currentStock={product.quantity ?? 0}
+                            unit={product.unit || 'UN'}
+                            requestedQuantity={item.quantity}
+                          />
+                        )}
+                      </div>
                     </TableCell>
                     <TableCell>
                       <Select
