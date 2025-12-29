@@ -1,7 +1,46 @@
+import { useState } from "react";
 import { PageHeader } from "@/components/shared";
-import { Building2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Plus } from "lucide-react";
+import { useSuppliers } from "@/hooks/useSuppliers";
+import { SupplierForm, SuppliersList } from "@/components/fornecedores";
+import { Supplier } from "@/hooks/useSuppliers";
 
 export default function Fornecedores() {
+  const [showForm, setShowForm] = useState(false);
+  const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null);
+
+  const {
+    suppliers,
+    isLoading,
+    createSupplier,
+    updateSupplier,
+    toggleSupplierStatus,
+  } = useSuppliers();
+
+  const handleEdit = (supplier: Supplier) => {
+    setEditingSupplier(supplier);
+    setShowForm(true);
+  };
+
+  const handleCancel = () => {
+    setShowForm(false);
+    setEditingSupplier(null);
+  };
+
+  const handleSubmit = async (data: any) => {
+    if (editingSupplier) {
+      await updateSupplier.mutateAsync({ id: editingSupplier.id, ...data });
+    } else {
+      await createSupplier.mutateAsync(data);
+    }
+    handleCancel();
+  };
+
+  const handleToggleStatus = (id: string, isActive: boolean) => {
+    toggleSupplierStatus.mutate({ id, is_active: isActive });
+  };
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -11,14 +50,31 @@ export default function Fornecedores() {
           { label: "Cadastros" },
           { label: "Fornecedores" },
         ]}
+        actions={
+          !showForm && (
+            <Button onClick={() => setShowForm(true)}>
+              <Plus className="mr-2 h-4 w-4" />
+              Novo Fornecedor
+            </Button>
+          )
+        }
       />
-      <div className="rounded-lg border border-border bg-card p-8 text-center">
-        <Building2 className="mx-auto h-12 w-12 text-muted-foreground" />
-        <h3 className="mt-4 text-lg font-medium">Fornecedores</h3>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Área para cadastro e gestão de fornecedores.
-        </p>
-      </div>
+
+      {showForm ? (
+        <SupplierForm
+          supplier={editingSupplier}
+          onSubmit={handleSubmit}
+          onCancel={handleCancel}
+          isLoading={createSupplier.isPending || updateSupplier.isPending}
+        />
+      ) : (
+        <SuppliersList
+          suppliers={suppliers}
+          isLoading={isLoading}
+          onEdit={handleEdit}
+          onToggleStatus={handleToggleStatus}
+        />
+      )}
     </div>
   );
 }
