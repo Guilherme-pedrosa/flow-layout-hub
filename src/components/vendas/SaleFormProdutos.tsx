@@ -5,8 +5,9 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { Package, Plus, Trash2, AlertTriangle, Truck } from "lucide-react";
+import { Package, Plus, Trash2, Truck, Search } from "lucide-react";
 import { useProducts } from "@/hooks/useProducts";
+import { usePriceTables } from "@/hooks/useServices";
 import { useInTransitStock, SaleProductItem } from "@/hooks/useSales";
 import { formatCurrency } from "@/lib/formatters";
 
@@ -37,7 +38,7 @@ function StockIndicator({ productId, currentStock, unit, requestedQuantity }: {
                 : 'bg-green-600 text-white'
             }`}
           >
-            Estoque atual: {currentStock.toLocaleString('pt-BR')} / {unit}
+            Estoque: {currentStock.toLocaleString('pt-BR')} {unit}
           </div>
         </TooltipTrigger>
         <TooltipContent>
@@ -59,7 +60,7 @@ function StockIndicator({ productId, currentStock, unit, requestedQuantity }: {
             </div>
           </TooltipTrigger>
           <TooltipContent>
-            <p>Quantidade em trânsito nas compras pendentes</p>
+            <p>Quantidade em compras pendentes (não entra no estoque atual)</p>
           </TooltipContent>
         </Tooltip>
       )}
@@ -69,13 +70,18 @@ function StockIndicator({ productId, currentStock, unit, requestedQuantity }: {
 
 export function SaleFormProdutos({ items, onChange }: SaleFormProdutosProps) {
   const { products } = useProducts();
+  const { priceTables } = usePriceTables();
   const [searchTerm, setSearchTerm] = useState("");
 
   const activeProducts = products?.filter(p => p.is_active) ?? [];
+  const activePriceTables = priceTables?.filter(pt => pt.is_active) ?? [];
+
+  // Filtrar por nome, código ou barcode
   const filteredProducts = searchTerm 
     ? activeProducts.filter(p => 
         p.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        p.code.includes(searchTerm)
+        p.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (p.barcode && p.barcode.toLowerCase().includes(searchTerm.toLowerCase()))
       )
     : activeProducts;
 
@@ -88,7 +94,8 @@ export function SaleFormProdutos({ items, onChange }: SaleFormProdutosProps) {
         unit_price: 0,
         discount_value: 0,
         discount_type: 'value',
-        subtotal: 0
+        subtotal: 0,
+        price_table_id: ''
       }
     ]);
   };
@@ -108,7 +115,8 @@ export function SaleFormProdutos({ items, onChange }: SaleFormProdutosProps) {
           description: product.description,
           quantity: product.quantity ?? 0,
           sale_price: product.sale_price ?? 0,
-          unit: product.unit ?? 'UN'
+          unit: product.unit ?? 'UN',
+          barcode: product.barcode
         };
       }
     }
@@ -144,6 +152,7 @@ export function SaleFormProdutos({ items, onChange }: SaleFormProdutosProps) {
               <TableHead className="w-[250px]">
                 Produto <span className="text-destructive">*</span>
               </TableHead>
+              <TableHead className="w-[120px]">Tabela de Preço</TableHead>
               <TableHead>Detalhes</TableHead>
               <TableHead className="w-[120px]">
                 Quant. <span className="text-destructive">*</span>
@@ -173,17 +182,40 @@ export function SaleFormProdutos({ items, onChange }: SaleFormProdutosProps) {
                       </SelectTrigger>
                       <SelectContent>
                         <div className="p-2">
-                          <Input
-                            placeholder="Buscar produto..."
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                            className="mb-2"
-                          />
+                          <div className="flex items-center gap-2 mb-2">
+                            <Search className="h-4 w-4 text-muted-foreground" />
+                            <Input
+                              placeholder="Buscar por nome, código ou referência..."
+                              value={searchTerm}
+                              onChange={(e) => setSearchTerm(e.target.value)}
+                              className="flex-1"
+                            />
+                          </div>
+                          <p className="text-xs text-muted-foreground mb-2">
+                            Busque por nome, código ou código de barras
+                          </p>
                         </div>
                         {filteredProducts.slice(0, 20).map(p => (
                           <SelectItem key={p.id} value={p.id}>
-                            {p.code} - {p.description}
+                            <span className="font-medium">{p.code}</span> - {p.description}
+                            {p.barcode && <span className="text-muted-foreground ml-1">({p.barcode})</span>}
                           </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </TableCell>
+                  <TableCell>
+                    <Select
+                      value={item.price_table_id || ''}
+                      onValueChange={(value) => updateItem(index, 'price_table_id', value)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Padrão" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="">Preço padrão</SelectItem>
+                        {activePriceTables.map(pt => (
+                          <SelectItem key={pt.id} value={pt.id}>{pt.name}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>

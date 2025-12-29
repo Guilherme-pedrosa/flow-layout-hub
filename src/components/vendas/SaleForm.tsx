@@ -4,12 +4,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Save, X, DollarSign, FileText } from "lucide-react";
 import { SaleFormDadosGerais } from "./SaleFormDadosGerais";
 import { SaleFormProdutos } from "./SaleFormProdutos";
 import { SaleFormServicos } from "./SaleFormServicos";
 import { SaleFormTransporte } from "./SaleFormTransporte";
+import { SaleFormPagamento, Installment } from "./SaleFormPagamento";
 import { useSales, SaleProductItem, SaleServiceItem } from "@/hooks/useSales";
 import { formatCurrency } from "@/lib/formatters";
 
@@ -22,7 +22,8 @@ export function SaleForm({ onClose, initialData }: SaleFormProps) {
   const { createSale } = useSales();
   const [formData, setFormData] = useState({
     client_id: initialData?.client_id ?? '',
-    seller_name: '',
+    seller_id: '',
+    technician_id: '',
     status_id: initialData?.status_id ?? '',
     sale_date: new Date().toISOString().split('T')[0],
     delivery_date: '',
@@ -39,13 +40,14 @@ export function SaleForm({ onClose, initialData }: SaleFormProps) {
     discount_value: 0,
     discount_percent: 0,
     payment_type: 'avista',
-    installments: 1,
+    installments: 2,
     observations: '',
     internal_observations: '',
   });
 
   const [productItems, setProductItems] = useState<SaleProductItem[]>([]);
   const [serviceItems, setServiceItems] = useState<SaleServiceItem[]>([]);
+  const [installments, setInstallments] = useState<Installment[]>([]);
 
   const productsTotal = productItems.reduce((sum, i) => sum + i.subtotal, 0);
   const servicesTotal = serviceItems.reduce((sum, i) => sum + i.subtotal, 0);
@@ -63,6 +65,8 @@ export function SaleForm({ onClose, initialData }: SaleFormProps) {
     const sale = {
       company_id: '00000000-0000-0000-0000-000000000000', // TODO: pegar da empresa
       client_id: formData.client_id || null,
+      seller_id: formData.seller_id || null,
+      technician_id: formData.technician_id || null,
       status_id: formData.status_id || null,
       sale_date: formData.sale_date,
       delivery_date: formData.delivery_date || null,
@@ -81,7 +85,7 @@ export function SaleForm({ onClose, initialData }: SaleFormProps) {
       discount_percent: formData.discount_percent,
       total_value: total,
       payment_type: formData.payment_type,
-      installments: formData.installments,
+      installments: formData.payment_type === 'parcelado' ? formData.installments : 1,
       observations: formData.observations || null,
       internal_observations: formData.internal_observations || null,
     };
@@ -89,7 +93,8 @@ export function SaleForm({ onClose, initialData }: SaleFormProps) {
     await createSale.mutateAsync({
       sale,
       productItems: productItems.map(({ product, ...item }) => item),
-      serviceItems,
+      serviceItems: serviceItems.map(({ service, ...item }) => item),
+      installments: formData.payment_type === 'parcelado' ? installments : [],
     });
     onClose();
   };
@@ -133,29 +138,14 @@ export function SaleForm({ onClose, initialData }: SaleFormProps) {
       </Card>
 
       {/* Pagamento */}
-      <Card>
-        <CardHeader className="pb-4">
-          <CardTitle className="flex items-center gap-2 text-lg"><DollarSign className="h-5 w-5" />Pagamento</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <RadioGroup value={formData.payment_type} onValueChange={(v) => handleChange('payment_type', v)} className="flex gap-6">
-            <div className="flex items-center space-x-2">
-              <RadioGroupItem value="avista" id="avista" />
-              <Label htmlFor="avista">À vista <span className="text-destructive">*</span></Label>
-            </div>
-            <div className="flex items-center space-x-2">
-              <RadioGroupItem value="parcelado" id="parcelado" />
-              <Label htmlFor="parcelado">Parcelado <span className="text-destructive">*</span></Label>
-            </div>
-          </RadioGroup>
-          {formData.payment_type === 'parcelado' && (
-            <div className="mt-4 max-w-xs">
-              <Label>Número de parcelas</Label>
-              <Input type="number" min="2" value={formData.installments} onChange={(e) => handleChange('installments', parseInt(e.target.value) || 1)} />
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      <SaleFormPagamento
+        paymentType={formData.payment_type}
+        installmentsCount={formData.installments}
+        installments={installments}
+        totalValue={total}
+        onChange={handleChange}
+        onInstallmentsChange={setInstallments}
+      />
 
       {/* Observações */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

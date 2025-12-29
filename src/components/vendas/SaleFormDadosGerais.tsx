@@ -6,13 +6,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { FileEdit } from "lucide-react";
 import { useSaleStatuses } from "@/hooks/useSales";
 import { useCostCenters, CostCenter } from "@/hooks/useFinanceiro";
+import { useSystemUsers } from "@/hooks/useServices";
 import { supabase } from "@/integrations/supabase/client";
 
 interface SaleFormDadosGeraisProps {
   formData: {
     sale_number?: number;
     client_id: string;
-    seller_name: string;
+    seller_id: string;
+    technician_id: string;
     status_id: string;
     sale_date: string;
     delivery_date: string;
@@ -37,6 +39,7 @@ const salesChannelOptions = [
 export function SaleFormDadosGerais({ formData, onChange }: SaleFormDadosGeraisProps) {
   const { statuses } = useSaleStatuses();
   const { costCenters, fetchCostCenters } = useCostCenters();
+  const { data: users } = useSystemUsers();
   const [clientes, setClientes] = useState<any[]>([]);
 
   useEffect(() => {
@@ -47,6 +50,7 @@ export function SaleFormDadosGerais({ formData, onChange }: SaleFormDadosGeraisP
 
   const activeStatuses = statuses?.filter(s => s.is_active) ?? [];
   const activeCostCenters = costCenters?.filter(c => c.is_active) ?? [];
+  const activeUsers = users ?? [];
 
   return (
     <div className="space-y-6">
@@ -78,7 +82,26 @@ export function SaleFormDadosGerais({ formData, onChange }: SaleFormDadosGeraisP
 
             <div className="space-y-2">
               <Label>Vendedor</Label>
-              <Input value={formData.seller_name} onChange={(e) => onChange('seller_name', e.target.value)} />
+              <Select value={formData.seller_id} onValueChange={(v) => onChange('seller_id', v)}>
+                <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                <SelectContent>
+                  {activeUsers.map(u => (
+                    <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Técnico Responsável</Label>
+              <Select value={formData.technician_id} onValueChange={(v) => onChange('technician_id', v)}>
+                <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                <SelectContent>
+                  {activeUsers.map(u => (
+                    <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="space-y-2">

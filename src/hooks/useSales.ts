@@ -31,6 +31,7 @@ export interface SaleProductItem {
     quantity: number;
     sale_price: number;
     unit: string;
+    barcode?: string | null;
   };
   details?: string;
   quantity: number;
@@ -38,11 +39,20 @@ export interface SaleProductItem {
   discount_value: number;
   discount_type: 'value' | 'percent';
   subtotal: number;
+  price_table_id?: string;
 }
 
 export interface SaleServiceItem {
   id?: string;
   sale_id?: string;
+  service_id?: string;
+  service?: {
+    id: string;
+    code: string;
+    description: string;
+    unit: string;
+    sale_price: number;
+  };
   service_description: string;
   details?: string;
   quantity: number;
@@ -206,11 +216,13 @@ export function useSales() {
     mutationFn: async ({
       sale,
       productItems,
-      serviceItems
+      serviceItems,
+      installments = []
     }: {
       sale: Record<string, unknown>;
       productItems: Omit<SaleProductItem, 'id' | 'sale_id' | 'product'>[];
-      serviceItems: Omit<SaleServiceItem, 'id' | 'sale_id'>[];
+      serviceItems: Omit<SaleServiceItem, 'id' | 'sale_id' | 'service'>[];
+      installments?: { installment_number: number; due_date: string; amount: number; payment_method: string }[];
     }) => {
       const { data: saleData, error: saleError } = await supabase
         .from("sales")
@@ -229,6 +241,12 @@ export function useSales() {
       if (serviceItems.length > 0) {
         await supabase.from("sale_service_items").insert(
           serviceItems.map(item => ({ ...item, sale_id: saleData.id }))
+        );
+      }
+
+      if (installments.length > 0) {
+        await supabase.from("sale_installments").insert(
+          installments.map(item => ({ ...item, sale_id: saleData.id }))
         );
       }
 
