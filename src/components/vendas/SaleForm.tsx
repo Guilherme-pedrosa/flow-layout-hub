@@ -191,7 +191,7 @@ export function SaleForm({ onClose, initialData }: SaleFormProps) {
   const freightValue = parseFloat(formData.freight_value) || 0;
   const discountValue = parseFloat(formData.discount_value) || 0;
   const discountPercent = parseFloat(formData.discount_percent) || 0;
-  const installmentsCount = parseInt(formData.installments) || 2;
+  const installmentsCount = formData.installments === '' ? 0 : (parseInt(formData.installments) || 0);
 
   const productsTotal = productItems.reduce((sum, i) => sum + i.subtotal, 0);
   const servicesTotal = serviceItems.reduce((sum, i) => sum + i.subtotal, 0);
