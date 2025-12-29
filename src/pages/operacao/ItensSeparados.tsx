@@ -317,7 +317,11 @@ export default function ItensSeparados() {
                     onOpenChange={(open) => setExpandedId(open ? source.id : null)}
                   >
                     <CollapsibleTrigger asChild>
-                      <div className="flex items-center justify-between p-4 rounded-lg border hover:bg-accent/5 cursor-pointer transition-colors">
+                      <div className={`flex items-center justify-between p-4 rounded-lg border hover:bg-accent/5 cursor-pointer transition-colors ${
+                        source.checkout_status === 'partial' 
+                          ? 'bg-yellow-50 dark:bg-yellow-950/30 border-yellow-400' 
+                          : ''
+                      }`}>
                         <div className="flex items-center gap-4">
                           <div className="flex items-center gap-2">
                             {source.type === 'venda' ? (
@@ -330,7 +334,10 @@ export default function ItensSeparados() {
                             </span>
                           </div>
                           
-                          <Badge variant={source.checkout_status === 'completed' ? 'default' : 'secondary'}>
+                          <Badge 
+                            variant={source.checkout_status === 'completed' ? 'default' : 'outline'}
+                            className={source.checkout_status === 'partial' ? 'bg-yellow-100 text-yellow-700 border-yellow-300' : ''}
+                          >
                             {source.checkout_status === 'completed' ? (
                               <><CheckCircle2 className="h-3 w-3 mr-1" /> Completo</>
                             ) : (
