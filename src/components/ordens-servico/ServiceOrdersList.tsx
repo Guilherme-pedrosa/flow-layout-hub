@@ -3,11 +3,14 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSub, DropdownMenuSubTrigger, DropdownMenuSubContent } from "@/components/ui/dropdown-menu";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Search, Eye, Edit, Trash2, MoreVertical, DollarSign, FileText, Printer, Link, Share2, Wrench } from "lucide-react";
-import { useServiceOrders, ServiceOrder } from "@/hooks/useServiceOrders";
+import { Search, Eye, Edit, Trash2, MoreVertical, DollarSign, FileText, Printer, Link, Share2, Wrench, Package, CircleDollarSign, CheckCircle } from "lucide-react";
+import { useServiceOrders, useServiceOrderStatuses, ServiceOrder } from "@/hooks/useServiceOrders";
+import { useDocumentPdf } from "@/hooks/useDocumentPdf";
 import { formatCurrency } from "@/lib/formatters";
 import { SaleStatusBadge } from "@/components/vendas/SaleStatusBadge";
+import { toast } from "sonner";
 
 interface ServiceOrdersListProps {
   onEdit: (order: ServiceOrder) => void;
@@ -15,8 +18,12 @@ interface ServiceOrdersListProps {
 }
 
 export function ServiceOrdersList({ onEdit, onView }: ServiceOrdersListProps) {
-  const { orders, isLoading, deleteOrder } = useServiceOrders();
+  const { orders, isLoading, updateOrder, deleteOrder, refetch } = useServiceOrders();
+  const { statuses, getActiveStatuses } = useServiceOrderStatuses();
+  const { printDocument, printSummary, isGenerating } = useDocumentPdf();
   const [search, setSearch] = useState("");
+
+  const activeStatuses = getActiveStatuses();
 
   const filteredOrders = orders.filter(o => 
     o.client?.razao_social?.toLowerCase().includes(search.toLowerCase()) ||
@@ -29,6 +36,48 @@ export function ServiceOrdersList({ onEdit, onView }: ServiceOrdersListProps) {
   const handleCopyLink = (order: ServiceOrder) => {
     const url = `${window.location.origin}/os/${order.tracking_token}`;
     navigator.clipboard.writeText(url);
+    toast.success("Link copiado!");
+  };
+
+  const handlePrintComplete = async (order: ServiceOrder) => {
+    await printDocument(order.id, "service_order");
+  };
+
+  const handlePrintSummary = async (order: ServiceOrder) => {
+    await printSummary(order.id, "service_order");
+  };
+
+  const handleChangeStatus = async (orderId: string, newStatusId: string) => {
+    const newStatus = statuses.find(s => s.id === newStatusId);
+    if (!newStatus) return;
+
+    try {
+      await updateOrder.mutateAsync({ 
+        id: orderId, 
+        order: { status_id: newStatusId } 
+      });
+      refetch();
+      toast.success(`Status alterado para "${newStatus.name}"`);
+    } catch (error) {
+      console.error("Erro ao alterar status:", error);
+      toast.error("Erro ao alterar status");
+    }
+  };
+
+  const getStatusBadge = (order: ServiceOrder) => {
+    if (order.status) {
+      return (
+        <Badge 
+          style={{ 
+            backgroundColor: order.status.color,
+            color: '#fff'
+          }}
+        >
+          {order.status.name}
+        </Badge>
+      );
+    }
+    return <Badge variant="secondary">Sem status</Badge>;
   };
 
   if (isLoading) return <div className="p-8 text-center text-muted-foreground">Carregando...</div>;
@@ -50,7 +99,7 @@ export function ServiceOrdersList({ onEdit, onView }: ServiceOrdersListProps) {
               <TableHead>Cliente</TableHead>
               <TableHead>Equipamento</TableHead>
               <TableHead className="w-[120px]">Data</TableHead>
-              <TableHead className="w-[140px]">Situação</TableHead>
+              <TableHead className="w-[180px]">Situação</TableHead>
               <TableHead className="w-[120px] text-right">Valor</TableHead>
               <TableHead className="w-[100px]">Ações</TableHead>
             </TableRow>
@@ -79,7 +128,38 @@ export function ServiceOrdersList({ onEdit, onView }: ServiceOrdersListProps) {
                   </TableCell>
                   <TableCell>{new Date(order.order_date).toLocaleDateString('pt-BR')}</TableCell>
                   <TableCell>
-                    {order.status ? <SaleStatusBadge name={order.status.name} color={order.status.color} /> : <Badge variant="outline">-</Badge>}
+                    <Select 
+                      value={order.status_id || ""} 
+                      onValueChange={(value) => handleChangeStatus(order.id, value)}
+                    >
+                      <SelectTrigger className="w-40 h-8">
+                        <SelectValue>
+                          {getStatusBadge(order)}
+                        </SelectValue>
+                      </SelectTrigger>
+                      <SelectContent>
+                        {activeStatuses.map(status => (
+                          <SelectItem key={status.id} value={status.id}>
+                            <div className="flex items-center gap-2">
+                              <div 
+                                className="w-2 h-2 rounded-full" 
+                                style={{ backgroundColor: status.color }}
+                              />
+                              <span>{status.name}</span>
+                              {status.stock_behavior !== 'none' && (
+                                <Package className="h-3 w-3 text-muted-foreground" />
+                              )}
+                              {status.financial_behavior !== 'none' && (
+                                <CircleDollarSign className="h-3 w-3 text-muted-foreground" />
+                              )}
+                              {status.checkout_behavior === 'required' && (
+                                <CheckCircle className="h-3 w-3 text-muted-foreground" />
+                              )}
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </TableCell>
                   <TableCell className="text-right font-medium">{formatCurrency(order.total_value)}</TableCell>
                   <TableCell>
@@ -91,11 +171,14 @@ export function ServiceOrdersList({ onEdit, onView }: ServiceOrdersListProps) {
                         <DropdownMenuContent align="end">
                           <DropdownMenuItem onClick={() => handleCopyLink(order)}><Link className="h-4 w-4 mr-2" />Link de acompanhamento</DropdownMenuItem>
                           <DropdownMenuSub>
-                            <DropdownMenuSubTrigger><Printer className="h-4 w-4 mr-2" />Imprimir</DropdownMenuSubTrigger>
+                            <DropdownMenuSubTrigger><Printer className="h-4 w-4 mr-2" />Imprimir PDF</DropdownMenuSubTrigger>
                             <DropdownMenuSubContent>
-                              <DropdownMenuItem>Modelo padrão</DropdownMenuItem>
-                              <DropdownMenuItem>Modelo detalhado</DropdownMenuItem>
-                              <DropdownMenuItem>Termo de garantia</DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handlePrintComplete(order)} disabled={isGenerating}>
+                                <FileText className="h-4 w-4 mr-2" />Relatório Completo
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handlePrintSummary(order)} disabled={isGenerating}>
+                                <FileText className="h-4 w-4 mr-2" />Resumido
+                              </DropdownMenuItem>
                             </DropdownMenuSubContent>
                           </DropdownMenuSub>
                           <DropdownMenuSub>
