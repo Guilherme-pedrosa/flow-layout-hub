@@ -1005,7 +1005,11 @@ export type Database = {
       payables: {
         Row: {
           amount: number
+          approved_at: string | null
+          approved_by: string | null
           bank_account_id: string | null
+          bank_transaction_id: string | null
+          boleto_barcode: string | null
           chart_account_id: string | null
           company_id: string
           cost_center_id: string | null
@@ -1016,20 +1020,36 @@ export type Database = {
           due_date: string
           forecast_converted_at: string | null
           id: string
+          inter_payment_id: string | null
           is_forecast: boolean | null
           is_paid: boolean | null
           notes: string | null
           paid_amount: number | null
           paid_at: string | null
           payment_method: string | null
+          payment_method_type:
+            | Database["public"]["Enums"]["payment_method_type"]
+            | null
+          payment_status: Database["public"]["Enums"]["payment_status"] | null
+          pix_key: string | null
+          pix_key_type: string | null
           purchase_order_id: string | null
+          recipient_document: string | null
+          recipient_name: string | null
           reconciliation_id: string | null
+          scheduled_payment_date: string | null
+          submitted_at: string | null
+          submitted_by: string | null
           supplier_id: string
           updated_at: string
         }
         Insert: {
           amount: number
+          approved_at?: string | null
+          approved_by?: string | null
           bank_account_id?: string | null
+          bank_transaction_id?: string | null
+          boleto_barcode?: string | null
           chart_account_id?: string | null
           company_id: string
           cost_center_id?: string | null
@@ -1040,20 +1060,36 @@ export type Database = {
           due_date: string
           forecast_converted_at?: string | null
           id?: string
+          inter_payment_id?: string | null
           is_forecast?: boolean | null
           is_paid?: boolean | null
           notes?: string | null
           paid_amount?: number | null
           paid_at?: string | null
           payment_method?: string | null
+          payment_method_type?:
+            | Database["public"]["Enums"]["payment_method_type"]
+            | null
+          payment_status?: Database["public"]["Enums"]["payment_status"] | null
+          pix_key?: string | null
+          pix_key_type?: string | null
           purchase_order_id?: string | null
+          recipient_document?: string | null
+          recipient_name?: string | null
           reconciliation_id?: string | null
+          scheduled_payment_date?: string | null
+          submitted_at?: string | null
+          submitted_by?: string | null
           supplier_id: string
           updated_at?: string
         }
         Update: {
           amount?: number
+          approved_at?: string | null
+          approved_by?: string | null
           bank_account_id?: string | null
+          bank_transaction_id?: string | null
+          boleto_barcode?: string | null
           chart_account_id?: string | null
           company_id?: string
           cost_center_id?: string | null
@@ -1064,23 +1100,49 @@ export type Database = {
           due_date?: string
           forecast_converted_at?: string | null
           id?: string
+          inter_payment_id?: string | null
           is_forecast?: boolean | null
           is_paid?: boolean | null
           notes?: string | null
           paid_amount?: number | null
           paid_at?: string | null
           payment_method?: string | null
+          payment_method_type?:
+            | Database["public"]["Enums"]["payment_method_type"]
+            | null
+          payment_status?: Database["public"]["Enums"]["payment_status"] | null
+          pix_key?: string | null
+          pix_key_type?: string | null
           purchase_order_id?: string | null
+          recipient_document?: string | null
+          recipient_name?: string | null
           reconciliation_id?: string | null
+          scheduled_payment_date?: string | null
+          submitted_at?: string | null
+          submitted_by?: string | null
           supplier_id?: string
           updated_at?: string
         }
         Relationships: [
           {
+            foreignKeyName: "payables_approved_by_fkey"
+            columns: ["approved_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "payables_bank_account_id_fkey"
             columns: ["bank_account_id"]
             isOneToOne: false
             referencedRelation: "bank_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payables_bank_transaction_id_fkey"
+            columns: ["bank_transaction_id"]
+            isOneToOne: false
+            referencedRelation: "bank_transactions"
             referencedColumns: ["id"]
           },
           {
@@ -1119,10 +1181,68 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "payables_submitted_by_fkey"
+            columns: ["submitted_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "payables_supplier_id_fkey"
             columns: ["supplier_id"]
             isOneToOne: false
             referencedRelation: "suppliers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      payment_audit_logs: {
+        Row: {
+          action: string
+          created_at: string | null
+          id: string
+          metadata: Json | null
+          new_status: string | null
+          old_status: string | null
+          payable_id: string
+          user_id: string | null
+          user_name: string | null
+        }
+        Insert: {
+          action: string
+          created_at?: string | null
+          id?: string
+          metadata?: Json | null
+          new_status?: string | null
+          old_status?: string | null
+          payable_id: string
+          user_id?: string | null
+          user_name?: string | null
+        }
+        Update: {
+          action?: string
+          created_at?: string | null
+          id?: string
+          metadata?: Json | null
+          new_status?: string | null
+          old_status?: string | null
+          payable_id?: string
+          user_id?: string | null
+          user_name?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payment_audit_logs_payable_id_fkey"
+            columns: ["payable_id"]
+            isOneToOne: false
+            referencedRelation: "payables"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payment_audit_logs_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
             referencedColumns: ["id"]
           },
         ]
@@ -3505,6 +3625,16 @@ export type Database = {
         | "despesa"
         | "custo"
       cliente_status: "ativo" | "inativo" | "bloqueado"
+      payment_method_type: "boleto" | "pix" | "transferencia" | "outro"
+      payment_status:
+        | "open"
+        | "ready_to_pay"
+        | "submitted_for_approval"
+        | "approved"
+        | "sent_to_bank"
+        | "paid"
+        | "failed"
+        | "cancelled"
       regime_tributario:
         | "simples_nacional"
         | "lucro_presumido"
@@ -3649,6 +3779,17 @@ export const Constants = {
         "custo",
       ],
       cliente_status: ["ativo", "inativo", "bloqueado"],
+      payment_method_type: ["boleto", "pix", "transferencia", "outro"],
+      payment_status: [
+        "open",
+        "ready_to_pay",
+        "submitted_for_approval",
+        "approved",
+        "sent_to_bank",
+        "paid",
+        "failed",
+        "cancelled",
+      ],
       regime_tributario: [
         "simples_nacional",
         "lucro_presumido",
