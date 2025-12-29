@@ -13,3 +13,4 @@ export { ScheduledPaymentsList } from './ScheduledPaymentsList';
 export { PaymentApprovalList } from './PaymentApprovalList';
 export { DDABoletosList } from './DDABoletosList';
 export { ExtratoList } from './ExtratoList';
+export { LancamentosPayablesList } from './LancamentosPayablesList';
