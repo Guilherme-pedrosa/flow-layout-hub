@@ -166,6 +166,118 @@ export type Database = {
           },
         ]
       }
+      checkout_audit: {
+        Row: {
+          action: string
+          checkout_id: string
+          checkout_type: string
+          created_at: string
+          id: string
+          ip_address: string | null
+          items_snapshot: Json | null
+          metadata: Json | null
+          observations: string | null
+          stock_after: Json | null
+          stock_before: Json | null
+          user_agent: string | null
+          user_id: string | null
+          user_name: string | null
+        }
+        Insert: {
+          action: string
+          checkout_id: string
+          checkout_type: string
+          created_at?: string
+          id?: string
+          ip_address?: string | null
+          items_snapshot?: Json | null
+          metadata?: Json | null
+          observations?: string | null
+          stock_after?: Json | null
+          stock_before?: Json | null
+          user_agent?: string | null
+          user_id?: string | null
+          user_name?: string | null
+        }
+        Update: {
+          action?: string
+          checkout_id?: string
+          checkout_type?: string
+          created_at?: string
+          id?: string
+          ip_address?: string | null
+          items_snapshot?: Json | null
+          metadata?: Json | null
+          observations?: string | null
+          stock_after?: Json | null
+          stock_before?: Json | null
+          user_agent?: string | null
+          user_id?: string | null
+          user_name?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "checkout_audit_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      checkout_pdfs: {
+        Row: {
+          checkout_id: string
+          checkout_type: string
+          created_at: string
+          document_hash: string | null
+          file_name: string
+          file_size: number | null
+          generated_by: string | null
+          generated_by_name: string | null
+          id: string
+          pdf_type: string
+          storage_path: string
+          version: number
+        }
+        Insert: {
+          checkout_id: string
+          checkout_type: string
+          created_at?: string
+          document_hash?: string | null
+          file_name: string
+          file_size?: number | null
+          generated_by?: string | null
+          generated_by_name?: string | null
+          id?: string
+          pdf_type: string
+          storage_path: string
+          version?: number
+        }
+        Update: {
+          checkout_id?: string
+          checkout_type?: string
+          created_at?: string
+          document_hash?: string | null
+          file_name?: string
+          file_size?: number | null
+          generated_by?: string | null
+          generated_by_name?: string | null
+          id?: string
+          pdf_type?: string
+          storage_path?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "checkout_pdfs_generated_by_fkey"
+            columns: ["generated_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       cliente_contatos: {
         Row: {
           cargo: string | null

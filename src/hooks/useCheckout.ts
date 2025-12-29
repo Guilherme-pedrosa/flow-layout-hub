@@ -430,6 +430,16 @@ export function useCheckout() {
         }
       }
 
+      // Registrar log de auditoria
+      await supabase.from("checkout_audit").insert({
+        checkout_type: source.type,
+        checkout_id: source.id,
+        action: 'item_separado',
+        user_name: 'Operador', // TODO: pegar do contexto de auth
+        items_snapshot: { product_id: item.product_id, quantity: quantity },
+        metadata: { barcode },
+      });
+
       return { newChecked, newPending };
     },
     onSuccess: () => {
