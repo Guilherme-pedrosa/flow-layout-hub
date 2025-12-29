@@ -7,4 +7,5 @@ export { NotaFiscalCard } from "./NotaFiscalCard";
 export { ItensNFeTable } from "./ItensNFeTable";
 export { CadastrarFornecedorDialog } from "./CadastrarFornecedorDialog";
 export { CadastrarProdutoDialog } from "./CadastrarProdutoDialog";
+export { PrintLabelDialog } from "./PrintLabelDialog";
 export * from "./types";
