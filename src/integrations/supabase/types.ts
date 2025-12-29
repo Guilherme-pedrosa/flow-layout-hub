@@ -14,6 +14,113 @@ export type Database = {
   }
   public: {
     Tables: {
+      accounts_receivable: {
+        Row: {
+          amount: number
+          bank_transaction_id: string | null
+          client_id: string | null
+          company_id: string
+          created_at: string
+          description: string | null
+          document_number: string | null
+          document_type: string | null
+          due_date: string
+          id: string
+          inter_boleto_id: string | null
+          inter_codigo_barras: string | null
+          inter_linha_digitavel: string | null
+          inter_nosso_numero: string | null
+          is_paid: boolean | null
+          issue_date: string | null
+          notes: string | null
+          paid_amount: number | null
+          paid_at: string | null
+          payment_method: string | null
+          reconciled_at: string | null
+          sale_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          amount: number
+          bank_transaction_id?: string | null
+          client_id?: string | null
+          company_id: string
+          created_at?: string
+          description?: string | null
+          document_number?: string | null
+          document_type?: string | null
+          due_date: string
+          id?: string
+          inter_boleto_id?: string | null
+          inter_codigo_barras?: string | null
+          inter_linha_digitavel?: string | null
+          inter_nosso_numero?: string | null
+          is_paid?: boolean | null
+          issue_date?: string | null
+          notes?: string | null
+          paid_amount?: number | null
+          paid_at?: string | null
+          payment_method?: string | null
+          reconciled_at?: string | null
+          sale_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          bank_transaction_id?: string | null
+          client_id?: string | null
+          company_id?: string
+          created_at?: string
+          description?: string | null
+          document_number?: string | null
+          document_type?: string | null
+          due_date?: string
+          id?: string
+          inter_boleto_id?: string | null
+          inter_codigo_barras?: string | null
+          inter_linha_digitavel?: string | null
+          inter_nosso_numero?: string | null
+          is_paid?: boolean | null
+          issue_date?: string | null
+          notes?: string | null
+          paid_amount?: number | null
+          paid_at?: string | null
+          payment_method?: string | null
+          reconciled_at?: string | null
+          sale_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "accounts_receivable_bank_transaction_id_fkey"
+            columns: ["bank_transaction_id"]
+            isOneToOne: false
+            referencedRelation: "bank_transactions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "accounts_receivable_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "accounts_receivable_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "accounts_receivable_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "sales"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       audit_logs: {
         Row: {
           action: string
