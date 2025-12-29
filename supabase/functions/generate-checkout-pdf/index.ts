@@ -478,14 +478,17 @@ Deno.serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const { checkoutId, checkoutType: rawCheckoutType, pdfType = 'complete', userId, userName } = await req.json();
+    const body = await req.json();
+    console.log(`[generate-checkout-pdf] Request body:`, JSON.stringify(body));
+    
+    const { checkoutId, checkoutType: rawCheckoutType, pdfType = 'complete', userId, userName } = body;
 
     // Normalizar checkoutType: aceitar 'sale'/'service_order' ou 'venda'/'os'
     let checkoutType = rawCheckoutType;
     if (rawCheckoutType === 'sale') checkoutType = 'venda';
     if (rawCheckoutType === 'service_order') checkoutType = 'os';
 
-    console.log(`[generate-checkout-pdf] Generating PDF for ${checkoutType} ${checkoutId}, type: ${pdfType}`);
+    console.log(`[generate-checkout-pdf] Normalized: checkoutType=${checkoutType}, checkoutId=${checkoutId}, pdfType=${pdfType}`);
 
     if (!checkoutId || !checkoutType) {
       return new Response(
@@ -498,6 +501,7 @@ Deno.serve(async (req) => {
     let checkoutData: CheckoutData;
 
     if (checkoutType === 'venda') {
+      console.log(`[generate-checkout-pdf] Fetching sale data...`);
       const { data: sale, error: saleError } = await supabase
         .from('sales')
         .select(`
@@ -507,17 +511,23 @@ Deno.serve(async (req) => {
         .eq('id', checkoutId)
         .single();
 
-      if (saleError) throw saleError;
+      if (saleError) {
+        console.error(`[generate-checkout-pdf] Sale fetch error:`, saleError);
+        throw saleError;
+      }
+      console.log(`[generate-checkout-pdf] Sale found:`, sale?.id);
 
       // Buscar itens
       const { data: items, error: itemsError } = await supabase
         .from('sale_product_items')
-        .select(`
-          id, quantity, product_id
-        `)
+        .select(`id, quantity, product_id`)
         .eq('sale_id', checkoutId);
 
-      if (itemsError) throw itemsError;
+      if (itemsError) {
+        console.error(`[generate-checkout-pdf] Items fetch error:`, itemsError);
+        throw itemsError;
+      }
+      console.log(`[generate-checkout-pdf] Found ${items?.length || 0} items`);
 
       // Buscar produtos separadamente
       const productIds = (items || []).map(i => i.product_id).filter(Boolean);
