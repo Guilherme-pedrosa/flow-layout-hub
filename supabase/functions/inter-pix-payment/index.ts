@@ -217,19 +217,38 @@ serve(async (req) => {
     };
 
     console.log(`[inter-pix-payment] Calling GCP Function: ${gcpFunctionUrl}`);
+    console.log(`[inter-pix-payment] Payload keys: ${Object.keys(gcpPayload).join(', ')}`);
 
     // Call GCP Function
     const gcpResponse = await fetch(gcpFunctionUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${gcpFunctionSecret}`
+        "Authorization": `Bearer ${gcpFunctionSecret}`,
+        "x-api-key": gcpFunctionSecret
       },
       body: JSON.stringify(gcpPayload)
     });
 
-    const gcpResult = await gcpResponse.json();
-    console.log("[inter-pix-payment] GCP Response:", JSON.stringify(gcpResult));
+    // Get raw response text first to handle HTML error pages
+    const responseText = await gcpResponse.text();
+    console.log(`[inter-pix-payment] GCP Response status: ${gcpResponse.status}`);
+    console.log(`[inter-pix-payment] GCP Response (first 500 chars): ${responseText.substring(0, 500)}`);
+
+    // Check if response is HTML (error page)
+    if (responseText.trim().startsWith('<!') || responseText.trim().startsWith('<html')) {
+      throw new Error(`Cloud Run retornou HTML (status ${gcpResponse.status}). Verifique se a URL e autenticação estão corretas.`);
+    }
+
+    let gcpResult;
+    try {
+      gcpResult = JSON.parse(responseText);
+    } catch (parseError) {
+      console.error("[inter-pix-payment] JSON parse error:", responseText);
+      throw new Error(`Resposta inválida do Cloud Run: ${responseText.substring(0, 200)}`);
+    }
+    
+    console.log("[inter-pix-payment] GCP Response parsed:", JSON.stringify(gcpResult));
 
     if (!gcpResponse.ok || gcpResult.error) {
       const errorMsg = gcpResult.error || `Erro HTTP ${gcpResponse.status}`;
