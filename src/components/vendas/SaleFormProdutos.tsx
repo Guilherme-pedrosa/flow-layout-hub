@@ -289,6 +289,31 @@ export function SaleFormProdutos({ items, onChange }: SaleFormProdutosProps) {
           </Button>
         </div>
 
+        {/* Stock indicator for mobile */}
+        {product && (
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                className={cn(
+                  "h-7 px-2 text-xs gap-1",
+                  isOutOfStock ? "text-destructive" : "text-green-600"
+                )}
+              >
+                <Package className="h-3 w-3" />
+                Est: {(product.quantity ?? 0).toLocaleString('pt-BR')} {product.unit || 'UN'}
+              </Button>
+            </PopoverTrigger>
+            <StockPopover
+              productId={product.id}
+              currentStock={product.quantity ?? 0}
+              unit={product.unit || 'UN'}
+              requestedQuantity={item.quantity}
+            />
+          </Popover>
+        )}
+
         <div className="grid grid-cols-2 gap-3">
           <div>
             <Label className="text-xs text-muted-foreground">Tabela</Label>
