@@ -84,6 +84,7 @@ const menuGroups: { label: string; items: MenuItem[] }[] = [
   {
     label: "Compras",
     items: [
+      { title: "Pedidos de Compra", icon: FileSpreadsheet, href: "/pedidos-compra", highlight: true },
       { title: "Solicitações", icon: FileText, href: "/solicitacoes" },
       { title: "Aprovações", icon: CheckSquare, href: "/aprovacoes", highlight: true, badge: aprovacoesPendingCount },
       { title: "Notas de Compra", icon: FileSpreadsheet, href: "/notas-compra" },
