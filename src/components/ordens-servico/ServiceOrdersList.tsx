@@ -1,0 +1,123 @@
+import { useState } from "react";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSub, DropdownMenuSubTrigger, DropdownMenuSubContent } from "@/components/ui/dropdown-menu";
+import { Badge } from "@/components/ui/badge";
+import { Search, Eye, Edit, Trash2, MoreVertical, DollarSign, FileText, Printer, Link, Share2, Wrench } from "lucide-react";
+import { useServiceOrders, ServiceOrder } from "@/hooks/useServiceOrders";
+import { formatCurrency } from "@/lib/formatters";
+import { SaleStatusBadge } from "@/components/vendas/SaleStatusBadge";
+
+interface ServiceOrdersListProps {
+  onEdit: (order: ServiceOrder) => void;
+  onView: (order: ServiceOrder) => void;
+}
+
+export function ServiceOrdersList({ onEdit, onView }: ServiceOrdersListProps) {
+  const { orders, isLoading, deleteOrder } = useServiceOrders();
+  const [search, setSearch] = useState("");
+
+  const filteredOrders = orders.filter(o => 
+    o.client?.razao_social?.toLowerCase().includes(search.toLowerCase()) ||
+    o.client?.nome_fantasia?.toLowerCase().includes(search.toLowerCase()) ||
+    o.order_number?.toString().includes(search) ||
+    o.equipment_type?.toLowerCase().includes(search.toLowerCase()) ||
+    o.equipment_brand?.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const handleCopyLink = (order: ServiceOrder) => {
+    const url = `${window.location.origin}/os/${order.tracking_token}`;
+    navigator.clipboard.writeText(url);
+  };
+
+  if (isLoading) return <div className="p-8 text-center text-muted-foreground">Carregando...</div>;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex gap-4">
+        <div className="relative flex-1 max-w-sm">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input placeholder="Buscar ordens..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
+        </div>
+      </div>
+
+      <div className="border rounded-lg">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="w-[80px]">Nº</TableHead>
+              <TableHead>Cliente</TableHead>
+              <TableHead>Equipamento</TableHead>
+              <TableHead className="w-[120px]">Data</TableHead>
+              <TableHead className="w-[140px]">Situação</TableHead>
+              <TableHead className="w-[120px] text-right">Valor</TableHead>
+              <TableHead className="w-[100px]">Ações</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {filteredOrders.length === 0 ? (
+              <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Nenhuma OS encontrada</TableCell></TableRow>
+            ) : (
+              filteredOrders.map(order => (
+                <TableRow key={order.id}>
+                  <TableCell className="font-medium">{order.order_number}</TableCell>
+                  <TableCell>
+                    <div>{order.client?.razao_social || '-'}</div>
+                    {order.client?.nome_fantasia && <div className="text-sm text-muted-foreground">({order.client.nome_fantasia})</div>}
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-1">
+                      <Wrench className="h-3 w-3 text-muted-foreground" />
+                      <span className="text-sm">
+                        {order.equipment_type || order.equipment_brand || order.equipment_model 
+                          ? [order.equipment_type, order.equipment_brand, order.equipment_model].filter(Boolean).join(' - ')
+                          : '-'
+                        }
+                      </span>
+                    </div>
+                  </TableCell>
+                  <TableCell>{new Date(order.order_date).toLocaleDateString('pt-BR')}</TableCell>
+                  <TableCell>
+                    {order.status ? <SaleStatusBadge name={order.status.name} color={order.status.color} /> : <Badge variant="outline">-</Badge>}
+                  </TableCell>
+                  <TableCell className="text-right font-medium">{formatCurrency(order.total_value)}</TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-1">
+                      <Button variant="ghost" size="icon" onClick={() => onView(order)}><Eye className="h-4 w-4" /></Button>
+                      <Button variant="ghost" size="icon" onClick={() => onEdit(order)}><Edit className="h-4 w-4" /></Button>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild><Button variant="ghost" size="icon"><MoreVertical className="h-4 w-4" /></Button></DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => handleCopyLink(order)}><Link className="h-4 w-4 mr-2" />Link de acompanhamento</DropdownMenuItem>
+                          <DropdownMenuSub>
+                            <DropdownMenuSubTrigger><Printer className="h-4 w-4 mr-2" />Imprimir</DropdownMenuSubTrigger>
+                            <DropdownMenuSubContent>
+                              <DropdownMenuItem>Modelo padrão</DropdownMenuItem>
+                              <DropdownMenuItem>Modelo detalhado</DropdownMenuItem>
+                              <DropdownMenuItem>Termo de garantia</DropdownMenuItem>
+                            </DropdownMenuSubContent>
+                          </DropdownMenuSub>
+                          <DropdownMenuSub>
+                            <DropdownMenuSubTrigger><FileText className="h-4 w-4 mr-2" />Emitir</DropdownMenuSubTrigger>
+                            <DropdownMenuSubContent>
+                              <DropdownMenuItem>NF-e (Produtos)</DropdownMenuItem>
+                              <DropdownMenuItem>NFS-e (Serviços)</DropdownMenuItem>
+                            </DropdownMenuSubContent>
+                          </DropdownMenuSub>
+                          <DropdownMenuItem><Share2 className="h-4 w-4 mr-2" />Compartilhar</DropdownMenuItem>
+                          <DropdownMenuItem><DollarSign className="h-4 w-4 mr-2" />Ver no financeiro</DropdownMenuItem>
+                          <DropdownMenuItem className="text-destructive" onClick={() => deleteOrder.mutate(order.id)}><Trash2 className="h-4 w-4 mr-2" />Excluir</DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </div>
+    </div>
+  );
+}

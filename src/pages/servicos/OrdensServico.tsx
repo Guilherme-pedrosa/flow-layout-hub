@@ -1,26 +1,49 @@
+import { useState } from "react";
 import { PageHeader } from "@/components/shared";
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
+import { ServiceOrdersList, ServiceOrderForm } from "@/components/ordens-servico";
+import { ServiceOrder } from "@/hooks/useServiceOrders";
 
 const OrdensServico = () => {
+  const [showForm, setShowForm] = useState(false);
+  const [editingOrder, setEditingOrder] = useState<ServiceOrder | null>(null);
+
+  const handleEdit = (order: ServiceOrder) => {
+    setEditingOrder(order);
+    setShowForm(true);
+  };
+
+  const handleView = (order: ServiceOrder) => {
+    // TODO: abrir visualização
+  };
+
+  const handleClose = () => {
+    setShowForm(false);
+    setEditingOrder(null);
+  };
+
   return (
-    <div className="animate-fade-in">
+    <div className="animate-fade-in space-y-6">
       <PageHeader
         title="Ordens de Serviço"
         description="Gerencie suas ordens de serviço"
         breadcrumbs={[{ label: "Serviços" }, { label: "Ordens de Serviço" }]}
         actions={
-          <Button>
-            <Plus className="mr-2 h-4 w-4" />
-            Nova OS
-          </Button>
+          !showForm && (
+            <Button onClick={() => setShowForm(true)}>
+              <Plus className="mr-2 h-4 w-4" />
+              Nova OS
+            </Button>
+          )
         }
       />
-      <div className="rounded-lg border border-dashed p-12 text-center">
-        <p className="text-muted-foreground">
-          Conteúdo da página de Ordens de Serviço será implementado aqui
-        </p>
-      </div>
+
+      {showForm ? (
+        <ServiceOrderForm onClose={handleClose} initialData={editingOrder} />
+      ) : (
+        <ServiceOrdersList onEdit={handleEdit} onView={handleView} />
+      )}
     </div>
   );
 };
