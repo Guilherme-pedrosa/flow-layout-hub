@@ -158,8 +158,11 @@ export default function Checkout() {
       });
 
       toast.success(`${item.product_description} conferido!`);
-    } catch (error) {
-      toast.error("Erro ao conferir item");
+    } catch (error: any) {
+      // Exibe erro de estoque diretamente - BLOQUEIO IMEDIATO
+      toast.error(error.message || "Erro ao conferir item", {
+        duration: 5000, // Mostra por mais tempo para o usuário ler
+      });
     }
 
     setBarcodeInput("");
