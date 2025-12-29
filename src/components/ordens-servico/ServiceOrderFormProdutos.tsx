@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NumericInput } from "@/components/ui/numeric-input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -320,12 +321,10 @@ export function ServiceOrderFormProdutos({ items, onChange }: ServiceOrderFormPr
           </div>
           <div>
             <Label className="text-xs text-muted-foreground">Quantidade</Label>
-            <Input
-              type="number"
-              min="0"
-              step="0.001"
+            <NumericInput
               value={item.quantity}
-              onChange={(e) => updateItem(index, 'quantity', parseFloat(e.target.value) || 0)}
+              onChange={(val) => updateItem(index, 'quantity', val)}
+              step={0.001}
               className={cn("h-9", isOutOfStock && 'border-destructive bg-destructive/10')}
             />
           </div>
@@ -334,23 +333,19 @@ export function ServiceOrderFormProdutos({ items, onChange }: ServiceOrderFormPr
         <div className="grid grid-cols-2 gap-3">
           <div>
             <Label className="text-xs text-muted-foreground">Valor Unit.</Label>
-            <Input
-              type="number"
-              min="0"
-              step="0.01"
+            <NumericInput
               value={item.unit_price}
-              onChange={(e) => updateItem(index, 'unit_price', parseFloat(e.target.value) || 0)}
+              onChange={(val) => updateItem(index, 'unit_price', val)}
+              step={0.01}
               className="h-9"
             />
           </div>
           <div>
             <Label className="text-xs text-muted-foreground">Custo</Label>
-            <Input
-              type="number"
-              min="0"
-              step="0.01"
+            <NumericInput
               value={item.purchase_price}
-              onChange={(e) => updateItem(index, 'purchase_price', parseFloat(e.target.value) || 0)}
+              onChange={(val) => updateItem(index, 'purchase_price', val)}
+              step={0.01}
               className="h-9 bg-muted"
             />
           </div>
@@ -359,12 +354,10 @@ export function ServiceOrderFormProdutos({ items, onChange }: ServiceOrderFormPr
         <div>
           <Label className="text-xs text-muted-foreground">Desconto</Label>
           <div className="flex gap-2">
-            <Input
-              type="number"
-              min="0"
-              step="0.01"
+            <NumericInput
               value={item.discount_value}
-              onChange={(e) => updateItem(index, 'discount_value', parseFloat(e.target.value) || 0)}
+              onChange={(val) => updateItem(index, 'discount_value', val)}
+              step={0.01}
               className="flex-1 h-9"
             />
             <Select
@@ -476,43 +469,35 @@ export function ServiceOrderFormProdutos({ items, onChange }: ServiceOrderFormPr
                       />
                     </TableCell>
                     <TableCell>
-                      <Input
-                        type="number"
-                        min="0"
-                        step="0.001"
+                      <NumericInput
                         value={item.quantity}
-                        onChange={(e) => updateItem(index, 'quantity', parseFloat(e.target.value) || 0)}
+                        onChange={(val) => updateItem(index, 'quantity', val)}
+                        step={0.001}
                         className={cn("text-xs", isOutOfStock && 'border-destructive bg-destructive/10')}
                       />
                     </TableCell>
                     <TableCell>
-                      <Input
-                        type="number"
-                        min="0"
-                        step="0.01"
+                      <NumericInput
                         value={item.unit_price}
-                        onChange={(e) => updateItem(index, 'unit_price', parseFloat(e.target.value) || 0)}
+                        onChange={(val) => updateItem(index, 'unit_price', val)}
+                        step={0.01}
                         className="text-xs"
                       />
                     </TableCell>
                     <TableCell>
-                      <Input
-                        type="number"
-                        min="0"
-                        step="0.01"
+                      <NumericInput
                         value={item.purchase_price}
-                        onChange={(e) => updateItem(index, 'purchase_price', parseFloat(e.target.value) || 0)}
+                        onChange={(val) => updateItem(index, 'purchase_price', val)}
+                        step={0.01}
                         className="text-xs bg-muted"
                       />
                     </TableCell>
                     <TableCell>
                       <div className="flex gap-1">
-                        <Input
-                          type="number"
-                          min="0"
-                          step="0.01"
+                        <NumericInput
                           value={item.discount_value}
-                          onChange={(e) => updateItem(index, 'discount_value', parseFloat(e.target.value) || 0)}
+                          onChange={(val) => updateItem(index, 'discount_value', val)}
+                          step={0.01}
                           className="w-16 text-xs"
                         />
                         <Select
