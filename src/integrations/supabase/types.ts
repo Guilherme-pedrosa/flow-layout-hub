@@ -442,6 +442,156 @@ export type Database = {
           },
         ]
       }
+      products: {
+        Row: {
+          code: string
+          created_at: string
+          description: string
+          id: string
+          is_active: boolean
+          min_stock: number | null
+          ncm: string | null
+          purchase_price: number | null
+          quantity: number | null
+          sale_price: number | null
+          unit: string | null
+          updated_at: string
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          description: string
+          id?: string
+          is_active?: boolean
+          min_stock?: number | null
+          ncm?: string | null
+          purchase_price?: number | null
+          quantity?: number | null
+          sale_price?: number | null
+          unit?: string | null
+          updated_at?: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          description?: string
+          id?: string
+          is_active?: boolean
+          min_stock?: number | null
+          ncm?: string | null
+          purchase_price?: number | null
+          quantity?: number | null
+          sale_price?: number | null
+          unit?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      purchase_order_items: {
+        Row: {
+          cfop: string | null
+          created_at: string
+          id: string
+          ncm: string | null
+          product_id: string | null
+          purchase_order_id: string
+          quantity: number
+          total_value: number | null
+          unit_price: number | null
+          xml_code: string | null
+          xml_description: string | null
+        }
+        Insert: {
+          cfop?: string | null
+          created_at?: string
+          id?: string
+          ncm?: string | null
+          product_id?: string | null
+          purchase_order_id: string
+          quantity: number
+          total_value?: number | null
+          unit_price?: number | null
+          xml_code?: string | null
+          xml_description?: string | null
+        }
+        Update: {
+          cfop?: string | null
+          created_at?: string
+          id?: string
+          ncm?: string | null
+          product_id?: string | null
+          purchase_order_id?: string
+          quantity?: number
+          total_value?: number | null
+          unit_price?: number | null
+          xml_code?: string | null
+          xml_description?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "purchase_order_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_order_items_purchase_order_id_fkey"
+            columns: ["purchase_order_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      purchase_orders: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          invoice_date: string | null
+          invoice_number: string | null
+          invoice_series: string | null
+          status: string | null
+          supplier_address: string | null
+          supplier_cnpj: string | null
+          supplier_name: string | null
+          total_value: number | null
+          updated_at: string
+          xml_url: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          invoice_date?: string | null
+          invoice_number?: string | null
+          invoice_series?: string | null
+          status?: string | null
+          supplier_address?: string | null
+          supplier_cnpj?: string | null
+          supplier_name?: string | null
+          total_value?: number | null
+          updated_at?: string
+          xml_url?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          invoice_date?: string | null
+          invoice_number?: string | null
+          invoice_series?: string | null
+          status?: string | null
+          supplier_address?: string | null
+          supplier_cnpj?: string | null
+          supplier_name?: string | null
+          total_value?: number | null
+          updated_at?: string
+          xml_url?: string | null
+        }
+        Relationships: []
+      }
       quick_categories: {
         Row: {
           chart_account_id: string | null
@@ -493,6 +643,56 @@ export type Database = {
             columns: ["default_cost_center_id"]
             isOneToOne: false
             referencedRelation: "cost_centers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      stock_movements: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          product_id: string
+          quantity: number
+          reason: string | null
+          reference_id: string | null
+          reference_type: string | null
+          total_value: number | null
+          type: string
+          unit_price: number | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          product_id: string
+          quantity: number
+          reason?: string | null
+          reference_id?: string | null
+          reference_type?: string | null
+          total_value?: number | null
+          type: string
+          unit_price?: number | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          product_id?: string
+          quantity?: number
+          reason?: string | null
+          reference_id?: string | null
+          reference_type?: string | null
+          total_value?: number | null
+          type?: string
+          unit_price?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stock_movements_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
             referencedColumns: ["id"]
           },
         ]

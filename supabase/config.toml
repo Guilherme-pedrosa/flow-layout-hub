@@ -1,1 +1,4 @@
 project_id = "qxxhwzxxneciskhemqmi"
+
+[functions.parse-xml-nfe]
+verify_jwt = false
