@@ -1,8 +1,7 @@
-import { useState, useEffect } from "react";
+import { useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Table,
   TableBody,
@@ -19,17 +18,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Plus, Trash2, Package } from "lucide-react";
-import { usePurchaseOrders, PurchaseOrderItem, PurchaseOrderItemInsert } from "@/hooks/usePurchaseOrders";
 import { useProducts } from "@/hooks/useProducts";
 import { useChartOfAccounts, useCostCenters } from "@/hooks/useFinanceiro";
-import { toast } from "sonner";
 
-interface PurchaseOrderItemsProps {
-  orderId?: string;
-  purpose: "estoque" | "ordem_de_servico" | "despesa_operacional";
-}
-
-interface LocalItem {
+export interface LocalItem {
   id?: string;
   product_id: string;
   description: string;
@@ -40,6 +32,12 @@ interface LocalItem {
   cost_center_id: string;
 }
 
+interface PurchaseOrderItemsProps {
+  items: LocalItem[];
+  onItemsChange: (items: LocalItem[]) => void;
+  purpose: "estoque" | "ordem_de_servico" | "despesa_operacional";
+}
+
 const formatCurrency = (value: number) => {
   return new Intl.NumberFormat("pt-BR", {
     style: "currency",
@@ -47,11 +45,7 @@ const formatCurrency = (value: number) => {
   }).format(value);
 };
 
-export function PurchaseOrderItems({ orderId, purpose }: PurchaseOrderItemsProps) {
-  const [items, setItems] = useState<LocalItem[]>([]);
-  const [loading, setLoading] = useState(false);
-
-  const { getOrderItems, createOrderItems, deleteOrderItems } = usePurchaseOrders();
+export function PurchaseOrderItems({ items, onItemsChange, purpose }: PurchaseOrderItemsProps) {
   const { products } = useProducts();
   const { accounts: chartOfAccounts, fetchAccounts } = useChartOfAccounts();
   const { costCenters, fetchCostCenters } = useCostCenters();
@@ -62,39 +56,8 @@ export function PurchaseOrderItems({ orderId, purpose }: PurchaseOrderItemsProps
     fetchCostCenters();
   }, []);
 
-  // Load existing items
-  useEffect(() => {
-    if (orderId) {
-      loadItems();
-    }
-  }, [orderId]);
-
-  const loadItems = async () => {
-    if (!orderId) return;
-    setLoading(true);
-    try {
-      const orderItems = await getOrderItems(orderId);
-      setItems(
-        orderItems.map((item) => ({
-          id: item.id,
-          product_id: item.product_id || "",
-          description: item.description || item.product?.description || "",
-          quantity: item.quantity,
-          unit_price: item.unit_price || 0,
-          total_value: item.total_value || 0,
-          chart_account_id: item.chart_account_id || "",
-          cost_center_id: item.cost_center_id || "",
-        }))
-      );
-    } catch (error) {
-      console.error("Erro ao carregar itens:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const handleAddItem = () => {
-    setItems([
+    onItemsChange([
       ...items,
       {
         product_id: "",
@@ -109,7 +72,7 @@ export function PurchaseOrderItems({ orderId, purpose }: PurchaseOrderItemsProps
   };
 
   const handleRemoveItem = (index: number) => {
-    setItems(items.filter((_, i) => i !== index));
+    onItemsChange(items.filter((_, i) => i !== index));
   };
 
   const handleItemChange = (index: number, field: keyof LocalItem, value: any) => {
@@ -135,43 +98,7 @@ export function PurchaseOrderItems({ orderId, purpose }: PurchaseOrderItemsProps
       }
     }
 
-    setItems(newItems);
-  };
-
-  const handleSaveItems = async () => {
-    if (!orderId) {
-      toast.error("Salve o pedido primeiro para adicionar itens");
-      return;
-    }
-
-    if (items.length === 0) {
-      toast.error("Adicione pelo menos um item");
-      return;
-    }
-
-    setLoading(true);
-    try {
-      // Delete existing items and recreate
-      await deleteOrderItems.mutateAsync(orderId);
-
-      const itemsToCreate: PurchaseOrderItemInsert[] = items.map((item) => ({
-        purchase_order_id: orderId,
-        product_id: item.product_id || undefined,
-        description: item.description,
-        quantity: item.quantity,
-        unit_price: item.unit_price,
-        total_value: item.total_value,
-        chart_account_id: item.chart_account_id || undefined,
-        cost_center_id: item.cost_center_id || undefined,
-      }));
-
-      await createOrderItems.mutateAsync(itemsToCreate);
-      toast.success("Itens salvos com sucesso!");
-    } catch (error) {
-      console.error("Erro ao salvar itens:", error);
-    } finally {
-      setLoading(false);
-    }
+    onItemsChange(newItems);
   };
 
   const totalGeral = items.reduce((acc, item) => acc + item.total_value, 0);
@@ -182,17 +109,10 @@ export function PurchaseOrderItems({ orderId, purpose }: PurchaseOrderItemsProps
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle className="text-lg">Itens do Pedido</CardTitle>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={handleAddItem}>
-            <Plus className="mr-2 h-4 w-4" />
-            Adicionar Item
-          </Button>
-          {orderId && (
-            <Button size="sm" onClick={handleSaveItems} disabled={loading}>
-              Salvar Itens
-            </Button>
-          )}
-        </div>
+        <Button variant="outline" size="sm" onClick={handleAddItem}>
+          <Plus className="mr-2 h-4 w-4" />
+          Adicionar Item
+        </Button>
       </CardHeader>
       <CardContent>
         {items.length === 0 ? (
