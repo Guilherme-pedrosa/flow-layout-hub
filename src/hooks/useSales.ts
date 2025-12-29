@@ -237,15 +237,32 @@ export function useSales() {
       if (saleError) throw saleError;
 
       if (productItems.length > 0) {
-        await supabase.from("sale_product_items").insert(
-          productItems.map(item => ({ ...item, sale_id: saleData.id }))
+        const { error: productError } = await supabase.from("sale_product_items").insert(
+          productItems.map(item => ({ 
+            ...item, 
+            sale_id: saleData.id,
+            product_id: item.product_id || null,
+            price_table_id: item.price_table_id || null,
+          }))
         );
+        if (productError) {
+          console.error("Erro ao inserir itens de produto:", productError);
+          throw productError;
+        }
       }
 
       if (serviceItems.length > 0) {
-        await supabase.from("sale_service_items").insert(
-          serviceItems.map(item => ({ ...item, sale_id: saleData.id }))
+        const { error: serviceError } = await supabase.from("sale_service_items").insert(
+          serviceItems.map(item => ({ 
+            ...item, 
+            sale_id: saleData.id,
+            service_id: item.service_id || null,
+          }))
         );
+        if (serviceError) {
+          console.error("Erro ao inserir itens de serviço:", serviceError);
+          throw serviceError;
+        }
       }
 
       if (installments.length > 0) {

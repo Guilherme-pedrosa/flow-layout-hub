@@ -259,7 +259,14 @@ export function SaleForm({ onClose, initialData }: SaleFormProps) {
         if (productItems.length > 0) {
           await supabase.from("sale_product_items").insert(
             productItems.map(({ product, id, sale_id, ...item }) => ({ 
-              ...item, 
+              product_id: item.product_id || null,
+              details: item.details || null,
+              quantity: item.quantity,
+              unit_price: item.unit_price,
+              discount_value: item.discount_value || 0,
+              discount_type: item.discount_type || 'value',
+              subtotal: item.subtotal,
+              price_table_id: item.price_table_id || null,
               sale_id: initialData.id 
             }))
           );
@@ -268,7 +275,14 @@ export function SaleForm({ onClose, initialData }: SaleFormProps) {
         if (serviceItems.length > 0) {
           await supabase.from("sale_service_items").insert(
             serviceItems.map(({ service, id, sale_id, ...item }) => ({ 
-              ...item, 
+              service_id: item.service_id || null,
+              service_description: item.service_description,
+              details: item.details || null,
+              quantity: item.quantity,
+              unit_price: item.unit_price,
+              discount_value: item.discount_value || 0,
+              discount_type: item.discount_type || 'value',
+              subtotal: item.subtotal,
               sale_id: initialData.id 
             }))
           );
@@ -303,8 +317,26 @@ export function SaleForm({ onClose, initialData }: SaleFormProps) {
         // Create new sale
         const result = await createSale.mutateAsync({
           sale: saleData,
-          productItems: productItems.map(({ product, ...item }) => item),
-          serviceItems: serviceItems.map(({ service, ...item }) => item),
+          productItems: productItems.map(({ product, id, sale_id, ...item }) => ({
+            product_id: item.product_id || null,
+            details: item.details || null,
+            quantity: item.quantity,
+            unit_price: item.unit_price,
+            discount_value: item.discount_value || 0,
+            discount_type: item.discount_type || 'value',
+            subtotal: item.subtotal,
+            price_table_id: item.price_table_id || null,
+          })),
+          serviceItems: serviceItems.map(({ service, id, sale_id, ...item }) => ({
+            service_id: item.service_id || null,
+            service_description: item.service_description,
+            details: item.details || null,
+            quantity: item.quantity,
+            unit_price: item.unit_price,
+            discount_value: item.discount_value || 0,
+            discount_type: item.discount_type || 'value',
+            subtotal: item.subtotal,
+          })),
           installments: formData.payment_type === 'parcelado' ? installments : [],
           attachments: attachments.map(({ id, ...item }) => item),
         });
