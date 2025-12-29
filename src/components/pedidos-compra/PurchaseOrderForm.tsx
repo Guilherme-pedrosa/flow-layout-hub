@@ -189,7 +189,7 @@ export function PurchaseOrderForm({ order, onClose }: PurchaseOrderFormProps) {
     try {
       // Verificar limites de valor
       const companyId = COMPANY_ID;
-      const limitCheck = await checkOrderLimits(companyId, null, totalValue, order?.id);
+      const limitCheck = await checkOrderLimits(companyId, null, totalValue, purpose, order?.id);
       
       if (!limitCheck.allowed) {
         toast.error(limitCheck.message || "Valor do pedido excede os limites configurados");
