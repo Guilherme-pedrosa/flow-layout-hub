@@ -78,6 +78,7 @@ const menuGroups: { label: string; items: MenuItem[] }[] = [
       { title: "Vendas", icon: ShoppingCart, href: "/vendas" },
       { title: "Config. Vendas", icon: Wrench, href: "/vendas-config" },
       { title: "Checkout", icon: CircleDollarSign, href: "/checkout", highlight: true, badge: checkoutPendingCount },
+      { title: "Itens Separados", icon: Package, href: "/itens-separados" },
       { title: "Ordens de Serviço", icon: ClipboardList, href: "/ordens-servico" },
       { title: "Config. OS", icon: Wrench, href: "/ordens-servico-config" },
     ],
