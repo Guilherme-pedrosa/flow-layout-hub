@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { PageHeader } from "@/components/shared";
 import { Button } from "@/components/ui/button";
 import { Plus, Search, FileSpreadsheet, AlertTriangle, CheckCircle2 } from "lucide-react";
@@ -40,6 +41,7 @@ const purposeLabels: Record<string, string> = {
 };
 
 export default function PedidosCompra() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [showForm, setShowForm] = useState(false);
   const [editingOrder, setEditingOrder] = useState<PurchaseOrder | null>(null);
   const [search, setSearch] = useState("");
@@ -47,6 +49,20 @@ export default function PedidosCompra() {
 
   const { orders, isLoading } = usePurchaseOrders();
   const { statuses } = usePurchaseOrderStatuses();
+
+  // Handle edit query param to open directly to a purchase order
+  useEffect(() => {
+    const editId = searchParams.get("edit");
+    if (editId && orders.length > 0 && !showForm) {
+      const orderToEdit = orders.find((o) => o.id === editId);
+      if (orderToEdit) {
+        setEditingOrder(orderToEdit);
+        setShowForm(true);
+        // Clear the query param after opening
+        setSearchParams({}, { replace: true });
+      }
+    }
+  }, [searchParams, orders, showForm, setSearchParams]);
 
   const filteredOrders = orders.filter((order) => {
     const searchLower = search.toLowerCase();
