@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -8,7 +8,7 @@ import { FileEdit, Search, Wrench } from "lucide-react";
 import { useServiceOrderStatuses } from "@/hooks/useServiceOrders";
 import { useCostCenters } from "@/hooks/useFinanceiro";
 import { useSystemUsers } from "@/hooks/useServices";
-import { supabase } from "@/integrations/supabase/client";
+import { usePessoas } from "@/hooks/usePessoas";
 
 interface ServiceOrderFormDadosGeraisProps {
   formData: {
@@ -42,32 +42,29 @@ export function ServiceOrderFormDadosGerais({ formData, onChange }: ServiceOrder
   const { statuses } = useServiceOrderStatuses();
   const { costCenters, fetchCostCenters } = useCostCenters();
   const { data: users } = useSystemUsers();
-  const [clientes, setClientes] = useState<any[]>([]);
+  const { activeClientes } = usePessoas();
   const [clienteSearch, setClienteSearch] = useState("");
-
-  useEffect(() => {
-    fetchCostCenters();
-    supabase.from("clientes").select("id, razao_social, nome_fantasia, cpf_cnpj").eq("status", "ativo")
-      .then(({ data }) => setClientes(data ?? []));
-  }, [fetchCostCenters]);
 
   const activeStatuses = statuses?.filter(s => s.is_active) ?? [];
   const activeCostCenters = costCenters?.filter(c => c.is_active) ?? [];
   const activeUsers = users ?? [];
 
-  const filteredClientes = clienteSearch
-    ? clientes.filter(c => {
-        const searchLower = clienteSearch.toLowerCase();
-        const razao = (c.razao_social || '').toLowerCase();
-        const fantasia = (c.nome_fantasia || '').toLowerCase();
-        const cpfCnpj = (c.cpf_cnpj || '').replace(/\D/g, '');
-        const searchClean = clienteSearch.replace(/\D/g, '');
-        
-        return razao.includes(searchLower) || 
-               fantasia.includes(searchLower) || 
-               cpfCnpj.includes(searchClean);
-      })
-    : clientes;
+  const filteredClientes = useMemo(() => {
+    if (!clienteSearch) return activeClientes;
+    
+    const searchLower = clienteSearch.toLowerCase();
+    const searchClean = clienteSearch.replace(/\D/g, '');
+    
+    return activeClientes.filter(c => {
+      const razao = (c.razao_social || '').toLowerCase();
+      const fantasia = (c.nome_fantasia || '').toLowerCase();
+      const cpfCnpj = (c.cpf_cnpj || '').replace(/\D/g, '');
+      
+      return razao.includes(searchLower) || 
+             fantasia.includes(searchLower) || 
+             cpfCnpj.includes(searchClean);
+    });
+  }, [activeClientes, clienteSearch]);
 
   return (
     <div className="space-y-6">
