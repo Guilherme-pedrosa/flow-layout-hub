@@ -1,5 +1,6 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
@@ -9,10 +10,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Send, CheckCircle, Clock, XCircle, Loader2 } from "lucide-react";
+import { Send, CheckCircle, Clock, XCircle, Loader2, RotateCcw } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { toast } from "sonner";
 
 interface PixPayment {
   id: string;
@@ -28,9 +30,10 @@ interface PixPayment {
   processed_at: string | null;
 }
 
-export function PixPaymentsList() {
+const PixPaymentsList = React.forwardRef<HTMLDivElement>((_, ref) => {
   const [payments, setPayments] = useState<PixPayment[]>([]);
   const [loading, setLoading] = useState(true);
+  const [retrying, setRetrying] = useState<string | null>(null);
 
   useEffect(() => {
     fetchPayments();
@@ -50,6 +53,38 @@ export function PixPaymentsList() {
       console.error("Erro ao carregar pagamentos PIX:", error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleRetry = async (payment: PixPayment) => {
+    setRetrying(payment.id);
+    try {
+      // Primeiro, atualiza o status para pending
+      await supabase
+        .from("inter_pix_payments")
+        .update({ status: "pending", error_message: null })
+        .eq("id", payment.id);
+
+      // Chama a edge function para reprocessar
+      const { data, error } = await supabase.functions.invoke("inter-pix-payment", {
+        body: { paymentId: payment.id },
+      });
+
+      if (error) throw error;
+
+      if (data?.success) {
+        toast.success("Pagamento PIX reenviado com sucesso!");
+      } else {
+        toast.error(data?.error || "Erro ao reenviar pagamento");
+      }
+
+      // Recarrega a lista
+      await fetchPayments();
+    } catch (error) {
+      console.error("Erro ao reenviar pagamento:", error);
+      toast.error("Erro ao reenviar pagamento PIX");
+    } finally {
+      setRetrying(null);
     }
   };
 
@@ -132,12 +167,13 @@ export function PixPaymentsList() {
                 <TableHead className="text-right">Valor</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>ID Transação</TableHead>
+                <TableHead className="text-center">Ações</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {payments.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                     Nenhum pagamento PIX realizado
                   </TableCell>
                 </TableRow>
@@ -180,6 +216,25 @@ export function PixPaymentsList() {
                         <span className="text-muted-foreground">-</span>
                       )}
                     </TableCell>
+                    <TableCell className="text-center">
+                      {payment.status === "failed" && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleRetry(payment)}
+                          disabled={retrying === payment.id}
+                        >
+                          {retrying === payment.id ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <>
+                              <RotateCcw className="h-4 w-4 mr-1" />
+                              Tentar novamente
+                            </>
+                          )}
+                        </Button>
+                      )}
+                    </TableCell>
                   </TableRow>
                 ))
               )}
@@ -189,4 +244,8 @@ export function PixPaymentsList() {
       </CardContent>
     </Card>
   );
-}
+});
+
+PixPaymentsList.displayName = "PixPaymentsList";
+
+export { PixPaymentsList };
