@@ -921,6 +921,93 @@ export type Database = {
           },
         ]
       }
+      inter_dda_boletos: {
+        Row: {
+          beneficiario_banco: string | null
+          beneficiario_documento: string | null
+          beneficiario_nome: string | null
+          codigo_barras: string | null
+          company_id: string
+          created_at: string
+          data_emissao: string | null
+          data_vencimento: string
+          external_id: string | null
+          id: string
+          imported_at: string | null
+          imported_to_payable_id: string | null
+          linha_digitavel: string
+          pagador_documento: string | null
+          pagador_nome: string | null
+          raw_data: Json | null
+          status: string
+          synced_at: string | null
+          updated_at: string
+          valor: number
+          valor_final: number | null
+        }
+        Insert: {
+          beneficiario_banco?: string | null
+          beneficiario_documento?: string | null
+          beneficiario_nome?: string | null
+          codigo_barras?: string | null
+          company_id: string
+          created_at?: string
+          data_emissao?: string | null
+          data_vencimento: string
+          external_id?: string | null
+          id?: string
+          imported_at?: string | null
+          imported_to_payable_id?: string | null
+          linha_digitavel: string
+          pagador_documento?: string | null
+          pagador_nome?: string | null
+          raw_data?: Json | null
+          status?: string
+          synced_at?: string | null
+          updated_at?: string
+          valor: number
+          valor_final?: number | null
+        }
+        Update: {
+          beneficiario_banco?: string | null
+          beneficiario_documento?: string | null
+          beneficiario_nome?: string | null
+          codigo_barras?: string | null
+          company_id?: string
+          created_at?: string
+          data_emissao?: string | null
+          data_vencimento?: string
+          external_id?: string | null
+          id?: string
+          imported_at?: string | null
+          imported_to_payable_id?: string | null
+          linha_digitavel?: string
+          pagador_documento?: string | null
+          pagador_nome?: string | null
+          raw_data?: Json | null
+          status?: string
+          synced_at?: string | null
+          updated_at?: string
+          valor?: number
+          valor_final?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inter_dda_boletos_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inter_dda_boletos_imported_to_payable_id_fkey"
+            columns: ["imported_to_payable_id"]
+            isOneToOne: false
+            referencedRelation: "payables"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       inter_pix_payments: {
         Row: {
           amount: number
@@ -1038,6 +1125,7 @@ export type Database = {
           recipient_name: string | null
           reconciliation_id: string | null
           scheduled_payment_date: string | null
+          source: string | null
           submitted_at: string | null
           submitted_by: string | null
           supplier_id: string
@@ -1078,6 +1166,7 @@ export type Database = {
           recipient_name?: string | null
           reconciliation_id?: string | null
           scheduled_payment_date?: string | null
+          source?: string | null
           submitted_at?: string | null
           submitted_by?: string | null
           supplier_id: string
@@ -1118,6 +1207,7 @@ export type Database = {
           recipient_name?: string | null
           reconciliation_id?: string | null
           scheduled_payment_date?: string | null
+          source?: string | null
           submitted_at?: string | null
           submitted_by?: string | null
           supplier_id?: string

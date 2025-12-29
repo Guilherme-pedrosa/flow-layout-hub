@@ -1,11 +1,13 @@
 import { useState } from "react";
 import { PageHeader } from "@/components/shared";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Calendar, ShieldCheck, History, Clock } from "lucide-react";
-import { ScheduledPaymentsList, PaymentApprovalList, PixPaymentsList } from "@/components/financeiro";
+import { Calendar, ShieldCheck, History, Receipt } from "lucide-react";
+import { ScheduledPaymentsList, PaymentApprovalList, PixPaymentsList, DDABoletosList } from "@/components/financeiro";
 
 export default function ContasPagar() {
-  const [approvalCount, setApprovalCount] = useState(0);
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  const handleRefresh = () => setRefreshKey((k) => k + 1);
 
   return (
     <div className="space-y-6">
@@ -18,11 +20,15 @@ export default function ContasPagar() {
         ]}
       />
       
-      <Tabs defaultValue="programados" className="space-y-4">
+      <Tabs defaultValue="lancamentos" className="space-y-4">
         <TabsList>
-          <TabsTrigger value="programados" className="gap-2">
+          <TabsTrigger value="lancamentos" className="gap-2">
             <Calendar className="h-4 w-4" />
-            Pagamentos Programados
+            Lançamentos
+          </TabsTrigger>
+          <TabsTrigger value="dda" className="gap-2">
+            <Receipt className="h-4 w-4" />
+            DDA (Boletos)
           </TabsTrigger>
           <TabsTrigger value="aprovacoes" className="gap-2">
             <ShieldCheck className="h-4 w-4" />
@@ -34,12 +40,16 @@ export default function ContasPagar() {
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="programados">
-          <ScheduledPaymentsList />
+        <TabsContent value="lancamentos">
+          <ScheduledPaymentsList key={refreshKey} onSubmitted={handleRefresh} />
+        </TabsContent>
+
+        <TabsContent value="dda">
+          <DDABoletosList />
         </TabsContent>
 
         <TabsContent value="aprovacoes">
-          <PaymentApprovalList />
+          <PaymentApprovalList key={refreshKey} onApproved={handleRefresh} />
         </TabsContent>
 
         <TabsContent value="historico">
