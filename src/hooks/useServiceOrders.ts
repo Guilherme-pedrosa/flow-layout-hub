@@ -16,7 +16,6 @@ export interface ServiceOrderStatus {
   stock_behavior: StockBehavior;
   financial_behavior: FinancialBehavior;
   checkout_behavior: CheckoutBehavior;
-  requires_completed_checkout: boolean;
   display_order: number;
   is_active: boolean;
   created_at: string;
