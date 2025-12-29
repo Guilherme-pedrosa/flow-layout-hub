@@ -217,12 +217,14 @@ export function useSales() {
       sale,
       productItems,
       serviceItems,
-      installments = []
+      installments = [],
+      attachments = []
     }: {
       sale: Record<string, unknown>;
       productItems: Omit<SaleProductItem, 'id' | 'sale_id' | 'product'>[];
       serviceItems: Omit<SaleServiceItem, 'id' | 'sale_id' | 'service'>[];
       installments?: { installment_number: number; due_date: string; amount: number; payment_method: string }[];
+      attachments?: { file_name: string; file_url: string; file_size?: number }[];
     }) => {
       const { data: saleData, error: saleError } = await supabase
         .from("sales")
@@ -247,6 +249,12 @@ export function useSales() {
       if (installments.length > 0) {
         await supabase.from("sale_installments").insert(
           installments.map(item => ({ ...item, sale_id: saleData.id }))
+        );
+      }
+
+      if (attachments.length > 0) {
+        await supabase.from("sale_attachments").insert(
+          attachments.map(item => ({ ...item, sale_id: saleData.id }))
         );
       }
 
@@ -304,23 +312,49 @@ export function useInTransitStock(productId: string) {
   return useQuery({
     queryKey: ["in_transit_stock", productId],
     queryFn: async () => {
-      const { data } = await supabase
+      if (!productId) return { quantity: 0, nextArrivalDate: null };
+
+      const { data, error } = await supabase
         .from("purchase_order_items")
-        .select(`quantity, purchase_order:purchase_orders(invoice_date, status)`)
+        .select(`
+          quantity, 
+          purchase_order:purchase_orders(
+            id,
+            invoice_date, 
+            status,
+            status_id,
+            purchase_status:purchase_order_statuses(stock_behavior)
+          )
+        `)
         .eq("product_id", productId);
 
-      const pendingItems = data?.filter((item: any) => 
-        item.purchase_order?.status !== 'concluido'
-      ) ?? [];
+      if (error || !data) return { quantity: 0, nextArrivalDate: null };
+
+      // Filtrar apenas pedidos que ainda não deram entrada no estoque
+      // Considera pendentes aqueles cujo status não é "finalizado", "concluido" ou "cancelado"
+      // ou cujo stock_behavior não é "move"
+      const pendingItems = data.filter((item: any) => {
+        const status = item.purchase_order?.status?.toLowerCase() || '';
+        const stockBehavior = item.purchase_order?.purchase_status?.stock_behavior;
+        
+        // Se tem status configurado com comportamento de estoque, usa ele
+        if (stockBehavior) {
+          return stockBehavior !== 'move'; // Ainda não moveu para o estoque
+        }
+        
+        // Senão, filtra por status textual
+        const finishedStatuses = ['finalizado', 'concluido', 'concluído', 'cancelado'];
+        return !finishedStatuses.includes(status);
+      });
 
       const totalInTransit = pendingItems.reduce((sum: number, item: any) => 
-        sum + Number(item.quantity), 0
+        sum + Number(item.quantity || 0), 0
       );
 
       const nextArrival = pendingItems
         .map((item: any) => item.purchase_order?.invoice_date)
         .filter(Boolean)
-        .sort()[0];
+        .sort()[0] || null;
 
       return { quantity: totalInTransit, nextArrivalDate: nextArrival };
     },

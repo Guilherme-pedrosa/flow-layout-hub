@@ -7,7 +7,7 @@ import { useState } from "react";
 
 interface SaleFormTransporteProps {
   formData: {
-    freight_value: number;
+    freight_value: string | number;
     carrier: string;
     show_delivery_address: boolean;
     delivery_address: {

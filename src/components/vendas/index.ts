@@ -5,4 +5,5 @@ export { SaleFormProdutos } from "./SaleFormProdutos";
 export { SaleFormServicos } from "./SaleFormServicos";
 export { SaleFormTransporte } from "./SaleFormTransporte";
 export { SaleFormPagamento } from "./SaleFormPagamento";
+export { SaleFormAnexos } from "./SaleFormAnexos";
 export { SaleStatusBadge } from "./SaleStatusBadge";
