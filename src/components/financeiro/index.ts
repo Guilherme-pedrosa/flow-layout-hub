@@ -8,3 +8,6 @@ export { PayablesList } from './PayablesList';
 export { PixPaymentForm } from './PixPaymentForm';
 export { PixPaymentsList } from './PixPaymentsList';
 export { PixApprovalList } from './PixApprovalList';
+export { PayableForm } from './PayableForm';
+export { ScheduledPaymentsList } from './ScheduledPaymentsList';
+export { PaymentApprovalList } from './PaymentApprovalList';
