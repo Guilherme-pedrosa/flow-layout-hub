@@ -1,9 +1,11 @@
+import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Wrench, Plus, Trash2 } from "lucide-react";
+import { Wrench, Plus, Trash2, Search } from "lucide-react";
+import { useServices } from "@/hooks/useServices";
 import { SaleServiceItem } from "@/hooks/useSales";
 import { formatCurrency } from "@/lib/formatters";
 
@@ -13,10 +15,24 @@ interface SaleFormServicosProps {
 }
 
 export function SaleFormServicos({ items, onChange }: SaleFormServicosProps) {
+  const { services } = useServices();
+  const [searchTerm, setSearchTerm] = useState("");
+
+  const activeServices = services?.filter(s => s.is_active) ?? [];
+
+  // Filtrar por descrição ou código
+  const filteredServices = searchTerm 
+    ? activeServices.filter(s => 
+        s.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        s.code.toLowerCase().includes(searchTerm.toLowerCase())
+      )
+    : activeServices;
+
   const addItem = () => {
     onChange([
       ...items,
       {
+        service_id: '',
         service_description: '',
         details: '',
         quantity: 1,
@@ -31,6 +47,22 @@ export function SaleFormServicos({ items, onChange }: SaleFormServicosProps) {
   const updateItem = (index: number, field: keyof SaleServiceItem, value: any) => {
     const newItems = [...items];
     const item = { ...newItems[index], [field]: value };
+
+    // Se mudou o serviço selecionado, atualizar dados
+    if (field === 'service_id') {
+      const service = activeServices.find(s => s.id === value);
+      if (service) {
+        item.service_description = service.description;
+        item.unit_price = service.sale_price ?? 0;
+        item.service = {
+          id: service.id,
+          code: service.code,
+          description: service.description,
+          unit: service.unit,
+          sale_price: service.sale_price
+        };
+      }
+    }
 
     // Recalcular subtotal
     const price = item.unit_price * item.quantity;
@@ -79,11 +111,37 @@ export function SaleFormServicos({ items, onChange }: SaleFormServicosProps) {
             {items.map((item, index) => (
               <TableRow key={index}>
                 <TableCell>
-                  <Input
-                    value={item.service_description}
-                    onChange={(e) => updateItem(index, 'service_description', e.target.value)}
-                    placeholder="Descrição do serviço"
-                  />
+                  <Select
+                    value={item.service_id || ''}
+                    onValueChange={(value) => updateItem(index, 'service_id', value)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione o serviço" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <div className="p-2">
+                        <div className="flex items-center gap-2 mb-2">
+                          <Search className="h-4 w-4 text-muted-foreground" />
+                          <Input
+                            placeholder="Buscar por código ou descrição..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            className="flex-1"
+                          />
+                        </div>
+                      </div>
+                      {filteredServices.slice(0, 20).map(s => (
+                        <SelectItem key={s.id} value={s.id}>
+                          <span className="font-medium">{s.code}</span> - {s.description}
+                        </SelectItem>
+                      ))}
+                      {filteredServices.length === 0 && (
+                        <div className="p-2 text-sm text-muted-foreground text-center">
+                          Nenhum serviço encontrado
+                        </div>
+                      )}
+                    </SelectContent>
+                  </Select>
                 </TableCell>
                 <TableCell>
                   <Input

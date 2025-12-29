@@ -442,6 +442,96 @@ export type Database = {
           },
         ]
       }
+      price_table_items: {
+        Row: {
+          created_at: string
+          custom_price: number
+          id: string
+          price_table_id: string
+          product_id: string | null
+          service_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          custom_price: number
+          id?: string
+          price_table_id: string
+          product_id?: string | null
+          service_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          custom_price?: number
+          id?: string
+          price_table_id?: string
+          product_id?: string | null
+          service_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "price_table_items_price_table_id_fkey"
+            columns: ["price_table_id"]
+            isOneToOne: false
+            referencedRelation: "price_tables"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "price_table_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "price_table_items_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "services"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      price_tables: {
+        Row: {
+          company_id: string
+          created_at: string
+          description: string | null
+          id: string
+          is_active: boolean | null
+          is_default: boolean | null
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          is_default?: boolean | null
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          is_default?: boolean | null
+          name?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "price_tables_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       product_images: {
         Row: {
           created_at: string
@@ -923,6 +1013,50 @@ export type Database = {
           },
         ]
       }
+      sale_installments: {
+        Row: {
+          amount: number
+          created_at: string
+          due_date: string
+          id: string
+          installment_number: number
+          is_paid: boolean | null
+          paid_at: string | null
+          payment_method: string | null
+          sale_id: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          due_date: string
+          id?: string
+          installment_number: number
+          is_paid?: boolean | null
+          paid_at?: string | null
+          payment_method?: string | null
+          sale_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          due_date?: string
+          id?: string
+          installment_number?: number
+          is_paid?: boolean | null
+          paid_at?: string | null
+          payment_method?: string | null
+          sale_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sale_installments_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "sales"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sale_pdf_templates: {
         Row: {
           company_id: string
@@ -974,6 +1108,7 @@ export type Database = {
           discount_type: string | null
           discount_value: number | null
           id: string
+          price_table_id: string | null
           product_id: string | null
           quantity: number
           sale_id: string
@@ -986,6 +1121,7 @@ export type Database = {
           discount_type?: string | null
           discount_value?: number | null
           id?: string
+          price_table_id?: string | null
           product_id?: string | null
           quantity?: number
           sale_id: string
@@ -998,6 +1134,7 @@ export type Database = {
           discount_type?: string | null
           discount_value?: number | null
           id?: string
+          price_table_id?: string | null
           product_id?: string | null
           quantity?: number
           sale_id?: string
@@ -1005,6 +1142,13 @@ export type Database = {
           unit_price?: number
         }
         Relationships: [
+          {
+            foreignKeyName: "sale_product_items_price_table_id_fkey"
+            columns: ["price_table_id"]
+            isOneToOne: false
+            referencedRelation: "price_tables"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "sale_product_items_product_id_fkey"
             columns: ["product_id"]
@@ -1063,6 +1207,7 @@ export type Database = {
           quantity: number
           sale_id: string
           service_description: string
+          service_id: string | null
           subtotal: number
           unit_price: number
         }
@@ -1075,6 +1220,7 @@ export type Database = {
           quantity?: number
           sale_id: string
           service_description: string
+          service_id?: string | null
           subtotal?: number
           unit_price?: number
         }
@@ -1087,6 +1233,7 @@ export type Database = {
           quantity?: number
           sale_id?: string
           service_description?: string
+          service_id?: string | null
           subtotal?: number
           unit_price?: number
         }
@@ -1096,6 +1243,13 @@ export type Database = {
             columns: ["sale_id"]
             isOneToOne: false
             referencedRelation: "sales"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sale_service_items_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "services"
             referencedColumns: ["id"]
           },
         ]
@@ -1179,6 +1333,7 @@ export type Database = {
           seller_id: string | null
           services_total: number | null
           status_id: string | null
+          technician_id: string | null
           total_value: number | null
           tracking_token: string | null
           updated_at: string
@@ -1211,6 +1366,7 @@ export type Database = {
           seller_id?: string | null
           services_total?: number | null
           status_id?: string | null
+          technician_id?: string | null
           total_value?: number | null
           tracking_token?: string | null
           updated_at?: string
@@ -1243,6 +1399,7 @@ export type Database = {
           seller_id?: string | null
           services_total?: number | null
           status_id?: string | null
+          technician_id?: string | null
           total_value?: number | null
           tracking_token?: string | null
           updated_at?: string
@@ -1288,6 +1445,57 @@ export type Database = {
             columns: ["status_id"]
             isOneToOne: false
             referencedRelation: "sale_statuses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sales_technician_id_fkey"
+            columns: ["technician_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      services: {
+        Row: {
+          code: string
+          company_id: string
+          created_at: string
+          description: string
+          id: string
+          is_active: boolean | null
+          sale_price: number | null
+          unit: string | null
+          updated_at: string
+        }
+        Insert: {
+          code: string
+          company_id: string
+          created_at?: string
+          description: string
+          id?: string
+          is_active?: boolean | null
+          sale_price?: number | null
+          unit?: string | null
+          updated_at?: string
+        }
+        Update: {
+          code?: string
+          company_id?: string
+          created_at?: string
+          description?: string
+          id?: string
+          is_active?: boolean | null
+          sale_price?: number | null
+          unit?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "services_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
             referencedColumns: ["id"]
           },
         ]
