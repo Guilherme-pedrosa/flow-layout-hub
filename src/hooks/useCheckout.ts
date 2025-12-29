@@ -120,8 +120,24 @@ export function useCheckout() {
 
     if (checkoutError) throw checkoutError;
 
+    // Busca movimentações de estoque existentes para esta venda
+    // Isso é usado para identificar itens já separados mesmo sem checkout_items
+    const { data: stockMovements } = await supabase
+      .from("stock_movements")
+      .select("product_id, quantity")
+      .eq("reference_id", saleId)
+      .eq("reference_type", "venda")
+      .eq("type", "SAIDA_VENDA");
+
     const items: CheckoutItem[] = (productItems || []).map(item => {
       const checkoutItem = checkoutItems?.find(ci => ci.sale_product_item_id === item.id);
+      
+      // Verifica se há movimentação de estoque para este produto (já foi baixado)
+      const stockMovement = stockMovements?.find(sm => sm.product_id === item.product_id);
+      const quantityFromMovement = stockMovement?.quantity || 0;
+      
+      // Usa checkout_item se existir, senão usa movimentação de estoque
+      const quantityChecked = checkoutItem?.quantity_checked ?? quantityFromMovement;
       
       return {
         id: checkoutItem?.id || item.id,
@@ -131,8 +147,8 @@ export function useCheckout() {
         product_description: item.product?.description || '',
         product_barcode: item.product?.barcode || null,
         quantity_total: item.quantity,
-        quantity_checked: checkoutItem?.quantity_checked || 0,
-        quantity_pending: checkoutItem?.quantity_pending ?? item.quantity,
+        quantity_checked: quantityChecked,
+        quantity_pending: item.quantity - quantityChecked,
         stock_available: item.product?.quantity || 0,
       };
     });
@@ -185,8 +201,22 @@ export function useCheckout() {
 
     if (checkoutError) throw checkoutError;
 
+    // Busca movimentações de estoque existentes para esta OS
+    const { data: stockMovements } = await supabase
+      .from("stock_movements")
+      .select("product_id, quantity")
+      .eq("reference_id", osId)
+      .eq("reference_type", "os")
+      .eq("type", "SAIDA_VENDA");
+
     const items: CheckoutItem[] = (productItems || []).map(item => {
       const checkoutItem = checkoutItems?.find(ci => ci.service_order_product_item_id === item.id);
+      
+      // Verifica se há movimentação de estoque para este produto
+      const stockMovement = stockMovements?.find(sm => sm.product_id === item.product_id);
+      const quantityFromMovement = stockMovement?.quantity || 0;
+      
+      const quantityChecked = checkoutItem?.quantity_checked ?? quantityFromMovement;
       
       return {
         id: checkoutItem?.id || item.id,
@@ -196,8 +226,8 @@ export function useCheckout() {
         product_description: item.product?.description || '',
         product_barcode: item.product?.barcode || null,
         quantity_total: item.quantity,
-        quantity_checked: checkoutItem?.quantity_checked || 0,
-        quantity_pending: checkoutItem?.quantity_pending ?? item.quantity,
+        quantity_checked: quantityChecked,
+        quantity_pending: item.quantity - quantityChecked,
         stock_available: item.product?.quantity || 0,
       };
     });
