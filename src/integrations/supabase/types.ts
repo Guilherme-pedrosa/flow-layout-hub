@@ -557,6 +557,264 @@ export type Database = {
           },
         ]
       }
+      pessoa_contatos: {
+        Row: {
+          cargo: string | null
+          created_at: string
+          email: string | null
+          id: string
+          nome: string | null
+          pessoa_id: string
+          principal: boolean | null
+          telefone: string | null
+          updated_at: string
+        }
+        Insert: {
+          cargo?: string | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          nome?: string | null
+          pessoa_id: string
+          principal?: boolean | null
+          telefone?: string | null
+          updated_at?: string
+        }
+        Update: {
+          cargo?: string | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          nome?: string | null
+          pessoa_id?: string
+          principal?: boolean | null
+          telefone?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pessoa_contatos_pessoa_id_fkey"
+            columns: ["pessoa_id"]
+            isOneToOne: false
+            referencedRelation: "pessoas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pessoa_historico: {
+        Row: {
+          campo_alterado: string
+          created_at: string
+          id: string
+          pessoa_id: string
+          usuario_id: string | null
+          valor_anterior: string | null
+          valor_novo: string | null
+        }
+        Insert: {
+          campo_alterado: string
+          created_at?: string
+          id?: string
+          pessoa_id: string
+          usuario_id?: string | null
+          valor_anterior?: string | null
+          valor_novo?: string | null
+        }
+        Update: {
+          campo_alterado?: string
+          created_at?: string
+          id?: string
+          pessoa_id?: string
+          usuario_id?: string | null
+          valor_anterior?: string | null
+          valor_novo?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pessoa_historico_pessoa_id_fkey"
+            columns: ["pessoa_id"]
+            isOneToOne: false
+            referencedRelation: "pessoas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pessoas: {
+        Row: {
+          auth_id: string | null
+          bairro: string | null
+          cargo: string | null
+          cep: string | null
+          cidade: string | null
+          cnae_principal: string | null
+          comissao_percentual: number | null
+          company_id: string | null
+          complemento: string | null
+          condicao_pagamento: string | null
+          contribuinte_icms: boolean | null
+          cpf_cnpj: string | null
+          created_at: string
+          created_by: string | null
+          data_abertura: string | null
+          data_admissao: string | null
+          data_demissao: string | null
+          departamento: string | null
+          email: string | null
+          estado: string | null
+          id: string
+          inscricao_estadual: string | null
+          inscricao_municipal: string | null
+          is_active: boolean
+          is_cliente: boolean
+          is_colaborador: boolean
+          is_fornecedor: boolean
+          is_transportadora: boolean
+          limite_credito: number | null
+          logradouro: string | null
+          nome_fantasia: string | null
+          numero: string | null
+          observacoes_comerciais: string | null
+          observacoes_fiscais: string | null
+          observacoes_internas: string | null
+          razao_social: string | null
+          regime_tributario:
+            | Database["public"]["Enums"]["regime_tributario"]
+            | null
+          responsavel_comercial: string | null
+          responsavel_tecnico: string | null
+          retencao_impostos: boolean | null
+          salario: number | null
+          situacao_cadastral: string | null
+          sla_padrao: string | null
+          status: Database["public"]["Enums"]["cliente_status"]
+          telefone: string | null
+          tipo_cliente:
+            | Database["public"]["Enums"]["tipo_cliente_comercial"]
+            | null
+          tipo_pessoa: Database["public"]["Enums"]["tipo_pessoa"]
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          auth_id?: string | null
+          bairro?: string | null
+          cargo?: string | null
+          cep?: string | null
+          cidade?: string | null
+          cnae_principal?: string | null
+          comissao_percentual?: number | null
+          company_id?: string | null
+          complemento?: string | null
+          condicao_pagamento?: string | null
+          contribuinte_icms?: boolean | null
+          cpf_cnpj?: string | null
+          created_at?: string
+          created_by?: string | null
+          data_abertura?: string | null
+          data_admissao?: string | null
+          data_demissao?: string | null
+          departamento?: string | null
+          email?: string | null
+          estado?: string | null
+          id?: string
+          inscricao_estadual?: string | null
+          inscricao_municipal?: string | null
+          is_active?: boolean
+          is_cliente?: boolean
+          is_colaborador?: boolean
+          is_fornecedor?: boolean
+          is_transportadora?: boolean
+          limite_credito?: number | null
+          logradouro?: string | null
+          nome_fantasia?: string | null
+          numero?: string | null
+          observacoes_comerciais?: string | null
+          observacoes_fiscais?: string | null
+          observacoes_internas?: string | null
+          razao_social?: string | null
+          regime_tributario?:
+            | Database["public"]["Enums"]["regime_tributario"]
+            | null
+          responsavel_comercial?: string | null
+          responsavel_tecnico?: string | null
+          retencao_impostos?: boolean | null
+          salario?: number | null
+          situacao_cadastral?: string | null
+          sla_padrao?: string | null
+          status?: Database["public"]["Enums"]["cliente_status"]
+          telefone?: string | null
+          tipo_cliente?:
+            | Database["public"]["Enums"]["tipo_cliente_comercial"]
+            | null
+          tipo_pessoa?: Database["public"]["Enums"]["tipo_pessoa"]
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          auth_id?: string | null
+          bairro?: string | null
+          cargo?: string | null
+          cep?: string | null
+          cidade?: string | null
+          cnae_principal?: string | null
+          comissao_percentual?: number | null
+          company_id?: string | null
+          complemento?: string | null
+          condicao_pagamento?: string | null
+          contribuinte_icms?: boolean | null
+          cpf_cnpj?: string | null
+          created_at?: string
+          created_by?: string | null
+          data_abertura?: string | null
+          data_admissao?: string | null
+          data_demissao?: string | null
+          departamento?: string | null
+          email?: string | null
+          estado?: string | null
+          id?: string
+          inscricao_estadual?: string | null
+          inscricao_municipal?: string | null
+          is_active?: boolean
+          is_cliente?: boolean
+          is_colaborador?: boolean
+          is_fornecedor?: boolean
+          is_transportadora?: boolean
+          limite_credito?: number | null
+          logradouro?: string | null
+          nome_fantasia?: string | null
+          numero?: string | null
+          observacoes_comerciais?: string | null
+          observacoes_fiscais?: string | null
+          observacoes_internas?: string | null
+          razao_social?: string | null
+          regime_tributario?:
+            | Database["public"]["Enums"]["regime_tributario"]
+            | null
+          responsavel_comercial?: string | null
+          responsavel_tecnico?: string | null
+          retencao_impostos?: boolean | null
+          salario?: number | null
+          situacao_cadastral?: string | null
+          sla_padrao?: string | null
+          status?: Database["public"]["Enums"]["cliente_status"]
+          telefone?: string | null
+          tipo_cliente?:
+            | Database["public"]["Enums"]["tipo_cliente_comercial"]
+            | null
+          tipo_pessoa?: Database["public"]["Enums"]["tipo_pessoa"]
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pessoas_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       price_table_items: {
         Row: {
           created_at: string
