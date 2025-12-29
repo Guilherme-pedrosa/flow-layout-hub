@@ -21,6 +21,12 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { 
   Package, 
   Search, 
@@ -30,8 +36,10 @@ import {
   Wrench,
   CheckCircle2,
   Clock,
+  Printer,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/formatters";
+import { useCheckoutPdf } from "@/hooks/useCheckoutPdf";
 
 interface SeparatedItem {
   id: string;
@@ -58,6 +66,8 @@ export default function ItensSeparados() {
   const [search, setSearch] = useState("");
   const [activeTab, setActiveTab] = useState<"vendas" | "os">("vendas");
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  
+  const { isGenerating, printCheckout, printSummary } = useCheckoutPdf();
 
   // Busca vendas com checkout completo ou parcial
   const salesQuery = useQuery({
@@ -346,7 +356,7 @@ export default function ItensSeparados() {
                           </Badge>
                         </div>
 
-                        <div className="flex items-center gap-6">
+                        <div className="flex items-center gap-4">
                           <div className="text-right">
                             <div className="text-sm text-muted-foreground">{source.client_name || 'Cliente não informado'}</div>
                             <div className="font-medium">{formatCurrency(source.total_value)}</div>
@@ -355,6 +365,34 @@ export default function ItensSeparados() {
                           <Badge variant="outline">
                             {source.items.reduce((sum, i) => sum + i.quantity_checked, 0)} itens
                           </Badge>
+
+                          {/* Botão de impressão */}
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button 
+                                variant="outline" 
+                                size="sm"
+                                disabled={isGenerating}
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <Printer className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                              <DropdownMenuItem 
+                                onClick={() => printCheckout(source.id, source.type === 'venda' ? 'sale' : 'service_order')}
+                              >
+                                <FileText className="h-4 w-4 mr-2" />
+                                Recibo Completo
+                              </DropdownMenuItem>
+                              <DropdownMenuItem 
+                                onClick={() => printSummary(source.id, source.type === 'venda' ? 'sale' : 'service_order')}
+                              >
+                                <FileText className="h-4 w-4 mr-2" />
+                                Resumo
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
 
                           {expandedId === source.id ? (
                             <ChevronUp className="h-5 w-5 text-muted-foreground" />
