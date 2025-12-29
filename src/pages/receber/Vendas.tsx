@@ -1,26 +1,49 @@
+import { useState } from "react";
 import { PageHeader } from "@/components/shared";
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
+import { SalesList, SaleForm } from "@/components/vendas";
+import { Sale } from "@/hooks/useSales";
 
 const Vendas = () => {
+  const [showForm, setShowForm] = useState(false);
+  const [editingSale, setEditingSale] = useState<Sale | null>(null);
+
+  const handleEdit = (sale: Sale) => {
+    setEditingSale(sale);
+    setShowForm(true);
+  };
+
+  const handleView = (sale: Sale) => {
+    // TODO: abrir visualização
+  };
+
+  const handleClose = () => {
+    setShowForm(false);
+    setEditingSale(null);
+  };
+
   return (
-    <div className="animate-fade-in">
+    <div className="animate-fade-in space-y-6">
       <PageHeader
         title="Vendas"
         description="Gerencie suas vendas e pedidos"
         breadcrumbs={[{ label: "Receber" }, { label: "Vendas" }]}
         actions={
-          <Button>
-            <Plus className="mr-2 h-4 w-4" />
-            Nova Venda
-          </Button>
+          !showForm && (
+            <Button onClick={() => setShowForm(true)}>
+              <Plus className="mr-2 h-4 w-4" />
+              Nova Venda
+            </Button>
+          )
         }
       />
-      <div className="rounded-lg border border-dashed p-12 text-center">
-        <p className="text-muted-foreground">
-          Conteúdo da página de Vendas será implementado aqui
-        </p>
-      </div>
+
+      {showForm ? (
+        <SaleForm onClose={handleClose} initialData={editingSale} />
+      ) : (
+        <SalesList onEdit={handleEdit} onView={handleView} />
+      )}
     </div>
   );
 };
