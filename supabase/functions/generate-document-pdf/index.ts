@@ -78,6 +78,11 @@ interface DocumentData {
     discount_value: number;
     subtotal: number;
   }>;
+  // Anexos
+  attachments: Array<{
+    file_name: string;
+    file_url: string;
+  }>;
   // Logs
   created_by: string | null;
   created_at: string;
@@ -484,6 +489,22 @@ function generateDocumentHTML(data: DocumentData, pdfType: 'complete' | 'summary
     </div>
     ` : ''}
 
+    <!-- Anexos -->
+    ${data.attachments && data.attachments.length > 0 ? `
+    <div class="section" style="margin-top: 20px;">
+      <h2 class="section-title">Anexos</h2>
+      <ul style="margin: 0; padding-left: 20px;">
+        ${data.attachments.map((att: { file_name: string; file_url: string }) => `
+          <li style="margin-bottom: 8px;">
+            <a href="${att.file_url}" target="_blank" style="color: #0ea5e9; text-decoration: underline;">
+              ${att.file_name}
+            </a>
+          </li>
+        `).join('')}
+      </ul>
+    </div>
+    ` : ''}
+
     <!-- Logs/Histórico - apenas no completo -->
     ${pdfType === 'complete' ? `
     <div class="logs-section">
@@ -589,6 +610,12 @@ Deno.serve(async (req) => {
         `)
         .eq('sale_id', documentId);
 
+      // Buscar anexos
+      const { data: attachments } = await supabase
+        .from('sale_attachments')
+        .select('file_name, file_url')
+        .eq('sale_id', documentId);
+
       const client = sale.client as any;
       const status = sale.status as any;
       const clientAddress = client ? 
@@ -620,6 +647,10 @@ Deno.serve(async (req) => {
         checkout_status: sale.checkout_status || 'none',
         observations: sale.observations,
         internal_observations: sale.internal_observations,
+        attachments: (attachments || []).map((a: any) => ({
+          file_name: a.file_name,
+          file_url: a.file_url,
+        })),
         product_items: (productItems || []).map((item: any) => ({
           code: item.product?.code || '',
           description: item.product?.description || '',
@@ -716,6 +747,7 @@ Deno.serve(async (req) => {
         checkout_status: os.checkout_status || 'none',
         observations: os.observations,
         internal_observations: os.internal_observations,
+        attachments: [], // OS não tem anexos por enquanto
         product_items: (productItems || []).map((item: any) => ({
           code: item.product?.code || '',
           description: item.product?.description || '',

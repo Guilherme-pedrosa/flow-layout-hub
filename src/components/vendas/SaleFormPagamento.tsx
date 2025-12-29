@@ -104,8 +104,13 @@ export function SaleFormPagamento({
                 type="text"
                 inputMode="numeric"
                 placeholder="2"
-                value={installmentsCount} 
-                onChange={(e) => onChange('installments', e.target.value)} 
+                value={installmentsCount === 0 ? '' : installmentsCount.toString()} 
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (val === '' || /^\d*$/.test(val)) {
+                    onChange('installments', val);
+                  }
+                }} 
               />
             </div>
 
@@ -136,11 +141,15 @@ export function SaleFormPagamento({
                         </TableCell>
                         <TableCell>
                           <Input
-                            type="number"
-                            min="0"
-                            step="0.01"
-                            value={inst.amount}
-                            onChange={(e) => updateInstallment(index, 'amount', parseFloat(e.target.value) || 0)}
+                            type="text"
+                            inputMode="decimal"
+                            value={inst.amount === 0 ? '' : inst.amount.toString()}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              if (val === '' || /^\d*\.?\d*$/.test(val)) {
+                                updateInstallment(index, 'amount', val === '' ? 0 : parseFloat(val));
+                              }
+                            }}
                           />
                         </TableCell>
                         <TableCell>
