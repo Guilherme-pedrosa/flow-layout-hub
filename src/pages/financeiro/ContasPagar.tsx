@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { PageHeader } from "@/components/shared";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Calendar, ShieldCheck, History, Receipt } from "lucide-react";
-import { ScheduledPaymentsList, PaymentApprovalList, PixPaymentsList, DDABoletosList } from "@/components/financeiro";
+import { Calendar, ShieldCheck, History, Receipt, FileText } from "lucide-react";
+import { ScheduledPaymentsList, PaymentApprovalList, PixPaymentsList, DDABoletosList, ExtratoList } from "@/components/financeiro";
 
 export default function ContasPagar() {
   const [refreshKey, setRefreshKey] = useState(0);
@@ -26,6 +26,10 @@ export default function ContasPagar() {
             <Calendar className="h-4 w-4" />
             Lançamentos
           </TabsTrigger>
+          <TabsTrigger value="extrato" className="gap-2">
+            <FileText className="h-4 w-4" />
+            Extrato
+          </TabsTrigger>
           <TabsTrigger value="dda" className="gap-2">
             <Receipt className="h-4 w-4" />
             DDA (Boletos)
@@ -42,6 +46,10 @@ export default function ContasPagar() {
 
         <TabsContent value="lancamentos">
           <ScheduledPaymentsList key={refreshKey} onSubmitted={handleRefresh} />
+        </TabsContent>
+
+        <TabsContent value="extrato">
+          <ExtratoList />
         </TabsContent>
 
         <TabsContent value="dda">
