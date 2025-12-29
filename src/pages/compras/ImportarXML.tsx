@@ -35,6 +35,12 @@ export default function ImportarXML() {
   const [fornecedorCadastrado, setFornecedorCadastrado] = useState(false);
   const [transportadorCadastrado, setTransportadorCadastrado] = useState(false);
   
+  // Estados financeiros adicionais
+  const [financeiroObservacao, setFinanceiroObservacao] = useState("");
+  const [planoContasId, setPlanoContasId] = useState("");
+  const [centroCustoId, setCentroCustoId] = useState("");
+  const [formaPagamentoSelecionada, setFormaPagamentoSelecionada] = useState("");
+  
   // Dialogs
   const [dialogFornecedor, setDialogFornecedor] = useState(false);
   const [dialogTransportador, setDialogTransportador] = useState(false);
@@ -259,6 +265,10 @@ export default function ImportarXML() {
     setNotaDuplicada(false);
     setFornecedorCadastrado(false);
     setTransportadorCadastrado(false);
+    setFinanceiroObservacao("");
+    setPlanoContasId("");
+    setCentroCustoId("");
+    setFormaPagamentoSelecionada("");
   };
 
   return (
@@ -306,6 +316,14 @@ export default function ImportarXML() {
               formaPagamento={nfeData.financeiro.formaPagamento}
               parcelas={nfeData.financeiro.parcelas}
               valorTotal={nfeData.nota.valorTotal}
+              observacao={financeiroObservacao}
+              planoContasId={planoContasId}
+              centroCustoId={centroCustoId}
+              formaPagamentoSelecionada={formaPagamentoSelecionada}
+              onObservacaoChange={setFinanceiroObservacao}
+              onPlanoContasChange={setPlanoContasId}
+              onCentroCustoChange={setCentroCustoId}
+              onFormaPagamentoChange={setFormaPagamentoSelecionada}
             />
             <ImpostosCard
               impostos={nfeData.impostos}
