@@ -28,6 +28,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Plus, MoreHorizontal, Pencil, Trash2, GripVertical } from "lucide-react";
 import { StatusConfigForm, StatusFormData } from "./StatusConfigForm";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 interface StatusItem {
   id: string;
@@ -81,6 +82,7 @@ export function StatusConfigList({
   const [showForm, setShowForm] = useState(false);
   const [editingStatus, setEditingStatus] = useState<StatusItem | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const isMobile = useIsMobile();
 
   const handleSave = (data: StatusFormData) => {
     if (editingStatus) {
@@ -103,15 +105,74 @@ export function StatusConfigList({
     }
   };
 
+  const renderMobileCard = (status: StatusItem) => (
+    <Card key={status.id} className="mb-3">
+      <CardContent className="p-4">
+        <div className="flex items-start justify-between mb-3">
+          <div className="flex items-center gap-2 flex-wrap">
+            <Badge 
+              style={{ backgroundColor: status.color }}
+              className="text-white"
+            >
+              {status.name}
+            </Badge>
+            {status.is_default && (
+              <Badge variant="outline" className="text-xs">
+                Padrão
+              </Badge>
+            )}
+            <Badge variant={status.is_active ? "default" : "secondary"}>
+              {status.is_active ? "Ativo" : "Inativo"}
+            </Badge>
+          </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon">
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => handleEdit(status)}>
+                <Pencil className="h-4 w-4 mr-2" />
+                Editar
+              </DropdownMenuItem>
+              <DropdownMenuItem 
+                className="text-destructive"
+                onClick={() => setDeleteConfirm(status.id)}
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                Excluir
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+        <div className="grid grid-cols-3 gap-2 text-sm">
+          <div>
+            <span className="text-muted-foreground block text-xs">Checkout</span>
+            <span>{CHECKOUT_LABELS[status.checkout_behavior] || status.checkout_behavior}</span>
+          </div>
+          <div>
+            <span className="text-muted-foreground block text-xs">Reserva</span>
+            <span>{STOCK_LABELS[status.stock_behavior] || status.stock_behavior}</span>
+          </div>
+          <div>
+            <span className="text-muted-foreground block text-xs">Financeiro</span>
+            <span>{FINANCIAL_LABELS[status.financial_behavior] || status.financial_behavior}</span>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+
   return (
     <>
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
+        <CardHeader className="flex flex-col sm:flex-row sm:items-center gap-4 sm:justify-between">
           <div>
-            <CardTitle>{title}</CardTitle>
-            <CardDescription>{description}</CardDescription>
+            <CardTitle className="text-lg sm:text-xl">{title}</CardTitle>
+            <CardDescription className="text-sm">{description}</CardDescription>
           </div>
-          <Button onClick={() => { setEditingStatus(null); setShowForm(true); }}>
+          <Button onClick={() => { setEditingStatus(null); setShowForm(true); }} className="w-full sm:w-auto">
             <Plus className="h-4 w-4 mr-2" />
             Novo Status
           </Button>
@@ -122,6 +183,10 @@ export function StatusConfigList({
           ) : statuses.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
               Nenhum status cadastrado
+            </div>
+          ) : isMobile ? (
+            <div className="space-y-3">
+              {statuses.map(renderMobileCard)}
             </div>
           ) : (
             <Table>
@@ -222,9 +287,9 @@ export function StatusConfigList({
               Tem certeza que deseja excluir este status? Esta ação não pode ser desfeita.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground">
+          <AlertDialogFooter className="flex-col sm:flex-row gap-2">
+            <AlertDialogCancel className="w-full sm:w-auto">Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} className="w-full sm:w-auto bg-destructive text-destructive-foreground">
               Excluir
             </AlertDialogAction>
           </AlertDialogFooter>

@@ -97,7 +97,7 @@ export function StatusConfigForm({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
             {initialData?.id ? `Editar ${title}` : `Novo ${title}`}
@@ -105,8 +105,8 @@ export function StatusConfigForm({
         </DialogHeader>
         
         <div className="space-y-4 py-4">
-          <div className="grid grid-cols-4 gap-4">
-            <div className="col-span-3 space-y-2">
+          <div className="space-y-4">
+            <div className="space-y-2">
               <Label htmlFor="name">Nome do Status</Label>
               <Input
                 id="name"
@@ -117,12 +117,12 @@ export function StatusConfigForm({
             </div>
             <div className="space-y-2">
               <Label>Cor</Label>
-              <div className="flex flex-wrap gap-1">
+              <div className="flex flex-wrap gap-2">
                 {COLOR_OPTIONS.map((color) => (
                   <button
                     key={color}
                     type="button"
-                    className={`w-6 h-6 rounded-full border-2 transition-all ${
+                    className={`w-8 h-8 rounded-full border-2 transition-all ${
                       formData.color === color 
                         ? 'border-foreground scale-110' 
                         : 'border-transparent hover:scale-105'
@@ -207,7 +207,6 @@ export function StatusConfigForm({
             </Select>
           </div>
 
-
           <div className="space-y-2">
             <Label htmlFor="display_order">Ordem de Exibição</Label>
             <Input
@@ -218,7 +217,7 @@ export function StatusConfigForm({
             />
           </div>
 
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:justify-between">
             <div className="flex items-center gap-2">
               <Switch
                 id="is_default"
@@ -239,11 +238,11 @@ export function StatusConfigForm({
           </div>
         </div>
 
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+        <DialogFooter className="flex-col sm:flex-row gap-2">
+          <Button variant="outline" onClick={() => onOpenChange(false)} className="w-full sm:w-auto">
             Cancelar
           </Button>
-          <Button onClick={handleSave} disabled={!formData.name.trim()}>
+          <Button onClick={handleSave} disabled={!formData.name.trim()} className="w-full sm:w-auto">
             Salvar
           </Button>
         </DialogFooter>
