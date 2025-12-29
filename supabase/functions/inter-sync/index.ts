@@ -35,24 +35,36 @@ serve(async (req) => {
       throw new Error("Credenciais do Banco Inter não configuradas");
     }
 
-    // Gerar transações de demonstração (MVP)
+  // Gerar transações de demonstração (MVP) - NSUs determinísticos para evitar duplicatas
     const mockTransactions = [];
     const startDate = new Date(date_from);
     const endDate = new Date(date_to);
     let currentDate = new Date(startDate);
-    let nsuCounter = Date.now();
+
+    // Seed para gerar valores consistentes baseados na data
+    const seededRandom = (seed: number) => {
+      const x = Math.sin(seed) * 10000;
+      return x - Math.floor(x);
+    };
 
     while (currentDate <= endDate) {
-      const txCount = Math.floor(Math.random() * 3) + 1;
+      const dateStr = currentDate.toISOString().split("T")[0];
+      const dateSeed = currentDate.getTime();
+      
+      // Gerar 1-2 transações por dia de forma determinística
+      const txCount = Math.floor(seededRandom(dateSeed) * 2) + 1;
+      
       for (let i = 0; i < txCount; i++) {
-        const isCredit = Math.random() > 0.4;
-        const amount = Math.round((Math.random() * 4950 + 50) * 100) / 100;
+        const seed = dateSeed + i;
+        const isCredit = seededRandom(seed) > 0.4;
+        const amount = Math.round((seededRandom(seed * 2) * 950 + 50) * 100) / 100;
+        
         mockTransactions.push({
-          date: currentDate.toISOString().split("T")[0],
+          date: dateStr,
           description: isCredit ? "PIX RECEBIDO" : "PAGAMENTO BOLETO",
           amount: isCredit ? amount : -amount,
           type: isCredit ? "CREDIT" : "DEBIT",
-          nsu: `NSU${nsuCounter++}`,
+          nsu: `INTER-${dateStr}-${i}`, // NSU determinístico baseado na data
         });
       }
       currentDate.setDate(currentDate.getDate() + 1);
