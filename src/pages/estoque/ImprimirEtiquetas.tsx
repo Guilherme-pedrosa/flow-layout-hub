@@ -108,28 +108,48 @@ export default function ImprimirEtiquetas() {
       <!DOCTYPE html>
       <html>
       <head>
-        <title>Etiquetas de Produtos</title>
+        <title>Etiquetas</title>
         <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"><\/script>
         <style>
           @page {
             size: 50mm 30mm;
-            margin: 0;
+            margin: 0 !important;
+            padding: 0 !important;
+          }
+          @media print {
+            html, body {
+              margin: 0 !important;
+              padding: 0 !important;
+              width: 50mm;
+              height: 30mm;
+            }
+            /* Remove cabeçalhos e rodapés do navegador */
+            @page {
+              margin: 0 !important;
+            }
+            .label {
+              border: none !important;
+              -webkit-print-color-adjust: exact;
+              print-color-adjust: exact;
+            }
           }
           * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
           }
-          body {
+          html, body {
             font-family: Arial, sans-serif;
             margin: 0;
             padding: 0;
+            width: 50mm;
           }
           .label {
             width: 50mm;
             height: 30mm;
             padding: 1.5mm 2mm;
             page-break-after: always;
+            page-break-inside: avoid;
             display: flex;
             flex-direction: column;
             overflow: hidden;
@@ -179,13 +199,6 @@ export default function ImprimirEtiquetas() {
             font-weight: bold;
             text-align: center;
             margin-top: 0.5mm;
-          }
-          @media print {
-            .label {
-              border: none;
-              -webkit-print-color-adjust: exact;
-              print-color-adjust: exact;
-            }
           }
         </style>
       </head>
