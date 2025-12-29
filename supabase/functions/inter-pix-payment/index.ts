@@ -107,7 +107,7 @@ async function sendPixPayment(
   cert: string,
   key: string,
   payload: PixPaymentRequest
-): Promise<{ endToEndId: string; codigoSolicitacao: string }> {
+): Promise<{ endToEndId: string; codigoSolicitacao: string; status: string }> {
   console.log("[inter-pix-payment] Enviando PIX...");
   
   const pixUrl = `${INTER_API_URL}/banking/v2/pix`;
@@ -164,11 +164,15 @@ async function sendPixPayment(
   }
 
   const result = await response.json();
-  console.log("[inter-pix-payment] PIX enviado:", result);
+  console.log("[inter-pix-payment] Resposta PIX:", JSON.stringify(result, null, 2));
+  
+  // Detectar status da resposta (pode ser AGUARDANDO_APROVACAO, REALIZADO, etc.)
+  const interStatus = result.status || result.situacao || "AGUARDANDO_APROVACAO";
   
   return {
-    endToEndId: result.endToEndId || result.e2eId,
-    codigoSolicitacao: result.codigoSolicitacao || result.txid,
+    endToEndId: result.endToEndId || result.e2eId || null,
+    codigoSolicitacao: result.codigoSolicitacao || result.txid || result.id || null,
+    status: interStatus,
   };
 }
 
@@ -300,19 +304,25 @@ serve(async (req) => {
       const token = await getOAuthToken(credentials, cert, key);
       const pixResult = await sendPixPayment(token, credentials, cert, key, payload);
 
+      // Mapear status do Inter para status interno
+      const isApprovalPending = ["AGUARDANDO_APROVACAO", "PENDENTE", "EM_PROCESSAMENTO", "AGENDADO"].includes(pixResult.status);
+      const internalStatus = isApprovalPending ? "pending_approval" : "completed";
+      const interStatusFinal = isApprovalPending ? pixResult.status : "REALIZADO";
+
       await supabase
         .from("inter_pix_payments")
         .update({
-          status: "completed",
-          inter_status: "REALIZADO",
+          status: internalStatus,
+          inter_status: interStatusFinal,
           inter_end_to_end_id: pixResult.endToEndId,
           inter_transaction_id: pixResult.codigoSolicitacao,
           inter_response: pixResult,
-          processed_at: new Date().toISOString(),
+          processed_at: isApprovalPending ? null : new Date().toISOString(),
         })
         .eq("id", paymentId);
 
-      if (payload.payable_id) {
+      // Só marca como pago se foi realizado imediatamente
+      if (!isApprovalPending && payload.payable_id) {
         await supabase
           .from("payables")
           .update({
@@ -326,7 +336,7 @@ serve(async (req) => {
 
       await supabase.from("audit_logs").insert({
         company_id: payload.company_id,
-        action: "pix_payment_success",
+        action: isApprovalPending ? "pix_payment_pending_approval" : "pix_payment_success",
         entity: "inter_pix_payments",
         entity_id: paymentId,
         metadata_json: {
@@ -334,8 +344,13 @@ serve(async (req) => {
           recipient: payload.recipient_name,
           pix_key: payload.pix_key,
           end_to_end_id: pixResult.endToEndId,
+          inter_status: pixResult.status,
         },
       });
+
+      const message = isApprovalPending 
+        ? "PIX enviado - aguardando aprovação no Banco Inter" 
+        : "PIX enviado com sucesso";
 
       return new Response(
         JSON.stringify({
@@ -343,8 +358,9 @@ serve(async (req) => {
           payment_id: paymentId,
           end_to_end_id: pixResult.endToEndId,
           transaction_id: pixResult.codigoSolicitacao,
-          status: "completed",
-          message: "PIX enviado com sucesso",
+          status: internalStatus,
+          inter_status: pixResult.status,
+          message,
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );

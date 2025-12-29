@@ -104,6 +104,13 @@ const PixPaymentsList = React.forwardRef<HTMLDivElement>((_, ref) => {
             Concluído
           </Badge>
         );
+      case "pending_approval":
+        return (
+          <Badge variant="outline" className="bg-orange-500/10 text-orange-600 border-orange-500/20">
+            <Clock className="mr-1 h-3 w-3" />
+            Aguard. Aprovação
+          </Badge>
+        );
       case "processing":
         return (
           <Badge variant="outline" className="bg-blue-500/10 text-blue-600 border-blue-500/20">
