@@ -81,7 +81,7 @@ export default function ItensSeparados() {
         const { data: productItems } = await supabase
           .from("sale_product_items")
           .select(`
-            id, quantity,
+            id, quantity, product_id,
             product:products(code, description)
           `)
           .eq("sale_id", sale.id);
@@ -90,25 +90,34 @@ export default function ItensSeparados() {
 
         const { data: checkoutItems } = await supabase
           .from("sale_checkout_items")
-          .select(`
-            *,
-            checked_by_user:users!sale_checkout_items_checked_by_fkey(name)
-          `)
+          .select("*")
           .in("sale_product_item_id", productItems.map(p => p.id));
+
+        // Busca movimentações de estoque para esta venda
+        const { data: stockMovements } = await supabase
+          .from("stock_movements")
+          .select("product_id, quantity, created_at")
+          .eq("reference_id", sale.id)
+          .eq("reference_type", "venda")
+          .eq("type", "SAIDA_VENDA");
 
         const items: SeparatedItem[] = productItems
           .map(item => {
             const checkout = checkoutItems?.find(c => c.sale_product_item_id === item.id);
-            if (!checkout || checkout.quantity_checked === 0) return null;
+            const stockMovement = stockMovements?.find(sm => sm.product_id === item.product_id);
+            
+            // Usa checkout se existir, senão usa movimentação
+            const quantityChecked = checkout?.quantity_checked ?? stockMovement?.quantity ?? 0;
+            if (quantityChecked === 0) return null;
             
             return {
               id: item.id,
               product_code: item.product?.code || '',
               product_description: item.product?.description || '',
-              quantity_checked: checkout.quantity_checked,
+              quantity_checked: quantityChecked,
               quantity_total: item.quantity,
-              checked_at: checkout.checked_at,
-              checked_by_name: (checkout as any).checked_by_user?.name || null,
+              checked_at: checkout?.checked_at || stockMovement?.created_at || null,
+              checked_by_name: null,
             };
           })
           .filter(Boolean) as SeparatedItem[];
@@ -153,7 +162,7 @@ export default function ItensSeparados() {
         const { data: productItems } = await supabase
           .from("service_order_product_items")
           .select(`
-            id, quantity,
+            id, quantity, product_id,
             product:products(code, description)
           `)
           .eq("service_order_id", order.id);
@@ -162,25 +171,33 @@ export default function ItensSeparados() {
 
         const { data: checkoutItems } = await supabase
           .from("service_order_checkout_items")
-          .select(`
-            *,
-            checked_by_user:users!service_order_checkout_items_checked_by_fkey(name)
-          `)
+          .select("*")
           .in("service_order_product_item_id", productItems.map(p => p.id));
+
+        // Busca movimentações de estoque para esta OS
+        const { data: stockMovements } = await supabase
+          .from("stock_movements")
+          .select("product_id, quantity, created_at")
+          .eq("reference_id", order.id)
+          .eq("reference_type", "os")
+          .eq("type", "SAIDA_VENDA");
 
         const items: SeparatedItem[] = productItems
           .map(item => {
             const checkout = checkoutItems?.find(c => c.service_order_product_item_id === item.id);
-            if (!checkout || checkout.quantity_checked === 0) return null;
+            const stockMovement = stockMovements?.find(sm => sm.product_id === item.product_id);
+            
+            const quantityChecked = checkout?.quantity_checked ?? stockMovement?.quantity ?? 0;
+            if (quantityChecked === 0) return null;
             
             return {
               id: item.id,
               product_code: item.product?.code || '',
               product_description: item.product?.description || '',
-              quantity_checked: checkout.quantity_checked,
+              quantity_checked: quantityChecked,
               quantity_total: item.quantity,
-              checked_at: checkout.checked_at,
-              checked_by_name: (checkout as any).checked_by_user?.name || null,
+              checked_at: checkout?.checked_at || stockMovement?.created_at || null,
+              checked_by_name: null,
             };
           })
           .filter(Boolean) as SeparatedItem[];
