@@ -13,13 +13,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2, Save, X, FileUp, AlertTriangle, Package, FileText, Truck, DollarSign } from "lucide-react";
+import { Loader2, Save, X, FileUp, AlertTriangle, Package, FileText, Truck, DollarSign, Plus } from "lucide-react";
 import { usePurchaseOrders, PurchaseOrder, PurchaseOrderInsert } from "@/hooks/usePurchaseOrders";
 import { usePurchaseOrderStatuses } from "@/hooks/usePurchaseOrderStatuses";
 import { usePessoas } from "@/hooks/usePessoas";
 import { useChartOfAccounts, useCostCenters } from "@/hooks/useFinanceiro";
 import { toast } from "sonner";
 import { PurchaseOrderItems } from "./PurchaseOrderItems";
+import { CadastrarPessoaDialog } from "@/components/shared/CadastrarPessoaDialog";
 import { useEffect as useEffectReact } from "react";
 
 interface PurchaseOrderFormProps {
@@ -31,6 +32,7 @@ const COMPANY_ID = "00000000-0000-0000-0000-000000000001";
 
 export function PurchaseOrderForm({ order, onClose }: PurchaseOrderFormProps) {
   const [activeTab, setActiveTab] = useState("dados");
+  const [showCadastroFornecedor, setShowCadastroFornecedor] = useState(false);
   const [saving, setSaving] = useState(false);
 
   // Form state
@@ -47,7 +49,7 @@ export function PurchaseOrderForm({ order, onClose }: PurchaseOrderFormProps) {
 
   const { createOrder, updateOrder, refetch } = usePurchaseOrders();
   const { statuses } = usePurchaseOrderStatuses();
-  const { activeFornecedores } = usePessoas();
+  const { activeFornecedores, refetch: refetchPessoas } = usePessoas();
   const { accounts: chartOfAccounts, fetchAccounts } = useChartOfAccounts();
   const { costCenters, fetchCostCenters } = useCostCenters();
 
@@ -162,18 +164,29 @@ export function PurchaseOrderForm({ order, onClose }: PurchaseOrderFormProps) {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Fornecedor *</Label>
-                  <Select value={supplierId} onValueChange={setSupplierId}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecione o fornecedor" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {activeFornecedores.map((fornecedor) => (
-                        <SelectItem key={fornecedor.id} value={fornecedor.id}>
-                          {fornecedor.razao_social || fornecedor.nome_fantasia}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <div className="flex gap-2">
+                    <Select value={supplierId} onValueChange={setSupplierId}>
+                      <SelectTrigger className="flex-1">
+                        <SelectValue placeholder="Selecione o fornecedor" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {activeFornecedores.map((fornecedor) => (
+                          <SelectItem key={fornecedor.id} value={fornecedor.id}>
+                            {fornecedor.razao_social || fornecedor.nome_fantasia}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      onClick={() => setShowCadastroFornecedor(true)}
+                      title="Cadastrar novo fornecedor"
+                    >
+                      <Plus className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
 
                 <div className="space-y-2">
@@ -449,6 +462,17 @@ export function PurchaseOrderForm({ order, onClose }: PurchaseOrderFormProps) {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Dialog de Cadastro de Fornecedor */}
+      <CadastrarPessoaDialog
+        open={showCadastroFornecedor}
+        onOpenChange={setShowCadastroFornecedor}
+        tipo="fornecedor"
+        onSuccess={(pessoaId) => {
+          refetchPessoas();
+          setSupplierId(pessoaId);
+        }}
+      />
     </div>
   );
 }
