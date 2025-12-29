@@ -29,6 +29,28 @@ interface InterCredentials {
   account_number: string | null;
 }
 
+function normalizePEM(content: string, type: 'CERTIFICATE' | 'PRIVATE KEY'): string {
+  // Remove espaços em branco extras e normaliza
+  let cleaned = content.trim();
+  
+  // Se já está no formato PEM correto, retorna
+  if (cleaned.includes(`-----BEGIN ${type}-----`)) {
+    return cleaned;
+  }
+  
+  // Tenta detectar se é base64 puro sem headers
+  const base64Regex = /^[A-Za-z0-9+/=\s]+$/;
+  if (base64Regex.test(cleaned)) {
+    // Remove quebras de linha e espaços
+    cleaned = cleaned.replace(/\s/g, '');
+    // Adiciona headers PEM
+    const chunks = cleaned.match(/.{1,64}/g) || [];
+    return `-----BEGIN ${type}-----\n${chunks.join('\n')}\n-----END ${type}-----`;
+  }
+  
+  return cleaned;
+}
+
 async function getOAuthToken(
   credentials: InterCredentials,
   cert: string,
@@ -38,11 +60,17 @@ async function getOAuthToken(
   
   const tokenUrl = `${INTER_API_URL}/oauth/v2/token`;
   
+  // Normalizar certificado e chave
+  const normalizedCert = normalizePEM(cert, 'CERTIFICATE');
+  const normalizedKey = normalizePEM(key, 'PRIVATE KEY');
+  
+  console.log("[inter-pix-payment] Cert starts with:", normalizedCert.substring(0, 50));
+  console.log("[inter-pix-payment] Key starts with:", normalizedKey.substring(0, 50));
+  
   // Criar cliente HTTP com certificado mTLS
   const httpClient = Deno.createHttpClient({
-    caCerts: [],
-    cert: cert,
-    key: key,
+    cert: normalizedCert,
+    key: normalizedKey,
   });
 
   const params = new URLSearchParams();
@@ -65,7 +93,7 @@ async function getOAuthToken(
   if (!response.ok) {
     const errorText = await response.text();
     console.error("[inter-pix-payment] Erro ao obter token:", errorText);
-    throw new Error(`Erro ao obter token OAuth: ${response.status}`);
+    throw new Error(`Erro ao obter token OAuth: ${response.status} - ${errorText}`);
   }
 
   const data = await response.json();
@@ -84,10 +112,13 @@ async function sendPixPayment(
   
   const pixUrl = `${INTER_API_URL}/banking/v2/pix`;
   
+  // Normalizar certificado e chave
+  const normalizedCert = normalizePEM(cert, 'CERTIFICATE');
+  const normalizedKey = normalizePEM(key, 'PRIVATE KEY');
+  
   const httpClient = Deno.createHttpClient({
-    caCerts: [],
-    cert: cert,
-    key: key,
+    cert: normalizedCert,
+    key: normalizedKey,
   });
 
   const pixBody = {
