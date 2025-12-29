@@ -399,43 +399,56 @@ export default function Checkout() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {selectedSource.items.map((item) => (
-                          <TableRow key={item.id}>
-                            <TableCell>
-                              <div>
-                                <div className="font-medium">{item.product_description}</div>
-                                <div className="text-xs text-muted-foreground">
-                                  Cód: {item.product_code}
-                                  {item.product_barcode && ` | ${item.product_barcode}`}
+                        {selectedSource.items.map((item) => {
+                          const isComplete = item.quantity_checked >= item.quantity_total;
+                          const isPartial = item.quantity_checked > 0 && item.quantity_checked < item.quantity_total;
+                          const isPending = item.quantity_checked === 0 && item.quantity_pending > 0;
+                          
+                          return (
+                            <TableRow 
+                              key={item.id}
+                              className={
+                                isPartial || isPending
+                                  ? 'bg-yellow-50 dark:bg-yellow-950/30'
+                                  : ''
+                              }
+                            >
+                              <TableCell>
+                                <div>
+                                  <div className="font-medium">{item.product_description}</div>
+                                  <div className="text-xs text-muted-foreground">
+                                    Cód: {item.product_code}
+                                    {item.product_barcode && ` | ${item.product_barcode}`}
+                                  </div>
                                 </div>
-                              </div>
-                            </TableCell>
-                            <TableCell className="text-center font-medium">
-                              {item.quantity_checked}
-                            </TableCell>
-                            <TableCell className="text-center">
-                              {item.quantity_total}
-                            </TableCell>
-                            <TableCell className="text-center">
-                              <span className={item.stock_available < item.quantity_pending ? 'text-destructive' : ''}>
-                                {item.stock_available}
-                              </span>
-                            </TableCell>
-                            <TableCell className="text-center">
-                              {item.quantity_checked >= item.quantity_total ? (
-                                <CheckCircle2 className="h-5 w-5 text-green-500 mx-auto" />
-                              ) : item.quantity_checked > 0 ? (
-                                <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200">
-                                  Parcial
-                                </Badge>
-                              ) : (
-                                <Badge variant="outline" className="bg-muted text-muted-foreground">
-                                  Pendente
-                                </Badge>
-                              )}
-                            </TableCell>
-                          </TableRow>
-                        ))}
+                              </TableCell>
+                              <TableCell className="text-center font-medium">
+                                {item.quantity_checked}
+                              </TableCell>
+                              <TableCell className="text-center">
+                                {item.quantity_total}
+                              </TableCell>
+                              <TableCell className="text-center">
+                                <span className={item.stock_available < item.quantity_pending ? 'text-destructive' : ''}>
+                                  {item.stock_available}
+                                </span>
+                              </TableCell>
+                              <TableCell className="text-center">
+                                {isComplete ? (
+                                  <CheckCircle2 className="h-5 w-5 text-green-500 mx-auto" />
+                                ) : isPartial ? (
+                                  <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200">
+                                    Parcial
+                                  </Badge>
+                                ) : (
+                                  <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200">
+                                    Pendente
+                                  </Badge>
+                                )}
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
                       </TableBody>
                     </Table>
                   </ScrollArea>
