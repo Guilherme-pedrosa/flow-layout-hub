@@ -442,48 +442,202 @@ export type Database = {
           },
         ]
       }
+      product_images: {
+        Row: {
+          created_at: string
+          display_order: number | null
+          id: string
+          is_main: boolean | null
+          product_id: string
+          url: string
+        }
+        Insert: {
+          created_at?: string
+          display_order?: number | null
+          id?: string
+          is_main?: boolean | null
+          product_id: string
+          url: string
+        }
+        Update: {
+          created_at?: string
+          display_order?: number | null
+          id?: string
+          is_main?: boolean | null
+          product_id?: string
+          url?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_images_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      product_suppliers: {
+        Row: {
+          created_at: string
+          id: string
+          product_id: string
+          supplier_cnpj: string | null
+          supplier_code: string | null
+          supplier_name: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          product_id: string
+          supplier_cnpj?: string | null
+          supplier_code?: string | null
+          supplier_name: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          product_id?: string
+          supplier_cnpj?: string | null
+          supplier_code?: string | null
+          supplier_name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_suppliers_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       products: {
         Row: {
+          accessory_expenses: number | null
+          barcode: string | null
+          benefit_code: string | null
+          cest: string | null
           code: string
+          controls_stock: boolean | null
           created_at: string
           description: string
+          description_long: string | null
+          extra_fields: Json | null
+          fci_number: string | null
+          final_cost: number | null
+          gross_weight: number | null
+          has_composition: boolean | null
+          has_invoice: boolean | null
+          has_variations: boolean | null
+          height: number | null
           id: string
           is_active: boolean
+          is_pdv_available: boolean | null
+          is_sold_separately: boolean | null
+          length: number | null
+          max_stock: number | null
           min_stock: number | null
           ncm: string | null
+          ncm_description: string | null
+          ncm_validated: boolean | null
+          net_weight: number | null
+          origin: string | null
+          other_expenses: number | null
+          product_group: string | null
           purchase_price: number | null
           quantity: number | null
           sale_price: number | null
+          specific_product: string | null
           unit: string | null
+          unit_conversions: Json | null
           updated_at: string
+          weight: number | null
+          width: number | null
         }
         Insert: {
+          accessory_expenses?: number | null
+          barcode?: string | null
+          benefit_code?: string | null
+          cest?: string | null
           code: string
+          controls_stock?: boolean | null
           created_at?: string
           description: string
+          description_long?: string | null
+          extra_fields?: Json | null
+          fci_number?: string | null
+          final_cost?: number | null
+          gross_weight?: number | null
+          has_composition?: boolean | null
+          has_invoice?: boolean | null
+          has_variations?: boolean | null
+          height?: number | null
           id?: string
           is_active?: boolean
+          is_pdv_available?: boolean | null
+          is_sold_separately?: boolean | null
+          length?: number | null
+          max_stock?: number | null
           min_stock?: number | null
           ncm?: string | null
+          ncm_description?: string | null
+          ncm_validated?: boolean | null
+          net_weight?: number | null
+          origin?: string | null
+          other_expenses?: number | null
+          product_group?: string | null
           purchase_price?: number | null
           quantity?: number | null
           sale_price?: number | null
+          specific_product?: string | null
           unit?: string | null
+          unit_conversions?: Json | null
           updated_at?: string
+          weight?: number | null
+          width?: number | null
         }
         Update: {
+          accessory_expenses?: number | null
+          barcode?: string | null
+          benefit_code?: string | null
+          cest?: string | null
           code?: string
+          controls_stock?: boolean | null
           created_at?: string
           description?: string
+          description_long?: string | null
+          extra_fields?: Json | null
+          fci_number?: string | null
+          final_cost?: number | null
+          gross_weight?: number | null
+          has_composition?: boolean | null
+          has_invoice?: boolean | null
+          has_variations?: boolean | null
+          height?: number | null
           id?: string
           is_active?: boolean
+          is_pdv_available?: boolean | null
+          is_sold_separately?: boolean | null
+          length?: number | null
+          max_stock?: number | null
           min_stock?: number | null
           ncm?: string | null
+          ncm_description?: string | null
+          ncm_validated?: boolean | null
+          net_weight?: number | null
+          origin?: string | null
+          other_expenses?: number | null
+          product_group?: string | null
           purchase_price?: number | null
           quantity?: number | null
           sale_price?: number | null
+          specific_product?: string | null
           unit?: string | null
+          unit_conversions?: Json | null
           updated_at?: string
+          weight?: number | null
+          width?: number | null
         }
         Relationships: []
       }
