@@ -7,6 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useProducts } from "@/hooks/useProducts";
 import { usePurchaseOrders } from "@/hooks/usePurchaseOrders";
 import { useStockMovements } from "@/hooks/useStockMovements";
+import { usePurchaseOrderStatuses } from "@/hooks/usePurchaseOrderStatuses";
 import { toast } from "sonner";
 import { sugerirCfopEntrada } from "@/lib/cfops";
 import {
@@ -50,6 +51,7 @@ export default function ImportarXML() {
   const { products, createProduct } = useProducts();
   const { createOrder, createOrderItems } = usePurchaseOrders();
   const { createMovement } = useStockMovements();
+  const { getDefaultStatus, getActiveStatuses } = usePurchaseOrderStatuses();
 
   // Verificar se fornecedor/transportador já estão cadastrados
   useEffect(() => {
@@ -200,7 +202,10 @@ export default function ImportarXML() {
         }
       }
 
-      // Criar pedido de compra
+      // Buscar status padrão
+      const defaultStatus = getDefaultStatus();
+
+      // Criar pedido de compra com dados financeiros
       const orderData = await createOrder.mutateAsync({
         supplier_cnpj: nfeData.fornecedor.cnpj,
         supplier_name: nfeData.fornecedor.razaoSocial,
@@ -209,7 +214,12 @@ export default function ImportarXML() {
         invoice_series: nfeData.nota.serie,
         invoice_date: nfeData.nota.dataEmissao,
         total_value: nfeData.nota.valorTotal,
-        status: "finalizado",
+        status: defaultStatus?.name || "pendente",
+        status_id: defaultStatus?.id,
+        payment_method: formaPagamentoSelecionada || undefined,
+        chart_account_id: planoContasId || undefined,
+        cost_center_id: centroCustoId || undefined,
+        financial_notes: financeiroObservacao || undefined,
       });
 
       // Criar itens do pedido
