@@ -70,7 +70,7 @@ export function SaleForm({ onClose, initialData }: SaleFormProps) {
 
   const handleSave = async () => {
     const sale = {
-      company_id: '00000000-0000-0000-0000-000000000000', // TODO: pegar da empresa
+      company_id: '7875af52-18d0-434e-8ae9-97981bd668e7', // TODO: pegar da empresa do usuário logado
       client_id: formData.client_id || null,
       seller_id: formData.seller_id || null,
       technician_id: formData.technician_id || null,

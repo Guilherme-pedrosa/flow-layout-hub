@@ -255,9 +255,17 @@ export function useSales() {
       }
 
       if (attachments.length > 0) {
-        await supabase.from("sale_attachments").insert(
-          attachments.map(item => ({ ...item, sale_id: saleData.id }))
+        const { error: attachmentsError } = await supabase.from("sale_attachments").insert(
+          attachments.map(item => ({ 
+            file_name: item.file_name,
+            file_url: item.file_url,
+            file_size: item.file_size || null,
+            sale_id: saleData.id 
+          }))
         );
+        if (attachmentsError) {
+          console.error("Erro ao salvar anexos:", attachmentsError);
+        }
       }
 
       return saleData;

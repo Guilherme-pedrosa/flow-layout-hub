@@ -13,18 +13,16 @@ interface NumericInputProps extends Omit<React.InputHTMLAttributes<HTMLInputElem
 }
 
 const NumericInput = React.forwardRef<HTMLInputElement, NumericInputProps>(
-  ({ value, onChange, min = 0, max, step = 1, allowNegative = false, decimalPlaces, className, ...props }, ref) => {
-    const [displayValue, setDisplayValue] = React.useState<string>(value?.toString() ?? '0');
+  ({ value, onChange, min, max, step = 1, allowNegative = false, decimalPlaces, className, ...props }, ref) => {
+    const [displayValue, setDisplayValue] = React.useState<string>(value?.toString() ?? '');
+    const [isFocused, setIsFocused] = React.useState(false);
     
-    // Sync display value when external value changes (but not from user typing)
+    // Sync display value when external value changes (but not when user is typing)
     React.useEffect(() => {
-      // Only update if the parsed display value doesn't match the external value
-      const parsedDisplay = parseFloat(displayValue);
-      if (isNaN(parsedDisplay) && value === 0) return;
-      if (parsedDisplay !== value) {
-        setDisplayValue(value?.toString() ?? '0');
+      if (!isFocused) {
+        setDisplayValue(value?.toString() ?? '');
       }
-    }, [value]);
+    }, [value, isFocused]);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
       const inputValue = e.target.value;
@@ -55,11 +53,12 @@ const NumericInput = React.forwardRef<HTMLInputElement, NumericInputProps>(
     };
 
     const handleBlur = () => {
+      setIsFocused(false);
       // On blur, ensure we have a valid numeric value
       const numValue = parseFloat(displayValue);
       if (isNaN(numValue) || displayValue === '' || displayValue === '-') {
-        setDisplayValue(min?.toString() ?? '0');
-        onChange(min ?? 0);
+        setDisplayValue('0');
+        onChange(0);
       } else {
         // Apply constraints and format
         let finalValue = numValue;
@@ -75,6 +74,10 @@ const NumericInput = React.forwardRef<HTMLInputElement, NumericInputProps>(
       }
     };
 
+    const handleFocus = () => {
+      setIsFocused(true);
+    };
+
     return (
       <Input
         ref={ref}
@@ -83,6 +86,7 @@ const NumericInput = React.forwardRef<HTMLInputElement, NumericInputProps>(
         value={displayValue}
         onChange={handleChange}
         onBlur={handleBlur}
+        onFocus={handleFocus}
         className={cn(className)}
         {...props}
       />
