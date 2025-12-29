@@ -478,7 +478,12 @@ Deno.serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const { checkoutId, checkoutType, pdfType = 'completo', userId, userName } = await req.json();
+    const { checkoutId, checkoutType: rawCheckoutType, pdfType = 'complete', userId, userName } = await req.json();
+
+    // Normalizar checkoutType: aceitar 'sale'/'service_order' ou 'venda'/'os'
+    let checkoutType = rawCheckoutType;
+    if (rawCheckoutType === 'sale') checkoutType = 'venda';
+    if (rawCheckoutType === 'service_order') checkoutType = 'os';
 
     console.log(`[generate-checkout-pdf] Generating PDF for ${checkoutType} ${checkoutId}, type: ${pdfType}`);
 
