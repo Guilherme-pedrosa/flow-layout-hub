@@ -2,12 +2,13 @@ import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NumericInput } from "@/components/ui/numeric-input";
+import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
 import { Wrench, Plus, Trash2, ChevronsUpDown, Check, PlusCircle } from "lucide-react";
 import { useServices } from "@/hooks/useServices";
 import { ServiceOrderServiceItem } from "@/hooks/useServiceOrders";
@@ -75,7 +76,7 @@ function CadastrarServicoRapido({ onSuccess }: { onSuccess: () => void }) {
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Preço de venda</Label>
-              <Input type="number" value={form.sale_price} onChange={(e) => setForm(f => ({ ...f, sale_price: parseFloat(e.target.value) || 0 }))} />
+              <NumericInput value={form.sale_price} onChange={(val) => setForm(f => ({ ...f, sale_price: val }))} />
             </div>
             <div className="space-y-2">
               <Label>Unidade</Label>
@@ -223,10 +224,102 @@ export function ServiceOrderFormServicos({ items, onChange }: ServiceOrderFormSe
   // Calcular custo total de mão de obra
   const totalLaborCost = items.reduce((sum, item) => sum + (item.cost_price * item.quantity), 0);
 
+  // Mobile card view
+  const renderMobileItem = (item: ServiceOrderServiceItem, index: number) => {
+    return (
+      <div key={index} className="border rounded-lg p-4 space-y-3 bg-card">
+        <div className="flex justify-between items-start">
+          <div className="flex-1 pr-2">
+            <ServiceCombobox
+              value={item.service_id || ''}
+              onSelect={(serviceId) => updateItem(index, 'service_id', serviceId)}
+              services={activeServices}
+              onRefetch={refetchServices}
+            />
+          </div>
+          <Button variant="destructive" size="icon" className="h-8 w-8 shrink-0" onClick={() => removeItem(index)}>
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <Label className="text-xs text-muted-foreground">Quantidade</Label>
+            <NumericInput
+              value={item.quantity}
+              onChange={(val) => updateItem(index, 'quantity', val)}
+              step={0.001}
+              className="h-9"
+            />
+          </div>
+          <div>
+            <Label className="text-xs text-muted-foreground">Valor Unit.</Label>
+            <NumericInput
+              value={item.unit_price}
+              onChange={(val) => updateItem(index, 'unit_price', val)}
+              step={0.01}
+              className="h-9"
+            />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <Label className="text-xs text-muted-foreground">Custo M.O.</Label>
+            <NumericInput
+              value={item.cost_price}
+              onChange={(val) => updateItem(index, 'cost_price', val)}
+              step={0.01}
+              className="h-9 bg-muted"
+            />
+          </div>
+          <div>
+            <Label className="text-xs text-muted-foreground">Desconto</Label>
+            <div className="flex gap-1">
+              <NumericInput
+                value={item.discount_value}
+                onChange={(val) => updateItem(index, 'discount_value', val)}
+                step={0.01}
+                className="flex-1 h-9"
+              />
+              <Select
+                value={item.discount_type}
+                onValueChange={(value) => updateItem(index, 'discount_type', value)}
+              >
+                <SelectTrigger className="w-14 h-9">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="value">R$</SelectItem>
+                  <SelectItem value="percent">%</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <Label className="text-xs text-muted-foreground">Detalhes</Label>
+          <Input
+            value={item.details ?? ''}
+            onChange={(e) => updateItem(index, 'details', e.target.value)}
+            placeholder="Observações..."
+            className="h-9"
+          />
+        </div>
+
+        <div className="pt-2 border-t flex justify-between items-center">
+          <span className="text-sm text-muted-foreground">Subtotal:</span>
+          <span className="font-semibold">{formatCurrency(item.subtotal)}</span>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <Card>
       <CardHeader className="pb-4">
-        <CardTitle className="flex items-center justify-between text-lg">
+        <CardTitle className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-lg">
           <div className="flex items-center gap-2">
             <Wrench className="h-5 w-5" />
             Serviços
@@ -237,107 +330,106 @@ export function ServiceOrderFormServicos({ items, onChange }: ServiceOrderFormSe
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="w-[200px]">Serviço <span className="text-destructive">*</span></TableHead>
-              <TableHead>Detalhes</TableHead>
-              <TableHead className="w-[80px]">Qtd.</TableHead>
-              <TableHead className="w-[100px]">Valor</TableHead>
-              <TableHead className="w-[100px]">Custo</TableHead>
-              <TableHead className="w-[130px]">Desconto</TableHead>
-              <TableHead className="w-[100px]">Subtotal</TableHead>
-              <TableHead className="w-[50px]"></TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {items.map((item, index) => (
-              <TableRow key={index}>
-                <TableCell>
-                  <ServiceCombobox
-                    value={item.service_id || ''}
-                    onSelect={(serviceId) => updateItem(index, 'service_id', serviceId)}
-                    services={activeServices}
-                    onRefetch={refetchServices}
-                  />
-                </TableCell>
-                <TableCell>
-                  <Input
-                    value={item.details ?? ''}
-                    onChange={(e) => updateItem(index, 'details', e.target.value)}
-                    placeholder="Detalhes..."
-                    className="text-xs"
-                  />
-                </TableCell>
-                <TableCell>
-                  <Input
-                    type="number"
-                    min="0"
-                    step="0.001"
-                    value={item.quantity}
-                    onChange={(e) => updateItem(index, 'quantity', parseFloat(e.target.value) || 0)}
-                    className="text-xs"
-                  />
-                </TableCell>
-                <TableCell>
-                  <Input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={item.unit_price}
-                    onChange={(e) => updateItem(index, 'unit_price', parseFloat(e.target.value) || 0)}
-                    className="text-xs"
-                  />
-                </TableCell>
-                <TableCell>
-                  <Input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={item.cost_price}
-                    onChange={(e) => updateItem(index, 'cost_price', parseFloat(e.target.value) || 0)}
-                    className="text-xs bg-muted"
-                    placeholder="Custo"
-                  />
-                </TableCell>
-                <TableCell>
-                  <div className="flex gap-1">
-                    <Input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={item.discount_value}
-                      onChange={(e) => updateItem(index, 'discount_value', parseFloat(e.target.value) || 0)}
-                      className="w-16 text-xs"
-                    />
-                    <Select
-                      value={item.discount_type}
-                      onValueChange={(value) => updateItem(index, 'discount_type', value)}
-                    >
-                      <SelectTrigger className="w-14 text-xs">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="value">R$</SelectItem>
-                        <SelectItem value="percent">%</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </TableCell>
-                <TableCell className="font-medium text-xs">
-                  {formatCurrency(item.subtotal)}
-                </TableCell>
-                <TableCell>
-                  <Button variant="destructive" size="icon" className="h-7 w-7" onClick={() => removeItem(index)}>
-                    <Trash2 className="h-3 w-3" />
-                  </Button>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+        {/* Mobile view - Cards */}
+        <div className="md:hidden space-y-4">
+          {items.map((item, index) => renderMobileItem(item, index))}
+        </div>
 
-        <Button variant="default" className="mt-4" onClick={addItem}>
+        {/* Desktop view - Table */}
+        <div className="hidden md:block overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="min-w-[200px]">Serviço <span className="text-destructive">*</span></TableHead>
+                <TableHead className="min-w-[120px]">Detalhes</TableHead>
+                <TableHead className="w-[80px]">Qtd.</TableHead>
+                <TableHead className="w-[100px]">Valor</TableHead>
+                <TableHead className="w-[100px]">Custo</TableHead>
+                <TableHead className="w-[130px]">Desconto</TableHead>
+                <TableHead className="w-[100px]">Subtotal</TableHead>
+                <TableHead className="w-[50px]"></TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {items.map((item, index) => (
+                <TableRow key={index}>
+                  <TableCell>
+                    <ServiceCombobox
+                      value={item.service_id || ''}
+                      onSelect={(serviceId) => updateItem(index, 'service_id', serviceId)}
+                      services={activeServices}
+                      onRefetch={refetchServices}
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <Input
+                      value={item.details ?? ''}
+                      onChange={(e) => updateItem(index, 'details', e.target.value)}
+                      placeholder="Detalhes..."
+                      className="text-xs"
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <NumericInput
+                      value={item.quantity}
+                      onChange={(val) => updateItem(index, 'quantity', val)}
+                      step={0.001}
+                      className="text-xs"
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <NumericInput
+                      value={item.unit_price}
+                      onChange={(val) => updateItem(index, 'unit_price', val)}
+                      step={0.01}
+                      className="text-xs"
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <NumericInput
+                      value={item.cost_price}
+                      onChange={(val) => updateItem(index, 'cost_price', val)}
+                      step={0.01}
+                      className="text-xs bg-muted"
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex gap-1">
+                      <NumericInput
+                        value={item.discount_value}
+                        onChange={(val) => updateItem(index, 'discount_value', val)}
+                        step={0.01}
+                        className="w-16 text-xs"
+                      />
+                      <Select
+                        value={item.discount_type}
+                        onValueChange={(value) => updateItem(index, 'discount_type', value)}
+                      >
+                        <SelectTrigger className="w-14 text-xs">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="value">R$</SelectItem>
+                          <SelectItem value="percent">%</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </TableCell>
+                  <TableCell className="font-medium text-xs">
+                    {formatCurrency(item.subtotal)}
+                  </TableCell>
+                  <TableCell>
+                    <Button variant="destructive" size="icon" className="h-7 w-7" onClick={() => removeItem(index)}>
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+
+        <Button variant="default" className="mt-4 w-full sm:w-auto" onClick={addItem}>
           <Plus className="h-4 w-4 mr-2" />
           Adicionar serviço
         </Button>

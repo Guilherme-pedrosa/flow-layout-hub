@@ -2,12 +2,13 @@ import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NumericInput } from "@/components/ui/numeric-input";
+import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
 import { Package, Plus, Trash2, Truck, ChevronsUpDown, Check, PlusCircle } from "lucide-react";
 import { useProducts } from "@/hooks/useProducts";
 import { usePriceTables } from "@/hooks/useServices";
@@ -115,7 +116,7 @@ function CadastrarProdutoRapido({ onSuccess }: { onSuccess: () => void }) {
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Preço de venda</Label>
-              <Input type="number" value={form.sale_price} onChange={(e) => setForm(f => ({ ...f, sale_price: parseFloat(e.target.value) || 0 }))} />
+              <NumericInput value={form.sale_price} onChange={(val) => setForm(f => ({ ...f, sale_price: val }))} />
             </div>
             <div className="space-y-2">
               <Label>Unidade</Label>
@@ -266,6 +267,110 @@ export function SaleFormProdutos({ items, onChange }: SaleFormProdutosProps) {
     onChange(items.filter((_, i) => i !== index));
   };
 
+  // Mobile card view
+  const renderMobileItem = (item: SaleProductItem, index: number) => {
+    const product = item.product || activeProducts.find(p => p.id === item.product_id);
+    const isOutOfStock = product && item.quantity > (product.quantity ?? 0);
+
+    return (
+      <div key={index} className="border rounded-lg p-4 space-y-3 bg-card">
+        <div className="flex justify-between items-start">
+          <div className="flex-1 pr-2">
+            <ProductCombobox
+              value={item.product_id}
+              onSelect={(productId) => updateItem(index, 'product_id', productId)}
+              products={activeProducts}
+              isOutOfStock={isOutOfStock}
+              onRefetch={refetchProducts}
+            />
+          </div>
+          <Button variant="destructive" size="icon" className="h-8 w-8 shrink-0" onClick={() => removeItem(index)}>
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <Label className="text-xs text-muted-foreground">Tabela</Label>
+            <Select
+              value={item.price_table_id || 'default'}
+              onValueChange={(value) => updateItem(index, 'price_table_id', value === 'default' ? '' : value)}
+            >
+              <SelectTrigger className="text-sm h-9">
+                <SelectValue placeholder="Padrão" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="default">Padrão</SelectItem>
+                {activePriceTables.map(pt => (
+                  <SelectItem key={pt.id} value={pt.id}>{pt.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label className="text-xs text-muted-foreground">Quantidade</Label>
+            <NumericInput
+              value={item.quantity}
+              onChange={(val) => updateItem(index, 'quantity', val)}
+              step={0.001}
+              className={cn("h-9", isOutOfStock && 'border-destructive bg-destructive/10')}
+            />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <Label className="text-xs text-muted-foreground">Valor Unit.</Label>
+            <NumericInput
+              value={item.unit_price}
+              onChange={(val) => updateItem(index, 'unit_price', val)}
+              step={0.01}
+              className="h-9"
+            />
+          </div>
+          <div>
+            <Label className="text-xs text-muted-foreground">Desconto</Label>
+            <div className="flex gap-1">
+              <NumericInput
+                value={item.discount_value}
+                onChange={(val) => updateItem(index, 'discount_value', val)}
+                step={0.01}
+                className="flex-1 h-9"
+              />
+              <Select
+                value={item.discount_type}
+                onValueChange={(value) => updateItem(index, 'discount_type', value)}
+              >
+                <SelectTrigger className="w-14 h-9">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="value">R$</SelectItem>
+                  <SelectItem value="percent">%</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <Label className="text-xs text-muted-foreground">Detalhes</Label>
+          <Input
+            value={item.details ?? ''}
+            onChange={(e) => updateItem(index, 'details', e.target.value)}
+            placeholder="Observações..."
+            className="h-9"
+          />
+        </div>
+
+        <div className="pt-2 border-t flex justify-between items-center">
+          <span className="text-sm text-muted-foreground">Subtotal:</span>
+          <span className="font-semibold">{formatCurrency(item.subtotal)}</span>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <Card>
       <CardHeader className="pb-4">
@@ -275,136 +380,120 @@ export function SaleFormProdutos({ items, onChange }: SaleFormProdutosProps) {
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="w-[250px]">Produto <span className="text-destructive">*</span></TableHead>
-              <TableHead className="w-[120px]">Tabela de Preço</TableHead>
-              <TableHead>Detalhes</TableHead>
-              <TableHead className="w-[120px]">Quant. <span className="text-destructive">*</span></TableHead>
-              <TableHead className="w-[120px]">Valor <span className="text-destructive">*</span></TableHead>
-              <TableHead className="w-[150px]">Desconto</TableHead>
-              <TableHead className="w-[120px]">Subtotal</TableHead>
-              <TableHead className="w-[60px]">Ação</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {items.map((item, index) => {
-              const product = item.product || activeProducts.find(p => p.id === item.product_id);
-              const isOutOfStock = product && item.quantity > (product.quantity ?? 0);
+        {/* Mobile view - Cards */}
+        <div className="md:hidden space-y-4">
+          {items.map((item, index) => renderMobileItem(item, index))}
+        </div>
 
-              return (
-                <TableRow key={index}>
-                  <TableCell>
-                    <ProductCombobox
-                      value={item.product_id}
-                      onSelect={(productId) => updateItem(index, 'product_id', productId)}
-                      products={activeProducts}
-                      isOutOfStock={isOutOfStock}
-                      onRefetch={refetchProducts}
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <Select
-                      value={item.price_table_id || 'default'}
-                      onValueChange={(value) => updateItem(index, 'price_table_id', value === 'default' ? '' : value)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Padrão" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="default">Preço padrão</SelectItem>
-                        {activePriceTables.map(pt => (
-                          <SelectItem key={pt.id} value={pt.id}>{pt.name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </TableCell>
-                  <TableCell>
-                    <Input
-                      value={item.details ?? ''}
-                      onChange={(e) => updateItem(index, 'details', e.target.value)}
-                      placeholder="Detalhes..."
-                    />
-                  </TableCell>
-                  <TableCell>
-                    {product ? (
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <Input
-                            type="number"
-                            min="0"
-                            step="0.001"
-                            value={item.quantity}
-                            onChange={(e) => updateItem(index, 'quantity', parseFloat(e.target.value) || 0)}
-                            className={isOutOfStock ? 'border-destructive bg-destructive/10 cursor-pointer' : 'cursor-pointer'}
-                          />
-                        </PopoverTrigger>
-                        <StockPopover
-                          productId={item.product_id}
-                          currentStock={product.quantity ?? 0}
-                          unit={product.unit ?? 'UN'}
-                          requestedQuantity={item.quantity}
-                        />
-                      </Popover>
-                    ) : (
-                      <Input
-                        type="number"
-                        min="0"
-                        step="0.001"
-                        value={item.quantity}
-                        onChange={(e) => updateItem(index, 'quantity', parseFloat(e.target.value) || 0)}
+        {/* Desktop view - Table */}
+        <div className="hidden md:block overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="min-w-[200px]">Produto <span className="text-destructive">*</span></TableHead>
+                <TableHead className="w-[120px]">Tabela de Preço</TableHead>
+                <TableHead className="min-w-[120px]">Detalhes</TableHead>
+                <TableHead className="w-[100px]">Quant. <span className="text-destructive">*</span></TableHead>
+                <TableHead className="w-[100px]">Valor <span className="text-destructive">*</span></TableHead>
+                <TableHead className="w-[140px]">Desconto</TableHead>
+                <TableHead className="w-[100px]">Subtotal</TableHead>
+                <TableHead className="w-[60px]">Ação</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {items.map((item, index) => {
+                const product = item.product || activeProducts.find(p => p.id === item.product_id);
+                const isOutOfStock = product && item.quantity > (product.quantity ?? 0);
+
+                return (
+                  <TableRow key={index}>
+                    <TableCell>
+                      <ProductCombobox
+                        value={item.product_id}
+                        onSelect={(productId) => updateItem(index, 'product_id', productId)}
+                        products={activeProducts}
+                        isOutOfStock={isOutOfStock}
+                        onRefetch={refetchProducts}
                       />
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <Input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={item.unit_price}
-                      onChange={(e) => updateItem(index, 'unit_price', parseFloat(e.target.value) || 0)}
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex gap-1">
-                      <Input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={item.discount_value}
-                        onChange={(e) => updateItem(index, 'discount_value', parseFloat(e.target.value) || 0)}
-                        className="w-20"
-                      />
+                    </TableCell>
+                    <TableCell>
                       <Select
-                        value={item.discount_type}
-                        onValueChange={(value) => updateItem(index, 'discount_type', value)}
+                        value={item.price_table_id || 'default'}
+                        onValueChange={(value) => updateItem(index, 'price_table_id', value === 'default' ? '' : value)}
                       >
-                        <SelectTrigger className="w-16">
-                          <SelectValue />
+                        <SelectTrigger className="text-xs">
+                          <SelectValue placeholder="Padrão" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="value">R$</SelectItem>
-                          <SelectItem value="percent">%</SelectItem>
+                          <SelectItem value="default">Preço padrão</SelectItem>
+                          {activePriceTables.map(pt => (
+                            <SelectItem key={pt.id} value={pt.id}>{pt.name}</SelectItem>
+                          ))}
                         </SelectContent>
                       </Select>
-                    </div>
-                  </TableCell>
-                  <TableCell className="font-medium">
-                    {formatCurrency(item.subtotal)}
-                  </TableCell>
-                  <TableCell>
-                    <Button variant="destructive" size="icon" onClick={() => removeItem(index)}>
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              );
-            })}
-          </TableBody>
-        </Table>
+                    </TableCell>
+                    <TableCell>
+                      <Input
+                        value={item.details ?? ''}
+                        onChange={(e) => updateItem(index, 'details', e.target.value)}
+                        placeholder="Detalhes..."
+                        className="text-xs"
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <NumericInput
+                        value={item.quantity}
+                        onChange={(val) => updateItem(index, 'quantity', val)}
+                        step={0.001}
+                        className={cn("text-xs", isOutOfStock && 'border-destructive bg-destructive/10')}
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <NumericInput
+                        value={item.unit_price}
+                        onChange={(val) => updateItem(index, 'unit_price', val)}
+                        step={0.01}
+                        className="text-xs"
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex gap-1">
+                        <NumericInput
+                          value={item.discount_value}
+                          onChange={(val) => updateItem(index, 'discount_value', val)}
+                          step={0.01}
+                          className="w-16 text-xs"
+                        />
+                        <Select
+                          value={item.discount_type}
+                          onValueChange={(value) => updateItem(index, 'discount_type', value)}
+                        >
+                          <SelectTrigger className="w-14 text-xs">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="value">R$</SelectItem>
+                            <SelectItem value="percent">%</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </TableCell>
+                    <TableCell className="font-medium text-xs">
+                      {formatCurrency(item.subtotal)}
+                    </TableCell>
+                    <TableCell>
+                      <Button variant="destructive" size="icon" className="h-7 w-7" onClick={() => removeItem(index)}>
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </div>
 
-        <Button variant="default" className="mt-4" onClick={addItem}>
+        <Button variant="default" className="mt-4 w-full sm:w-auto" onClick={addItem}>
           <Plus className="h-4 w-4 mr-2" />
           Adicionar produto
         </Button>

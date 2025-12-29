@@ -2,16 +2,20 @@ import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NumericInput } from "@/components/ui/numeric-input";
+import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
-import { Wrench, Plus, Trash2, Search, PlusCircle } from "lucide-react";
+import { Wrench, Plus, Trash2, ChevronsUpDown, Check, PlusCircle } from "lucide-react";
 import { useServices } from "@/hooks/useServices";
 import { SaleServiceItem } from "@/hooks/useSales";
 import { formatCurrency } from "@/lib/formatters";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { cn } from "@/lib/utils";
 
 interface SaleFormServicosProps {
   items: SaleServiceItem[];
@@ -35,7 +39,7 @@ function CadastrarServicoRapido({ onSuccess }: { onSuccess: () => void }) {
       sale_price: form.sale_price,
       unit: form.unit,
       is_active: true,
-      company_id: '00000000-0000-0000-0000-000000000000' // TODO: pegar da empresa
+      company_id: '00000000-0000-0000-0000-000000000000'
     });
     setSaving(false);
     if (error) {
@@ -72,7 +76,7 @@ function CadastrarServicoRapido({ onSuccess }: { onSuccess: () => void }) {
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Preço de venda</Label>
-              <Input type="number" value={form.sale_price} onChange={(e) => setForm(f => ({ ...f, sale_price: parseFloat(e.target.value) || 0 }))} />
+              <NumericInput value={form.sale_price} onChange={(val) => setForm(f => ({ ...f, sale_price: val }))} />
             </div>
             <div className="space-y-2">
               <Label>Unidade</Label>
@@ -88,18 +92,84 @@ function CadastrarServicoRapido({ onSuccess }: { onSuccess: () => void }) {
   );
 }
 
+interface ServiceComboboxProps {
+  value: string;
+  onSelect: (serviceId: string) => void;
+  services: Array<{
+    id: string;
+    code: string;
+    description: string;
+    sale_price?: number | null;
+    unit?: string | null;
+  }>;
+  onRefetch: () => void;
+}
+
+function ServiceCombobox({ value, onSelect, services, onRefetch }: ServiceComboboxProps) {
+  const [open, setOpen] = useState(false);
+  const selectedService = services.find(s => s.id === value);
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          role="combobox"
+          aria-expanded={open}
+          className={cn(
+            "w-full justify-between text-left font-normal",
+            !value && "text-muted-foreground"
+          )}
+        >
+          <span className="truncate">
+            {selectedService 
+              ? `${selectedService.code} - ${selectedService.description}`
+              : "Selecione um serviço..."
+            }
+          </span>
+          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-[350px] p-0" align="start">
+        <Command>
+          <CommandInput placeholder="Buscar serviço..." />
+          <CommandList>
+            <CommandEmpty>Nenhum serviço encontrado.</CommandEmpty>
+            <CommandGroup>
+              {services.slice(0, 30).map((s) => (
+                <CommandItem
+                  key={s.id}
+                  value={`${s.code} ${s.description}`}
+                  onSelect={() => {
+                    onSelect(s.id);
+                    setOpen(false);
+                  }}
+                >
+                  <Check
+                    className={cn(
+                      "mr-2 h-4 w-4",
+                      value === s.id ? "opacity-100" : "opacity-0"
+                    )}
+                  />
+                  <span className="font-medium">{s.code}</span>
+                  <span className="ml-1 text-muted-foreground truncate">- {s.description}</span>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+            <div className="border-t p-1">
+              <CadastrarServicoRapido onSuccess={onRefetch} />
+            </div>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 export function SaleFormServicos({ items, onChange }: SaleFormServicosProps) {
   const { services, refetch: refetchServices } = useServices();
-  const [searchTerm, setSearchTerm] = useState("");
 
   const activeServices = services?.filter(s => s.is_active) ?? [];
-
-  const filteredServices = searchTerm 
-    ? activeServices.filter(s => 
-        s.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        s.code.toLowerCase().includes(searchTerm.toLowerCase())
-      )
-    : activeServices;
 
   const addItem = () => {
     onChange([
@@ -151,6 +221,87 @@ export function SaleFormServicos({ items, onChange }: SaleFormServicosProps) {
     onChange(items.filter((_, i) => i !== index));
   };
 
+  // Mobile card view
+  const renderMobileItem = (item: SaleServiceItem, index: number) => {
+    return (
+      <div key={index} className="border rounded-lg p-4 space-y-3 bg-card">
+        <div className="flex justify-between items-start">
+          <div className="flex-1 pr-2">
+            <ServiceCombobox
+              value={item.service_id || ''}
+              onSelect={(serviceId) => updateItem(index, 'service_id', serviceId)}
+              services={activeServices}
+              onRefetch={refetchServices}
+            />
+          </div>
+          <Button variant="destructive" size="icon" className="h-8 w-8 shrink-0" onClick={() => removeItem(index)}>
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <Label className="text-xs text-muted-foreground">Quantidade</Label>
+            <NumericInput
+              value={item.quantity}
+              onChange={(val) => updateItem(index, 'quantity', val)}
+              step={0.001}
+              className="h-9"
+            />
+          </div>
+          <div>
+            <Label className="text-xs text-muted-foreground">Valor Unit.</Label>
+            <NumericInput
+              value={item.unit_price}
+              onChange={(val) => updateItem(index, 'unit_price', val)}
+              step={0.01}
+              className="h-9"
+            />
+          </div>
+        </div>
+
+        <div>
+          <Label className="text-xs text-muted-foreground">Desconto</Label>
+          <div className="flex gap-2">
+            <NumericInput
+              value={item.discount_value}
+              onChange={(val) => updateItem(index, 'discount_value', val)}
+              step={0.01}
+              className="flex-1 h-9"
+            />
+            <Select
+              value={item.discount_type}
+              onValueChange={(value) => updateItem(index, 'discount_type', value)}
+            >
+              <SelectTrigger className="w-20 h-9">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="value">R$</SelectItem>
+                <SelectItem value="percent">%</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        <div>
+          <Label className="text-xs text-muted-foreground">Detalhes</Label>
+          <Input
+            value={item.details ?? ''}
+            onChange={(e) => updateItem(index, 'details', e.target.value)}
+            placeholder="Observações..."
+            className="h-9"
+          />
+        </div>
+
+        <div className="pt-2 border-t flex justify-between items-center">
+          <span className="text-sm text-muted-foreground">Subtotal:</span>
+          <span className="font-semibold">{formatCurrency(item.subtotal)}</span>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <Card>
       <CardHeader className="pb-4">
@@ -160,120 +311,97 @@ export function SaleFormServicos({ items, onChange }: SaleFormServicosProps) {
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="w-[250px]">Serviço <span className="text-destructive">*</span></TableHead>
-              <TableHead>Detalhes</TableHead>
-              <TableHead className="w-[100px]">Quant. <span className="text-destructive">*</span></TableHead>
-              <TableHead className="w-[120px]">Valor <span className="text-destructive">*</span></TableHead>
-              <TableHead className="w-[150px]">Desconto</TableHead>
-              <TableHead className="w-[120px]">Subtotal</TableHead>
-              <TableHead className="w-[60px]">Ação</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {items.map((item, index) => (
-              <TableRow key={index}>
-                <TableCell>
-                  <Select
-                    value={item.service_id || 'none'}
-                    onValueChange={(value) => updateItem(index, 'service_id', value === 'none' ? '' : value)}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecione o serviço" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <div className="p-2">
-                        <div className="flex items-center gap-2 mb-2">
-                          <Search className="h-4 w-4 text-muted-foreground" />
-                          <Input
-                            placeholder="Buscar por código ou descrição..."
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                            className="flex-1"
-                          />
-                        </div>
-                      </div>
-                      {filteredServices.slice(0, 20).map(s => (
-                        <SelectItem key={s.id} value={s.id}>
-                          <span className="font-medium">{s.code}</span> - {s.description}
-                        </SelectItem>
-                      ))}
-                      {filteredServices.length === 0 && (
-                        <div className="p-2 text-sm text-muted-foreground text-center">
-                          Nenhum serviço encontrado
-                        </div>
-                      )}
-                      <div className="border-t mt-2 pt-2">
-                        <CadastrarServicoRapido onSuccess={refetchServices} />
-                      </div>
-                    </SelectContent>
-                  </Select>
-                </TableCell>
-                <TableCell>
-                  <Input
-                    value={item.details ?? ''}
-                    onChange={(e) => updateItem(index, 'details', e.target.value)}
-                    placeholder="Detalhes..."
-                  />
-                </TableCell>
-                <TableCell>
-                  <Input
-                    type="number"
-                    min="0"
-                    step="0.001"
-                    value={item.quantity}
-                    onChange={(e) => updateItem(index, 'quantity', parseFloat(e.target.value) || 0)}
-                  />
-                </TableCell>
-                <TableCell>
-                  <Input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={item.unit_price}
-                    onChange={(e) => updateItem(index, 'unit_price', parseFloat(e.target.value) || 0)}
-                  />
-                </TableCell>
-                <TableCell>
-                  <div className="flex gap-1">
-                    <Input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={item.discount_value}
-                      onChange={(e) => updateItem(index, 'discount_value', parseFloat(e.target.value) || 0)}
-                      className="w-20"
-                    />
-                    <Select
-                      value={item.discount_type}
-                      onValueChange={(value) => updateItem(index, 'discount_type', value)}
-                    >
-                      <SelectTrigger className="w-16">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="value">R$</SelectItem>
-                        <SelectItem value="percent">%</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </TableCell>
-                <TableCell className="font-medium">
-                  {formatCurrency(item.subtotal)}
-                </TableCell>
-                <TableCell>
-                  <Button variant="destructive" size="icon" onClick={() => removeItem(index)}>
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+        {/* Mobile view - Cards */}
+        <div className="md:hidden space-y-4">
+          {items.map((item, index) => renderMobileItem(item, index))}
+        </div>
 
-        <Button variant="default" className="mt-4" onClick={addItem}>
+        {/* Desktop view - Table */}
+        <div className="hidden md:block overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="min-w-[200px]">Serviço <span className="text-destructive">*</span></TableHead>
+                <TableHead className="min-w-[120px]">Detalhes</TableHead>
+                <TableHead className="w-[100px]">Quant. <span className="text-destructive">*</span></TableHead>
+                <TableHead className="w-[100px]">Valor <span className="text-destructive">*</span></TableHead>
+                <TableHead className="w-[140px]">Desconto</TableHead>
+                <TableHead className="w-[100px]">Subtotal</TableHead>
+                <TableHead className="w-[60px]">Ação</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {items.map((item, index) => (
+                <TableRow key={index}>
+                  <TableCell>
+                    <ServiceCombobox
+                      value={item.service_id || ''}
+                      onSelect={(serviceId) => updateItem(index, 'service_id', serviceId)}
+                      services={activeServices}
+                      onRefetch={refetchServices}
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <Input
+                      value={item.details ?? ''}
+                      onChange={(e) => updateItem(index, 'details', e.target.value)}
+                      placeholder="Detalhes..."
+                      className="text-xs"
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <NumericInput
+                      value={item.quantity}
+                      onChange={(val) => updateItem(index, 'quantity', val)}
+                      step={0.001}
+                      className="text-xs"
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <NumericInput
+                      value={item.unit_price}
+                      onChange={(val) => updateItem(index, 'unit_price', val)}
+                      step={0.01}
+                      className="text-xs"
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex gap-1">
+                      <NumericInput
+                        value={item.discount_value}
+                        onChange={(val) => updateItem(index, 'discount_value', val)}
+                        step={0.01}
+                        className="w-16 text-xs"
+                      />
+                      <Select
+                        value={item.discount_type}
+                        onValueChange={(value) => updateItem(index, 'discount_type', value)}
+                      >
+                        <SelectTrigger className="w-14 text-xs">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="value">R$</SelectItem>
+                          <SelectItem value="percent">%</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </TableCell>
+                  <TableCell className="font-medium text-xs">
+                    {formatCurrency(item.subtotal)}
+                  </TableCell>
+                  <TableCell>
+                    <Button variant="destructive" size="icon" className="h-7 w-7" onClick={() => removeItem(index)}>
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+
+        <Button variant="default" className="mt-4 w-full sm:w-auto" onClick={addItem}>
           <Plus className="h-4 w-4 mr-2" />
           Adicionar serviço
         </Button>
