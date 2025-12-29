@@ -373,6 +373,19 @@ export default function Checkout() {
 
             <CardContent className="flex-1 overflow-hidden">
               <div className="space-y-2 h-full flex flex-col">
+                {/* Aviso de checkout em andamento */}
+                {selectedSource?.checkout_status === 'partial' && (
+                  <div className="bg-yellow-50 dark:bg-yellow-950/30 border border-yellow-200 dark:border-yellow-800 rounded-lg p-3 mb-2">
+                    <div className="flex items-center gap-2 text-yellow-700 dark:text-yellow-400">
+                      <AlertCircle className="h-4 w-4" />
+                      <span className="font-medium text-sm">Checkout em andamento</span>
+                    </div>
+                    <p className="text-xs text-yellow-600 dark:text-yellow-500 mt-1">
+                      Existem itens pendentes de conferência. Você pode continuar ou salvar a separação parcial.
+                    </p>
+                  </div>
+                )}
+                
                 <Label className="text-base font-semibold">Itens do pedido para separação</Label>
                 
                 {!selectedSource ? (
