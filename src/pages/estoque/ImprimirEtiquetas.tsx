@@ -109,6 +109,7 @@ export default function ImprimirEtiquetas() {
       <html>
       <head>
         <title>Etiquetas de Produtos</title>
+        <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"><\/script>
         <style>
           @page {
             size: 50mm 30mm;
@@ -127,62 +128,61 @@ export default function ImprimirEtiquetas() {
           .label {
             width: 50mm;
             height: 30mm;
-            padding: 2mm;
+            padding: 1.5mm 2mm;
             page-break-after: always;
             display: flex;
             flex-direction: column;
-            justify-content: space-between;
             overflow: hidden;
+            border: 0.5px solid #ccc;
           }
           .label:last-child {
             page-break-after: avoid;
           }
           .product-name {
-            font-size: 8pt;
+            font-size: 7pt;
             font-weight: bold;
             text-transform: uppercase;
-            white-space: nowrap;
+            line-height: 1.2;
+            max-height: 8mm;
             overflow: hidden;
-            text-overflow: ellipsis;
             margin-bottom: 1mm;
           }
           .info-row {
             display: flex;
             justify-content: space-between;
             font-size: 6pt;
-            margin-bottom: 1mm;
+            margin-bottom: 0.5mm;
           }
           .info-label {
             font-weight: bold;
           }
           .warehouse {
             font-size: 5pt;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
             margin-bottom: 1mm;
           }
           .warehouse-label {
             font-weight: bold;
           }
-          .barcode-container {
-            text-align: center;
+          .barcode-section {
             flex: 1;
             display: flex;
             flex-direction: column;
-            justify-content: flex-end;
+            justify-content: center;
+            align-items: center;
           }
-          .barcode-container svg {
-            width: 100%;
-            height: 10mm;
+          .barcode-section svg {
+            max-width: 44mm;
+            height: 12mm;
           }
           .code-text {
-            font-size: 7pt;
+            font-size: 8pt;
+            font-weight: bold;
             text-align: center;
             margin-top: 0.5mm;
           }
           @media print {
             .label {
+              border: none;
               -webkit-print-color-adjust: exact;
               print-color-adjust: exact;
             }
@@ -192,21 +192,26 @@ export default function ImprimirEtiquetas() {
       <body>
         ${labelsHtml}
         <script>
-          document.querySelectorAll('.barcode').forEach(el => {
-            const code = el.getAttribute('data-code');
-            if (code && window.JsBarcode) {
-              JsBarcode(el, code, {
-                format: "CODE128",
-                width: 1.5,
-                height: 30,
-                displayValue: false,
-                margin: 0
-              });
-            }
+          document.addEventListener('DOMContentLoaded', function() {
+            document.querySelectorAll('.barcode').forEach(function(el) {
+              var code = el.getAttribute('data-code');
+              if (code && typeof JsBarcode !== 'undefined') {
+                try {
+                  JsBarcode(el, code, {
+                    format: "CODE128",
+                    width: 1.5,
+                    height: 40,
+                    displayValue: false,
+                    margin: 0
+                  });
+                } catch(e) {
+                  console.error('Barcode error:', e);
+                }
+              }
+            });
+            setTimeout(function() { window.print(); }, 300);
           });
-          window.onload = function() { window.print(); }
-        </script>
-        <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+        <\/script>
       </body>
       </html>
     `);
@@ -230,10 +235,9 @@ export default function ImprimirEtiquetas() {
           </div>
         </div>
         <div class="warehouse">
-          <span class="warehouse-label">Armazém</span><br/>
-          Estoque Principal
+          <span class="warehouse-label">Armazém</span>
         </div>
-        <div class="barcode-container">
+        <div class="barcode-section">
           <svg class="barcode" data-code="${escapeHtml(barcodeValue)}"></svg>
           <div class="code-text">${escapeHtml(barcodeValue)}</div>
         </div>
