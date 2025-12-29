@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { PurchaseOrderStatus } from "./usePurchaseOrderStatuses";
 
 export interface PurchaseOrder {
   id: string;
@@ -12,10 +13,16 @@ export interface PurchaseOrder {
   invoice_date: string | null;
   total_value: number | null;
   status: string | null;
+  status_id: string | null;
   xml_url: string | null;
+  payment_method: string | null;
+  chart_account_id: string | null;
+  cost_center_id: string | null;
+  financial_notes: string | null;
   created_at: string;
   updated_at: string;
   created_by: string | null;
+  purchase_order_status?: PurchaseOrderStatus;
 }
 
 export interface PurchaseOrderItem {
@@ -45,7 +52,12 @@ export interface PurchaseOrderInsert {
   invoice_date?: string;
   total_value?: number;
   status?: string;
+  status_id?: string;
   xml_url?: string;
+  payment_method?: string;
+  chart_account_id?: string;
+  cost_center_id?: string;
+  financial_notes?: string;
 }
 
 export interface PurchaseOrderItemInsert {
@@ -68,7 +80,10 @@ export function usePurchaseOrders() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("purchase_orders")
-        .select("*")
+        .select(`
+          *,
+          purchase_order_status:purchase_order_statuses(*)
+        `)
         .order("created_at", { ascending: false });
 
       if (error) throw error;
@@ -95,6 +110,27 @@ export function usePurchaseOrders() {
     },
   });
 
+  const updateOrder = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: Partial<PurchaseOrderInsert> }) => {
+      const { data: result, error } = await supabase
+        .from("purchase_orders")
+        .update(data)
+        .eq("id", id)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return result;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["purchase_orders"] });
+      toast.success("Pedido atualizado com sucesso!");
+    },
+    onError: (error) => {
+      toast.error(`Erro ao atualizar pedido: ${error.message}`);
+    },
+  });
+
   const createOrderItems = useMutation({
     mutationFn: async (items: PurchaseOrderItemInsert[]) => {
       const { data, error } = await supabase
@@ -114,10 +150,10 @@ export function usePurchaseOrders() {
   });
 
   const updateOrderStatus = useMutation({
-    mutationFn: async ({ id, status }: { id: string; status: string }) => {
+    mutationFn: async ({ id, status_id }: { id: string; status_id: string }) => {
       const { data, error } = await supabase
         .from("purchase_orders")
-        .update({ status })
+        .update({ status_id })
         .eq("id", id)
         .select()
         .single();
@@ -127,6 +163,7 @@ export function usePurchaseOrders() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["purchase_orders"] });
+      toast.success("Status atualizado com sucesso!");
     },
     onError: (error) => {
       toast.error(`Erro ao atualizar status: ${error.message}`);
@@ -146,14 +183,30 @@ export function usePurchaseOrders() {
     return data as PurchaseOrderItem[];
   };
 
+  const getOrderById = async (orderId: string) => {
+    const { data, error } = await supabase
+      .from("purchase_orders")
+      .select(`
+        *,
+        purchase_order_status:purchase_order_statuses(*)
+      `)
+      .eq("id", orderId)
+      .single();
+
+    if (error) throw error;
+    return data as PurchaseOrder;
+  };
+
   return {
     orders: ordersQuery.data ?? [],
     isLoading: ordersQuery.isLoading,
     error: ordersQuery.error,
     createOrder,
+    updateOrder,
     createOrderItems,
     updateOrderStatus,
     getOrderItems,
+    getOrderById,
     refetch: ordersQuery.refetch,
   };
 }

@@ -544,15 +544,70 @@ export type Database = {
           },
         ]
       }
+      purchase_order_statuses: {
+        Row: {
+          color: string | null
+          company_id: string
+          created_at: string
+          display_order: number | null
+          financial_behavior: string
+          id: string
+          is_active: boolean
+          is_default: boolean | null
+          name: string
+          stock_behavior: string
+          updated_at: string
+        }
+        Insert: {
+          color?: string | null
+          company_id: string
+          created_at?: string
+          display_order?: number | null
+          financial_behavior?: string
+          id?: string
+          is_active?: boolean
+          is_default?: boolean | null
+          name: string
+          stock_behavior?: string
+          updated_at?: string
+        }
+        Update: {
+          color?: string | null
+          company_id?: string
+          created_at?: string
+          display_order?: number | null
+          financial_behavior?: string
+          id?: string
+          is_active?: boolean
+          is_default?: boolean | null
+          name?: string
+          stock_behavior?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "purchase_order_statuses_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       purchase_orders: {
         Row: {
+          chart_account_id: string | null
+          cost_center_id: string | null
           created_at: string
           created_by: string | null
+          financial_notes: string | null
           id: string
           invoice_date: string | null
           invoice_number: string | null
           invoice_series: string | null
+          payment_method: string | null
           status: string | null
+          status_id: string | null
           supplier_address: string | null
           supplier_cnpj: string | null
           supplier_name: string | null
@@ -561,13 +616,18 @@ export type Database = {
           xml_url: string | null
         }
         Insert: {
+          chart_account_id?: string | null
+          cost_center_id?: string | null
           created_at?: string
           created_by?: string | null
+          financial_notes?: string | null
           id?: string
           invoice_date?: string | null
           invoice_number?: string | null
           invoice_series?: string | null
+          payment_method?: string | null
           status?: string | null
+          status_id?: string | null
           supplier_address?: string | null
           supplier_cnpj?: string | null
           supplier_name?: string | null
@@ -576,13 +636,18 @@ export type Database = {
           xml_url?: string | null
         }
         Update: {
+          chart_account_id?: string | null
+          cost_center_id?: string | null
           created_at?: string
           created_by?: string | null
+          financial_notes?: string | null
           id?: string
           invoice_date?: string | null
           invoice_number?: string | null
           invoice_series?: string | null
+          payment_method?: string | null
           status?: string | null
+          status_id?: string | null
           supplier_address?: string | null
           supplier_cnpj?: string | null
           supplier_name?: string | null
@@ -590,7 +655,29 @@ export type Database = {
           updated_at?: string
           xml_url?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "purchase_orders_chart_account_id_fkey"
+            columns: ["chart_account_id"]
+            isOneToOne: false
+            referencedRelation: "chart_of_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_orders_cost_center_id_fkey"
+            columns: ["cost_center_id"]
+            isOneToOne: false
+            referencedRelation: "cost_centers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_orders_status_id_fkey"
+            columns: ["status_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_order_statuses"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       quick_categories: {
         Row: {
