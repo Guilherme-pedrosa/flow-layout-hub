@@ -1,72 +1,96 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { PageHeader } from "@/components/shared";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "@/components/ui/command";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import { Upload, FileText, Check, ChevronsUpDown, Plus, Loader2 } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Check, Loader2, AlertTriangle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useProducts } from "@/hooks/useProducts";
 import { usePurchaseOrders } from "@/hooks/usePurchaseOrders";
 import { useStockMovements } from "@/hooks/useStockMovements";
-import { formatCurrency } from "@/lib/formatters";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils";
-
-interface NFEItem {
-  codigo: string;
-  descricao: string;
-  ncm: string;
-  cfop: string;
-  quantidade: number;
-  valorUnitario: number;
-  valorTotal: number;
-  productId?: string;
-}
-
-interface NFEData {
-  fornecedor: { cnpj: string; razaoSocial: string; endereco: string };
-  nota: { numero: string; serie: string; dataEmissao: string; valorTotal: number };
-  itens: NFEItem[];
-}
+import { sugerirCfopEntrada } from "@/lib/cfops";
+import {
+  ImportarXMLUpload,
+  FornecedorCard,
+  TransportadorCard,
+  FinanceiroCard,
+  ImpostosCard,
+  NotaFiscalCard,
+  ItensNFeTable,
+  CadastrarFornecedorDialog,
+  CadastrarProdutoDialog,
+  NFEData,
+  NFEItem,
+  NFEFornecedor,
+  Transportador,
+} from "@/components/compras";
 
 export default function ImportarXML() {
   const [step, setStep] = useState<"upload" | "review">("upload");
   const [isProcessing, setIsProcessing] = useState(false);
   const [nfeData, setNfeData] = useState<NFEData | null>(null);
-  const [itemMappings, setItemMappings] = useState<Record<number, string>>({});
+  const [notaDuplicada, setNotaDuplicada] = useState(false);
+  
+  // Estados para cadastro
+  const [fornecedorCadastrado, setFornecedorCadastrado] = useState(false);
+  const [transportadorCadastrado, setTransportadorCadastrado] = useState(false);
+  
+  // Dialogs
+  const [dialogFornecedor, setDialogFornecedor] = useState(false);
+  const [dialogTransportador, setDialogTransportador] = useState(false);
+  const [dialogProduto, setDialogProduto] = useState(false);
+  const [itemParaCadastrar, setItemParaCadastrar] = useState<{ index: number; item: NFEItem } | null>(null);
   
   const { products, createProduct } = useProducts();
   const { createOrder, createOrderItems } = usePurchaseOrders();
   const { createMovement } = useStockMovements();
+
+  // Verificar se fornecedor/transportador já estão cadastrados
+  useEffect(() => {
+    if (nfeData) {
+      checkFornecedorCadastrado();
+      checkTransportadorCadastrado();
+    }
+  }, [nfeData]);
+
+  const checkFornecedorCadastrado = async () => {
+    if (!nfeData?.fornecedor.cnpj) return;
+    const { data } = await supabase
+      .from("clientes")
+      .select("id")
+      .eq("cpf_cnpj", nfeData.fornecedor.cnpj)
+      .maybeSingle();
+    setFornecedorCadastrado(!!data);
+  };
+
+  const checkTransportadorCadastrado = async () => {
+    if (!nfeData?.transportador?.cnpj) return;
+    const { data } = await supabase
+      .from("clientes")
+      .select("id")
+      .eq("cpf_cnpj", nfeData.transportador.cnpj)
+      .maybeSingle();
+    setTransportadorCadastrado(!!data);
+  };
+
+  const checkNotaDuplicada = async (numero: string, serie: string, cnpjFornecedor: string) => {
+    const { data } = await supabase
+      .from("purchase_orders")
+      .select("id")
+      .eq("invoice_number", numero)
+      .eq("invoice_series", serie)
+      .eq("supplier_cnpj", cnpjFornecedor)
+      .maybeSingle();
+    return !!data;
+  };
 
   const handleFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     setIsProcessing(true);
+    setNotaDuplicada(false);
+    
     try {
       const xmlContent = await file.text();
       
@@ -77,7 +101,28 @@ export default function ImportarXML() {
       if (error) throw error;
       if (!data.success) throw new Error(data.error);
 
-      setNfeData(data.data);
+      // Verificar duplicidade
+      const isDuplicate = await checkNotaDuplicada(
+        data.data.nota.numero,
+        data.data.nota.serie,
+        data.data.fornecedor.cnpj
+      );
+
+      if (isDuplicate) {
+        setNotaDuplicada(true);
+        toast.error("Esta nota fiscal já foi importada anteriormente!");
+        setIsProcessing(false);
+        return;
+      }
+
+      // Adicionar CFOP de entrada sugerido para cada item
+      const itensComCfop = data.data.itens.map((item: any) => ({
+        ...item,
+        cfopEntrada: sugerirCfopEntrada(item.cfopSaida),
+        criarProduto: false,
+      }));
+
+      setNfeData({ ...data.data, itens: itensComCfop });
       setStep("review");
       toast.success("XML processado com sucesso!");
     } catch (error) {
@@ -89,7 +134,38 @@ export default function ImportarXML() {
   }, []);
 
   const handleMapProduct = (itemIndex: number, productId: string) => {
-    setItemMappings(prev => ({ ...prev, [itemIndex]: productId }));
+    if (!nfeData) return;
+    const newItens = [...nfeData.itens];
+    newItens[itemIndex] = { ...newItens[itemIndex], productId, criarProduto: false };
+    setNfeData({ ...nfeData, itens: newItens });
+  };
+
+  const handleCriarProduto = (itemIndex: number) => {
+    if (!nfeData) return;
+    setItemParaCadastrar({ index: itemIndex, item: nfeData.itens[itemIndex] });
+    setDialogProduto(true);
+  };
+
+  const handleToggleCriarProduto = (itemIndex: number, criar: boolean) => {
+    if (!nfeData) return;
+    const newItens = [...nfeData.itens];
+    newItens[itemIndex] = { ...newItens[itemIndex], criarProduto: criar, productId: criar ? undefined : newItens[itemIndex].productId };
+    setNfeData({ ...nfeData, itens: newItens });
+  };
+
+  const handleCfopEntradaChange = (itemIndex: number, cfop: string) => {
+    if (!nfeData) return;
+    const newItens = [...nfeData.itens];
+    newItens[itemIndex] = { ...newItens[itemIndex], cfopEntrada: cfop };
+    setNfeData({ ...nfeData, itens: newItens });
+  };
+
+  const handleProdutoCadastrado = (productId: string) => {
+    if (!nfeData || !itemParaCadastrar) return;
+    const newItens = [...nfeData.itens];
+    newItens[itemParaCadastrar.index] = { ...newItens[itemParaCadastrar.index], productId, criarProduto: false };
+    setNfeData({ ...nfeData, itens: newItens });
+    setItemParaCadastrar(null);
   };
 
   const handleFinalize = async () => {
@@ -97,11 +173,32 @@ export default function ImportarXML() {
 
     setIsProcessing(true);
     try {
-      // Create purchase order
+      // Criar produtos marcados para auto-cadastro
+      const produtosCriados: Record<number, string> = {};
+      
+      for (let i = 0; i < nfeData.itens.length; i++) {
+        const item = nfeData.itens[i];
+        if (item.criarProduto && !item.productId) {
+          const result = await createProduct.mutateAsync({
+            code: item.codigo,
+            description: item.descricao,
+            ncm: item.ncm || null,
+            unit: item.unidade || "UN",
+            purchase_price: item.valorUnitario,
+            sale_price: item.valorUnitario * 1.3,
+            quantity: 0,
+            min_stock: 0,
+            is_active: true,
+          });
+          produtosCriados[i] = result.id;
+        }
+      }
+
+      // Criar pedido de compra
       const orderData = await createOrder.mutateAsync({
         supplier_cnpj: nfeData.fornecedor.cnpj,
         supplier_name: nfeData.fornecedor.razaoSocial,
-        supplier_address: nfeData.fornecedor.endereco,
+        supplier_address: `${nfeData.fornecedor.endereco}, ${nfeData.fornecedor.bairro}, ${nfeData.fornecedor.cidade}/${nfeData.fornecedor.uf}`,
         invoice_number: nfeData.nota.numero,
         invoice_series: nfeData.nota.serie,
         invoice_date: nfeData.nota.dataEmissao,
@@ -109,14 +206,14 @@ export default function ImportarXML() {
         status: "finalizado",
       });
 
-      // Create order items and stock movements
+      // Criar itens do pedido
       const orderItems = nfeData.itens.map((item, index) => ({
         purchase_order_id: orderData.id,
-        product_id: itemMappings[index] || null,
+        product_id: item.productId || produtosCriados[index] || null,
         xml_code: item.codigo,
         xml_description: item.descricao,
         ncm: item.ncm,
-        cfop: item.cfop,
+        cfop: item.cfopEntrada,
         quantity: item.quantidade,
         unit_price: item.valorUnitario,
         total_value: item.valorTotal,
@@ -124,33 +221,44 @@ export default function ImportarXML() {
 
       await createOrderItems.mutateAsync(orderItems);
 
-      // Create stock movements for mapped products
-      for (const [indexStr, productId] of Object.entries(itemMappings)) {
-        const index = parseInt(indexStr);
-        const item = nfeData.itens[index];
+      // Criar movimentações de estoque para produtos vinculados
+      for (let i = 0; i < nfeData.itens.length; i++) {
+        const item = nfeData.itens[i];
+        const productId = item.productId || produtosCriados[i];
         
-        await createMovement.mutateAsync({
-          product_id: productId,
-          type: "ENTRADA_COMPRA",
-          quantity: item.quantidade,
-          unit_price: item.valorUnitario,
-          total_value: item.valorTotal,
-          reason: `NF ${nfeData.nota.numero}`,
-          reference_type: "purchase_order",
-          reference_id: orderData.id,
-        });
+        if (productId) {
+          await createMovement.mutateAsync({
+            product_id: productId,
+            type: "ENTRADA_COMPRA",
+            quantity: item.quantidade,
+            unit_price: item.valorUnitario,
+            total_value: item.valorTotal,
+            reason: `NF ${nfeData.nota.numero}`,
+            reference_type: "purchase_order",
+            reference_id: orderData.id,
+          });
+        }
       }
 
       toast.success("Nota Fiscal importada com sucesso!");
       setStep("upload");
       setNfeData(null);
-      setItemMappings({});
+      setFornecedorCadastrado(false);
+      setTransportadorCadastrado(false);
     } catch (error) {
       console.error("Error finalizing import:", error);
       toast.error("Erro ao finalizar importação");
     } finally {
       setIsProcessing(false);
     }
+  };
+
+  const handleCancelar = () => {
+    setStep("upload");
+    setNfeData(null);
+    setNotaDuplicada(false);
+    setFornecedorCadastrado(false);
+    setTransportadorCadastrado(false);
   };
 
   return (
@@ -161,111 +269,100 @@ export default function ImportarXML() {
         breadcrumbs={[{ label: "Compras" }, { label: "Importar XML" }]}
       />
 
+      {notaDuplicada && (
+        <Alert variant="destructive">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertTitle>Nota Fiscal Duplicada</AlertTitle>
+          <AlertDescription>
+            Esta nota fiscal já foi importada anteriormente. Selecione outro arquivo XML.
+          </AlertDescription>
+        </Alert>
+      )}
+
       {step === "upload" && (
-        <Card>
-          <CardContent className="p-8">
-            <Label htmlFor="xml-upload" className="cursor-pointer">
-              <div className="border-2 border-dashed rounded-lg p-12 text-center hover:border-primary transition-colors">
-                {isProcessing ? (
-                  <Loader2 className="mx-auto h-12 w-12 animate-spin text-muted-foreground" />
-                ) : (
-                  <Upload className="mx-auto h-12 w-12 text-muted-foreground" />
-                )}
-                <p className="mt-4 text-lg font-medium">
-                  {isProcessing ? "Processando..." : "Clique para selecionar um arquivo XML"}
-                </p>
-                <p className="mt-2 text-sm text-muted-foreground">Apenas arquivos .xml são aceitos</p>
-              </div>
-            </Label>
-            <Input id="xml-upload" type="file" accept=".xml" className="hidden" onChange={handleFileUpload} disabled={isProcessing} />
-          </CardContent>
-        </Card>
+        <ImportarXMLUpload isProcessing={isProcessing} onFileUpload={handleFileUpload} />
       )}
 
       {step === "review" && nfeData && (
         <div className="space-y-6">
-          <div className="grid md:grid-cols-2 gap-4">
-            <Card>
-              <CardHeader><CardTitle className="text-base">Fornecedor</CardTitle></CardHeader>
-              <CardContent className="space-y-1 text-sm">
-                <p><strong>CNPJ:</strong> {nfeData.fornecedor.cnpj}</p>
-                <p><strong>Razão Social:</strong> {nfeData.fornecedor.razaoSocial}</p>
-                <p><strong>Endereço:</strong> {nfeData.fornecedor.endereco}</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader><CardTitle className="text-base">Nota Fiscal</CardTitle></CardHeader>
-              <CardContent className="space-y-1 text-sm">
-                <p><strong>Número:</strong> {nfeData.nota.numero}</p>
-                <p><strong>Série:</strong> {nfeData.nota.serie}</p>
-                <p><strong>Data:</strong> {nfeData.nota.dataEmissao}</p>
-                <p><strong>Valor Total:</strong> {formatCurrency(nfeData.nota.valorTotal)}</p>
-              </CardContent>
-            </Card>
+          {/* Cards de informações */}
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <FornecedorCard
+              fornecedor={nfeData.fornecedor}
+              fornecedorCadastrado={fornecedorCadastrado}
+              onCadastrar={() => setDialogFornecedor(true)}
+            />
+            <NotaFiscalCard nota={nfeData.nota} />
+            <TransportadorCard
+              transportador={nfeData.transportador}
+              transportadorCadastrado={transportadorCadastrado}
+              onCadastrar={() => setDialogTransportador(true)}
+            />
           </div>
 
-          <Card>
-            <CardHeader><CardTitle className="text-base">Itens da Nota ({nfeData.itens.length})</CardTitle></CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Código XML</TableHead>
-                    <TableHead>Descrição</TableHead>
-                    <TableHead>Qtd</TableHead>
-                    <TableHead>Valor Unit.</TableHead>
-                    <TableHead>Produto Vinculado</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {nfeData.itens.map((item, index) => (
-                    <TableRow key={index}>
-                      <TableCell className="font-mono text-xs">{item.codigo}</TableCell>
-                      <TableCell>{item.descricao}</TableCell>
-                      <TableCell>{item.quantidade}</TableCell>
-                      <TableCell>{formatCurrency(item.valorUnitario)}</TableCell>
-                      <TableCell>
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <Button variant="outline" size="sm" className="w-full justify-between">
-                              {itemMappings[index] ? products.find(p => p.id === itemMappings[index])?.description?.slice(0, 20) + "..." : "Vincular..."}
-                              <ChevronsUpDown className="ml-2 h-3 w-3" />
-                            </Button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-80 p-0">
-                            <Command>
-                              <CommandInput placeholder="Buscar produto..." />
-                              <CommandList>
-                                <CommandEmpty>Nenhum produto.</CommandEmpty>
-                                <CommandGroup>
-                                  {products.filter(p => p.is_active).map(product => (
-                                    <CommandItem key={product.id} onSelect={() => handleMapProduct(index, product.id)}>
-                                      <Check className={cn("mr-2 h-4 w-4", itemMappings[index] === product.id ? "opacity-100" : "opacity-0")} />
-                                      {product.code} - {product.description}
-                                    </CommandItem>
-                                  ))}
-                                </CommandGroup>
-                              </CommandList>
-                            </Command>
-                          </PopoverContent>
-                        </Popover>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
+          {/* Financeiro e Impostos */}
+          <div className="grid md:grid-cols-2 gap-4">
+            <FinanceiroCard
+              formaPagamento={nfeData.financeiro.formaPagamento}
+              parcelas={nfeData.financeiro.parcelas}
+              valorTotal={nfeData.nota.valorTotal}
+            />
+            <ImpostosCard
+              impostos={nfeData.impostos}
+              observacoes={nfeData.observacoes}
+            />
+          </div>
 
+          {/* Tabela de Itens */}
+          <ItensNFeTable
+            itens={nfeData.itens}
+            products={products}
+            onMapProduct={handleMapProduct}
+            onCriarProduto={handleCriarProduto}
+            onToggleCriarProduto={handleToggleCriarProduto}
+            onCfopEntradaChange={handleCfopEntradaChange}
+          />
+
+          {/* Botões de ação */}
           <div className="flex justify-end gap-4">
-            <Button variant="outline" onClick={() => { setStep("upload"); setNfeData(null); }}>Cancelar</Button>
+            <Button variant="outline" onClick={handleCancelar}>
+              Cancelar
+            </Button>
             <Button onClick={handleFinalize} disabled={isProcessing}>
-              {isProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Check className="mr-2 h-4 w-4" />}
+              {isProcessing ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Check className="mr-2 h-4 w-4" />
+              )}
               Finalizar Importação
             </Button>
           </div>
         </div>
       )}
+
+      {/* Dialogs */}
+      <CadastrarFornecedorDialog
+        open={dialogFornecedor}
+        onOpenChange={setDialogFornecedor}
+        dados={nfeData?.fornecedor || null}
+        tipo="fornecedor"
+        onSuccess={() => setFornecedorCadastrado(true)}
+      />
+
+      <CadastrarFornecedorDialog
+        open={dialogTransportador}
+        onOpenChange={setDialogTransportador}
+        dados={nfeData?.transportador || null}
+        tipo="transportador"
+        onSuccess={() => setTransportadorCadastrado(true)}
+      />
+
+      <CadastrarProdutoDialog
+        open={dialogProduto}
+        onOpenChange={setDialogProduto}
+        item={itemParaCadastrar?.item || null}
+        onSuccess={handleProdutoCadastrado}
+      />
     </div>
   );
 }
