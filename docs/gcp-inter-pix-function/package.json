@@ -1,0 +1,12 @@
+{
+  "name": "inter-pix-payment",
+  "version": "1.0.0",
+  "description": "Google Cloud Function for Banco Inter PIX payments with mTLS",
+  "main": "index.js",
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.89.0"
+  }
+}
