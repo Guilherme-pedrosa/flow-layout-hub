@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-
+import { formatCurrency } from "@/lib/formatters";
 interface Product {
   id: string;
   code: string;
@@ -89,7 +89,7 @@ export function ProductSearch({ onAddProduct }: ProductSearchProps) {
                 </div>
                 <p className="font-medium truncate">{product.name}</p>
                 <p className="text-lg font-bold text-primary">
-                  R$ {product.price.toFixed(2).replace(".", ",")}
+                  {formatCurrency(product.price)}
                 </p>
               </div>
 

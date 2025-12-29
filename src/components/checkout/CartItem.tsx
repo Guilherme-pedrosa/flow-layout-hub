@@ -1,7 +1,7 @@
 import { Minus, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-
+import { formatCurrency } from "@/lib/formatters";
 export interface CartItemData {
   id: string;
   code: string;
@@ -30,7 +30,7 @@ export function CartItem({ item, onUpdateQuantity, onRemove }: CartItemProps) {
         </div>
         <p className="font-medium truncate">{item.name}</p>
         <p className="text-sm text-muted-foreground">
-          R$ {item.price.toFixed(2).replace(".", ",")} / {item.unit}
+          {formatCurrency(item.price)} / {item.unit}
         </p>
       </div>
 
@@ -63,7 +63,7 @@ export function CartItem({ item, onUpdateQuantity, onRemove }: CartItemProps) {
 
       <div className="text-right min-w-[80px]">
         <p className="font-bold text-primary">
-          R$ {subtotal.toFixed(2).replace(".", ",")}
+          {formatCurrency(subtotal)}
         </p>
       </div>
 
