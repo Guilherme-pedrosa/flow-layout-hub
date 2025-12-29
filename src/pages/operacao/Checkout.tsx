@@ -15,6 +15,12 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { 
   ShoppingCart, 
   Package, 
@@ -26,8 +32,10 @@ import {
   Wrench,
   AlertCircle,
   CheckCircle2,
+  Printer,
 } from "lucide-react";
 import { useCheckout, CheckoutSource, CheckoutItem } from "@/hooks/useCheckout";
+import { useCheckoutPdf } from "@/hooks/useCheckoutPdf";
 import { formatCurrency } from "@/lib/formatters";
 import { toast } from "sonner";
 
@@ -44,6 +52,8 @@ export default function Checkout() {
     resetCheckout,
     refetch,
   } = useCheckout();
+
+  const { isGenerating, printCheckout, printSummary } = useCheckoutPdf();
 
   const [activeTab, setActiveTab] = useState<"vendas" | "os">("vendas");
   const [selectedSource, setSelectedSource] = useState<CheckoutSource | null>(null);
@@ -527,24 +537,56 @@ export default function Checkout() {
             </CardContent>
 
             {/* Botões de ação */}
-            <div className="p-4 border-t flex gap-2">
-              <Button 
-                variant="outline" 
-                onClick={handleReset} 
-                disabled={!selectedSource || resetCheckout.isPending}
-                className="flex-1"
-              >
-                <RotateCcw className="h-4 w-4 mr-2" />
-                Reiniciar (alt+Q)
-              </Button>
-              <Button 
-                onClick={handleSave} 
-                disabled={!selectedSource || checkedItems.length === 0 || finalizeCheckout.isPending}
-                className="flex-1"
-              >
-                <Save className="h-4 w-4 mr-2" />
-                Salvar (alt+S)
-              </Button>
+            <div className="p-4 border-t space-y-2">
+              <div className="flex gap-2">
+                <Button 
+                  variant="outline" 
+                  onClick={handleReset} 
+                  disabled={!selectedSource || resetCheckout.isPending}
+                  className="flex-1"
+                >
+                  <RotateCcw className="h-4 w-4 mr-2" />
+                  Reiniciar
+                </Button>
+                <Button 
+                  onClick={handleSave} 
+                  disabled={!selectedSource || checkedItems.length === 0 || finalizeCheckout.isPending}
+                  className="flex-1"
+                >
+                  <Save className="h-4 w-4 mr-2" />
+                  Salvar
+                </Button>
+              </div>
+              
+              {/* Botão de impressão PDF */}
+              {selectedSource && checkedItems.length > 0 && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button 
+                      variant="outline" 
+                      className="w-full"
+                      disabled={isGenerating}
+                    >
+                      <Printer className="h-4 w-4 mr-2" />
+                      {isGenerating ? "Gerando PDF..." : "Imprimir Recibo"}
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-48">
+                    <DropdownMenuItem 
+                      onClick={() => printCheckout(selectedSource.id, selectedSource.type === 'venda' ? 'sale' : 'service_order')}
+                    >
+                      <FileText className="h-4 w-4 mr-2" />
+                      Recibo Completo
+                    </DropdownMenuItem>
+                    <DropdownMenuItem 
+                      onClick={() => printSummary(selectedSource.id, selectedSource.type === 'venda' ? 'sale' : 'service_order')}
+                    >
+                      <FileText className="h-4 w-4 mr-2" />
+                      Resumo
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
             </div>
           </Card>
         </div>
