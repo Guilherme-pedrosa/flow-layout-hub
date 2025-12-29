@@ -327,21 +327,42 @@ export function useCheckout() {
     },
   });
 
-  // Finalizar checkout (baixa estoque)
+  // Finalizar checkout (baixa estoque COM movimentação)
   const finalizeCheckout = useMutation({
     mutationFn: async (source: CheckoutSource) => {
-      // Atualiza estoque de cada produto
+      // Atualiza estoque de cada produto E cria movimentação
       for (const item of source.items) {
         if (item.quantity_checked > 0) {
+          // Buscar o preço unitário do produto
+          const { data: productData } = await supabase
+            .from("products")
+            .select("purchase_price, sale_price, quantity")
+            .eq("id", item.product_id)
+            .single();
+
+          const currentQty = productData?.quantity ?? 0;
+          const newQty = currentQty - item.quantity_checked;
+          const unitPrice = productData?.sale_price || productData?.purchase_price || 0;
+
+          // Criar movimentação de saída
+          await supabase
+            .from("stock_movements")
+            .insert({
+              product_id: item.product_id,
+              type: "SAIDA_VENDA",
+              quantity: item.quantity_checked,
+              unit_price: unitPrice,
+              total_value: unitPrice * item.quantity_checked,
+              reason: `Checkout ${source.type === 'venda' ? 'Venda' : 'OS'} #${source.number}`,
+              reference_type: source.type,
+              reference_id: source.id,
+            });
+
           // Baixa o estoque
           await supabase
             .from("products")
-            .update({
-              quantity: item.stock_available - item.quantity_checked,
-            })
+            .update({ quantity: newQty })
             .eq("id", item.product_id);
-
-          // TODO: Registrar movimentação de estoque
         }
       }
 

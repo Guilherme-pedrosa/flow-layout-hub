@@ -13,8 +13,12 @@ import NotFound from "./pages/NotFound";
 import Vendas from "./pages/receber/Vendas";
 import ConfiguracoesVendas from "./pages/receber/ConfiguracoesVendas";
 import Checkout from "./pages/operacao/Checkout";
+import ItensSeparados from "./pages/operacao/ItensSeparados";
 import OrdensServico from "./pages/servicos/OrdensServico";
 import ConfiguracoesOS from "./pages/servicos/ConfiguracoesOS";
+
+// Páginas públicas
+import OrcamentoView from "./pages/public/OrcamentoView";
 
 // Compras
 import PedidosCompra from "./pages/compras/PedidosCompra";
@@ -66,6 +70,10 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <Routes>
+          {/* Rotas públicas (sem layout) */}
+          <Route path="/orcamento/:token" element={<OrcamentoView />} />
+
+          {/* Rotas com layout */}
           <Route element={<AppLayout />}>
             <Route path="/" element={<Dashboard />} />
             
@@ -73,6 +81,7 @@ const App = () => (
             <Route path="/vendas" element={<Vendas />} />
             <Route path="/vendas-config" element={<ConfiguracoesVendas />} />
             <Route path="/checkout" element={<Checkout />} />
+            <Route path="/itens-separados" element={<ItensSeparados />} />
             <Route path="/ordens-servico" element={<OrdensServico />} />
             <Route path="/ordens-servico-config" element={<ConfiguracoesOS />} />
             
