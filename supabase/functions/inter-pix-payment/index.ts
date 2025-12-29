@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { encode } from "https://deno.land/std@0.168.0/encoding/base64.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -153,6 +154,68 @@ serve(async (req) => {
     }
 
     console.log(`[inter-pix-payment] Payment ID: ${pixPaymentId}`);
+
+    // Fetch Inter credentials from database
+    console.log(`[inter-pix-payment] Fetching credentials for company: ${paymentData.companyId}`);
+    const { data: credentials, error: credError } = await supabase
+      .from("inter_credentials")
+      .select("*")
+      .eq("company_id", paymentData.companyId)
+      .eq("is_active", true)
+      .single();
+
+    if (credError || !credentials) {
+      console.error("[inter-pix-payment] Credentials error:", credError);
+      throw new Error("Credenciais Inter não configuradas para esta empresa");
+    }
+
+    console.log(`[inter-pix-payment] Credentials found, downloading certificates...`);
+
+    // Download certificate and private key from storage
+    const { data: certData, error: certError } = await supabase.storage
+      .from("inter-certs")
+      .download(credentials.certificate_file_path);
+
+    if (certError || !certData) {
+      console.error("[inter-pix-payment] Certificate download error:", certError);
+      throw new Error("Erro ao baixar certificado");
+    }
+
+    const { data: keyData, error: keyError } = await supabase.storage
+      .from("inter-certs")
+      .download(credentials.private_key_file_path);
+
+    if (keyError || !keyData) {
+      console.error("[inter-pix-payment] Private key download error:", keyError);
+      throw new Error("Erro ao baixar chave privada");
+    }
+
+    // Convert to base64 for transmission
+    const certText = await certData.text();
+    const keyText = await keyData.text();
+    const certBase64 = encode(certText);
+    const keyBase64 = encode(keyText);
+
+    console.log(`[inter-pix-payment] Certificates loaded, calling GCP Function...`);
+
+    // Prepare payload for GCP Function (includes credentials and certificates)
+    const gcpPayload = {
+      // Payment data
+      pixKey: paymentData.pixKey,
+      pixKeyType: paymentData.pixKeyType,
+      amount: paymentData.amount,
+      recipientName: paymentData.recipientName,
+      recipientDocument: paymentData.recipientDocument,
+      description: paymentData.description,
+      // Credentials
+      clientId: credentials.client_id,
+      clientSecret: credentials.client_secret,
+      accountNumber: credentials.account_number,
+      // Certificates (base64 encoded)
+      certificate: certBase64,
+      privateKey: keyBase64
+    };
+
     console.log(`[inter-pix-payment] Calling GCP Function: ${gcpFunctionUrl}`);
 
     // Call GCP Function
@@ -162,7 +225,7 @@ serve(async (req) => {
         "Content-Type": "application/json",
         "Authorization": `Bearer ${gcpFunctionSecret}`
       },
-      body: JSON.stringify(paymentData)
+      body: JSON.stringify(gcpPayload)
     });
 
     const gcpResult = await gcpResponse.json();

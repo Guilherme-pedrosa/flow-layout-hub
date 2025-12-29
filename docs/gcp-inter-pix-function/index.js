@@ -1,15 +1,9 @@
 const https = require('https');
-const { createClient } = require('@supabase/supabase-js');
-
-// Initialize Supabase client
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
 
 /**
  * Google Cloud Function for Banco Inter PIX payments with mTLS
- * This function handles the mTLS connection that Supabase Edge Functions cannot support
+ * This function receives all data from the Lovable Edge Function
+ * No Supabase connection needed - all data is passed in the request
  */
 exports.interPixPayment = async (req, res) => {
   // CORS headers
@@ -33,53 +27,43 @@ exports.interPixPayment = async (req, res) => {
 
   try {
     const { 
-      companyId,
+      // Payment data
       pixKey,
       pixKeyType,
       amount,
       recipientName,
       recipientDocument,
-      description
+      description,
+      // Credentials (passed from Edge Function)
+      clientId,
+      clientSecret,
+      accountNumber,
+      // Certificates (passed from Edge Function as base64)
+      certificate,
+      privateKey
     } = req.body;
 
-    console.log('Processing PIX payment:', { companyId, pixKey, amount, recipientName });
+    console.log('Processing PIX payment:', { pixKey, amount, recipientName });
 
-    // Get Inter credentials from Supabase
-    const { data: credentials, error: credError } = await supabase
-      .from('inter_credentials')
-      .select('*')
-      .eq('company_id', companyId)
-      .eq('is_active', true)
-      .single();
-
-    if (credError || !credentials) {
-      console.error('Credentials error:', credError);
-      return res.status(400).json({ error: 'Credenciais Inter não encontradas' });
+    // Validate required fields
+    if (!pixKey || !amount || !recipientName || !recipientDocument) {
+      return res.status(400).json({ error: 'Dados do pagamento incompletos' });
     }
 
-    // Download certificates from Supabase Storage
-    const { data: certData, error: certError } = await supabase.storage
-      .from('inter-certs')
-      .download(credentials.certificate_file_path);
-
-    const { data: keyData, error: keyError } = await supabase.storage
-      .from('inter-certs')
-      .download(credentials.private_key_file_path);
-
-    if (certError || keyError) {
-      console.error('Certificate download error:', certError || keyError);
-      return res.status(500).json({ error: 'Erro ao carregar certificados' });
+    if (!clientId || !clientSecret || !certificate || !privateKey) {
+      return res.status(400).json({ error: 'Credenciais Inter incompletas' });
     }
 
-    const cert = await certData.text();
-    const key = await keyData.text();
+    // Decode base64 certificates
+    const cert = Buffer.from(certificate, 'base64').toString('utf-8');
+    const key = Buffer.from(privateKey, 'base64').toString('utf-8');
 
     // Get OAuth token
-    const token = await getOAuthToken(credentials, cert, key);
+    const token = await getOAuthToken({ clientId, clientSecret }, cert, key);
     console.log('OAuth token obtained successfully');
 
     // Send PIX payment
-    const result = await sendPixPayment(token, credentials, cert, key, {
+    const result = await sendPixPayment(token, accountNumber, cert, key, {
       pixKey,
       pixKeyType,
       amount,
@@ -106,8 +90,8 @@ exports.interPixPayment = async (req, res) => {
 async function getOAuthToken(credentials, cert, key) {
   return new Promise((resolve, reject) => {
     const postData = new URLSearchParams({
-      client_id: credentials.client_id,
-      client_secret: credentials.client_secret,
+      client_id: credentials.clientId,
+      client_secret: credentials.clientSecret,
       scope: 'pagamento-pix.write pagamento-pix.read',
       grant_type: 'client_credentials'
     }).toString();
@@ -151,7 +135,7 @@ async function getOAuthToken(credentials, cert, key) {
 /**
  * Send PIX payment to Banco Inter using mTLS
  */
-async function sendPixPayment(token, credentials, cert, key, payload) {
+async function sendPixPayment(token, accountNumber, cert, key, payload) {
   return new Promise((resolve, reject) => {
     // Map PIX key type to Inter API format
     const tipoChaveMap = {
@@ -169,7 +153,7 @@ async function sendPixPayment(token, credentials, cert, key, payload) {
       destinatario: {
         tipo: payload.recipientDocument.replace(/\D/g, '').length === 11 ? 'FISICA' : 'JURIDICA',
         nome: payload.recipientName,
-        contaCorrente: credentials.account_number
+        contaCorrente: accountNumber
       },
       dataPagamento: new Date().toISOString().split('T')[0],
       chave: payload.pixKey,
@@ -194,7 +178,7 @@ async function sendPixPayment(token, credentials, cert, key, payload) {
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json',
         'Content-Length': Buffer.byteLength(postData),
-        'x-conta-corrente': credentials.account_number
+        'x-conta-corrente': accountNumber
       }
     };
 
