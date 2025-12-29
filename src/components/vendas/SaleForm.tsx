@@ -4,7 +4,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Save, X, DollarSign, FileText } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Save, X, DollarSign, FileText, Printer } from "lucide-react";
+import { useDocumentPdf } from "@/hooks/useDocumentPdf";
 import { SaleFormDadosGerais } from "./SaleFormDadosGerais";
 import { SaleFormProdutos } from "./SaleFormProdutos";
 import { SaleFormServicos } from "./SaleFormServicos";
@@ -25,6 +27,7 @@ const TEMP_COMPANY_ID = "7875af52-18d0-434e-8ae9-97981bd668e7";
 
 export function SaleForm({ onClose, initialData }: SaleFormProps) {
   const { createSale, updateSale } = useSales();
+  const { printDocument, printSummary, isGenerating } = useDocumentPdf();
   const isEditing = !!initialData?.id;
   
   const [formData, setFormData] = useState({
@@ -468,6 +471,24 @@ export function SaleForm({ onClose, initialData }: SaleFormProps) {
           <Save className="h-4 w-4 mr-2" />
           {isEditing ? 'Salvar Alterações' : 'Cadastrar'}
         </Button>
+        {isEditing && initialData?.id && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" disabled={isGenerating}>
+                <Printer className="h-4 w-4 mr-2" />
+                Imprimir PDF
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent>
+              <DropdownMenuItem onClick={() => printDocument(initialData.id, "sale")}>
+                <FileText className="h-4 w-4 mr-2" />Completo
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => printSummary(initialData.id, "sale")}>
+                <FileText className="h-4 w-4 mr-2" />Resumido
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
         <Button variant="destructive" onClick={onClose}>
           <X className="h-4 w-4 mr-2" />
           Cancelar
