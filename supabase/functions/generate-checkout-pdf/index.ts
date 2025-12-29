@@ -684,7 +684,33 @@ Deno.serve(async (req) => {
       .eq('checkout_id', checkoutId)
       .order('created_at', { ascending: true });
 
+    console.log(`[generate-checkout-pdf] Found ${auditLogs?.length || 0} audit logs`);
     checkoutData.audit_logs = auditLogs || [];
+    
+    // Se não há logs de auditoria, tentar reconstruir a partir de movimentações de estoque
+    if (checkoutData.audit_logs.length === 0) {
+      console.log(`[generate-checkout-pdf] No audit logs, reconstructing from stock_movements...`);
+      
+      const { data: movements } = await supabase
+        .from('stock_movements')
+        .select('created_at, type, notes')
+        .eq('reference_id', checkoutId)
+        .eq('reference_type', checkoutType === 'venda' ? 'venda' : 'os')
+        .order('created_at', { ascending: true })
+        .limit(1);
+      
+      if (movements && movements.length > 0) {
+        const firstMovement = movements[0];
+        checkoutData.audit_logs.push({
+          action: 'checkout_finalizado',
+          user_name: 'Sistema (reconstruído)',
+          created_at: firstMovement.created_at,
+          items_snapshot: null,
+          observations: 'Log reconstruído a partir de movimentações de estoque'
+        });
+        console.log(`[generate-checkout-pdf] Reconstructed 1 audit log from stock_movements`);
+      }
+    }
 
     // Gerar HTML do PDF
     const htmlContent = generatePDFHTML(checkoutData, pdfType);
