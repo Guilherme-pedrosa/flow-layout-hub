@@ -1,4 +1,4 @@
-import { useState, useEffect, forwardRef } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -39,7 +39,7 @@ interface BankTransaction {
   reconciled_with_id: string | null;
 }
 
-export const ExtratoList = forwardRef<HTMLDivElement>((_, ref) => {
+export const ExtratoList = () => {
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [transactions, setTransactions] = useState<BankTransaction[]>([]);
@@ -149,7 +149,7 @@ export const ExtratoList = forwardRef<HTMLDivElement>((_, ref) => {
   const pendingCount = transactions.filter(t => !t.is_reconciled).length;
 
   return (
-    <div className="space-y-4" ref={ref}>
+    <div className="space-y-4">
       {!hasCredentials && (
         <Card className="border-amber-500 bg-amber-50 dark:bg-amber-950/20">
           <CardContent className="flex items-center gap-3 py-4">
@@ -365,6 +365,4 @@ export const ExtratoList = forwardRef<HTMLDivElement>((_, ref) => {
       />
     </div>
   );
-});
-
-ExtratoList.displayName = "ExtratoList";
+};
