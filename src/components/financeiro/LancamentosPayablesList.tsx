@@ -384,13 +384,22 @@ export function LancamentosPayablesList({ onRefresh }: LancamentosPayablesListPr
 
       await supabase.from("payment_audit_logs").insert(auditLogs);
 
-      toast.success(`${selectedIds.size} título(s) enviado(s) ao banco para pagamento`);
+      toast.success(
+        `${selectedIds.size} título(s) enviado(s) ao banco com sucesso!`,
+        {
+          description: "Os títulos foram marcados para pagamento e aguardam processamento bancário.",
+          duration: 5000,
+        }
+      );
       setSelectedIds(new Set());
       fetchData();
       onRefresh?.();
-    } catch (error) {
+    } catch (error: any) {
       console.error("Erro ao submeter:", error);
-      toast.error("Erro ao enviar ao banco");
+      toast.error("Erro ao enviar ao banco", {
+        description: error?.message || "Não foi possível enviar os títulos. Tente novamente.",
+        duration: 5000,
+      });
     } finally {
       setProcessing(false);
       setShowSubmitDialog(false);
