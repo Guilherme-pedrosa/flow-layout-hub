@@ -11,15 +11,29 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, Trash2, Package } from "lucide-react";
+import { Plus, Trash2, Package, ChevronsUpDown, Check } from "lucide-react";
 import { useProducts } from "@/hooks/useProducts";
 import { useChartOfAccounts, useCostCenters } from "@/hooks/useFinanceiro";
+import { cn } from "@/lib/utils";
 
 export interface LocalItem {
   id?: string;
@@ -49,12 +63,22 @@ export function PurchaseOrderItems({ items, onItemsChange, purpose }: PurchaseOr
   const { products, isLoading: productsLoading } = useProducts();
   const { accounts: chartOfAccounts, fetchAccounts } = useChartOfAccounts();
   const { costCenters, fetchCostCenters } = useCostCenters();
+  const [openProductPopover, setOpenProductPopover] = useState<number | null>(null);
 
-  // Load financial data
   useEffect(() => {
     fetchAccounts();
     fetchCostCenters();
   }, []);
+
+  const getProductDisplayName = (productId: string, maxLength: number = 20) => {
+    if (!productId) return null;
+    const product = products?.find(p => p.id === productId);
+    if (!product) return null;
+    const desc = product.description.length > maxLength 
+      ? product.description.substring(0, maxLength) + "..." 
+      : product.description;
+    return `${product.code} - ${desc}`;
+  };
 
   const handleAddItem = () => {
     onItemsChange([
@@ -79,14 +103,12 @@ export function PurchaseOrderItems({ items, onItemsChange, purpose }: PurchaseOr
     const newItems = [...items];
     newItems[index] = { ...newItems[index], [field]: value };
 
-    // Recalculate total
     if (field === "quantity" || field === "unit_price") {
       const qty = field === "quantity" ? value : newItems[index].quantity;
       const price = field === "unit_price" ? value : newItems[index].unit_price;
       newItems[index].total_value = qty * price;
     }
 
-    // Set description from product
     if (field === "product_id" && value) {
       const product = products?.find((p) => p.id === value);
       if (product) {
@@ -101,16 +123,76 @@ export function PurchaseOrderItems({ items, onItemsChange, purpose }: PurchaseOr
     onItemsChange(newItems);
   };
 
-  const totalGeral = items.reduce((acc, item) => acc + item.total_value, 0);
+  const handleProductSelect = (index: number, productId: string) => {
+    handleItemChange(index, "product_id", productId);
+    setOpenProductPopover(null);
+  };
 
+  const totalGeral = items.reduce((acc, item) => acc + item.total_value, 0);
   const showProductColumn = purpose === "estoque" || purpose === "ordem_de_servico";
 
-  // Get display text for product
-  const getProductLabel = (productId: string) => {
-    if (!productId) return "";
-    const product = products?.find(p => p.id === productId);
-    return product ? `${product.code} - ${product.description}` : "";
-  };
+  const ProductSelector = ({ item, index }: { item: LocalItem; index: number }) => (
+    <Popover 
+      open={openProductPopover === index} 
+      onOpenChange={(open) => setOpenProductPopover(open ? index : null)}
+    >
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          role="combobox"
+          aria-expanded={openProductPopover === index}
+          className="w-full justify-between text-left font-normal"
+        >
+          <span className="truncate">
+            {getProductDisplayName(item.product_id, 25) || "Selecione produto..."}
+          </span>
+          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent 
+        className="w-[320px] p-0 z-[100]" 
+        side="bottom" 
+        sideOffset={4}
+        align="start"
+        avoidCollisions={true}
+      >
+        <Command>
+          <CommandInput placeholder="Buscar por código ou descrição..." />
+          <CommandList className="max-h-[250px]">
+            <CommandEmpty>Nenhum produto encontrado.</CommandEmpty>
+            <CommandGroup>
+              {productsLoading ? (
+                <CommandItem disabled>Carregando produtos...</CommandItem>
+              ) : products && products.length > 0 ? (
+                products.map((product) => (
+                  <CommandItem
+                    key={product.id}
+                    value={`${product.code} ${product.description}`}
+                    onSelect={() => handleProductSelect(index, product.id)}
+                  >
+                    <Check
+                      className={cn(
+                        "mr-2 h-4 w-4 flex-shrink-0",
+                        item.product_id === product.id ? "opacity-100" : "opacity-0"
+                      )}
+                    />
+                    <div className="flex flex-col min-w-0">
+                      <span className="font-medium">{product.code}</span>
+                      <span className="text-xs text-muted-foreground truncate">
+                        {product.description}
+                      </span>
+                    </div>
+                  </CommandItem>
+                ))
+              ) : (
+                <CommandItem disabled>Nenhum produto cadastrado</CommandItem>
+              )}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
 
   return (
     <Card>
@@ -140,27 +222,7 @@ export function PurchaseOrderItems({ items, onItemsChange, purpose }: PurchaseOr
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex-1 min-w-0">
                       {showProductColumn && (
-                        <Select
-                          value={item.product_id || undefined}
-                          onValueChange={(v) => handleItemChange(index, "product_id", v)}
-                        >
-                          <SelectTrigger className="w-full">
-                            <SelectValue placeholder="Selecione produto..." />
-                          </SelectTrigger>
-                          <SelectContent className="max-h-[300px]">
-                            {productsLoading ? (
-                              <SelectItem value="loading" disabled>Carregando...</SelectItem>
-                            ) : products && products.length > 0 ? (
-                              products.map((product) => (
-                                <SelectItem key={product.id} value={product.id}>
-                                  <span className="font-medium">{product.code}</span> - {product.description}
-                                </SelectItem>
-                              ))
-                            ) : (
-                              <SelectItem value="empty" disabled>Nenhum produto</SelectItem>
-                            )}
-                          </SelectContent>
-                        </Select>
+                        <ProductSelector item={item} index={index} />
                       )}
                     </div>
                     <Button
@@ -253,7 +315,7 @@ export function PurchaseOrderItems({ items, onItemsChange, purpose }: PurchaseOr
             </div>
 
             {/* Desktop Table View */}
-            <div className="hidden md:block rounded-lg border overflow-x-auto">
+            <div className="hidden md:block rounded-lg border overflow-visible">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -269,30 +331,10 @@ export function PurchaseOrderItems({ items, onItemsChange, purpose }: PurchaseOr
                 </TableHeader>
                 <TableBody>
                   {items.map((item, index) => (
-                    <TableRow key={index}>
+                    <TableRow key={index} className="relative">
                       {showProductColumn && (
-                        <TableCell>
-                          <Select
-                            value={item.product_id || undefined}
-                            onValueChange={(v) => handleItemChange(index, "product_id", v)}
-                          >
-                            <SelectTrigger className="w-full">
-                              <SelectValue placeholder="Selecione produto..." />
-                            </SelectTrigger>
-                            <SelectContent className="max-h-[300px]">
-                              {productsLoading ? (
-                                <SelectItem value="loading" disabled>Carregando...</SelectItem>
-                              ) : products && products.length > 0 ? (
-                                products.map((product) => (
-                                  <SelectItem key={product.id} value={product.id}>
-                                    <span className="font-medium">{product.code}</span> - {product.description}
-                                  </SelectItem>
-                                ))
-                              ) : (
-                                <SelectItem value="empty" disabled>Nenhum produto</SelectItem>
-                              )}
-                            </SelectContent>
-                          </Select>
+                        <TableCell className="overflow-visible">
+                          <ProductSelector item={item} index={index} />
                         </TableCell>
                       )}
                       <TableCell>
