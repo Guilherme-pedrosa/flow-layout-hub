@@ -11,8 +11,10 @@ import NotFound from "./pages/NotFound";
 
 // Operação
 import Vendas from "./pages/receber/Vendas";
+import ConfiguracoesVendas from "./pages/receber/ConfiguracoesVendas";
 import Checkout from "./pages/operacao/Checkout";
 import OrdensServico from "./pages/servicos/OrdensServico";
+import ConfiguracoesOS from "./pages/servicos/ConfiguracoesOS";
 
 // Compras
 import Solicitacoes from "./pages/compras/Solicitacoes";
@@ -67,8 +69,10 @@ const App = () => (
             
             {/* Operação */}
             <Route path="/vendas" element={<Vendas />} />
+            <Route path="/vendas-config" element={<ConfiguracoesVendas />} />
             <Route path="/checkout" element={<Checkout />} />
             <Route path="/ordens-servico" element={<OrdensServico />} />
+            <Route path="/ordens-servico-config" element={<ConfiguracoesOS />} />
             
             {/* Compras */}
             <Route path="/solicitacoes" element={<Solicitacoes />} />
