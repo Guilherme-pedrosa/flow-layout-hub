@@ -4,19 +4,23 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { Package, Plus, Trash2, Truck, Search } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Package, Plus, Trash2, Truck, Search, PlusCircle } from "lucide-react";
 import { useProducts } from "@/hooks/useProducts";
 import { usePriceTables } from "@/hooks/useServices";
 import { useInTransitStock, SaleProductItem } from "@/hooks/useSales";
 import { formatCurrency } from "@/lib/formatters";
+import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 
 interface SaleFormProdutosProps {
   items: SaleProductItem[];
   onChange: (items: SaleProductItem[]) => void;
 }
 
-function StockIndicator({ productId, currentStock, unit, requestedQuantity }: { 
+function StockPopover({ productId, currentStock, unit, requestedQuantity }: { 
   productId: string; 
   currentStock: number; 
   unit: string;
@@ -28,55 +32,111 @@ function StockIndicator({ productId, currentStock, unit, requestedQuantity }: {
   const hasInTransit = inTransit && inTransit.quantity > 0;
 
   return (
-    <div className="flex flex-col items-center gap-1">
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <div 
-            className={`text-xs px-2 py-1 rounded ${
-              isOutOfStock 
-                ? 'bg-destructive text-destructive-foreground' 
-                : 'bg-green-600 text-white'
-            }`}
-          >
-            Estoque: {currentStock.toLocaleString('pt-BR')} {unit}
-          </div>
-        </TooltipTrigger>
-        <TooltipContent>
-          <p>Quantidade disponível em estoque</p>
-        </TooltipContent>
-      </Tooltip>
+    <PopoverContent className="w-auto p-3" align="start">
+      <div className="space-y-2">
+        <div 
+          className={`text-xs px-2 py-1 rounded ${
+            isOutOfStock 
+              ? 'bg-destructive text-destructive-foreground' 
+              : 'bg-green-600 text-white'
+          }`}
+        >
+          Estoque: {currentStock.toLocaleString('pt-BR')} {unit}
+        </div>
 
-      {hasInTransit && (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <div className="text-xs px-2 py-1 rounded bg-blue-500 text-white flex items-center gap-1">
-              <Truck className="h-3 w-3" />
-              Em trânsito: {inTransit.quantity.toLocaleString('pt-BR')}
-              {inTransit.nextArrivalDate && (
-                <span className="ml-1">
-                  (Prev: {new Date(inTransit.nextArrivalDate).toLocaleDateString('pt-BR')})
-                </span>
-              )}
+        {hasInTransit && (
+          <div className="text-xs px-2 py-1 rounded bg-blue-500 text-white flex items-center gap-1">
+            <Truck className="h-3 w-3" />
+            Em trânsito: {inTransit.quantity.toLocaleString('pt-BR')}
+            {inTransit.nextArrivalDate && (
+              <span className="ml-1">
+                (Prev: {new Date(inTransit.nextArrivalDate).toLocaleDateString('pt-BR')})
+              </span>
+            )}
+          </div>
+        )}
+      </div>
+    </PopoverContent>
+  );
+}
+
+function CadastrarProdutoRapido({ onSuccess }: { onSuccess: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState({ code: '', description: '', sale_price: 0, unit: 'UN' });
+
+  const handleSave = async () => {
+    if (!form.code || !form.description) {
+      toast.error("Código e descrição são obrigatórios");
+      return;
+    }
+    setSaving(true);
+    const { error } = await supabase.from("products").insert({
+      code: form.code,
+      description: form.description,
+      sale_price: form.sale_price,
+      unit: form.unit,
+      is_active: true
+    });
+    setSaving(false);
+    if (error) {
+      toast.error("Erro ao cadastrar produto");
+    } else {
+      toast.success("Produto cadastrado!");
+      setOpen(false);
+      setForm({ code: '', description: '', sale_price: 0, unit: 'UN' });
+      onSuccess();
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button variant="ghost" size="sm" className="w-full justify-start gap-2 text-primary">
+          <PlusCircle className="h-4 w-4" />
+          Cadastrar novo produto
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Cadastro rápido de produto</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <Label>Código *</Label>
+            <Input value={form.code} onChange={(e) => setForm(f => ({ ...f, code: e.target.value }))} />
+          </div>
+          <div className="space-y-2">
+            <Label>Descrição *</Label>
+            <Input value={form.description} onChange={(e) => setForm(f => ({ ...f, description: e.target.value }))} />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>Preço de venda</Label>
+              <Input type="number" value={form.sale_price} onChange={(e) => setForm(f => ({ ...f, sale_price: parseFloat(e.target.value) || 0 }))} />
             </div>
-          </TooltipTrigger>
-          <TooltipContent>
-            <p>Quantidade em compras pendentes (não entra no estoque atual)</p>
-          </TooltipContent>
-        </Tooltip>
-      )}
-    </div>
+            <div className="space-y-2">
+              <Label>Unidade</Label>
+              <Input value={form.unit} onChange={(e) => setForm(f => ({ ...f, unit: e.target.value }))} />
+            </div>
+          </div>
+          <Button onClick={handleSave} disabled={saving} className="w-full">
+            {saving ? 'Salvando...' : 'Cadastrar'}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
 export function SaleFormProdutos({ items, onChange }: SaleFormProdutosProps) {
-  const { products } = useProducts();
+  const { products, refetch: refetchProducts } = useProducts();
   const { priceTables } = usePriceTables();
   const [searchTerm, setSearchTerm] = useState("");
 
   const activeProducts = products?.filter(p => p.is_active) ?? [];
   const activePriceTables = priceTables?.filter(pt => pt.is_active) ?? [];
 
-  // Filtrar por nome, código ou barcode
   const filteredProducts = searchTerm 
     ? activeProducts.filter(p => 
         p.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -104,7 +164,6 @@ export function SaleFormProdutos({ items, onChange }: SaleFormProdutosProps) {
     const newItems = [...items];
     const item = { ...newItems[index], [field]: value };
 
-    // Se mudou o produto, atualizar preço e dados
     if (field === 'product_id') {
       const product = activeProducts.find(p => p.id === value);
       if (product) {
@@ -121,7 +180,6 @@ export function SaleFormProdutos({ items, onChange }: SaleFormProdutosProps) {
       }
     }
 
-    // Recalcular subtotal
     const price = item.unit_price * item.quantity;
     if (item.discount_type === 'percent') {
       item.subtotal = price - (price * (item.discount_value / 100));
@@ -149,17 +207,11 @@ export function SaleFormProdutos({ items, onChange }: SaleFormProdutosProps) {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="w-[250px]">
-                Produto <span className="text-destructive">*</span>
-              </TableHead>
+              <TableHead className="w-[250px]">Produto <span className="text-destructive">*</span></TableHead>
               <TableHead className="w-[120px]">Tabela de Preço</TableHead>
               <TableHead>Detalhes</TableHead>
-              <TableHead className="w-[120px]">
-                Quant. <span className="text-destructive">*</span>
-              </TableHead>
-              <TableHead className="w-[120px]">
-                Valor <span className="text-destructive">*</span>
-              </TableHead>
+              <TableHead className="w-[120px]">Quant. <span className="text-destructive">*</span></TableHead>
+              <TableHead className="w-[120px]">Valor <span className="text-destructive">*</span></TableHead>
               <TableHead className="w-[150px]">Desconto</TableHead>
               <TableHead className="w-[120px]">Subtotal</TableHead>
               <TableHead className="w-[60px]">Ação</TableHead>
@@ -191,16 +243,20 @@ export function SaleFormProdutos({ items, onChange }: SaleFormProdutosProps) {
                               className="flex-1"
                             />
                           </div>
-                          <p className="text-xs text-muted-foreground mb-2">
-                            Busque por nome, código ou código de barras
-                          </p>
                         </div>
                         {filteredProducts.slice(0, 20).map(p => (
                           <SelectItem key={p.id} value={p.id}>
                             <span className="font-medium">{p.code}</span> - {p.description}
-                            {p.barcode && <span className="text-muted-foreground ml-1">({p.barcode})</span>}
                           </SelectItem>
                         ))}
+                        {filteredProducts.length === 0 && (
+                          <div className="p-2 text-sm text-muted-foreground text-center">
+                            Nenhum produto encontrado
+                          </div>
+                        )}
+                        <div className="border-t mt-2 pt-2">
+                          <CadastrarProdutoRapido onSuccess={refetchProducts} />
+                        </div>
                       </SelectContent>
                     </Select>
                   </TableCell>
@@ -228,24 +284,34 @@ export function SaleFormProdutos({ items, onChange }: SaleFormProdutosProps) {
                     />
                   </TableCell>
                   <TableCell>
-                    <div className="space-y-1">
+                    {product ? (
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Input
+                            type="number"
+                            min="0"
+                            step="0.001"
+                            value={item.quantity}
+                            onChange={(e) => updateItem(index, 'quantity', parseFloat(e.target.value) || 0)}
+                            className={isOutOfStock ? 'border-destructive bg-destructive/10 cursor-pointer' : 'cursor-pointer'}
+                          />
+                        </PopoverTrigger>
+                        <StockPopover
+                          productId={item.product_id}
+                          currentStock={product.quantity ?? 0}
+                          unit={product.unit ?? 'UN'}
+                          requestedQuantity={item.quantity}
+                        />
+                      </Popover>
+                    ) : (
                       <Input
                         type="number"
                         min="0"
                         step="0.001"
                         value={item.quantity}
                         onChange={(e) => updateItem(index, 'quantity', parseFloat(e.target.value) || 0)}
-                        className={isOutOfStock ? 'border-destructive bg-destructive/10' : ''}
                       />
-                      {product && (
-                        <StockIndicator
-                          productId={item.product_id}
-                          currentStock={product.quantity ?? 0}
-                          unit={product.unit ?? 'UN'}
-                          requestedQuantity={item.quantity}
-                        />
-                      )}
-                    </div>
+                    )}
                   </TableCell>
                   <TableCell>
                     <Input
@@ -284,11 +350,7 @@ export function SaleFormProdutos({ items, onChange }: SaleFormProdutosProps) {
                     {formatCurrency(item.subtotal)}
                   </TableCell>
                   <TableCell>
-                    <Button
-                      variant="destructive"
-                      size="icon"
-                      onClick={() => removeItem(index)}
-                    >
+                    <Button variant="destructive" size="icon" onClick={() => removeItem(index)}>
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </TableCell>
@@ -298,11 +360,7 @@ export function SaleFormProdutos({ items, onChange }: SaleFormProdutosProps) {
           </TableBody>
         </Table>
 
-        <Button
-          variant="default"
-          className="mt-4"
-          onClick={addItem}
-        >
+        <Button variant="default" className="mt-4" onClick={addItem}>
           <Plus className="h-4 w-4 mr-2" />
           Adicionar produto
         </Button>

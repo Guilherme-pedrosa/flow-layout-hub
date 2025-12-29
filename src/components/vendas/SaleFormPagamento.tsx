@@ -101,11 +101,11 @@ export function SaleFormPagamento({
             <div className="max-w-xs">
               <Label>Número de parcelas</Label>
               <Input 
-                type="number" 
-                min="2" 
-                max="48"
+                type="text"
+                inputMode="numeric"
+                placeholder="2"
                 value={installmentsCount} 
-                onChange={(e) => onChange('installments', parseInt(e.target.value) || 2)} 
+                onChange={(e) => onChange('installments', e.target.value)} 
               />
             </div>
 

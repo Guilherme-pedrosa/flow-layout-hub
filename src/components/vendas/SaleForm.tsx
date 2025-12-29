@@ -10,6 +10,7 @@ import { SaleFormProdutos } from "./SaleFormProdutos";
 import { SaleFormServicos } from "./SaleFormServicos";
 import { SaleFormTransporte } from "./SaleFormTransporte";
 import { SaleFormPagamento, Installment } from "./SaleFormPagamento";
+import { SaleFormAnexos, SaleAttachment } from "./SaleFormAnexos";
 import { useSales, SaleProductItem, SaleServiceItem } from "@/hooks/useSales";
 import { formatCurrency } from "@/lib/formatters";
 
@@ -33,14 +34,14 @@ export function SaleForm({ onClose, initialData }: SaleFormProps) {
     os_number: '',
     os_gc: '',
     extra_observation: '',
-    freight_value: 0,
+    freight_value: '',
     carrier: '',
     show_delivery_address: false,
     delivery_address: {},
-    discount_value: 0,
-    discount_percent: 0,
+    discount_value: '',
+    discount_percent: '',
     payment_type: 'avista',
-    installments: 2,
+    installments: '',
     observations: '',
     internal_observations: '',
   });
@@ -48,13 +49,19 @@ export function SaleForm({ onClose, initialData }: SaleFormProps) {
   const [productItems, setProductItems] = useState<SaleProductItem[]>([]);
   const [serviceItems, setServiceItems] = useState<SaleServiceItem[]>([]);
   const [installments, setInstallments] = useState<Installment[]>([]);
+  const [attachments, setAttachments] = useState<SaleAttachment[]>([]);
+
+  const freightValue = parseFloat(formData.freight_value) || 0;
+  const discountValue = parseFloat(formData.discount_value) || 0;
+  const discountPercent = parseFloat(formData.discount_percent) || 0;
+  const installmentsCount = parseInt(formData.installments) || 2;
 
   const productsTotal = productItems.reduce((sum, i) => sum + i.subtotal, 0);
   const servicesTotal = serviceItems.reduce((sum, i) => sum + i.subtotal, 0);
-  const subtotal = productsTotal + servicesTotal + formData.freight_value;
-  const discountAmount = formData.discount_percent > 0 
-    ? subtotal * (formData.discount_percent / 100) 
-    : formData.discount_value;
+  const subtotal = productsTotal + servicesTotal + freightValue;
+  const discountAmount = discountPercent > 0 
+    ? subtotal * (discountPercent / 100) 
+    : discountValue;
   const total = subtotal - discountAmount;
 
   const handleChange = (field: string, value: any) => {
@@ -76,16 +83,16 @@ export function SaleForm({ onClose, initialData }: SaleFormProps) {
       os_number: formData.os_number || null,
       os_gc: formData.os_gc || null,
       extra_observation: formData.extra_observation || null,
-      freight_value: formData.freight_value,
+      freight_value: freightValue,
       carrier: formData.carrier || null,
       delivery_address: formData.show_delivery_address ? formData.delivery_address : null,
       products_total: productsTotal,
       services_total: servicesTotal,
-      discount_value: formData.discount_value,
-      discount_percent: formData.discount_percent,
+      discount_value: discountValue,
+      discount_percent: discountPercent,
       total_value: total,
       payment_type: formData.payment_type,
-      installments: formData.payment_type === 'parcelado' ? formData.installments : 1,
+      installments: formData.payment_type === 'parcelado' ? installmentsCount : 1,
       observations: formData.observations || null,
       internal_observations: formData.internal_observations || null,
     };
@@ -95,6 +102,7 @@ export function SaleForm({ onClose, initialData }: SaleFormProps) {
       productItems: productItems.map(({ product, ...item }) => item),
       serviceItems: serviceItems.map(({ service, ...item }) => item),
       installments: formData.payment_type === 'parcelado' ? installments : [],
+      attachments,
     });
     onClose();
   };
@@ -112,7 +120,7 @@ export function SaleForm({ onClose, initialData }: SaleFormProps) {
           <CardTitle className="flex items-center gap-2 text-lg"><DollarSign className="h-5 w-5" />Total</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
             <div className="space-y-2">
               <Label className="text-muted-foreground">Produtos</Label>
               <Input value={formatCurrency(productsTotal)} disabled className="bg-muted" />
@@ -122,12 +130,34 @@ export function SaleForm({ onClose, initialData }: SaleFormProps) {
               <Input value={formatCurrency(servicesTotal)} disabled className="bg-muted" />
             </div>
             <div className="space-y-2">
+              <Label>Frete (R$)</Label>
+              <Input 
+                type="text"
+                inputMode="decimal"
+                value={formData.freight_value} 
+                onChange={(e) => handleChange('freight_value', e.target.value)}
+                placeholder="0,00"
+              />
+            </div>
+            <div className="space-y-2">
               <Label>Desconto (R$)</Label>
-              <Input type="number" value={formData.discount_value} onChange={(e) => handleChange('discount_value', parseFloat(e.target.value) || 0)} />
+              <Input 
+                type="text"
+                inputMode="decimal"
+                value={formData.discount_value} 
+                onChange={(e) => handleChange('discount_value', e.target.value)}
+                placeholder="0,00"
+              />
             </div>
             <div className="space-y-2">
               <Label>Desconto (%)</Label>
-              <Input type="number" value={formData.discount_percent} onChange={(e) => handleChange('discount_percent', parseFloat(e.target.value) || 0)} />
+              <Input 
+                type="text"
+                inputMode="decimal"
+                value={formData.discount_percent} 
+                onChange={(e) => handleChange('discount_percent', e.target.value)}
+                placeholder="0"
+              />
             </div>
             <div className="space-y-2">
               <Label className="text-muted-foreground">Valor total</Label>
@@ -140,11 +170,17 @@ export function SaleForm({ onClose, initialData }: SaleFormProps) {
       {/* Pagamento */}
       <SaleFormPagamento
         paymentType={formData.payment_type}
-        installmentsCount={formData.installments}
+        installmentsCount={installmentsCount}
         installments={installments}
         totalValue={total}
         onChange={handleChange}
         onInstallmentsChange={setInstallments}
+      />
+
+      {/* Anexos */}
+      <SaleFormAnexos 
+        attachments={attachments}
+        onChange={setAttachments}
       />
 
       {/* Observações */}

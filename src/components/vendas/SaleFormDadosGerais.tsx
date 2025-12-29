@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { FileEdit } from "lucide-react";
+import { FileEdit, Search } from "lucide-react";
 import { useSaleStatuses } from "@/hooks/useSales";
 import { useCostCenters, CostCenter } from "@/hooks/useFinanceiro";
 import { useSystemUsers } from "@/hooks/useServices";
@@ -41,16 +41,32 @@ export function SaleFormDadosGerais({ formData, onChange }: SaleFormDadosGeraisP
   const { costCenters, fetchCostCenters } = useCostCenters();
   const { data: users } = useSystemUsers();
   const [clientes, setClientes] = useState<any[]>([]);
+  const [clienteSearch, setClienteSearch] = useState("");
 
   useEffect(() => {
     fetchCostCenters();
-    supabase.from("clientes").select("id, razao_social, nome_fantasia").eq("status", "ativo")
+    supabase.from("clientes").select("id, razao_social, nome_fantasia, cpf_cnpj").eq("status", "ativo")
       .then(({ data }) => setClientes(data ?? []));
   }, [fetchCostCenters]);
 
   const activeStatuses = statuses?.filter(s => s.is_active) ?? [];
   const activeCostCenters = costCenters?.filter(c => c.is_active) ?? [];
   const activeUsers = users ?? [];
+
+  // Filtrar clientes por nome ou CNPJ
+  const filteredClientes = clienteSearch
+    ? clientes.filter(c => {
+        const searchLower = clienteSearch.toLowerCase();
+        const razao = (c.razao_social || '').toLowerCase();
+        const fantasia = (c.nome_fantasia || '').toLowerCase();
+        const cpfCnpj = (c.cpf_cnpj || '').replace(/\D/g, '');
+        const searchClean = clienteSearch.replace(/\D/g, '');
+        
+        return razao.includes(searchLower) || 
+               fantasia.includes(searchLower) || 
+               cpfCnpj.includes(searchClean);
+      })
+    : clientes;
 
   return (
     <div className="space-y-6">
@@ -73,8 +89,25 @@ export function SaleFormDadosGerais({ formData, onChange }: SaleFormDadosGeraisP
               <Select value={formData.client_id} onValueChange={(v) => onChange('client_id', v)}>
                 <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
                 <SelectContent>
-                  {clientes.map(c => (
-                    <SelectItem key={c.id} value={c.id}>{c.razao_social || c.nome_fantasia}</SelectItem>
+                  <div className="p-2">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Search className="h-4 w-4 text-muted-foreground" />
+                      <Input
+                        placeholder="Buscar por nome ou CNPJ..."
+                        value={clienteSearch}
+                        onChange={(e) => setClienteSearch(e.target.value)}
+                        className="flex-1"
+                      />
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {filteredClientes.length} cliente(s) encontrado(s)
+                    </p>
+                  </div>
+                  {filteredClientes.slice(0, 30).map(c => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {c.razao_social || c.nome_fantasia}
+                      {c.cpf_cnpj && <span className="text-muted-foreground ml-1">({c.cpf_cnpj})</span>}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>

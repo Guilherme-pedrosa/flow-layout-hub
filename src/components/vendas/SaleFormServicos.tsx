@@ -4,23 +4,96 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Wrench, Plus, Trash2, Search } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Wrench, Plus, Trash2, Search, PlusCircle } from "lucide-react";
 import { useServices } from "@/hooks/useServices";
 import { SaleServiceItem } from "@/hooks/useSales";
 import { formatCurrency } from "@/lib/formatters";
+import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 
 interface SaleFormServicosProps {
   items: SaleServiceItem[];
   onChange: (items: SaleServiceItem[]) => void;
 }
 
+function CadastrarServicoRapido({ onSuccess }: { onSuccess: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState({ code: '', description: '', sale_price: 0, unit: 'SV' });
+
+  const handleSave = async () => {
+    if (!form.code || !form.description) {
+      toast.error("Código e descrição são obrigatórios");
+      return;
+    }
+    setSaving(true);
+    const { error } = await supabase.from("services").insert({
+      code: form.code,
+      description: form.description,
+      sale_price: form.sale_price,
+      unit: form.unit,
+      is_active: true,
+      company_id: '00000000-0000-0000-0000-000000000000' // TODO: pegar da empresa
+    });
+    setSaving(false);
+    if (error) {
+      toast.error("Erro ao cadastrar serviço");
+    } else {
+      toast.success("Serviço cadastrado!");
+      setOpen(false);
+      setForm({ code: '', description: '', sale_price: 0, unit: 'SV' });
+      onSuccess();
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button variant="ghost" size="sm" className="w-full justify-start gap-2 text-primary">
+          <PlusCircle className="h-4 w-4" />
+          Cadastrar novo serviço
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Cadastro rápido de serviço</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <Label>Código *</Label>
+            <Input value={form.code} onChange={(e) => setForm(f => ({ ...f, code: e.target.value }))} />
+          </div>
+          <div className="space-y-2">
+            <Label>Descrição *</Label>
+            <Input value={form.description} onChange={(e) => setForm(f => ({ ...f, description: e.target.value }))} />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>Preço de venda</Label>
+              <Input type="number" value={form.sale_price} onChange={(e) => setForm(f => ({ ...f, sale_price: parseFloat(e.target.value) || 0 }))} />
+            </div>
+            <div className="space-y-2">
+              <Label>Unidade</Label>
+              <Input value={form.unit} onChange={(e) => setForm(f => ({ ...f, unit: e.target.value }))} />
+            </div>
+          </div>
+          <Button onClick={handleSave} disabled={saving} className="w-full">
+            {saving ? 'Salvando...' : 'Cadastrar'}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export function SaleFormServicos({ items, onChange }: SaleFormServicosProps) {
-  const { services } = useServices();
+  const { services, refetch: refetchServices } = useServices();
   const [searchTerm, setSearchTerm] = useState("");
 
   const activeServices = services?.filter(s => s.is_active) ?? [];
 
-  // Filtrar por descrição ou código
   const filteredServices = searchTerm 
     ? activeServices.filter(s => 
         s.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -48,7 +121,6 @@ export function SaleFormServicos({ items, onChange }: SaleFormServicosProps) {
     const newItems = [...items];
     const item = { ...newItems[index], [field]: value };
 
-    // Se mudou o serviço selecionado, atualizar dados
     if (field === 'service_id') {
       const service = activeServices.find(s => s.id === value);
       if (service) {
@@ -64,7 +136,6 @@ export function SaleFormServicos({ items, onChange }: SaleFormServicosProps) {
       }
     }
 
-    // Recalcular subtotal
     const price = item.unit_price * item.quantity;
     if (item.discount_type === 'percent') {
       item.subtotal = price - (price * (item.discount_value / 100));
@@ -92,16 +163,10 @@ export function SaleFormServicos({ items, onChange }: SaleFormServicosProps) {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="w-[250px]">
-                Serviço <span className="text-destructive">*</span>
-              </TableHead>
+              <TableHead className="w-[250px]">Serviço <span className="text-destructive">*</span></TableHead>
               <TableHead>Detalhes</TableHead>
-              <TableHead className="w-[100px]">
-                Quant. <span className="text-destructive">*</span>
-              </TableHead>
-              <TableHead className="w-[120px]">
-                Valor <span className="text-destructive">*</span>
-              </TableHead>
+              <TableHead className="w-[100px]">Quant. <span className="text-destructive">*</span></TableHead>
+              <TableHead className="w-[120px]">Valor <span className="text-destructive">*</span></TableHead>
               <TableHead className="w-[150px]">Desconto</TableHead>
               <TableHead className="w-[120px]">Subtotal</TableHead>
               <TableHead className="w-[60px]">Ação</TableHead>
@@ -112,8 +177,8 @@ export function SaleFormServicos({ items, onChange }: SaleFormServicosProps) {
               <TableRow key={index}>
                 <TableCell>
                   <Select
-                    value={item.service_id || ''}
-                    onValueChange={(value) => updateItem(index, 'service_id', value)}
+                    value={item.service_id || 'none'}
+                    onValueChange={(value) => updateItem(index, 'service_id', value === 'none' ? '' : value)}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Selecione o serviço" />
@@ -140,6 +205,9 @@ export function SaleFormServicos({ items, onChange }: SaleFormServicosProps) {
                           Nenhum serviço encontrado
                         </div>
                       )}
+                      <div className="border-t mt-2 pt-2">
+                        <CadastrarServicoRapido onSuccess={refetchServices} />
+                      </div>
                     </SelectContent>
                   </Select>
                 </TableCell>
@@ -196,11 +264,7 @@ export function SaleFormServicos({ items, onChange }: SaleFormServicosProps) {
                   {formatCurrency(item.subtotal)}
                 </TableCell>
                 <TableCell>
-                  <Button
-                    variant="destructive"
-                    size="icon"
-                    onClick={() => removeItem(index)}
-                  >
+                  <Button variant="destructive" size="icon" onClick={() => removeItem(index)}>
                     <Trash2 className="h-4 w-4" />
                   </Button>
                 </TableCell>
@@ -209,11 +273,7 @@ export function SaleFormServicos({ items, onChange }: SaleFormServicosProps) {
           </TableBody>
         </Table>
 
-        <Button
-          variant="default"
-          className="mt-4"
-          onClick={addItem}
-        >
+        <Button variant="default" className="mt-4" onClick={addItem}>
           <Plus className="h-4 w-4 mr-2" />
           Adicionar serviço
         </Button>
