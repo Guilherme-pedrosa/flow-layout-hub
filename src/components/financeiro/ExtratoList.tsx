@@ -1,26 +1,28 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, forwardRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Checkbox } from "@/components/ui/checkbox";
 import { 
   RefreshCw, 
   Download, 
-  Check, 
-  X, 
+  Link2, 
+  Unlink, 
   ArrowUpCircle, 
   ArrowDownCircle,
   Loader2,
   AlertCircle,
   Calendar,
-  FileText
+  FileText,
+  Check
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { formatCurrency, formatDate } from "@/lib/formatters";
+import { ReconciliationModal } from "./ReconciliationModal";
+import { ReconciliationReverseModal } from "./ReconciliationReverseModal";
 
 const TEMP_COMPANY_ID = "7875af52-18d0-434e-8ae9-97981bd668e7";
 
@@ -33,14 +35,23 @@ interface BankTransaction {
   nsu: string | null;
   is_reconciled: boolean;
   reconciled_at: string | null;
+  bank_account_id: string | null;
+  reconciled_with_id: string | null;
 }
 
-export function ExtratoList() {
+export const ExtratoList = forwardRef<HTMLDivElement>((_, ref) => {
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [transactions, setTransactions] = useState<BankTransaction[]>([]);
   const [hasCredentials, setHasCredentials] = useState(false);
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  
+  // Modal de conciliação
+  const [reconciliationModalOpen, setReconciliationModalOpen] = useState(false);
+  const [selectedTransaction, setSelectedTransaction] = useState<BankTransaction | null>(null);
+  
+  // Modal de reversão
+  const [reverseModalOpen, setReverseModalOpen] = useState(false);
+  const [transactionToReverse, setTransactionToReverse] = useState<BankTransaction | null>(null);
   
   // Período padrão: últimos 30 dias
   const today = new Date();
@@ -114,68 +125,18 @@ export function ExtratoList() {
     }
   };
 
-  const handleReconcile = async (id: string, reconciled: boolean) => {
-    try {
-      const { error } = await supabase
-        .from("bank_transactions")
-        .update({
-          is_reconciled: reconciled,
-          reconciled_at: reconciled ? new Date().toISOString() : null,
-        })
-        .eq("id", id);
-
-      if (error) throw error;
-
-      setTransactions(prev =>
-        prev.map(t => t.id === id ? { ...t, is_reconciled: reconciled } : t)
-      );
-
-      toast.success(reconciled ? "Transação conciliada" : "Conciliação removida");
-    } catch (error) {
-      console.error("Erro ao conciliar:", error);
-      toast.error("Erro ao atualizar conciliação");
-    }
+  const openReconciliationModal = (transaction: BankTransaction) => {
+    setSelectedTransaction(transaction);
+    setReconciliationModalOpen(true);
   };
 
-  const handleBulkReconcile = async () => {
-    if (selectedIds.length === 0) return;
-
-    try {
-      const { error } = await supabase
-        .from("bank_transactions")
-        .update({
-          is_reconciled: true,
-          reconciled_at: new Date().toISOString(),
-        })
-        .in("id", selectedIds);
-
-      if (error) throw error;
-
-      setTransactions(prev =>
-        prev.map(t => selectedIds.includes(t.id) ? { ...t, is_reconciled: true } : t)
-      );
-      setSelectedIds([]);
-
-      toast.success(`${selectedIds.length} transações conciliadas`);
-    } catch (error) {
-      console.error("Erro ao conciliar em lote:", error);
-      toast.error("Erro ao conciliar transações");
-    }
+  const openReverseModal = (transaction: BankTransaction) => {
+    setTransactionToReverse(transaction);
+    setReverseModalOpen(true);
   };
 
-  const toggleSelectAll = () => {
-    const pendingIds = transactions.filter(t => !t.is_reconciled).map(t => t.id);
-    if (selectedIds.length === pendingIds.length) {
-      setSelectedIds([]);
-    } else {
-      setSelectedIds(pendingIds);
-    }
-  };
-
-  const toggleSelect = (id: string) => {
-    setSelectedIds(prev =>
-      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
-    );
+  const handleReconciliationSuccess = () => {
+    loadTransactions();
   };
 
   // Totais
@@ -188,7 +149,7 @@ export function ExtratoList() {
   const pendingCount = transactions.filter(t => !t.is_reconciled).length;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4" ref={ref}>
       {!hasCredentials && (
         <Card className="border-amber-500 bg-amber-50 dark:bg-amber-950/20">
           <CardContent className="flex items-center gap-3 py-4">
@@ -271,21 +232,6 @@ export function ExtratoList() {
         </Card>
       </div>
 
-      {/* Ações em Lote */}
-      {selectedIds.length > 0 && (
-        <Card className="bg-primary/5 border-primary">
-          <CardContent className="flex items-center justify-between py-3">
-            <span className="text-sm">
-              {selectedIds.length} transação(ões) selecionada(s)
-            </span>
-            <Button size="sm" onClick={handleBulkReconcile}>
-              <Check className="h-4 w-4 mr-2" />
-              Conciliar Selecionadas
-            </Button>
-          </CardContent>
-        </Card>
-      )}
-
       {/* Tabela de Transações */}
       <Card>
         <CardHeader>
@@ -337,15 +283,6 @@ export function ExtratoList() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-[50px]">
-                    <Checkbox
-                      checked={
-                        selectedIds.length > 0 &&
-                        selectedIds.length === transactions.filter(t => !t.is_reconciled).length
-                      }
-                      onCheckedChange={toggleSelectAll}
-                    />
-                  </TableHead>
                   <TableHead>Data</TableHead>
                   <TableHead>Descrição</TableHead>
                   <TableHead className="text-right">Valor</TableHead>
@@ -356,13 +293,6 @@ export function ExtratoList() {
               <TableBody>
                 {transactions.map((tx) => (
                   <TableRow key={tx.id} className={tx.is_reconciled ? "opacity-60" : ""}>
-                    <TableCell>
-                      <Checkbox
-                        checked={selectedIds.includes(tx.id)}
-                        onCheckedChange={() => toggleSelect(tx.id)}
-                        disabled={tx.is_reconciled}
-                      />
-                    </TableCell>
                     <TableCell className="font-medium">
                       {formatDate(tx.transaction_date)}
                     </TableCell>
@@ -393,17 +323,19 @@ export function ExtratoList() {
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => handleReconcile(tx.id, false)}
+                          onClick={() => openReverseModal(tx)}
+                          title="Desfazer conciliação"
                         >
-                          <X className="h-4 w-4" />
+                          <Unlink className="h-4 w-4" />
                         </Button>
                       ) : (
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => handleReconcile(tx.id, true)}
+                          onClick={() => openReconciliationModal(tx)}
+                          title="Conciliar"
                         >
-                          <Check className="h-4 w-4" />
+                          <Link2 className="h-4 w-4" />
                         </Button>
                       )}
                     </TableCell>
@@ -414,6 +346,25 @@ export function ExtratoList() {
           )}
         </CardContent>
       </Card>
+
+      {/* Modal de Conciliação */}
+      <ReconciliationModal
+        open={reconciliationModalOpen}
+        onOpenChange={setReconciliationModalOpen}
+        transaction={selectedTransaction}
+        companyId={TEMP_COMPANY_ID}
+        onSuccess={handleReconciliationSuccess}
+      />
+
+      {/* Modal de Reversão */}
+      <ReconciliationReverseModal
+        open={reverseModalOpen}
+        onOpenChange={setReverseModalOpen}
+        transaction={transactionToReverse}
+        onSuccess={handleReconciliationSuccess}
+      />
     </div>
   );
-}
+});
+
+ExtratoList.displayName = "ExtratoList";
