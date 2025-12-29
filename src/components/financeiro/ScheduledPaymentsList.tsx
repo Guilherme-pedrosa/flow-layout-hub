@@ -41,6 +41,7 @@ import {
   QrCode,
   Plus,
   Edit,
+  ShoppingCart,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { format, isToday, isThisWeek, parseISO } from "date-fns";
@@ -413,13 +414,13 @@ export function ScheduledPaymentsList({ onSubmitted }: ScheduledPaymentsListProp
                       {payable.purchase_order_id && payable.purchase_order ? (
                         <Link 
                           to={`/pedidos-compra?edit=${payable.purchase_order_id}`}
-                          className="inline-flex items-center gap-1 text-primary hover:underline font-medium"
+                          className="inline-flex items-center gap-1.5 text-primary hover:text-primary/80 transition-colors"
+                          title={`Abrir Pedido de Compra #${payable.purchase_order.order_number}`}
                         >
-                          <Receipt className="h-3 w-3" />
-                          PC #{payable.purchase_order.order_number}
+                          <ShoppingCart className="h-4 w-4" />
                         </Link>
                       ) : (
-                        <span className="text-muted-foreground text-sm">Manual</span>
+                        <span className="text-muted-foreground">—</span>
                       )}
                     </TableCell>
                     <TableCell>
