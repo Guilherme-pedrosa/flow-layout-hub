@@ -28,6 +28,7 @@ import ConfiguracoesCompras from "./pages/compras/ConfiguracoesCompras";
 import Saldo from "./pages/estoque/Saldo";
 import Movimentacoes from "./pages/estoque/Movimentacoes";
 import Ajustes from "./pages/estoque/Ajustes";
+import ImprimirEtiquetas from "./pages/estoque/ImprimirEtiquetas";
 
 // Faturamento
 import FaturarOS from "./pages/faturamento/FaturarOS";
@@ -87,6 +88,7 @@ const App = () => (
             <Route path="/saldo-estoque" element={<Saldo />} />
             <Route path="/movimentacoes" element={<Movimentacoes />} />
             <Route path="/ajustes" element={<Ajustes />} />
+            <Route path="/imprimir-etiquetas" element={<ImprimirEtiquetas />} />
             
             {/* Faturamento */}
             <Route path="/faturar-os" element={<FaturarOS />} />
