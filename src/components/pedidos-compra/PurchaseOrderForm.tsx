@@ -237,23 +237,23 @@ export function PurchaseOrderForm({ order, onClose }: PurchaseOrderFormProps) {
   };
 
   return (
-    <div className="space-y-6">
-      {/* Header Actions */}
-      <div className="flex items-center justify-between">
+    <div className="space-y-4 md:space-y-6">
+      {/* Header Actions - Mobile optimized */}
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           {order?.requires_reapproval && (
-            <div className="flex items-center gap-2 px-3 py-1.5 bg-destructive/10 text-destructive rounded-lg">
-              <AlertTriangle className="h-4 w-4" />
-              <span className="text-sm font-medium">Requer reaprovação: {order.reapproval_reason}</span>
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-destructive/10 text-destructive rounded-lg text-sm">
+              <AlertTriangle className="h-4 w-4 flex-shrink-0" />
+              <span className="font-medium line-clamp-2">Requer reaprovação: {order.reapproval_reason}</span>
             </div>
           )}
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={onClose}>
+          <Button variant="outline" onClick={onClose} size="sm" className="flex-1 sm:flex-none">
             <X className="mr-2 h-4 w-4" />
             Cancelar
           </Button>
-          <Button onClick={handleSave} disabled={saving}>
+          <Button onClick={handleSave} disabled={saving} size="sm" className="flex-1 sm:flex-none">
             {saving ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             ) : (
@@ -264,30 +264,35 @@ export function PurchaseOrderForm({ order, onClose }: PurchaseOrderFormProps) {
         </div>
       </div>
 
-      {/* Tabs */}
+      {/* Tabs - Mobile optimized with horizontal scroll */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-5">
-          <TabsTrigger value="dados" className="gap-2">
-            <FileText className="h-4 w-4" />
-            Dados Gerais
-          </TabsTrigger>
-          <TabsTrigger value="itens" className="gap-2">
-            <Package className="h-4 w-4" />
-            Itens {items.length > 0 && `(${items.length})`}
-          </TabsTrigger>
-          <TabsTrigger value="financeiro" className="gap-2">
-            <DollarSign className="h-4 w-4" />
-            Financeiro
-          </TabsTrigger>
-          <TabsTrigger value="nfe" className="gap-2">
-            <FileUp className="h-4 w-4" />
-            NF-e
-          </TabsTrigger>
-          <TabsTrigger value="cte" className="gap-2">
-            <Truck className="h-4 w-4" />
-            CT-e
-          </TabsTrigger>
-        </TabsList>
+        <div className="overflow-x-auto -mx-4 px-4 md:mx-0 md:px-0">
+          <TabsList className="inline-flex w-auto min-w-full md:grid md:grid-cols-5 md:w-full">
+            <TabsTrigger value="dados" className="flex-shrink-0 gap-1.5 px-3">
+              <FileText className="h-4 w-4" />
+              <span className="hidden sm:inline">Dados Gerais</span>
+              <span className="sm:hidden">Dados</span>
+            </TabsTrigger>
+            <TabsTrigger value="itens" className="flex-shrink-0 gap-1.5 px-3">
+              <Package className="h-4 w-4" />
+              <span>Itens</span>
+              {items.length > 0 && <span className="text-xs">({items.length})</span>}
+            </TabsTrigger>
+            <TabsTrigger value="financeiro" className="flex-shrink-0 gap-1.5 px-3">
+              <DollarSign className="h-4 w-4" />
+              <span className="hidden sm:inline">Financeiro</span>
+              <span className="sm:hidden">Fin.</span>
+            </TabsTrigger>
+            <TabsTrigger value="nfe" className="flex-shrink-0 gap-1.5 px-3">
+              <FileUp className="h-4 w-4" />
+              <span>NF-e</span>
+            </TabsTrigger>
+            <TabsTrigger value="cte" className="flex-shrink-0 gap-1.5 px-3">
+              <Truck className="h-4 w-4" />
+              <span>CT-e</span>
+            </TabsTrigger>
+          </TabsList>
+        </div>
 
         {/* Dados Gerais */}
         <TabsContent value="dados" className="space-y-4">

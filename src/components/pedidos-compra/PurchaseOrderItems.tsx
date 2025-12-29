@@ -122,14 +122,15 @@ export function PurchaseOrderItems({ items, onItemsChange, purpose }: PurchaseOr
 
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between">
+      <CardHeader className="flex flex-row items-center justify-between pb-3">
         <CardTitle className="text-lg">Itens do Pedido</CardTitle>
         <Button variant="outline" size="sm" onClick={handleAddItem}>
           <Plus className="mr-2 h-4 w-4" />
-          Adicionar Item
+          <span className="hidden sm:inline">Adicionar Item</span>
+          <span className="sm:hidden">Adicionar</span>
         </Button>
       </CardHeader>
-      <CardContent>
+      <CardContent className="p-3 md:p-6">
         {items.length === 0 ? (
           <div className="text-center py-8">
             <Package className="mx-auto h-12 w-12 text-muted-foreground" />
@@ -140,7 +141,162 @@ export function PurchaseOrderItems({ items, onItemsChange, purpose }: PurchaseOr
           </div>
         ) : (
           <div className="space-y-4">
-            <div className="rounded-lg border overflow-x-auto">
+            {/* Mobile Card View */}
+            <div className="md:hidden space-y-4">
+              {items.map((item, index) => (
+                <div key={index} className="rounded-lg border p-4 space-y-3 bg-card">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      {showProductColumn && (
+                        <Popover 
+                          open={openProductPopover === index} 
+                          onOpenChange={(open) => setOpenProductPopover(open ? index : null)}
+                        >
+                          <PopoverTrigger asChild>
+                            <Button
+                              variant="outline"
+                              role="combobox"
+                              aria-expanded={openProductPopover === index}
+                              className="w-full justify-between text-left font-normal h-auto py-2"
+                            >
+                              <span className="truncate">
+                                {item.product_id
+                                  ? (() => {
+                                      const product = products.find(p => p.id === item.product_id);
+                                      return product ? `${product.code} - ${product.description.substring(0, 25)}` : "Selecione";
+                                    })()
+                                  : "Selecione produto..."}
+                              </span>
+                              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-[280px] p-0" align="start">
+                            <Command>
+                              <CommandInput placeholder="Buscar produto..." />
+                              <CommandList>
+                                <CommandEmpty>Nenhum produto encontrado.</CommandEmpty>
+                                <CommandGroup>
+                                  {products.map((product) => (
+                                    <CommandItem
+                                      key={product.id}
+                                      value={`${product.code} ${product.description}`}
+                                      onSelect={() => {
+                                        handleItemChange(index, "product_id", product.id);
+                                        setOpenProductPopover(null);
+                                      }}
+                                    >
+                                      <Check
+                                        className={cn(
+                                          "mr-2 h-4 w-4",
+                                          item.product_id === product.id ? "opacity-100" : "opacity-0"
+                                        )}
+                                      />
+                                      <div className="flex flex-col">
+                                        <span className="font-medium">{product.code}</span>
+                                        <span className="text-xs text-muted-foreground truncate max-w-[200px]">
+                                          {product.description}
+                                        </span>
+                                      </div>
+                                    </CommandItem>
+                                  ))}
+                                </CommandGroup>
+                              </CommandList>
+                            </Command>
+                          </PopoverContent>
+                        </Popover>
+                      )}
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleRemoveItem(index)}
+                      className="flex-shrink-0"
+                    >
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
+                  </div>
+
+                  <Input
+                    value={item.description}
+                    onChange={(e) => handleItemChange(index, "description", e.target.value)}
+                    placeholder="Descrição"
+                    className="text-sm"
+                  />
+
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="space-y-1">
+                      <label className="text-xs text-muted-foreground">Qtd</label>
+                      <Input
+                        type="number"
+                        value={item.quantity}
+                        onChange={(e) => handleItemChange(index, "quantity", parseFloat(e.target.value) || 0)}
+                        min={0}
+                        className="text-sm"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs text-muted-foreground">Valor Unit.</label>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        value={item.unit_price}
+                        onChange={(e) => handleItemChange(index, "unit_price", parseFloat(e.target.value) || 0)}
+                        min={0}
+                        className="text-sm"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs text-muted-foreground">Total</label>
+                      <div className="h-9 px-3 py-2 bg-muted rounded-md text-sm font-medium flex items-center">
+                        {formatCurrency(item.total_value)}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <label className="text-xs text-muted-foreground">Plano de Contas</label>
+                      <Select
+                        value={item.chart_account_id}
+                        onValueChange={(v) => handleItemChange(index, "chart_account_id", v)}
+                      >
+                        <SelectTrigger className="text-sm h-9">
+                          <SelectValue placeholder="Selecione" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {chartOfAccounts.map((account) => (
+                            <SelectItem key={account.id} value={account.id}>
+                              {account.code}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs text-muted-foreground">Centro de Custo</label>
+                      <Select
+                        value={item.cost_center_id}
+                        onValueChange={(v) => handleItemChange(index, "cost_center_id", v)}
+                      >
+                        <SelectTrigger className="text-sm h-9">
+                          <SelectValue placeholder="Selecione" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {costCenters.map((center) => (
+                            <SelectItem key={center.id} value={center.id}>
+                              {center.code}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Desktop Table View */}
+            <div className="hidden md:block rounded-lg border overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -293,10 +449,10 @@ export function PurchaseOrderItems({ items, onItemsChange, purpose }: PurchaseOr
 
             {/* Totals */}
             <div className="flex justify-end">
-              <div className="bg-muted p-4 rounded-lg">
-                <div className="flex items-center justify-between gap-8">
+              <div className="bg-muted p-3 md:p-4 rounded-lg">
+                <div className="flex items-center justify-between gap-4 md:gap-8">
                   <span className="text-sm font-medium">Total Geral:</span>
-                  <span className="text-lg font-bold">{formatCurrency(totalGeral)}</span>
+                  <span className="text-base md:text-lg font-bold">{formatCurrency(totalGeral)}</span>
                 </div>
               </div>
             </div>
