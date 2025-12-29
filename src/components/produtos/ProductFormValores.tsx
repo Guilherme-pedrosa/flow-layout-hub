@@ -12,7 +12,6 @@ interface ProductFormValoresProps {
     accessory_expenses: number;
     other_expenses: number;
     final_cost: number;
-    sale_price: number;
   };
   onChange: (field: string, value: any) => void;
   isFromXml?: boolean;
@@ -42,10 +41,6 @@ export function ProductFormValores({ formData, onChange, isFromXml }: ProductFor
                       (formData.other_expenses || 0);
     onChange('final_cost', finalCost);
   }, [formData.purchase_price, formData.accessory_expenses, formData.other_expenses]);
-
-  const formatCurrency = (value: number) => {
-    return value.toLocaleString('pt-BR', { minimumFractionDigits: 4, maximumFractionDigits: 4 });
-  };
 
   return (
     <div className="space-y-6">
@@ -99,7 +94,7 @@ export function ProductFormValores({ formData, onChange, isFromXml }: ProductFor
           <div className="space-y-2">
             <LabelWithTooltip 
               label="Outras despesas" 
-              tooltip="Impostos e outros custos relacionados à aquisição (proporcional por item quando via XML)" 
+              tooltip="Impostos (IPI, ICMS ST, etc.) e outros custos relacionados à aquisição" 
             />
             <Input
               type="number"
@@ -120,7 +115,7 @@ export function ProductFormValores({ formData, onChange, isFromXml }: ProductFor
             <Input
               type="number"
               value={formData.final_cost}
-              className="text-right bg-muted"
+              className="text-right bg-muted font-semibold"
               disabled
               placeholder="0,0000"
             />
@@ -128,46 +123,12 @@ export function ProductFormValores({ formData, onChange, isFromXml }: ProductFor
         </CardContent>
       </Card>
 
-      {/* Valores de venda */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base flex items-center gap-2">
-            🏷️ Valores de venda
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <Alert className="bg-muted/50">
-            <AlertDescription>
-              O valor de venda é a valoração monetária dos produtos comercializados pelo estabelecimento.
-              Ele pode ser calculado ou indicado livremente.
-            </AlertDescription>
-          </Alert>
-
-          <div className="space-y-2">
-            <LabelWithTooltip 
-              label="Preço de venda" 
-              tooltip="Valor pelo qual o produto será vendido aos clientes" 
-            />
-            <Input
-              type="number"
-              step="0.01"
-              value={formData.sale_price}
-              onChange={(e) => onChange('sale_price', parseFloat(e.target.value) || 0)}
-              className="text-right"
-              placeholder="0,00"
-            />
-          </div>
-
-          {formData.final_cost > 0 && formData.sale_price > 0 && (
-            <div className="text-sm text-muted-foreground">
-              Margem de lucro: {' '}
-              <span className={formData.sale_price > formData.final_cost ? 'text-green-600' : 'text-destructive'}>
-                {((formData.sale_price - formData.final_cost) / formData.final_cost * 100).toFixed(2)}%
-              </span>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      {/* Nota sobre tabela de preços */}
+      <Alert>
+        <AlertDescription>
+          O preço de venda será definido através das Tabelas de Preços, permitindo diferentes valores para diferentes clientes ou condições comerciais.
+        </AlertDescription>
+      </Alert>
     </div>
   );
 }
