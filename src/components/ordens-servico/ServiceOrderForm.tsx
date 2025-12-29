@@ -4,7 +4,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Save, X, DollarSign, FileText, Truck } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Save, X, DollarSign, FileText, Truck, Printer } from "lucide-react";
+import { useDocumentPdf } from "@/hooks/useDocumentPdf";
 import { ServiceOrderFormDadosGerais } from "./ServiceOrderFormDadosGerais";
 import { ServiceOrderFormProdutos } from "./ServiceOrderFormProdutos";
 import { ServiceOrderFormServicos } from "./ServiceOrderFormServicos";
@@ -22,6 +24,8 @@ interface ServiceOrderFormProps {
 
 export function ServiceOrderForm({ onClose, initialData }: ServiceOrderFormProps) {
   const { createOrder } = useServiceOrders();
+  const { printDocument, printSummary, isGenerating } = useDocumentPdf();
+  const isEditing = !!initialData?.id;
   const [formData, setFormData] = useState({
     client_id: initialData?.client_id ?? '',
     seller_id: initialData?.seller_id ?? '',
@@ -270,8 +274,26 @@ export function ServiceOrderForm({ onClose, initialData }: ServiceOrderFormProps
       <div className="flex gap-3">
         <Button onClick={handleSave} disabled={createOrder.isPending}>
           <Save className="h-4 w-4 mr-2" />
-          Cadastrar
+          {isEditing ? 'Salvar Alterações' : 'Cadastrar'}
         </Button>
+        {isEditing && initialData?.id && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" disabled={isGenerating}>
+                <Printer className="h-4 w-4 mr-2" />
+                Imprimir PDF
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent>
+              <DropdownMenuItem onClick={() => printDocument(initialData.id, "service_order")}>
+                <FileText className="h-4 w-4 mr-2" />Relatório Completo
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => printSummary(initialData.id, "service_order")}>
+                <FileText className="h-4 w-4 mr-2" />Resumido
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
         <Button variant="destructive" onClick={onClose}>
           <X className="h-4 w-4 mr-2" />
           Cancelar
