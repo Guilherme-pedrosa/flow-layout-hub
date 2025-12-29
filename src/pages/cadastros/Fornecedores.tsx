@@ -2,23 +2,22 @@ import { useState } from "react";
 import { PageHeader } from "@/components/shared";
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
-import { useSuppliers } from "@/hooks/useSuppliers";
+import { usePessoas, Pessoa, PessoaInsert } from "@/hooks/usePessoas";
 import { SupplierForm, SuppliersList } from "@/components/fornecedores";
-import { Supplier } from "@/hooks/useSuppliers";
 
 export default function Fornecedores() {
   const [showForm, setShowForm] = useState(false);
-  const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null);
+  const [editingSupplier, setEditingSupplier] = useState<Pessoa | null>(null);
 
   const {
-    suppliers,
-    isLoading,
-    createSupplier,
-    updateSupplier,
-    toggleSupplierStatus,
-  } = useSuppliers();
+    fornecedores,
+    isLoadingFornecedores,
+    createPessoa,
+    updatePessoa,
+    toggleStatus,
+  } = usePessoas();
 
-  const handleEdit = (supplier: Supplier) => {
+  const handleEdit = (supplier: Pessoa) => {
     setEditingSupplier(supplier);
     setShowForm(true);
   };
@@ -28,17 +27,20 @@ export default function Fornecedores() {
     setEditingSupplier(null);
   };
 
-  const handleSubmit = async (data: any) => {
+  const handleSubmit = async (data: Partial<PessoaInsert>) => {
     if (editingSupplier) {
-      await updateSupplier.mutateAsync({ id: editingSupplier.id, ...data });
+      await updatePessoa.mutateAsync({ id: editingSupplier.id, data });
     } else {
-      await createSupplier.mutateAsync(data);
+      await createPessoa.mutateAsync({
+        ...data,
+        is_fornecedor: true,
+      });
     }
     handleCancel();
   };
 
   const handleToggleStatus = (id: string, isActive: boolean) => {
-    toggleSupplierStatus.mutate({ id, is_active: isActive });
+    toggleStatus.mutate({ id, is_active: isActive });
   };
 
   return (
@@ -65,12 +67,12 @@ export default function Fornecedores() {
           supplier={editingSupplier}
           onSubmit={handleSubmit}
           onCancel={handleCancel}
-          isLoading={createSupplier.isPending || updateSupplier.isPending}
+          isLoading={createPessoa.isPending || updatePessoa.isPending}
         />
       ) : (
         <SuppliersList
-          suppliers={suppliers}
-          isLoading={isLoading}
+          suppliers={fornecedores}
+          isLoading={isLoadingFornecedores}
           onEdit={handleEdit}
           onToggleStatus={handleToggleStatus}
         />

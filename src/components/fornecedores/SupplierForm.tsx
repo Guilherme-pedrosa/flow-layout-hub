@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Loader2, Search } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Supplier, SupplierInsert } from "@/hooks/useSuppliers";
+import { Pessoa, PessoaInsert } from "@/hooks/usePessoas";
 import { consultarCnpj } from "@/lib/api/cnpj";
 import { toast } from "sonner";
 
@@ -29,14 +29,14 @@ const supplierSchema = z.object({
   cep: z.string().optional(),
   telefone: z.string().optional(),
   email: z.string().email("E-mail inválido").optional().or(z.literal("")),
-  observacoes: z.string().optional(),
+  observacoes_internas: z.string().optional(),
 });
 
 type SupplierFormData = z.infer<typeof supplierSchema>;
 
 interface SupplierFormProps {
-  supplier?: Supplier | null;
-  onSubmit: (data: Omit<SupplierInsert, "company_id">) => void;
+  supplier?: Pessoa | null;
+  onSubmit: (data: Partial<PessoaInsert>) => void;
   onCancel: () => void;
   isLoading?: boolean;
 }
@@ -68,7 +68,7 @@ export function SupplierForm({ supplier, onSubmit, onCancel, isLoading }: Suppli
       cep: supplier?.cep || "",
       telefone: supplier?.telefone || "",
       email: supplier?.email || "",
-      observacoes: supplier?.observacoes || "",
+      observacoes_internas: supplier?.observacoes_internas || "",
     },
   });
 
@@ -107,8 +107,22 @@ export function SupplierForm({ supplier, onSubmit, onCancel, isLoading }: Suppli
 
   const onFormSubmit = (data: SupplierFormData) => {
     onSubmit({
-      ...data,
+      tipo_pessoa: data.tipo_pessoa,
+      cpf_cnpj: data.cpf_cnpj,
       razao_social: data.razao_social,
+      nome_fantasia: data.nome_fantasia,
+      inscricao_estadual: data.inscricao_estadual,
+      inscricao_municipal: data.inscricao_municipal,
+      logradouro: data.logradouro,
+      numero: data.numero,
+      complemento: data.complemento,
+      bairro: data.bairro,
+      cidade: data.cidade,
+      estado: data.estado,
+      cep: data.cep,
+      telefone: data.telefone,
+      email: data.email,
+      observacoes_internas: data.observacoes_internas,
     });
   };
 
@@ -254,7 +268,7 @@ export function SupplierForm({ supplier, onSubmit, onCancel, isLoading }: Suppli
           <CardTitle className="text-lg">Observações</CardTitle>
         </CardHeader>
         <CardContent>
-          <Textarea {...register("observacoes")} rows={3} />
+          <Textarea {...register("observacoes_internas")} rows={3} />
         </CardContent>
       </Card>
 
