@@ -14,6 +14,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { CartItemData } from "./CartItem";
+import { formatCurrency } from "@/lib/formatters";
 
 interface CheckoutSummaryProps {
   items: CartItemData[];
@@ -138,19 +139,19 @@ export function CheckoutSummary({ items, onFinalize }: CheckoutSummaryProps) {
             <Separator />
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">Subtotal</span>
-              <span>R$ {subtotal.toFixed(2).replace(".", ",")}</span>
+              <span>{formatCurrency(subtotal)}</span>
             </div>
             {discountValue > 0 && (
               <div className="flex justify-between text-sm text-destructive">
                 <span>Desconto</span>
-                <span>- R$ {discountValue.toFixed(2).replace(".", ",")}</span>
+                <span>- {formatCurrency(discountValue)}</span>
               </div>
             )}
             <Separator />
             <div className="flex justify-between text-xl font-bold">
               <span>Total</span>
               <span className="text-primary">
-                R$ {total.toFixed(2).replace(".", ",")}
+                {formatCurrency(total)}
               </span>
             </div>
           </div>
@@ -194,7 +195,7 @@ export function CheckoutSummary({ items, onFinalize }: CheckoutSummaryProps) {
             <div className="flex justify-between text-lg font-bold">
               <span>Total</span>
               <span className="text-accent">
-                R$ {total.toFixed(2).replace(".", ",")}
+                {formatCurrency(total)}
               </span>
             </div>
           </div>

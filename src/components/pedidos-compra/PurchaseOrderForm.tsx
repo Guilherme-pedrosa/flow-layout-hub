@@ -558,10 +558,15 @@ export function PurchaseOrderForm({ order, onClose }: PurchaseOrderFormProps) {
                           </TableCell>
                           <TableCell>
                             <Input
-                              type="number"
-                              step="0.01"
-                              value={inst.amount.toFixed(2)}
-                              onChange={(e) => handleInstallmentAmountChange(index, parseFloat(e.target.value) || 0)}
+                              type="text"
+                              inputMode="decimal"
+                              value={inst.amount === 0 ? '' : inst.amount.toString()}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                if (val === '' || /^\d*[.,]?\d*$/.test(val)) {
+                                  handleInstallmentAmountChange(index, val === '' ? 0 : parseFloat(val.replace(',', '.')) || 0);
+                                }
+                              }}
                               className="w-[150px]"
                             />
                           </TableCell>
