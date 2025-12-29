@@ -35,6 +35,8 @@ export function useCheckout() {
   const queryClient = useQueryClient();
 
   // Busca vendas pendentes de checkout
+  // REGRA: Checkout é persistente e vinculado ao processo, não à situação
+  // Se já houve checkout (parcial ou não), ele é reaproveitado quando a situação exige
   const salesPendingQuery = useQuery({
     queryKey: ["checkout", "sales_pending"],
     queryFn: async () => {
@@ -51,7 +53,8 @@ export function useCheckout() {
       
       // Filtra vendas que:
       // 1. Têm status com checkout_behavior = 'required'
-      // 2. E checkout_status não está 'completed'
+      // 2. E checkout_status NÃO está 'completed' (ainda falta conferir algo)
+      // NOTA: Se o checkout está 'partial', a venda aparece para continuar de onde parou
       return (data || []).filter(s => 
         s.status?.checkout_behavior === 'required' && 
         s.checkout_status !== 'completed'
@@ -60,6 +63,7 @@ export function useCheckout() {
   });
 
   // Busca OS pendentes de checkout
+  // REGRA: Checkout é persistente e vinculado ao processo, não à situação
   const osPendingQuery = useQuery({
     queryKey: ["checkout", "os_pending"],
     queryFn: async () => {
@@ -76,7 +80,7 @@ export function useCheckout() {
       
       // Filtra OS que:
       // 1. Têm status com checkout_behavior = 'required'
-      // 2. E checkout_status não está 'completed'
+      // 2. E checkout_status NÃO está 'completed' (ainda falta conferir algo)
       return (data || []).filter(s => 
         s.status?.checkout_behavior === 'required' && 
         s.checkout_status !== 'completed'
@@ -244,7 +248,7 @@ export function useCheckout() {
     }
   };
 
-  // Confirmar item (bipagem) - COM validação de estoque
+  // Confirmar item (bipagem) - COM validação de estoque IMEDIATA
   const confirmItem = useMutation({
     mutationFn: async ({
       source,
@@ -257,26 +261,57 @@ export function useCheckout() {
       quantity: number;
       barcode?: string;
     }) => {
-      // VALIDAÇÃO CRÍTICA: Verificar estoque disponível
-      const { data: productData } = await supabase
+      // VERIFICAÇÃO: Se já houve movimentação de estoque para este checkout, não permitir mais bipagens
+      // Isso evita duplicação de separação quando o usuário muda status e tenta bipar novamente
+      const { data: existingMovements } = await supabase
+        .from("stock_movements")
+        .select("id")
+        .eq("reference_id", source.id)
+        .eq("reference_type", source.type)
+        .limit(1);
+
+      if (existingMovements && existingMovements.length > 0) {
+        throw new Error(
+          "Este checkout já foi finalizado e o estoque baixado.\n" +
+          "Não é possível adicionar mais itens após a finalização."
+        );
+      }
+
+      // VALIDAÇÃO CRÍTICA: Verificar estoque disponível ANTES de qualquer operação
+      const { data: productData, error: productError } = await supabase
         .from("products")
-        .select("quantity")
+        .select("quantity, description")
         .eq("id", item.product_id)
         .single();
 
+      if (productError) {
+        throw new Error(`Erro ao verificar estoque: ${productError.message}`);
+      }
+
       const currentStock = productData?.quantity ?? 0;
+      const productName = productData?.description || item.product_description;
       
-      // Calcular quanto já foi separado + quanto quer separar agora
-      const totalToCheck = item.quantity_checked + quantity;
+      // Calcular quanto está disponível para separar
+      const availableForSeparation = currentStock - item.quantity_checked;
       
-      // Se o estoque atual é menor que a quantidade que será separada, bloquear
-      if (currentStock < totalToCheck) {
-        // Se não tem estoque suficiente para separar nem 1 unidade
-        if (currentStock <= item.quantity_checked) {
-          throw new Error(`Estoque insuficiente! Disponível: ${currentStock}, já separado: ${item.quantity_checked}`);
-        }
-        // Se tem estoque parcial, informar
-        throw new Error(`Estoque insuficiente para separar ${quantity} unidades. Disponível para separação: ${currentStock - item.quantity_checked}`);
+      // BLOQUEIO IMEDIATO: Se não há estoque disponível, não permitir a ação
+      if (availableForSeparation <= 0) {
+        throw new Error(
+          `Estoque insuficiente para o item ${productName}.\n` +
+          `Saldo disponível: ${currentStock}.\n` +
+          `Já separado: ${item.quantity_checked}.\n` +
+          `A baixa não pode ser realizada.`
+        );
+      }
+      
+      // Se está tentando separar mais do que tem disponível
+      if (quantity > availableForSeparation) {
+        throw new Error(
+          `Estoque insuficiente para o item ${productName}.\n` +
+          `Tentando separar: ${quantity} unidades.\n` +
+          `Disponível para separação: ${availableForSeparation}.\n` +
+          `A baixa não pode ser realizada.`
+        );
       }
 
       const newChecked = item.quantity_checked + quantity;
@@ -348,13 +383,28 @@ export function useCheckout() {
       queryClient.invalidateQueries({ queryKey: ["checkout"] });
     },
     onError: (error) => {
-      toast.error(error.message);
+      // Não exibe toast aqui, o erro será tratado no componente
     },
   });
 
   // Finalizar checkout (baixa estoque COM movimentação E validação)
   const finalizeCheckout = useMutation({
     mutationFn: async (source: CheckoutSource) => {
+      // VERIFICAÇÃO: Se já houve movimentação de estoque, não permitir finalizar novamente
+      const { data: existingMovements } = await supabase
+        .from("stock_movements")
+        .select("id")
+        .eq("reference_id", source.id)
+        .eq("reference_type", source.type)
+        .limit(1);
+
+      if (existingMovements && existingMovements.length > 0) {
+        throw new Error(
+          "Este checkout já foi finalizado anteriormente.\n" +
+          "Não é possível finalizar novamente."
+        );
+      }
+
       // VALIDAÇÃO CRÍTICA: Verificar estoque de TODOS os itens antes de começar
       const stockErrors: string[] = [];
       
@@ -447,9 +497,30 @@ export function useCheckout() {
     },
   });
 
-  // Reiniciar checkout
+  // Reiniciar checkout - APENAS se não houve movimentação de estoque
   const resetCheckout = useMutation({
     mutationFn: async (source: CheckoutSource) => {
+      // VALIDAÇÃO: Verificar se já houve movimentação de estoque para esta fonte
+      // Se houve, o reset NÃO pode ser permitido (trabalho operacional não pode ser descartado)
+      const { data: existingMovements, error: movementsError } = await supabase
+        .from("stock_movements")
+        .select("id")
+        .eq("reference_id", source.id)
+        .eq("reference_type", source.type)
+        .limit(1);
+
+      if (movementsError) {
+        throw new Error("Erro ao verificar movimentações de estoque");
+      }
+
+      if (existingMovements && existingMovements.length > 0) {
+        throw new Error(
+          "Este checkout já foi finalizado e teve baixa de estoque.\n" +
+          "Não é possível reiniciar o checkout após a movimentação de estoque.\n" +
+          "O trabalho operacional executado não pode ser descartado automaticamente."
+        );
+      }
+
       if (source.type === 'venda') {
         // Deleta todos os registros de checkout
         const itemIds = source.items
@@ -490,6 +561,9 @@ export function useCheckout() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["checkout"] });
       toast.success("Checkout reiniciado!");
+    },
+    onError: (error) => {
+      toast.error(error.message);
     },
   });
 
