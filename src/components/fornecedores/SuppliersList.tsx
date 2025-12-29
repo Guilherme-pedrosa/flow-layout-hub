@@ -9,15 +9,14 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Edit, Search, Building2 } from "lucide-react";
-import { Supplier } from "@/hooks/useSuppliers";
+import { Pessoa } from "@/hooks/usePessoas";
 
 interface SuppliersListProps {
-  suppliers: Supplier[];
+  suppliers: Pessoa[];
   isLoading: boolean;
-  onEdit: (supplier: Supplier) => void;
+  onEdit: (supplier: Pessoa) => void;
   onToggleStatus: (id: string, isActive: boolean) => void;
 }
 
@@ -27,7 +26,7 @@ export function SuppliersList({ suppliers, isLoading, onEdit, onToggleStatus }: 
   const filteredSuppliers = suppliers.filter((supplier) => {
     const searchLower = search.toLowerCase();
     return (
-      supplier.razao_social.toLowerCase().includes(searchLower) ||
+      supplier.razao_social?.toLowerCase().includes(searchLower) ||
       supplier.nome_fantasia?.toLowerCase().includes(searchLower) ||
       supplier.cpf_cnpj?.includes(search) ||
       supplier.cidade?.toLowerCase().includes(searchLower)
@@ -96,7 +95,7 @@ export function SuppliersList({ suppliers, isLoading, onEdit, onToggleStatus }: 
                   <TableCell className="font-mono text-sm">
                     {formatCnpj(supplier.cpf_cnpj)}
                   </TableCell>
-                  <TableCell className="font-medium">{supplier.razao_social}</TableCell>
+                  <TableCell className="font-medium">{supplier.razao_social || "-"}</TableCell>
                   <TableCell>{supplier.nome_fantasia || "-"}</TableCell>
                   <TableCell>
                     {supplier.cidade && supplier.estado
