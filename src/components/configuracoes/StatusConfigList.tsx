@@ -39,6 +39,7 @@ interface StatusItem {
   stock_behavior: string;
   financial_behavior: string;
   checkout_behavior: string;
+  requires_completed_checkout?: boolean;
   display_order: number;
 }
 
@@ -274,6 +275,7 @@ export function StatusConfigList({
           stock_behavior: editingStatus.stock_behavior as any,
           financial_behavior: editingStatus.financial_behavior as any,
           checkout_behavior: editingStatus.checkout_behavior as any,
+          requires_completed_checkout: (editingStatus as any).requires_completed_checkout ?? false,
         } : undefined}
         onSave={handleSave}
         title="Status"

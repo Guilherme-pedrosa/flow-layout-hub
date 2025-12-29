@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Json } from "@/integrations/supabase/types";
 
-export type StockBehavior = 'none' | 'reserve' | 'move';
+export type StockBehavior = 'none' | 'reserve';
 export type FinancialBehavior = 'none' | 'forecast' | 'effective';
 export type CheckoutBehavior = 'none' | 'required';
 
@@ -16,6 +16,7 @@ export interface ServiceOrderStatus {
   stock_behavior: StockBehavior;
   financial_behavior: FinancialBehavior;
   checkout_behavior: CheckoutBehavior;
+  requires_completed_checkout: boolean;
   display_order: number;
   is_active: boolean;
   created_at: string;

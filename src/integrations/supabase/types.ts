@@ -1310,6 +1310,7 @@ export type Database = {
           is_active: boolean
           is_default: boolean | null
           name: string
+          requires_completed_checkout: boolean | null
           stock_behavior: string
           updated_at: string
         }
@@ -1324,6 +1325,7 @@ export type Database = {
           is_active?: boolean
           is_default?: boolean | null
           name: string
+          requires_completed_checkout?: boolean | null
           stock_behavior?: string
           updated_at?: string
         }
@@ -1338,6 +1340,7 @@ export type Database = {
           is_active?: boolean
           is_default?: boolean | null
           name?: string
+          requires_completed_checkout?: boolean | null
           stock_behavior?: string
           updated_at?: string
         }
@@ -1365,10 +1368,13 @@ export type Database = {
           discount_percent: number | null
           discount_value: number | null
           extra_observation: string | null
+          financial_status: string | null
           freight_value: number | null
           id: string
           installments: number | null
           internal_observations: string | null
+          nfe_emitted_at: string | null
+          nfe_number: string | null
           observations: string | null
           os_gc: string | null
           os_number: string | null
@@ -1399,10 +1405,13 @@ export type Database = {
           discount_percent?: number | null
           discount_value?: number | null
           extra_observation?: string | null
+          financial_status?: string | null
           freight_value?: number | null
           id?: string
           installments?: number | null
           internal_observations?: string | null
+          nfe_emitted_at?: string | null
+          nfe_number?: string | null
           observations?: string | null
           os_gc?: string | null
           os_number?: string | null
@@ -1433,10 +1442,13 @@ export type Database = {
           discount_percent?: number | null
           discount_value?: number | null
           extra_observation?: string | null
+          financial_status?: string | null
           freight_value?: number | null
           id?: string
           installments?: number | null
           internal_observations?: string | null
+          nfe_emitted_at?: string | null
+          nfe_number?: string | null
           observations?: string | null
           os_gc?: string | null
           os_number?: string | null
@@ -1775,6 +1787,7 @@ export type Database = {
           is_active: boolean
           is_default: boolean | null
           name: string
+          requires_completed_checkout: boolean | null
           stock_behavior: string
           updated_at: string
         }
@@ -1789,6 +1802,7 @@ export type Database = {
           is_active?: boolean
           is_default?: boolean | null
           name: string
+          requires_completed_checkout?: boolean | null
           stock_behavior?: string
           updated_at?: string
         }
@@ -1803,6 +1817,7 @@ export type Database = {
           is_active?: boolean
           is_default?: boolean | null
           name?: string
+          requires_completed_checkout?: boolean | null
           stock_behavior?: string
           updated_at?: string
         }
@@ -1835,12 +1850,15 @@ export type Database = {
           equipment_serial: string | null
           equipment_type: string | null
           external_service_cost: number | null
+          financial_status: string | null
           finished_at: string | null
           freight_value: number | null
           id: string
           installments: number | null
           internal_observations: string | null
           labor_cost: number | null
+          nfe_emitted_at: string | null
+          nfe_number: string | null
           observations: string | null
           order_date: string
           order_number: number
@@ -1879,12 +1897,15 @@ export type Database = {
           equipment_serial?: string | null
           equipment_type?: string | null
           external_service_cost?: number | null
+          financial_status?: string | null
           finished_at?: string | null
           freight_value?: number | null
           id?: string
           installments?: number | null
           internal_observations?: string | null
           labor_cost?: number | null
+          nfe_emitted_at?: string | null
+          nfe_number?: string | null
           observations?: string | null
           order_date?: string
           order_number?: number
@@ -1923,12 +1944,15 @@ export type Database = {
           equipment_serial?: string | null
           equipment_type?: string | null
           external_service_cost?: number | null
+          financial_status?: string | null
           finished_at?: string | null
           freight_value?: number | null
           id?: string
           installments?: number | null
           internal_observations?: string | null
           labor_cost?: number | null
+          nfe_emitted_at?: string | null
+          nfe_number?: string | null
           observations?: string | null
           order_date?: string
           order_number?: number
