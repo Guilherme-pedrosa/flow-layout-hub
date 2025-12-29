@@ -341,13 +341,10 @@ export function ServiceOrderFormProdutos({ items, onChange }: ServiceOrderFormPr
             />
           </div>
           <div>
-            <Label className="text-xs text-muted-foreground">Custo</Label>
-            <NumericInput
-              value={item.purchase_price}
-              onChange={(val) => updateItem(index, 'purchase_price', val)}
-              step={0.01}
-              className="h-9 bg-muted"
-            />
+            <Label className="text-xs text-muted-foreground">Custo (histórico)</Label>
+            <div className="h-9 px-3 py-2 text-sm bg-muted rounded-md border flex items-center text-muted-foreground">
+              {formatCurrency(item.purchase_price)}
+            </div>
           </div>
         </div>
 
@@ -485,12 +482,9 @@ export function ServiceOrderFormProdutos({ items, onChange }: ServiceOrderFormPr
                       />
                     </TableCell>
                     <TableCell>
-                      <NumericInput
-                        value={item.purchase_price}
-                        onChange={(val) => updateItem(index, 'purchase_price', val)}
-                        step={0.01}
-                        className="text-xs bg-muted"
-                      />
+                      <div className="text-xs text-muted-foreground px-2 py-1 bg-muted rounded">
+                        {formatCurrency(item.purchase_price)}
+                      </div>
                     </TableCell>
                     <TableCell>
                       <div className="flex gap-1">
