@@ -85,6 +85,7 @@ interface Payable {
 
 interface PixPayment {
   id: string;
+  payable_id: string | null;
   recipient_name: string;
   recipient_document: string;
   pix_key: string;
@@ -96,6 +97,12 @@ interface PixPayment {
   inter_end_to_end_id: string | null;
   created_at: string;
   processed_at: string | null;
+  error_message: string | null;
+  payable?: {
+    pix_key: string | null;
+    pix_key_type: string | null;
+    document_number: string | null;
+  } | null;
 }
 
 interface LancamentosPayablesListProps {
@@ -154,10 +161,13 @@ export function LancamentosPayablesList({ onRefresh }: LancamentosPayablesListPr
 
       setPayables(payablesWithInstallments as Payable[]);
 
-      // Fetch PIX payments
+      // Fetch PIX payments com dados atualizados do payable
       const { data: pixData, error: pixError } = await supabase
         .from("inter_pix_payments")
-        .select("*")
+        .select(`
+          *,
+          payable:payables!inter_pix_payments_payable_id_fkey(pix_key, pix_key_type, document_number)
+        `)
         .order("created_at", { ascending: false });
 
       if (pixError) throw pixError;
@@ -593,6 +603,7 @@ export function LancamentosPayablesList({ onRefresh }: LancamentosPayablesListPr
                         onCheckedChange={toggleSelectAll}
                       />
                     </TableHead>
+                    <TableHead>Nº</TableHead>
                     <TableHead>Fornecedor</TableHead>
                     <TableHead>Origem</TableHead>
                     <TableHead>Vencimento</TableHead>
@@ -614,6 +625,11 @@ export function LancamentosPayablesList({ onRefresh }: LancamentosPayablesListPr
                           onCheckedChange={() => toggleSelect(payable.id)}
                           disabled={payable.payment_status !== "ready_to_pay"}
                         />
+                      </TableCell>
+                      <TableCell>
+                        <code className="text-xs bg-muted px-2 py-1 rounded font-mono">
+                          {payable.document_number || "-"}
+                        </code>
                       </TableCell>
                       <TableCell>
                         <div>
@@ -673,6 +689,7 @@ export function LancamentosPayablesList({ onRefresh }: LancamentosPayablesListPr
                   <Table>
                     <TableHeader>
                       <TableRow>
+                        <TableHead>Nº</TableHead>
                         <TableHead>Fornecedor</TableHead>
                         <TableHead>Descrição</TableHead>
                         <TableHead>Pago em</TableHead>
@@ -683,6 +700,11 @@ export function LancamentosPayablesList({ onRefresh }: LancamentosPayablesListPr
                     <TableBody>
                       {paidPayables.map((payable) => (
                         <TableRow key={payable.id}>
+                          <TableCell>
+                            <code className="text-xs bg-muted px-2 py-1 rounded font-mono">
+                              {payable.document_number || "-"}
+                            </code>
+                          </TableCell>
                           <TableCell className="font-medium">
                             {payable.supplier?.nome_fantasia || payable.supplier?.razao_social || "—"}
                           </TableCell>
@@ -719,9 +741,10 @@ export function LancamentosPayablesList({ onRefresh }: LancamentosPayablesListPr
                   <Table>
                     <TableHeader>
                       <TableRow>
+                        <TableHead>Nº Doc</TableHead>
                         <TableHead>Data</TableHead>
                         <TableHead>Favorecido</TableHead>
-                        <TableHead>Chave PIX</TableHead>
+                        <TableHead>Chave PIX Atual</TableHead>
                         <TableHead className="text-right">Valor</TableHead>
                         <TableHead>Status</TableHead>
                         <TableHead>ID Transação</TableHead>
@@ -729,65 +752,77 @@ export function LancamentosPayablesList({ onRefresh }: LancamentosPayablesListPr
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {pixPayments.map((payment) => (
-                        <TableRow key={payment.id}>
-                          <TableCell>
-                            {format(new Date(payment.created_at), "dd/MM/yyyy HH:mm", { locale: ptBR })}
-                          </TableCell>
-                          <TableCell>
-                            <div>
-                              <span className="font-medium">{payment.recipient_name}</span>
-                              {payment.recipient_document && (
-                                <span className="block text-xs text-muted-foreground">
-                                  {payment.recipient_document}
-                                </span>
-                              )}
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <div>
-                              <span className="text-xs text-muted-foreground">
-                                {getKeyTypeLabel(payment.pix_key_type)}:
-                              </span>
-                              <span className="block text-sm truncate max-w-[150px]">
-                                {payment.pix_key}
-                              </span>
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-right font-medium">
-                            {formatCurrency(payment.amount)}
-                          </TableCell>
-                          <TableCell>{getPixStatusBadge(payment.status)}</TableCell>
-                          <TableCell>
-                            {payment.inter_end_to_end_id ? (
-                              <code className="text-xs bg-muted px-2 py-1 rounded">
-                                {payment.inter_end_to_end_id.substring(0, 15)}...
+                      {pixPayments.map((payment) => {
+                        // Usa a chave PIX atualizada do payable, se disponível
+                        const currentPixKey = payment.payable?.pix_key || payment.pix_key;
+                        const currentPixKeyType = payment.payable?.pix_key_type || payment.pix_key_type;
+                        const documentNumber = payment.payable?.document_number;
+                        
+                        return (
+                          <TableRow key={payment.id}>
+                            <TableCell>
+                              <code className="text-xs bg-muted px-2 py-1 rounded font-mono">
+                                {documentNumber || "-"}
                               </code>
-                            ) : (
-                              <span className="text-muted-foreground">-</span>
-                            )}
-                          </TableCell>
-                          <TableCell className="text-center">
-                            {payment.status === "failed" && (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleRetryPix(payment)}
-                                disabled={retrying === payment.id}
-                              >
-                                {retrying === payment.id ? (
-                                  <Loader2 className="h-4 w-4 animate-spin" />
-                                ) : (
-                                  <>
-                                    <RotateCcw className="h-4 w-4 mr-1" />
-                                    Tentar novamente
-                                  </>
+                            </TableCell>
+                            <TableCell>
+                              {format(new Date(payment.created_at), "dd/MM/yyyy HH:mm", { locale: ptBR })}
+                            </TableCell>
+                            <TableCell>
+                              <div>
+                                <span className="font-medium">{payment.recipient_name}</span>
+                                {payment.recipient_document && (
+                                  <span className="block text-xs text-muted-foreground">
+                                    {payment.recipient_document}
+                                  </span>
                                 )}
-                              </Button>
-                            )}
-                          </TableCell>
-                        </TableRow>
-                      ))}
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <div>
+                                <span className="text-xs text-muted-foreground">
+                                  {getKeyTypeLabel(currentPixKeyType)}:
+                                </span>
+                                <span className="block text-sm truncate max-w-[150px]">
+                                  {currentPixKey}
+                                </span>
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-right font-medium">
+                              {formatCurrency(payment.amount)}
+                            </TableCell>
+                            <TableCell>{getPixStatusBadge(payment.status)}</TableCell>
+                            <TableCell>
+                              {payment.inter_end_to_end_id ? (
+                                <code className="text-xs bg-muted px-2 py-1 rounded">
+                                  {payment.inter_end_to_end_id.substring(0, 15)}...
+                                </code>
+                              ) : (
+                                <span className="text-muted-foreground">-</span>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-center">
+                              {payment.status === "failed" && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleRetryPix(payment)}
+                                  disabled={retrying === payment.id}
+                                >
+                                  {retrying === payment.id ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                  ) : (
+                                    <>
+                                      <RotateCcw className="h-4 w-4 mr-1" />
+                                      Tentar novamente
+                                    </>
+                                  )}
+                                </Button>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
                     </TableBody>
                   </Table>
                 </div>
