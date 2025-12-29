@@ -219,13 +219,12 @@ serve(async (req) => {
     console.log(`[inter-pix-payment] Calling GCP Function: ${gcpFunctionUrl}`);
     console.log(`[inter-pix-payment] Payload keys: ${Object.keys(gcpPayload).join(', ')}`);
 
-    // Call GCP Function
+    // Call GCP Function with correct authentication header
     const gcpResponse = await fetch(gcpFunctionUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${gcpFunctionSecret}`,
-        "x-api-key": gcpFunctionSecret
+        "x-function-secret": gcpFunctionSecret
       },
       body: JSON.stringify(gcpPayload)
     });
