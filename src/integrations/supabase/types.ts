@@ -1278,6 +1278,54 @@ export type Database = {
           },
         ]
       }
+      purchase_order_limits: {
+        Row: {
+          company_id: string
+          created_at: string
+          id: string
+          is_active: boolean
+          max_monthly_total: number | null
+          max_per_transaction: number | null
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          max_monthly_total?: number | null
+          max_per_transaction?: number | null
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          max_monthly_total?: number | null
+          max_per_transaction?: number | null
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "purchase_order_limits_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_order_limits_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       purchase_order_statuses: {
         Row: {
           color: string | null
