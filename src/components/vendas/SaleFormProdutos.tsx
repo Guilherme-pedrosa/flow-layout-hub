@@ -5,15 +5,17 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Package, Plus, Trash2, Truck, Search, PlusCircle } from "lucide-react";
+import { Package, Plus, Trash2, Truck, ChevronsUpDown, Check, PlusCircle } from "lucide-react";
 import { useProducts } from "@/hooks/useProducts";
 import { usePriceTables } from "@/hooks/useServices";
 import { useInTransitStock, SaleProductItem } from "@/hooks/useSales";
 import { formatCurrency } from "@/lib/formatters";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { cn } from "@/lib/utils";
 
 interface SaleFormProdutosProps {
   items: SaleProductItem[];
@@ -129,21 +131,90 @@ function CadastrarProdutoRapido({ onSuccess }: { onSuccess: () => void }) {
   );
 }
 
+interface ProductComboboxProps {
+  value: string;
+  onSelect: (productId: string) => void;
+  products: Array<{
+    id: string;
+    code: string;
+    description: string;
+    quantity?: number | null;
+    sale_price?: number | null;
+    unit?: string | null;
+    barcode?: string | null;
+  }>;
+  isOutOfStock?: boolean;
+  onRefetch: () => void;
+}
+
+function ProductCombobox({ value, onSelect, products, isOutOfStock, onRefetch }: ProductComboboxProps) {
+  const [open, setOpen] = useState(false);
+  const selectedProduct = products.find(p => p.id === value);
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          role="combobox"
+          aria-expanded={open}
+          className={cn(
+            "w-full justify-between text-left font-normal",
+            isOutOfStock && "border-destructive",
+            !value && "text-muted-foreground"
+          )}
+        >
+          <span className="truncate">
+            {selectedProduct 
+              ? `${selectedProduct.code} - ${selectedProduct.description}`
+              : "Selecione um produto..."
+            }
+          </span>
+          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-[350px] p-0" align="start">
+        <Command>
+          <CommandInput placeholder="Buscar por nome, código ou referência..." />
+          <CommandList>
+            <CommandEmpty>Nenhum produto encontrado.</CommandEmpty>
+            <CommandGroup>
+              {products.slice(0, 30).map((p) => (
+                <CommandItem
+                  key={p.id}
+                  value={`${p.code} ${p.description} ${p.barcode || ''}`}
+                  onSelect={() => {
+                    onSelect(p.id);
+                    setOpen(false);
+                  }}
+                >
+                  <Check
+                    className={cn(
+                      "mr-2 h-4 w-4",
+                      value === p.id ? "opacity-100" : "opacity-0"
+                    )}
+                  />
+                  <span className="font-medium">{p.code}</span>
+                  <span className="ml-1 text-muted-foreground truncate">- {p.description}</span>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+            <div className="border-t p-1">
+              <CadastrarProdutoRapido onSuccess={onRefetch} />
+            </div>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 export function SaleFormProdutos({ items, onChange }: SaleFormProdutosProps) {
   const { products, refetch: refetchProducts } = useProducts();
   const { priceTables } = usePriceTables();
-  const [searchTerm, setSearchTerm] = useState("");
 
   const activeProducts = products?.filter(p => p.is_active) ?? [];
   const activePriceTables = priceTables?.filter(pt => pt.is_active) ?? [];
-
-  const filteredProducts = searchTerm 
-    ? activeProducts.filter(p => 
-        p.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        p.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (p.barcode && p.barcode.toLowerCase().includes(searchTerm.toLowerCase()))
-      )
-    : activeProducts;
 
   const addItem = () => {
     onChange([
@@ -225,40 +296,13 @@ export function SaleFormProdutos({ items, onChange }: SaleFormProdutosProps) {
               return (
                 <TableRow key={index}>
                   <TableCell>
-                    <Select
+                    <ProductCombobox
                       value={item.product_id}
-                      onValueChange={(value) => updateItem(index, 'product_id', value)}
-                    >
-                      <SelectTrigger className={isOutOfStock ? 'border-destructive' : ''}>
-                        <SelectValue placeholder="Digite para buscar" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <div className="p-2">
-                          <div className="flex items-center gap-2 mb-2">
-                            <Search className="h-4 w-4 text-muted-foreground" />
-                            <Input
-                              placeholder="Buscar por nome, código ou referência..."
-                              value={searchTerm}
-                              onChange={(e) => setSearchTerm(e.target.value)}
-                              className="flex-1"
-                            />
-                          </div>
-                        </div>
-                        {filteredProducts.slice(0, 20).map(p => (
-                          <SelectItem key={p.id} value={p.id}>
-                            <span className="font-medium">{p.code}</span> - {p.description}
-                          </SelectItem>
-                        ))}
-                        {filteredProducts.length === 0 && (
-                          <div className="p-2 text-sm text-muted-foreground text-center">
-                            Nenhum produto encontrado
-                          </div>
-                        )}
-                        <div className="border-t mt-2 pt-2">
-                          <CadastrarProdutoRapido onSuccess={refetchProducts} />
-                        </div>
-                      </SelectContent>
-                    </Select>
+                      onSelect={(productId) => updateItem(index, 'product_id', productId)}
+                      products={activeProducts}
+                      isOutOfStock={isOutOfStock}
+                      onRefetch={refetchProducts}
+                    />
                   </TableCell>
                   <TableCell>
                     <Select
