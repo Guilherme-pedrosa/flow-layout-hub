@@ -308,19 +308,25 @@ export function useCheckout() {
       quantity: number;
       barcode?: string;
     }) => {
-      // VERIFICAÇÃO: Se já houve movimentação de estoque para este checkout, não permitir mais bipagens
-      // Isso evita duplicação de separação quando o usuário muda status e tenta bipar novamente
-      const { data: existingMovements } = await supabase
+      // REGRA CORRETA: Checkout parcial ≠ checkout finalizado
+      // Permitir continuar bipando itens que ainda não foram separados
+      // Verificar se ESTE ITEM ESPECÍFICO já teve movimentação de estoque
+      const { data: existingItemMovement } = await supabase
         .from("stock_movements")
-        .select("id")
+        .select("quantity")
         .eq("reference_id", source.id)
         .eq("reference_type", source.type)
-        .limit(1);
+        .eq("product_id", item.product_id);
 
-      if (existingMovements && existingMovements.length > 0) {
+      // Calcular quanto deste item já foi separado via movimentações
+      const alreadySeparatedQty = (existingItemMovement || []).reduce((sum, m) => sum + (m.quantity || 0), 0);
+
+      // Se este item já foi totalmente separado, bloquear
+      if (alreadySeparatedQty >= item.quantity_total) {
         throw new Error(
-          "Este checkout já foi finalizado e o estoque baixado.\n" +
-          "Não é possível adicionar mais itens após a finalização."
+          `Este item já foi totalmente separado.\n` +
+          `Quantidade separada: ${alreadySeparatedQty}.\n` +
+          `Quantidade total: ${item.quantity_total}.`
         );
       }
 
@@ -435,39 +441,79 @@ export function useCheckout() {
   });
 
   // Finalizar checkout (baixa estoque COM movimentação E validação)
+  // REGRA: Checkout parcial permite continuar - só finaliza quando usuário solicita explicitamente
   const finalizeCheckout = useMutation({
     mutationFn: async (source: CheckoutSource) => {
-      // VERIFICAÇÃO: Se já houve movimentação de estoque, não permitir finalizar novamente
-      const { data: existingMovements } = await supabase
-        .from("stock_movements")
-        .select("id")
-        .eq("reference_id", source.id)
-        .eq("reference_type", source.type)
-        .limit(1);
+      // Para cada item, verificar se já teve movimentação de estoque e quanto falta baixar
+      const itemsToProcess: Array<{
+        item: CheckoutItem;
+        quantityToDeduct: number;
+        alreadyDeducted: number;
+      }> = [];
 
-      if (existingMovements && existingMovements.length > 0) {
-        throw new Error(
-          "Este checkout já foi finalizado anteriormente.\n" +
-          "Não é possível finalizar novamente."
-        );
-      }
-
-      // VALIDAÇÃO CRÍTICA: Verificar estoque de TODOS os itens antes de começar
-      const stockErrors: string[] = [];
-      
       for (const item of source.items) {
         if (item.quantity_checked > 0) {
-          const { data: productData } = await supabase
-            .from("products")
+          // Buscar movimentações existentes para este item específico
+          const { data: existingMovements } = await supabase
+            .from("stock_movements")
             .select("quantity")
-            .eq("id", item.product_id)
-            .single();
+            .eq("reference_id", source.id)
+            .eq("reference_type", source.type)
+            .eq("product_id", item.product_id);
 
-          const currentQty = productData?.quantity ?? 0;
-          
-          if (currentQty < item.quantity_checked) {
-            stockErrors.push(`${item.product_description}: disponível ${currentQty}, tentando baixar ${item.quantity_checked}`);
+          const alreadyDeducted = (existingMovements || []).reduce((sum, m) => sum + (m.quantity || 0), 0);
+          const quantityToDeduct = item.quantity_checked - alreadyDeducted;
+
+          // Só processar se há quantidade nova para deduzir
+          if (quantityToDeduct > 0) {
+            itemsToProcess.push({
+              item,
+              quantityToDeduct,
+              alreadyDeducted,
+            });
           }
+        }
+      }
+
+      // Se não há nada novo para processar, verificar se é realmente uma finalização
+      if (itemsToProcess.length === 0) {
+        // Verificar se todos os itens já foram totalmente conferidos
+        const allChecked = source.items.every(item => item.quantity_checked >= item.quantity_total);
+        
+        if (allChecked) {
+          // Atualizar status para completed se ainda não estiver
+          if (source.type === 'venda') {
+            await supabase
+              .from("sales")
+              .update({ checkout_status: 'completed' })
+              .eq("id", source.id);
+          } else {
+            await supabase
+              .from("service_orders")
+              .update({ checkout_status: 'completed' })
+              .eq("id", source.id);
+          }
+          return { source, isPartial: false, isAlreadyFinalized: true };
+        } else {
+          toast.info("Checkout em andamento. Continue conferindo os itens pendentes.");
+          return { source, isPartial: true, isAlreadyFinalized: false };
+        }
+      }
+
+      // VALIDAÇÃO CRÍTICA: Verificar estoque de TODOS os itens que serão processados
+      const stockErrors: string[] = [];
+      
+      for (const { item, quantityToDeduct } of itemsToProcess) {
+        const { data: productData } = await supabase
+          .from("products")
+          .select("quantity")
+          .eq("id", item.product_id)
+          .single();
+
+        const currentQty = productData?.quantity ?? 0;
+        
+        if (currentQty < quantityToDeduct) {
+          stockErrors.push(`${item.product_description}: disponível ${currentQty}, tentando baixar ${quantityToDeduct}`);
         }
       }
 
@@ -475,40 +521,38 @@ export function useCheckout() {
         throw new Error(`Estoque insuficiente para os seguintes itens:\n${stockErrors.join('\n')}`);
       }
 
-      // Atualiza estoque de cada produto E cria movimentação
-      for (const item of source.items) {
-        if (item.quantity_checked > 0) {
-          // Buscar o preço unitário do produto
-          const { data: productData } = await supabase
-            .from("products")
-            .select("purchase_price, sale_price, quantity")
-            .eq("id", item.product_id)
-            .single();
+      // Processar apenas os itens que ainda não tiveram baixa (ou falta quantidade)
+      for (const { item, quantityToDeduct } of itemsToProcess) {
+        // Buscar o preço unitário do produto
+        const { data: productData } = await supabase
+          .from("products")
+          .select("purchase_price, sale_price, quantity")
+          .eq("id", item.product_id)
+          .single();
 
-          const currentQty = productData?.quantity ?? 0;
-          const newQty = currentQty - item.quantity_checked;
-          const unitPrice = productData?.sale_price || productData?.purchase_price || 0;
+        const currentQty = productData?.quantity ?? 0;
+        const newQty = currentQty - quantityToDeduct;
+        const unitPrice = productData?.sale_price || productData?.purchase_price || 0;
 
-          // Criar movimentação de saída
-          await supabase
-            .from("stock_movements")
-            .insert({
-              product_id: item.product_id,
-              type: "SAIDA_VENDA",
-              quantity: item.quantity_checked,
-              unit_price: unitPrice,
-              total_value: unitPrice * item.quantity_checked,
-              reason: `Checkout ${source.type === 'venda' ? 'Venda' : 'OS'} #${source.number}`,
-              reference_type: source.type,
-              reference_id: source.id,
-            });
+        // Criar movimentação de saída apenas para a quantidade nova
+        await supabase
+          .from("stock_movements")
+          .insert({
+            product_id: item.product_id,
+            type: "SAIDA_VENDA",
+            quantity: quantityToDeduct,
+            unit_price: unitPrice,
+            total_value: unitPrice * quantityToDeduct,
+            reason: `Checkout ${source.type === 'venda' ? 'Venda' : 'OS'} #${source.number}`,
+            reference_type: source.type,
+            reference_id: source.id,
+          });
 
-          // Baixa o estoque
-          await supabase
-            .from("products")
-            .update({ quantity: newQty })
-            .eq("id", item.product_id);
-        }
+        // Baixa o estoque
+        await supabase
+          .from("products")
+          .update({ quantity: newQty })
+          .eq("id", item.product_id);
       }
 
       // Verifica se todos os itens foram totalmente conferidos
@@ -528,19 +572,22 @@ export function useCheckout() {
           .eq("id", source.id);
       }
 
-      return { source, isPartial: !allChecked };
+      return { source, isPartial: !allChecked, isAlreadyFinalized: false };
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["checkout"] });
       queryClient.invalidateQueries({ queryKey: ["products"] });
-      if (data.isPartial) {
-        toast.success("Separação parcial salva! Estoque baixado.");
+      
+      if (data.isAlreadyFinalized) {
+        toast.success("Checkout já estava finalizado!");
+      } else if (data.isPartial) {
+        toast.success("Separação parcial salva! Estoque baixado. Continue conferindo os itens pendentes.");
       } else {
-        toast.success("Checkout finalizado! Estoque baixado.");
+        toast.success("Checkout finalizado com sucesso! Todos os itens foram separados.");
       }
     },
     onError: (error) => {
-      toast.error(`Erro ao finalizar checkout: ${error.message}`);
+      toast.error(`Erro ao processar checkout: ${error.message}`);
     },
   });
 
