@@ -337,25 +337,33 @@ export function useCheckout() {
         }
       }
 
+      // Verifica se todos os itens foram totalmente conferidos
+      const allChecked = source.items.every(item => item.quantity_checked >= item.quantity_total);
+      const newStatus = allChecked ? 'completed' : 'partial';
+
       // Atualiza status do checkout
       if (source.type === 'venda') {
         await supabase
           .from("sales")
-          .update({ checkout_status: 'completed' })
+          .update({ checkout_status: newStatus })
           .eq("id", source.id);
       } else {
         await supabase
           .from("service_orders")
-          .update({ checkout_status: 'completed' })
+          .update({ checkout_status: newStatus })
           .eq("id", source.id);
       }
 
-      return source;
+      return { source, isPartial: !allChecked };
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["checkout"] });
       queryClient.invalidateQueries({ queryKey: ["products"] });
-      toast.success("Checkout finalizado! Estoque baixado.");
+      if (data.isPartial) {
+        toast.success("Separação parcial salva! Estoque baixado.");
+      } else {
+        toast.success("Checkout finalizado! Estoque baixado.");
+      }
     },
     onError: (error) => {
       toast.error(`Erro ao finalizar checkout: ${error.message}`);
