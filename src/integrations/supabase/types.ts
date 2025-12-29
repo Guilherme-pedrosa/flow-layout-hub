@@ -442,6 +442,115 @@ export type Database = {
           },
         ]
       }
+      payables: {
+        Row: {
+          amount: number
+          bank_account_id: string | null
+          chart_account_id: string | null
+          company_id: string
+          cost_center_id: string | null
+          created_at: string
+          description: string | null
+          document_number: string | null
+          document_type: string
+          due_date: string
+          id: string
+          is_paid: boolean | null
+          notes: string | null
+          paid_amount: number | null
+          paid_at: string | null
+          payment_method: string | null
+          purchase_order_id: string | null
+          supplier_id: string
+          updated_at: string
+        }
+        Insert: {
+          amount: number
+          bank_account_id?: string | null
+          chart_account_id?: string | null
+          company_id: string
+          cost_center_id?: string | null
+          created_at?: string
+          description?: string | null
+          document_number?: string | null
+          document_type?: string
+          due_date: string
+          id?: string
+          is_paid?: boolean | null
+          notes?: string | null
+          paid_amount?: number | null
+          paid_at?: string | null
+          payment_method?: string | null
+          purchase_order_id?: string | null
+          supplier_id: string
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          bank_account_id?: string | null
+          chart_account_id?: string | null
+          company_id?: string
+          cost_center_id?: string | null
+          created_at?: string
+          description?: string | null
+          document_number?: string | null
+          document_type?: string
+          due_date?: string
+          id?: string
+          is_paid?: boolean | null
+          notes?: string | null
+          paid_amount?: number | null
+          paid_at?: string | null
+          payment_method?: string | null
+          purchase_order_id?: string | null
+          supplier_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payables_bank_account_id_fkey"
+            columns: ["bank_account_id"]
+            isOneToOne: false
+            referencedRelation: "bank_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payables_chart_account_id_fkey"
+            columns: ["chart_account_id"]
+            isOneToOne: false
+            referencedRelation: "chart_of_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payables_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payables_cost_center_id_fkey"
+            columns: ["cost_center_id"]
+            isOneToOne: false
+            referencedRelation: "cost_centers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payables_purchase_order_id_fkey"
+            columns: ["purchase_order_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payables_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "suppliers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       price_table_items: {
         Row: {
           created_at: string
@@ -731,15 +840,96 @@ export type Database = {
         }
         Relationships: []
       }
+      purchase_order_divergences: {
+        Row: {
+          actual_value: string | null
+          created_at: string
+          difference: number | null
+          divergence_type: string
+          expected_value: string | null
+          field_name: string | null
+          id: string
+          is_resolved: boolean | null
+          item_id: string | null
+          purchase_order_id: string
+          resolution_notes: string | null
+          resolved_at: string | null
+          resolved_by: string | null
+        }
+        Insert: {
+          actual_value?: string | null
+          created_at?: string
+          difference?: number | null
+          divergence_type: string
+          expected_value?: string | null
+          field_name?: string | null
+          id?: string
+          is_resolved?: boolean | null
+          item_id?: string | null
+          purchase_order_id: string
+          resolution_notes?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+        }
+        Update: {
+          actual_value?: string | null
+          created_at?: string
+          difference?: number | null
+          divergence_type?: string
+          expected_value?: string | null
+          field_name?: string | null
+          id?: string
+          is_resolved?: boolean | null
+          item_id?: string | null
+          purchase_order_id?: string
+          resolution_notes?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "purchase_order_divergences_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_order_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_order_divergences_purchase_order_id_fkey"
+            columns: ["purchase_order_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_order_divergences_resolved_by_fkey"
+            columns: ["resolved_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       purchase_order_items: {
         Row: {
           cfop: string | null
+          chart_account_id: string | null
+          cost_center_id: string | null
           created_at: string
+          description: string | null
+          divergence_details: Json | null
+          final_unit_cost: number | null
+          freight_allocated: number | null
+          has_divergence: boolean | null
           id: string
           ncm: string | null
+          nfe_quantity: number | null
+          nfe_total_value: number | null
+          nfe_unit_price: number | null
           product_id: string | null
           purchase_order_id: string
           quantity: number
+          quantity_received: number | null
           total_value: number | null
           unit_price: number | null
           xml_code: string | null
@@ -747,12 +937,23 @@ export type Database = {
         }
         Insert: {
           cfop?: string | null
+          chart_account_id?: string | null
+          cost_center_id?: string | null
           created_at?: string
+          description?: string | null
+          divergence_details?: Json | null
+          final_unit_cost?: number | null
+          freight_allocated?: number | null
+          has_divergence?: boolean | null
           id?: string
           ncm?: string | null
+          nfe_quantity?: number | null
+          nfe_total_value?: number | null
+          nfe_unit_price?: number | null
           product_id?: string | null
           purchase_order_id: string
           quantity: number
+          quantity_received?: number | null
           total_value?: number | null
           unit_price?: number | null
           xml_code?: string | null
@@ -760,18 +961,43 @@ export type Database = {
         }
         Update: {
           cfop?: string | null
+          chart_account_id?: string | null
+          cost_center_id?: string | null
           created_at?: string
+          description?: string | null
+          divergence_details?: Json | null
+          final_unit_cost?: number | null
+          freight_allocated?: number | null
+          has_divergence?: boolean | null
           id?: string
           ncm?: string | null
+          nfe_quantity?: number | null
+          nfe_total_value?: number | null
+          nfe_unit_price?: number | null
           product_id?: string | null
           purchase_order_id?: string
           quantity?: number
+          quantity_received?: number | null
           total_value?: number | null
           unit_price?: number | null
           xml_code?: string | null
           xml_description?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "purchase_order_items_chart_account_id_fkey"
+            columns: ["chart_account_id"]
+            isOneToOne: false
+            referencedRelation: "chart_of_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_order_items_cost_center_id_fkey"
+            columns: ["cost_center_id"]
+            isOneToOne: false
+            referencedRelation: "cost_centers"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "purchase_order_items_product_id_fkey"
             columns: ["product_id"]
@@ -844,16 +1070,44 @@ export type Database = {
           cost_center_id: string | null
           created_at: string
           created_by: string | null
+          cte_carrier_id: string | null
+          cte_date: string | null
+          cte_freight_value: number | null
+          cte_imported_at: string | null
+          cte_key: string | null
+          cte_number: string | null
+          cte_xml_url: string | null
+          financial_generated: boolean | null
+          financial_generated_at: string | null
           financial_notes: string | null
+          freight_value: number | null
+          has_external_freight: boolean | null
           id: string
           invoice_date: string | null
           invoice_number: string | null
           invoice_series: string | null
+          nfe_date: string | null
+          nfe_imported_at: string | null
+          nfe_key: string | null
+          nfe_number: string | null
+          nfe_series: string | null
+          nfe_xml_url: string | null
+          observations: string | null
+          order_number: number
           payment_method: string | null
+          purpose: string | null
+          reapproval_reason: string | null
+          receipt_date: string | null
+          receipt_status: string | null
+          requester_id: string | null
+          requires_reapproval: boolean | null
           status: string | null
           status_id: string | null
+          stock_entry_done: boolean | null
+          stock_entry_done_at: string | null
           supplier_address: string | null
           supplier_cnpj: string | null
+          supplier_id: string | null
           supplier_name: string | null
           total_value: number | null
           updated_at: string
@@ -864,16 +1118,44 @@ export type Database = {
           cost_center_id?: string | null
           created_at?: string
           created_by?: string | null
+          cte_carrier_id?: string | null
+          cte_date?: string | null
+          cte_freight_value?: number | null
+          cte_imported_at?: string | null
+          cte_key?: string | null
+          cte_number?: string | null
+          cte_xml_url?: string | null
+          financial_generated?: boolean | null
+          financial_generated_at?: string | null
           financial_notes?: string | null
+          freight_value?: number | null
+          has_external_freight?: boolean | null
           id?: string
           invoice_date?: string | null
           invoice_number?: string | null
           invoice_series?: string | null
+          nfe_date?: string | null
+          nfe_imported_at?: string | null
+          nfe_key?: string | null
+          nfe_number?: string | null
+          nfe_series?: string | null
+          nfe_xml_url?: string | null
+          observations?: string | null
+          order_number?: number
           payment_method?: string | null
+          purpose?: string | null
+          reapproval_reason?: string | null
+          receipt_date?: string | null
+          receipt_status?: string | null
+          requester_id?: string | null
+          requires_reapproval?: boolean | null
           status?: string | null
           status_id?: string | null
+          stock_entry_done?: boolean | null
+          stock_entry_done_at?: string | null
           supplier_address?: string | null
           supplier_cnpj?: string | null
+          supplier_id?: string | null
           supplier_name?: string | null
           total_value?: number | null
           updated_at?: string
@@ -884,16 +1166,44 @@ export type Database = {
           cost_center_id?: string | null
           created_at?: string
           created_by?: string | null
+          cte_carrier_id?: string | null
+          cte_date?: string | null
+          cte_freight_value?: number | null
+          cte_imported_at?: string | null
+          cte_key?: string | null
+          cte_number?: string | null
+          cte_xml_url?: string | null
+          financial_generated?: boolean | null
+          financial_generated_at?: string | null
           financial_notes?: string | null
+          freight_value?: number | null
+          has_external_freight?: boolean | null
           id?: string
           invoice_date?: string | null
           invoice_number?: string | null
           invoice_series?: string | null
+          nfe_date?: string | null
+          nfe_imported_at?: string | null
+          nfe_key?: string | null
+          nfe_number?: string | null
+          nfe_series?: string | null
+          nfe_xml_url?: string | null
+          observations?: string | null
+          order_number?: number
           payment_method?: string | null
+          purpose?: string | null
+          reapproval_reason?: string | null
+          receipt_date?: string | null
+          receipt_status?: string | null
+          requester_id?: string | null
+          requires_reapproval?: boolean | null
           status?: string | null
           status_id?: string | null
+          stock_entry_done?: boolean | null
+          stock_entry_done_at?: string | null
           supplier_address?: string | null
           supplier_cnpj?: string | null
+          supplier_id?: string | null
           supplier_name?: string | null
           total_value?: number | null
           updated_at?: string
@@ -915,10 +1225,31 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "purchase_orders_cte_carrier_id_fkey"
+            columns: ["cte_carrier_id"]
+            isOneToOne: false
+            referencedRelation: "suppliers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_orders_requester_id_fkey"
+            columns: ["requester_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "purchase_orders_status_id_fkey"
             columns: ["status_id"]
             isOneToOne: false
             referencedRelation: "purchase_order_statuses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_orders_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "suppliers"
             referencedColumns: ["id"]
           },
         ]
@@ -2109,6 +2440,86 @@ export type Database = {
             columns: ["product_id"]
             isOneToOne: false
             referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      suppliers: {
+        Row: {
+          bairro: string | null
+          cep: string | null
+          cidade: string | null
+          company_id: string
+          complemento: string | null
+          cpf_cnpj: string | null
+          created_at: string
+          email: string | null
+          estado: string | null
+          id: string
+          inscricao_estadual: string | null
+          inscricao_municipal: string | null
+          is_active: boolean
+          logradouro: string | null
+          nome_fantasia: string | null
+          numero: string | null
+          observacoes: string | null
+          razao_social: string
+          telefone: string | null
+          tipo_pessoa: string
+          updated_at: string
+        }
+        Insert: {
+          bairro?: string | null
+          cep?: string | null
+          cidade?: string | null
+          company_id: string
+          complemento?: string | null
+          cpf_cnpj?: string | null
+          created_at?: string
+          email?: string | null
+          estado?: string | null
+          id?: string
+          inscricao_estadual?: string | null
+          inscricao_municipal?: string | null
+          is_active?: boolean
+          logradouro?: string | null
+          nome_fantasia?: string | null
+          numero?: string | null
+          observacoes?: string | null
+          razao_social: string
+          telefone?: string | null
+          tipo_pessoa?: string
+          updated_at?: string
+        }
+        Update: {
+          bairro?: string | null
+          cep?: string | null
+          cidade?: string | null
+          company_id?: string
+          complemento?: string | null
+          cpf_cnpj?: string | null
+          created_at?: string
+          email?: string | null
+          estado?: string | null
+          id?: string
+          inscricao_estadual?: string | null
+          inscricao_municipal?: string | null
+          is_active?: boolean
+          logradouro?: string | null
+          nome_fantasia?: string | null
+          numero?: string | null
+          observacoes?: string | null
+          razao_social?: string
+          telefone?: string | null
+          tipo_pessoa?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "suppliers_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
             referencedColumns: ["id"]
           },
         ]
