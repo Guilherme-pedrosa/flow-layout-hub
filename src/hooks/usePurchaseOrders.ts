@@ -199,18 +199,45 @@ export function usePurchaseOrders() {
   });
 
   const createOrder = useMutation({
-    mutationFn: async (order: PurchaseOrderInsert) => {
+    mutationFn: async (order: PurchaseOrderInsert & { generatePayable?: boolean; dueDate?: string }) => {
+      const { generatePayable, dueDate, ...orderData } = order;
+      
       const { data, error } = await supabase
         .from("purchase_orders")
-        .insert(order)
+        .insert(orderData)
         .select()
         .single();
 
       if (error) throw error;
+
+      // Generate payable as forecast if supplier and total > 0
+      if (generatePayable && orderData.supplier_id && orderData.total_value && orderData.total_value > 0) {
+        const { error: payableError } = await supabase
+          .from("payables")
+          .insert({
+            company_id: "00000000-0000-0000-0000-000000000001", // TODO: get from context
+            supplier_id: orderData.supplier_id,
+            purchase_order_id: data.id,
+            amount: orderData.total_value,
+            due_date: dueDate || new Date().toISOString().split('T')[0],
+            document_type: "pedido_compra",
+            document_number: data.order_number?.toString(),
+            description: `Pedido de Compra #${data.order_number}`,
+            chart_account_id: orderData.chart_account_id,
+            cost_center_id: orderData.cost_center_id,
+            is_forecast: true,
+          });
+
+        if (payableError) {
+          console.error("Erro ao criar previsão financeira:", payableError);
+        }
+      }
+
       return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["purchase_orders"] });
+      queryClient.invalidateQueries({ queryKey: ["payables"] });
       toast.success("Pedido de compra criado com sucesso!");
     },
     onError: (error) => {
@@ -219,7 +246,17 @@ export function usePurchaseOrders() {
   });
 
   const updateOrder = useMutation({
-    mutationFn: async ({ id, data }: { id: string; data: Partial<PurchaseOrderInsert> }) => {
+    mutationFn: async ({ 
+      id, 
+      data, 
+      updatePayable,
+      dueDate 
+    }: { 
+      id: string; 
+      data: Partial<PurchaseOrderInsert>; 
+      updatePayable?: boolean;
+      dueDate?: string;
+    }) => {
       const { data: result, error } = await supabase
         .from("purchase_orders")
         .update(data)
@@ -228,10 +265,53 @@ export function usePurchaseOrders() {
         .single();
 
       if (error) throw error;
+
+      // Update or create payable if total value changed
+      if (updatePayable && data.supplier_id) {
+        // Check if payable exists
+        const { data: existingPayable } = await supabase
+          .from("payables")
+          .select("id")
+          .eq("purchase_order_id", id)
+          .maybeSingle();
+
+        if (existingPayable) {
+          // Update existing payable
+          await supabase
+            .from("payables")
+            .update({
+              amount: data.total_value || 0,
+              supplier_id: data.supplier_id,
+              chart_account_id: data.chart_account_id,
+              cost_center_id: data.cost_center_id,
+              due_date: dueDate,
+            })
+            .eq("id", existingPayable.id);
+        } else if (data.total_value && data.total_value > 0) {
+          // Create new payable
+          await supabase
+            .from("payables")
+            .insert({
+              company_id: "00000000-0000-0000-0000-000000000001",
+              supplier_id: data.supplier_id,
+              purchase_order_id: id,
+              amount: data.total_value,
+              due_date: dueDate || new Date().toISOString().split('T')[0],
+              document_type: "pedido_compra",
+              document_number: result.order_number?.toString(),
+              description: `Pedido de Compra #${result.order_number}`,
+              chart_account_id: data.chart_account_id,
+              cost_center_id: data.cost_center_id,
+              is_forecast: true,
+            });
+        }
+      }
+
       return result;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["purchase_orders"] });
+      queryClient.invalidateQueries({ queryKey: ["payables"] });
       toast.success("Pedido atualizado com sucesso!");
     },
     onError: (error) => {
@@ -296,7 +376,7 @@ export function usePurchaseOrders() {
   });
 
   const updateOrderStatus = useMutation({
-    mutationFn: async ({ id, status_id }: { id: string; status_id: string }) => {
+    mutationFn: async ({ id, status_id, convertForecast }: { id: string; status_id: string; convertForecast?: boolean }) => {
       const { data, error } = await supabase
         .from("purchase_orders")
         .update({ status_id })
@@ -305,10 +385,24 @@ export function usePurchaseOrders() {
         .single();
 
       if (error) throw error;
+
+      // Convert forecast to effective payable if status behavior is "gerar"
+      if (convertForecast) {
+        await supabase
+          .from("payables")
+          .update({
+            is_forecast: false,
+            forecast_converted_at: new Date().toISOString(),
+          })
+          .eq("purchase_order_id", id)
+          .eq("is_forecast", true);
+      }
+
       return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["purchase_orders"] });
+      queryClient.invalidateQueries({ queryKey: ["payables"] });
       toast.success("Status atualizado com sucesso!");
     },
     onError: (error) => {

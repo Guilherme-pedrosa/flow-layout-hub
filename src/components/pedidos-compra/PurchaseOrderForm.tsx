@@ -411,17 +411,39 @@ export function PurchaseOrderForm({ order, onClose }: PurchaseOrderFormProps) {
         <TabsContent value="financeiro">
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">Financeiro</CardTitle>
+              <CardTitle className="text-lg">Contas a Pagar</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-center py-8">
-                <DollarSign className="mx-auto h-12 w-12 text-muted-foreground" />
-                <h3 className="mt-4 text-lg font-medium">Contas a Pagar</h3>
-                <p className="mt-2 text-sm text-muted-foreground">
-                  {order?.financial_generated
-                    ? `Financeiro gerado em ${new Date(order.financial_generated_at!).toLocaleString()}`
-                    : "O financeiro será gerado após o recebimento completo"}
-                </p>
+              <div className="space-y-4">
+                <div className="flex items-center gap-3 p-4 rounded-lg bg-muted/50">
+                  <DollarSign className="h-8 w-8 text-muted-foreground" />
+                  <div>
+                    <p className="font-medium">
+                      {order ? "Financeiro gerado automaticamente" : "Financeiro será gerado ao salvar"}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      {order 
+                        ? "O financeiro é criado como previsão ao emitir o pedido. Quando o status mudar para um que tenha comportamento financeiro 'Gerar', a previsão se torna efetiva."
+                        : "Preencha os dados e salve o pedido para gerar a previsão financeira."}
+                    </p>
+                  </div>
+                </div>
+                {order && (
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="p-4 rounded-lg border">
+                      <Label className="text-muted-foreground">Status Financeiro</Label>
+                      <p className="font-medium mt-1">
+                        {order.financial_generated ? "Efetivo" : "Previsão"}
+                      </p>
+                    </div>
+                    <div className="p-4 rounded-lg border">
+                      <Label className="text-muted-foreground">Valor Total</Label>
+                      <p className="font-medium mt-1">
+                        {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(order.total_value || 0)}
+                      </p>
+                    </div>
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>

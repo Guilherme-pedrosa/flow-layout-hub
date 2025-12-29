@@ -454,7 +454,9 @@ export type Database = {
           document_number: string | null
           document_type: string
           due_date: string
+          forecast_converted_at: string | null
           id: string
+          is_forecast: boolean | null
           is_paid: boolean | null
           notes: string | null
           paid_amount: number | null
@@ -475,7 +477,9 @@ export type Database = {
           document_number?: string | null
           document_type?: string
           due_date: string
+          forecast_converted_at?: string | null
           id?: string
+          is_forecast?: boolean | null
           is_paid?: boolean | null
           notes?: string | null
           paid_amount?: number | null
@@ -496,7 +500,9 @@ export type Database = {
           document_number?: string | null
           document_type?: string
           due_date?: string
+          forecast_converted_at?: string | null
           id?: string
+          is_forecast?: boolean | null
           is_paid?: boolean | null
           notes?: string | null
           paid_amount?: number | null
