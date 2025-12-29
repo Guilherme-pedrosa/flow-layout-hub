@@ -18,10 +18,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Loader2, Save, Receipt, QrCode, CreditCard } from "lucide-react";
+import { Loader2, Save, Receipt, QrCode, CreditCard, Plus } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { format } from "date-fns";
+import { CadastrarPessoaDialog } from "@/components/shared/CadastrarPessoaDialog";
 
 interface PayableFormProps {
   open: boolean;
@@ -49,6 +50,7 @@ type PixKeyType = "cpf" | "cnpj" | "email" | "telefone" | "aleatorio";
 
 export function PayableForm({ open, onOpenChange, payable, onSuccess }: PayableFormProps) {
   const [loading, setLoading] = useState(false);
+  const [showCadastrarFornecedor, setShowCadastrarFornecedor] = useState(false);
   const [suppliers, setSuppliers] = useState<{ id: string; nome_fantasia: string | null; razao_social: string | null }[]>([]);
   
   const [formData, setFormData] = useState({
@@ -209,6 +211,7 @@ export function PayableForm({ open, onOpenChange, payable, onSuccess }: PayableF
   };
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
@@ -225,21 +228,32 @@ export function PayableForm({ open, onOpenChange, payable, onSuccess }: PayableF
           {/* Fornecedor */}
           <div className="space-y-2">
             <Label>Fornecedor *</Label>
-            <Select
-              value={formData.supplierId}
-              onValueChange={(value) => setFormData({ ...formData, supplierId: value })}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Selecione o fornecedor" />
-              </SelectTrigger>
-              <SelectContent>
-                {suppliers.map((s) => (
-                  <SelectItem key={s.id} value={s.id}>
-                    {s.nome_fantasia || s.razao_social || "Sem nome"}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="flex gap-2">
+              <Select
+                value={formData.supplierId}
+                onValueChange={(value) => setFormData({ ...formData, supplierId: value })}
+              >
+                <SelectTrigger className="flex-1">
+                  <SelectValue placeholder="Selecione o fornecedor" />
+                </SelectTrigger>
+                <SelectContent>
+                  {suppliers.map((s) => (
+                    <SelectItem key={s.id} value={s.id}>
+                      {s.nome_fantasia || s.razao_social || "Sem nome"}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button 
+                type="button" 
+                variant="outline" 
+                size="icon"
+                onClick={() => setShowCadastrarFornecedor(true)}
+                title="Cadastrar novo fornecedor"
+              >
+                <Plus className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
 
           {/* Valor e Vencimento */}
@@ -425,5 +439,17 @@ export function PayableForm({ open, onOpenChange, payable, onSuccess }: PayableF
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+    <CadastrarPessoaDialog
+      open={showCadastrarFornecedor}
+      onOpenChange={setShowCadastrarFornecedor}
+      tipo="fornecedor"
+      title="Cadastrar Fornecedor"
+      onSuccess={(pessoaId) => {
+        fetchSuppliers();
+        setFormData(prev => ({ ...prev, supplierId: pessoaId }));
+      }}
+    />
+    </>
   );
 }
