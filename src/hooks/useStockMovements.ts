@@ -62,24 +62,34 @@ export function useStockMovements() {
 
       if (movementError) throw movementError;
 
-      // Atualizar saldo do produto
-      const { data: productData, error: productFetchError } = await supabase
-        .from("products")
-        .select("quantity")
-        .eq("id", movement.product_id)
-        .single();
+      // Recalcular saldo do produto baseado em TODAS as movimentações
+      // Isso evita problemas de concorrência quando múltiplas movimentações são criadas em sequência
+      const { data: allMovements, error: movementsFetchError } = await supabase
+        .from("stock_movements")
+        .select("type, quantity")
+        .eq("product_id", movement.product_id);
 
-      if (productFetchError) throw productFetchError;
+      if (movementsFetchError) throw movementsFetchError;
 
-      const currentQty = productData?.quantity ?? 0;
-      const isEntry = movement.type.includes("ENTRADA");
-      const newQty = isEntry 
-        ? currentQty + movement.quantity 
-        : currentQty - movement.quantity;
+      // Calcular saldo total baseado em todas as movimentações
+      let totalQuantity = 0;
+      for (const mov of allMovements || []) {
+        const isEntry = mov.type.includes("ENTRADA");
+        const isExit = mov.type.includes("SAIDA");
+        const isReversal = mov.type.includes("ESTORNO");
+        
+        if (isEntry && !isReversal) {
+          totalQuantity += mov.quantity;
+        } else if (isExit || (isReversal && mov.type.includes("ENTRADA"))) {
+          totalQuantity -= mov.quantity;
+        } else if (isReversal && mov.type.includes("SAIDA")) {
+          totalQuantity += mov.quantity;
+        }
+      }
 
       const { error: updateError } = await supabase
         .from("products")
-        .update({ quantity: newQty })
+        .update({ quantity: totalQuantity })
         .eq("id", movement.product_id);
 
       if (updateError) throw updateError;
