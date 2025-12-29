@@ -1013,6 +1013,50 @@ export type Database = {
           },
         ]
       }
+      sale_checkout_items: {
+        Row: {
+          barcode_scanned: string | null
+          checked_at: string | null
+          checked_by: string | null
+          created_at: string
+          id: string
+          quantity_checked: number
+          quantity_pending: number
+          sale_product_item_id: string
+          updated_at: string
+        }
+        Insert: {
+          barcode_scanned?: string | null
+          checked_at?: string | null
+          checked_by?: string | null
+          created_at?: string
+          id?: string
+          quantity_checked?: number
+          quantity_pending?: number
+          sale_product_item_id: string
+          updated_at?: string
+        }
+        Update: {
+          barcode_scanned?: string | null
+          checked_at?: string | null
+          checked_by?: string | null
+          created_at?: string
+          id?: string
+          quantity_checked?: number
+          quantity_pending?: number
+          sale_product_item_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sale_checkout_items_sale_product_item_id_fkey"
+            columns: ["sale_product_item_id"]
+            isOneToOne: false
+            referencedRelation: "sale_product_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sale_installments: {
         Row: {
           amount: number
@@ -1256,6 +1300,7 @@ export type Database = {
       }
       sale_statuses: {
         Row: {
+          checkout_behavior: string
           color: string | null
           company_id: string
           created_at: string
@@ -1269,6 +1314,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          checkout_behavior?: string
           color?: string | null
           company_id: string
           created_at?: string
@@ -1282,6 +1328,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          checkout_behavior?: string
           color?: string | null
           company_id?: string
           created_at?: string
@@ -1307,6 +1354,7 @@ export type Database = {
       sales: {
         Row: {
           carrier: string | null
+          checkout_status: string | null
           client_id: string | null
           company_id: string
           cost_center_id: string | null
@@ -1340,6 +1388,7 @@ export type Database = {
         }
         Insert: {
           carrier?: string | null
+          checkout_status?: string | null
           client_id?: string | null
           company_id: string
           cost_center_id?: string | null
@@ -1373,6 +1422,7 @@ export type Database = {
         }
         Update: {
           carrier?: string | null
+          checkout_status?: string | null
           client_id?: string | null
           company_id?: string
           cost_center_id?: string | null
