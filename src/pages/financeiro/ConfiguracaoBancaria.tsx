@@ -90,6 +90,11 @@ export default function ConfiguracaoBancaria() {
       return;
     }
 
+    if (!accountNumber) {
+      toast.error("O número da conta corrente é obrigatório");
+      return;
+    }
+
     if (!credentials && (!certFile || !keyFile)) {
       toast.error("Faça upload do certificado e da chave privada");
       return;
@@ -216,13 +221,20 @@ export default function ConfiguracaoBancaria() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="accountNumber">Número da Conta (opcional)</Label>
+                <Label htmlFor="accountNumber" className="flex items-center gap-2">
+                  Número da Conta Corrente
+                  <Badge variant="destructive" className="text-xs">Obrigatório</Badge>
+                </Label>
                 <Input
                   id="accountNumber"
                   value={accountNumber}
                   onChange={(e) => setAccountNumber(e.target.value)}
-                  placeholder="Número da conta no Banco Inter"
+                  placeholder="Ex: 12345678-9"
+                  required
                 />
+                <p className="text-xs text-muted-foreground">
+                  Número da conta corrente no Banco Inter (sem agência)
+                </p>
               </div>
 
               <Separator />
