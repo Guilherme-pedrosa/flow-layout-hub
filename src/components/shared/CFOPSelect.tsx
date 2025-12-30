@@ -122,8 +122,12 @@ export function CFOPSelect({
 
   // Sugestão de CFOP via IA
   const handleAISuggestion = async () => {
-    if (!supplierState || !companyState) {
-      toast.error("Selecione um fornecedor primeiro para que a IA possa sugerir o CFOP");
+    if (!supplierState) {
+      toast.error("O fornecedor selecionado não possui UF cadastrada. Atualize o cadastro do fornecedor.");
+      return;
+    }
+    if (!companyState) {
+      toast.error("Configure a UF da empresa para que a IA possa sugerir o CFOP");
       return;
     }
 
