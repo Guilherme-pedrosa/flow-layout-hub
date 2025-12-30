@@ -6,13 +6,24 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSub, DropdownMenuSubTrigger, DropdownMenuSubContent } from "@/components/ui/dropdown-menu";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Search, Eye, Edit, MoreVertical, DollarSign, FileText, Printer, Link, Share2, Package, CircleDollarSign, CheckCircle, Download, Trash2 } from "lucide-react";
+import { Search, Eye, Edit, MoreVertical, DollarSign, FileText, Printer, Link, Share2, Package, CircleDollarSign, CheckCircle, Download, Trash2, Loader2 } from "lucide-react";
 import { useSales, useSaleStatuses, Sale } from "@/hooks/useSales";
 import { useDocumentPdf } from "@/hooks/useDocumentPdf";
+import { useNFe } from "@/hooks/useNFe";
 import { formatCurrency } from "@/lib/formatters";
 import { toast } from "sonner";
 import JSZip from "jszip";
 import { supabase } from "@/integrations/supabase/client";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface SalesListProps {
   onEdit: (sale: Sale) => void;
@@ -23,9 +34,13 @@ export function SalesList({ onEdit, onView }: SalesListProps) {
   const { sales, isLoading, updateSale, deleteSale, refetch } = useSales();
   const { statuses, getActiveStatuses } = useSaleStatuses();
   const { printDocument, printSummary, isGenerating } = useDocumentPdf();
+  const { emitirNFe, isEmitting, getNFeBySale, nfes } = useNFe();
   const [search, setSearch] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isDownloadingBatch, setIsDownloadingBatch] = useState(false);
+  const [emitindoNFeId, setEmitindoNFeId] = useState<string | null>(null);
+  const [showNFeDialog, setShowNFeDialog] = useState(false);
+  const [selectedSaleForNFe, setSelectedSaleForNFe] = useState<Sale | null>(null);
 
   const activeStatuses = getActiveStatuses();
 
@@ -47,6 +62,33 @@ export function SalesList({ onEdit, onView }: SalesListProps) {
 
   const handlePrintSummary = async (sale: Sale) => {
     await printSummary(sale.id, "sale");
+  };
+
+  const handleEmitirNFe = async (sale: Sale) => {
+    setSelectedSaleForNFe(sale);
+    setShowNFeDialog(true);
+  };
+
+  const confirmEmitirNFe = async () => {
+    if (!selectedSaleForNFe) return;
+    
+    setEmitindoNFeId(selectedSaleForNFe.id);
+    setShowNFeDialog(false);
+    
+    try {
+      await emitirNFe(selectedSaleForNFe.id);
+      refetch();
+    } catch (error) {
+      // Error already handled in hook
+    } finally {
+      setEmitindoNFeId(null);
+      setSelectedSaleForNFe(null);
+    }
+  };
+
+  const getSaleNFeStatus = (saleId: string) => {
+    const nfe = nfes.find(n => n.sale_id === saleId);
+    return nfe?.status;
   };
 
   const handleChangeStatus = async (saleId: string, newStatusId: string) => {
@@ -304,12 +346,34 @@ export function SalesList({ onEdit, onView }: SalesListProps) {
                             </DropdownMenuSubContent>
                           </DropdownMenuSub>
                           <DropdownMenuSub>
-                            <DropdownMenuSubTrigger>
-                              <FileText className="h-4 w-4 mr-2" />Emitir
+                            <DropdownMenuSubTrigger disabled={emitindoNFeId === sale.id || getSaleNFeStatus(sale.id) === 'autorizado'}>
+                              <FileText className="h-4 w-4 mr-2" />
+                              {emitindoNFeId === sale.id ? (
+                                <>
+                                  <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                                  Emitindo...
+                                </>
+                              ) : getSaleNFeStatus(sale.id) === 'autorizado' ? (
+                                'NFe Emitida'
+                              ) : (
+                                'Emitir NF'
+                              )}
                             </DropdownMenuSubTrigger>
                             <DropdownMenuSubContent>
-                              <DropdownMenuItem>NF-e (Produtos)</DropdownMenuItem>
-                              <DropdownMenuItem>NFS-e (Serviços)</DropdownMenuItem>
+                              <DropdownMenuItem 
+                                onClick={() => handleEmitirNFe(sale)}
+                                disabled={emitindoNFeId === sale.id || getSaleNFeStatus(sale.id) === 'autorizado'}
+                              >
+                                {emitindoNFeId === sale.id ? (
+                                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                ) : (
+                                  <FileText className="h-4 w-4 mr-2" />
+                                )}
+                                NF-e (Produtos)
+                              </DropdownMenuItem>
+                              <DropdownMenuItem disabled>
+                                <FileText className="h-4 w-4 mr-2" />NFS-e (Serviços)
+                              </DropdownMenuItem>
                             </DropdownMenuSubContent>
                           </DropdownMenuSub>
                           <DropdownMenuItem>
@@ -334,6 +398,32 @@ export function SalesList({ onEdit, onView }: SalesListProps) {
           </TableBody>
         </Table>
       </div>
+
+      {/* Dialog de confirmação para emissão de NFe */}
+      <AlertDialog open={showNFeDialog} onOpenChange={setShowNFeDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Emitir NF-e</AlertDialogTitle>
+            <AlertDialogDescription>
+              Deseja emitir a Nota Fiscal Eletrônica para a venda #{selectedSaleForNFe?.sale_number}?
+              <br /><br />
+              <strong>Valor total:</strong> {selectedSaleForNFe ? formatCurrency(selectedSaleForNFe.total_value) : '-'}
+              <br />
+              <strong>Cliente:</strong> {selectedSaleForNFe?.client?.razao_social || selectedSaleForNFe?.client?.nome_fantasia || 'Consumidor Final'}
+              <br /><br />
+              <span className="text-amber-600 text-sm">
+                Atenção: Esta ação enviará a nota fiscal para a SEFAZ e não poderá ser desfeita facilmente.
+              </span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmEmitirNFe}>
+              Emitir NF-e
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
