@@ -172,12 +172,25 @@ Sugira o CFOP de ENTRADA mais adequado. Responda APENAS com o código de 4 dígi
       // Handle streaming response or direct response
       let suggestedCFOP: string | undefined;
       
+      // Helper para extrair CFOP - aceita formatos como "2102", "2.102", etc
+      const extractCFOP = (text: string): string | undefined => {
+        // Primeiro tenta pegar 4 dígitos consecutivos
+        let match = text.match(/\d{4}/)?.[0];
+        if (match) return match;
+        
+        // Se não encontrou, tenta formato X.XXX (com ponto)
+        match = text.match(/(\d)[.\s]?(\d{3})/)?.[0];
+        if (match) return match.replace(/[.\s]/g, ''); // Remove ponto/espaço
+        
+        return undefined;
+      };
+      
       if (typeof data === 'string') {
-        suggestedCFOP = data.match(/\d{4}/)?.[0];
+        suggestedCFOP = extractCFOP(data);
       } else if (data?.response) {
-        suggestedCFOP = data.response.match(/\d{4}/)?.[0];
+        suggestedCFOP = extractCFOP(data.response);
       } else if (data?.choices?.[0]?.message?.content) {
-        suggestedCFOP = data.choices[0].message.content.match(/\d{4}/)?.[0];
+        suggestedCFOP = extractCFOP(data.choices[0].message.content);
       }
       
       if (suggestedCFOP) {
