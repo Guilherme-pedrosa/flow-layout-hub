@@ -291,27 +291,45 @@ serve(async (req) => {
       const pixResult = JSON.parse(responseText);
       console.log("[inter-pix-payment] 11. PIX result:", JSON.stringify(pixResult));
 
-      // Check if successful
-      if (!pixResult.success && !pixResult.transactionId && !pixResult.endToEndId) {
-        throw new Error(pixResult.error || "Resposta inválida do proxy");
+      // Verificar resposta do Inter - formatos possíveis:
+      // Sucesso: { tipoRetorno: "APROVACAO", codigoSolicitacao: "...", dataPagamento: "...", dataOperacao: "..." }
+      // Agendado: { tipoRetorno: "AGENDADO", codigoSolicitacao: "..." }
+      // Erro: { title: "...", detail: "...", violacoes: [...] }
+      
+      const tipoRetorno = pixResult.tipoRetorno?.toUpperCase();
+      const isApproved = tipoRetorno === "APROVACAO" || tipoRetorno === "APROVADO";
+      const isScheduled = tipoRetorno === "AGENDADO";
+      const codigoSolicitacao = pixResult.codigoSolicitacao;
+      
+      // Se não tem tipoRetorno nem codigoSolicitacao, é erro
+      if (!tipoRetorno && !codigoSolicitacao) {
+        const errorMsg = pixResult.detail || pixResult.message || pixResult.error || "Resposta inválida do Inter";
+        throw new Error(errorMsg);
       }
 
-      // Check if pending approval
-      const isPendingApproval = pixResult.pendingApproval || 
-        ["AGUARDANDO_APROVACAO", "PENDENTE", "EM_PROCESSAMENTO", "AGENDADO", "PENDENTE_APROVACAO"]
-          .includes(pixResult.status);
+      // Determinar status interno
+      let internalStatus: string;
+      if (isApproved) {
+        internalStatus = "completed";
+      } else if (isScheduled) {
+        internalStatus = "pending_approval";
+      } else {
+        // Outros status como PENDENTE, EM_PROCESSAMENTO, etc.
+        internalStatus = "pending_approval";
+      }
       
-      console.log("[inter-pix-payment] 12. Status:", pixResult.status, "- Pendente aprovação:", isPendingApproval);
-      const internalStatus = isPendingApproval ? "pending_approval" : "completed";
+      const isPendingApproval = internalStatus === "pending_approval";
+      console.log("[inter-pix-payment] 12. tipoRetorno:", tipoRetorno, "- codigoSolicitacao:", codigoSolicitacao, "- Status interno:", internalStatus);
       
       await supabase
         .from("inter_pix_payments")
         .update({
           status: internalStatus,
-          inter_transaction_id: pixResult.transactionId,
-          inter_end_to_end_id: pixResult.endToEndId,
-          inter_status: pixResult.status,
-          processed_at: isPendingApproval ? null : new Date().toISOString(),
+          inter_transaction_id: codigoSolicitacao,
+          inter_end_to_end_id: pixResult.endToEndId || null,
+          inter_status: tipoRetorno,
+          inter_response: pixResult,
+          processed_at: isApproved ? new Date().toISOString() : null,
           error_message: null,
           updated_at: new Date().toISOString()
         })
@@ -319,16 +337,7 @@ serve(async (req) => {
 
       // Update linked payable
       if (payableId) {
-        if (isPendingApproval) {
-          await supabase
-            .from("payables")
-            .update({
-              payment_status: "pending_approval",
-              inter_payment_id: pixPaymentId,
-              updated_at: new Date().toISOString()
-            })
-            .eq("id", payableId);
-        } else {
+        if (isApproved) {
           await supabase
             .from("payables")
             .update({
@@ -341,6 +350,15 @@ serve(async (req) => {
               updated_at: new Date().toISOString()
             })
             .eq("id", payableId);
+        } else {
+          await supabase
+            .from("payables")
+            .update({
+              payment_status: "pending_approval",
+              inter_payment_id: pixPaymentId,
+              updated_at: new Date().toISOString()
+            })
+            .eq("id", payableId);
         }
       }
 
@@ -349,10 +367,12 @@ serve(async (req) => {
         company_id: paymentData.companyId,
         entity: "inter_pix_payments",
         entity_id: pixPaymentId,
-        action: isPendingApproval ? "pix_payment_pending_approval" : "pix_payment_completed",
+        action: isApproved ? "pix_payment_completed" : "pix_payment_pending",
         metadata_json: {
-          transactionId: pixResult.transactionId,
-          endToEndId: pixResult.endToEndId,
+          tipoRetorno,
+          codigoSolicitacao,
+          dataPagamento: pixResult.dataPagamento,
+          dataOperacao: pixResult.dataOperacao,
           amount: paymentData.amount,
           recipient: paymentData.recipientName
         }
@@ -360,26 +380,29 @@ serve(async (req) => {
 
       await supabase.from("payment_audit_logs").insert({
         payable_id: payableId || pixPaymentId!,
-        action: isPendingApproval ? "pix_pending_approval" : "pix_payment_sent",
+        action: isApproved ? "pix_payment_approved" : "pix_payment_scheduled",
         old_status: "processing",
         new_status: internalStatus,
         metadata: {
-          transactionId: pixResult.transactionId,
+          tipoRetorno,
+          codigoSolicitacao,
           amount: paymentData.amount,
           recipient: paymentData.recipientName,
           pixKey: paymentData.pixKey
         }
       });
 
-      console.log(`[inter-pix-payment] Success - Status: ${internalStatus}`);
+      console.log(`[inter-pix-payment] Success - tipoRetorno: ${tipoRetorno}, codigoSolicitacao: ${codigoSolicitacao}`);
 
       return new Response(
         JSON.stringify({
           success: true,
           paymentId: pixPaymentId,
           status: internalStatus,
-          transactionId: pixResult.transactionId,
-          endToEndId: pixResult.endToEndId,
+          tipoRetorno,
+          codigoSolicitacao,
+          dataPagamento: pixResult.dataPagamento,
+          dataOperacao: pixResult.dataOperacao,
           pendingApproval: isPendingApproval
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
