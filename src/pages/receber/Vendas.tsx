@@ -24,15 +24,15 @@ const Vendas = () => {
   };
 
   return (
-    <div className="animate-fade-in space-y-6">
+    <div className="space-y-6">
       <PageHeader
         title="Vendas"
         description="Gerencie suas vendas e pedidos"
-        breadcrumbs={[{ label: "Receber" }, { label: "Vendas" }]}
+        breadcrumbs={[{ label: "Operação" }, { label: "Vendas" }]}
         actions={
           !showForm && (
             <Button onClick={() => setShowForm(true)}>
-              <Plus className="mr-2 h-4 w-4" />
+              <Plus className="h-4 w-4" />
               Nova Venda
             </Button>
           )

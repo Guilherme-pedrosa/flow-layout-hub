@@ -2,131 +2,135 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Wedo ERP - Design System (BTG Pactual / Mercury Style)
-   Professional, clean, trustworthy financial system
+/* Wedo ERP - BTG Pactual Inspired Design System
+   Ultra clean, minimal, trustworthy
 */
 
 @layer base {
   :root {
-    /* Font Family */
+    /* Font */
     --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 
-    /* Background - Clean white/light gray */
-    --background: 210 20% 98%;
-    --foreground: 222 47% 11%;
+    /* Background - Pure white */
+    --background: 0 0% 100%;
+    --foreground: 220 13% 13%;
 
-    /* Cards - Pure white */
+    /* Cards - Pure white with subtle gray on hover */
     --card: 0 0% 100%;
-    --card-foreground: 222 47% 11%;
+    --card-foreground: 220 13% 13%;
 
     /* Popover */
     --popover: 0 0% 100%;
-    --popover-foreground: 222 47% 11%;
+    --popover-foreground: 220 13% 13%;
 
-    /* Primary - BTG Navy Blue */
-    --primary: 217 91% 20%;
+    /* Primary - BTG Blue */
+    --primary: 217 91% 35%;
     --primary-foreground: 0 0% 100%;
 
-    /* Secondary - Light surfaces */
-    --secondary: 210 20% 96%;
-    --secondary-foreground: 222 47% 11%;
+    /* Secondary - Very subtle gray */
+    --secondary: 220 14% 96%;
+    --secondary-foreground: 220 13% 13%;
 
-    /* Muted - Subtle backgrounds */
-    --muted: 210 15% 94%;
-    --muted-foreground: 215 16% 47%;
+    /* Muted - Subtle */
+    --muted: 220 14% 96%;
+    --muted-foreground: 220 9% 46%;
 
-    /* Accent - BTG Gold/Amber */
-    --accent: 38 92% 50%;
-    --accent-foreground: 222 47% 11%;
+    /* Accent - BTG Blue (same as primary for cleaner look) */
+    --accent: 217 91% 35%;
+    --accent-foreground: 0 0% 100%;
 
     /* Destructive */
-    --destructive: 0 84% 60%;
+    --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
 
-    /* Borders */
-    --border: 214 32% 91%;
-    --input: 214 32% 91%;
-    --ring: 217 91% 20%;
+    /* Borders - Very subtle */
+    --border: 220 13% 91%;
+    --input: 220 13% 91%;
+    --ring: 217 91% 35%;
 
-    --radius: 0.5rem;
+    --radius: 0.75rem;
 
-    /* Sidebar - BTG Navy Dark */
-    --sidebar-background: 217 60% 10%;
-    --sidebar-foreground: 210 20% 90%;
-    --sidebar-primary: 38 92% 50%;
-    --sidebar-primary-foreground: 222 47% 11%;
-    --sidebar-accent: 217 50% 16%;
-    --sidebar-accent-foreground: 0 0% 100%;
-    --sidebar-border: 217 40% 18%;
-    --sidebar-ring: 38 92% 50%;
-    --sidebar-muted: 217 30% 25%;
+    /* Sidebar - Clean dark */
+    --sidebar-background: 222 47% 11%;
+    --sidebar-foreground: 220 14% 96%;
+    --sidebar-primary: 217 91% 55%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 222 47% 16%;
+    --sidebar-accent-foreground: 220 14% 96%;
+    --sidebar-border: 222 47% 18%;
+    --sidebar-ring: 217 91% 55%;
+    --sidebar-muted: 222 30% 25%;
 
-    /* Semantic Status Colors */
+    /* Semantic Colors */
     --success: 160 84% 39%;
     --success-foreground: 0 0% 100%;
-    --warning: 38 92% 50%;
-    --warning-foreground: 222 47% 11%;
-    --info: 217 91% 60%;
+    --warning: 45 93% 47%;
+    --warning-foreground: 220 13% 13%;
+    --error: 0 72% 51%;
+    --error-foreground: 0 0% 100%;
+    --info: 217 91% 55%;
     --info-foreground: 0 0% 100%;
 
-    /* Chart colors */
-    --chart-1: 217 91% 20%;
+    /* Chart */
+    --chart-1: 217 91% 35%;
     --chart-2: 160 84% 39%;
-    --chart-3: 38 92% 50%;
-    --chart-4: 217 91% 60%;
-    --chart-5: 280 65% 55%;
+    --chart-3: 45 93% 47%;
+    --chart-4: 271 91% 65%;
+    --chart-5: 0 72% 51%;
   }
 
   .dark {
     --background: 222 47% 8%;
-    --foreground: 210 20% 95%;
+    --foreground: 220 14% 96%;
 
     --card: 222 47% 11%;
-    --card-foreground: 210 20% 95%;
+    --card-foreground: 220 14% 96%;
 
     --popover: 222 47% 11%;
-    --popover-foreground: 210 20% 95%;
+    --popover-foreground: 220 14% 96%;
 
-    --primary: 38 92% 55%;
-    --primary-foreground: 222 47% 11%;
+    --primary: 217 91% 55%;
+    --primary-foreground: 220 13% 13%;
 
-    --secondary: 217 32% 15%;
-    --secondary-foreground: 210 20% 95%;
+    --secondary: 222 47% 15%;
+    --secondary-foreground: 220 14% 96%;
 
-    --muted: 217 32% 18%;
-    --muted-foreground: 215 15% 55%;
+    --muted: 222 47% 18%;
+    --muted-foreground: 220 9% 55%;
 
-    --accent: 38 92% 55%;
-    --accent-foreground: 222 47% 11%;
+    --accent: 217 91% 55%;
+    --accent-foreground: 220 13% 13%;
 
     --destructive: 0 62% 50%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 217 32% 20%;
-    --input: 217 32% 20%;
-    --ring: 38 92% 55%;
+    --border: 222 47% 20%;
+    --input: 222 47% 20%;
+    --ring: 217 91% 55%;
 
-    --sidebar-background: 222 47% 5%;
-    --sidebar-foreground: 210 20% 90%;
-    --sidebar-primary: 38 92% 55%;
-    --sidebar-primary-foreground: 222 47% 11%;
-    --sidebar-accent: 217 40% 12%;
-    --sidebar-accent-foreground: 210 20% 95%;
-    --sidebar-border: 217 32% 15%;
-    --sidebar-ring: 38 92% 55%;
-    --sidebar-muted: 217 25% 20%;
+    --sidebar-background: 222 47% 6%;
+    --sidebar-foreground: 220 14% 90%;
+    --sidebar-primary: 217 91% 55%;
+    --sidebar-primary-foreground: 220 13% 13%;
+    --sidebar-accent: 222 47% 12%;
+    --sidebar-accent-foreground: 220 14% 96%;
+    --sidebar-border: 222 47% 15%;
+    --sidebar-ring: 217 91% 55%;
+    --sidebar-muted: 222 30% 20%;
 
     --success: 160 84% 45%;
     --success-foreground: 0 0% 100%;
-    --warning: 38 92% 55%;
-    --warning-foreground: 222 47% 11%;
-    --info: 217 91% 65%;
+    --warning: 45 93% 55%;
+    --warning-foreground: 220 13% 13%;
+    --error: 0 72% 55%;
+    --error-foreground: 0 0% 100%;
+    --info: 217 91% 60%;
     --info-foreground: 0 0% 100%;
 
-    --chart-1: 38 92% 55%;
+    --chart-1: 217 91% 55%;
     --chart-2: 160 84% 45%;
-    --chart-3: 217 91% 60%;
-    --chart-4: 280 65% 55%;
+    --chart-3: 45 93% 55%;
+    --chart-4: 271 91% 65%;
     --chart-5: 0 72% 55%;
   }
 }
@@ -139,112 +143,212 @@
   body {
     @apply bg-background text-foreground antialiased;
     font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 
-  /* Typography Scale - BTG Style */
+  /* Clean typography */
   h1, .h1 {
-    @apply text-3xl font-semibold tracking-tight;
-    letter-spacing: -0.025em;
+    @apply text-2xl font-semibold tracking-tight text-foreground;
   }
 
   h2, .h2 {
-    @apply text-2xl font-semibold tracking-tight;
-    letter-spacing: -0.02em;
+    @apply text-xl font-semibold tracking-tight text-foreground;
   }
 
   h3, .h3 {
-    @apply text-xl font-semibold;
+    @apply text-lg font-medium text-foreground;
   }
 
   h4, .h4 {
-    @apply text-lg font-medium;
+    @apply text-base font-medium text-foreground;
   }
 
-  /* Smooth transitions for interactive elements */
-  button, a, input, select, textarea {
-    @apply transition-all duration-200;
+  p {
+    @apply text-sm text-muted-foreground leading-relaxed;
   }
 }
 
 @layer components {
-  /* Professional Card Style */
-  .card-pro {
-    @apply bg-card border border-border rounded-xl;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  /* BTG-style list item */
+  .list-item {
+    @apply flex items-center justify-between py-4 px-4 border-b border-border last:border-b-0;
+    @apply hover:bg-muted/50 transition-colors cursor-pointer;
   }
 
-  .card-pro:hover {
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  .list-item-icon {
+    @apply h-5 w-5 text-primary mr-4 flex-shrink-0;
   }
 
-  /* Metric Value Style */
-  .metric-value {
-    @apply text-3xl font-bold tabular-nums tracking-tight;
+  .list-item-content {
+    @apply flex-1 min-w-0;
   }
 
-  /* Table Header Style */
-  .table-header {
-    @apply text-xs font-semibold uppercase tracking-wider text-muted-foreground;
+  .list-item-title {
+    @apply text-sm font-medium text-foreground;
   }
 
-  /* Status Badges */
-  .badge-success {
-    @apply bg-emerald-50 text-emerald-700 border-emerald-200;
+  .list-item-subtitle {
+    @apply text-xs text-muted-foreground mt-0.5;
   }
 
-  .badge-warning {
-    @apply bg-amber-50 text-amber-700 border-amber-200;
+  .list-item-value {
+    @apply text-sm font-medium text-foreground text-right;
   }
 
-  .badge-error {
-    @apply bg-red-50 text-red-700 border-red-200;
+  .list-item-badge {
+    @apply flex items-center gap-1.5 text-xs font-medium text-destructive;
   }
 
-  .badge-info {
-    @apply bg-blue-50 text-blue-700 border-blue-200;
+  /* Clean card style */
+  .card-clean {
+    @apply bg-card rounded-xl border border-border;
   }
 
-  /* Active sidebar item indicator */
-  .sidebar-active {
-    @apply relative;
+  /* Action grid - BTG style */
+  .action-grid {
+    @apply grid grid-cols-3 gap-3;
   }
 
-  .sidebar-active::before {
-    content: '';
-    @apply absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-6 bg-accent rounded-r;
+  .action-card {
+    @apply flex flex-col items-start p-4 bg-card border border-border rounded-xl;
+    @apply hover:border-primary/30 hover:bg-muted/30 transition-all cursor-pointer;
+    @apply min-h-[100px];
+  }
+
+  .action-card-icon {
+    @apply h-5 w-5 text-primary mb-3;
+  }
+
+  .action-card-title {
+    @apply text-sm font-medium text-foreground leading-tight;
+  }
+
+  /* Info banner */
+  .info-banner {
+    @apply flex items-start gap-3 p-4 bg-primary text-primary-foreground rounded-xl;
+  }
+
+  /* Progress bar clean */
+  .progress-clean {
+    @apply h-1.5 bg-muted rounded-full overflow-hidden;
+  }
+
+  .progress-clean-fill {
+    @apply h-full bg-primary rounded-full transition-all;
+  }
+
+  /* Value display */
+  .value-display {
+    @apply flex items-center justify-between py-2;
+  }
+
+  .value-label {
+    @apply text-sm text-muted-foreground;
+  }
+
+  .value-amount {
+    @apply text-sm font-medium text-foreground tabular-nums;
+  }
+
+  /* Floating action button */
+  .fab {
+    @apply fixed bottom-6 right-6 h-14 px-6 rounded-full bg-primary text-primary-foreground;
+    @apply flex items-center gap-2 font-medium shadow-lg;
+    @apply hover:shadow-xl transition-shadow;
+  }
+
+  /* Status indicator */
+  .status-dot {
+    @apply h-2 w-2 rounded-full;
+  }
+
+  .status-dot-success {
+    @apply bg-success;
+  }
+
+  .status-dot-warning {
+    @apply bg-warning;
+  }
+
+  .status-dot-error {
+    @apply bg-error;
+  }
+
+  /* Table clean */
+  .table-clean {
+    @apply w-full;
+  }
+
+  .table-clean th {
+    @apply text-left text-xs font-medium text-muted-foreground uppercase tracking-wider py-3 px-4 border-b border-border;
+  }
+
+  .table-clean td {
+    @apply py-4 px-4 text-sm text-foreground border-b border-border;
+  }
+
+  .table-clean tr:hover td {
+    @apply bg-muted/30;
+  }
+
+  /* Filter bar */
+  .filter-bar {
+    @apply flex items-center gap-3 p-4 bg-muted/30 rounded-xl;
+  }
+
+  /* Month navigator */
+  .month-nav {
+    @apply flex items-center gap-2;
+  }
+
+  .month-nav-btn {
+    @apply h-8 w-8 flex items-center justify-center rounded-lg border border-border;
+    @apply hover:bg-muted transition-colors;
+  }
+
+  .month-nav-label {
+    @apply text-sm font-medium text-foreground min-w-[120px] text-center;
   }
 }
 
 @layer utilities {
-  .scrollbar-thin {
+  /* Clean scrollbar */
+  .scrollbar-clean {
     scrollbar-width: thin;
+    scrollbar-color: hsl(var(--border)) transparent;
   }
-  
-  .scrollbar-thin::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
+
+  .scrollbar-clean::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
   }
-  
-  .scrollbar-thin::-webkit-scrollbar-track {
+
+  .scrollbar-clean::-webkit-scrollbar-track {
     background: transparent;
   }
-  
-  .scrollbar-thin::-webkit-scrollbar-thumb {
+
+  .scrollbar-clean::-webkit-scrollbar-thumb {
+    background: hsl(var(--border));
+    border-radius: 2px;
+  }
+
+  .scrollbar-clean::-webkit-scrollbar-thumb:hover {
     background: hsl(var(--muted-foreground) / 0.3);
-    border-radius: 3px;
-  }
-  
-  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
-    background: hsl(var(--muted-foreground) / 0.5);
   }
 
-  /* Text gradient for emphasis */
-  .text-gradient {
-    @apply bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent;
+  /* Hide scrollbar but keep functionality */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
   }
 
-  /* Focus ring style */
-  .focus-ring {
-    @apply focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary;
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Tabular numbers for financial values */
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
   }
 }
