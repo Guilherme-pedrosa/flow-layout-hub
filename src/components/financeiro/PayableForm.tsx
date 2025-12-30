@@ -34,6 +34,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { CadastrarPessoaDialog } from "@/components/shared/CadastrarPessoaDialog";
+import { AuditValidationBadge } from "@/components/shared/AuditValidationBadge";
+import { useAiAuditora, AuditResult } from "@/hooks/useAiAuditora";
 import { useCompany } from "@/contexts/CompanyContext";
 
 interface PayableFormProps {
@@ -73,10 +75,12 @@ interface PixValidation {
 export function PayableForm({ open, onOpenChange, payable, onSuccess }: PayableFormProps) {
   const { currentCompany } = useCompany();
   const companyId = currentCompany?.id;
+  const { auditPayable, loading: auditLoading } = useAiAuditora();
   
   const [loading, setLoading] = useState(false);
   const [showCadastrarFornecedor, setShowCadastrarFornecedor] = useState(false);
   const [suppliers, setSuppliers] = useState<{ id: string; nome_fantasia: string | null; razao_social: string | null }[]>([]);
+  const [auditResult, setAuditResult] = useState<AuditResult | null>(null);
   
   // PIX validation state
   const [validatingPix, setValidatingPix] = useState(false);
@@ -258,6 +262,20 @@ export function PayableForm({ open, onOpenChange, payable, onSuccess }: PayableF
     setPixConfirmed(false);
   };
 
+  const handleAudit = async () => {
+    const amount = parseCurrency(formData.amount);
+    const result = await auditPayable({
+      supplier_id: formData.supplierId,
+      amount,
+      due_date: formData.dueDate,
+      description: formData.description,
+      payment_method_type: formData.paymentMethodType,
+      boleto_barcode: formData.boletoBarcode,
+      pix_key: formData.pixKey,
+    });
+    setAuditResult(result);
+  };
+
   const handleSubmit = async () => {
     if (!formData.supplierId || !formData.amount || !formData.dueDate) {
       toast.error("Preencha fornecedor, valor e vencimento");
@@ -267,6 +285,24 @@ export function PayableForm({ open, onOpenChange, payable, onSuccess }: PayableF
     const amount = parseCurrency(formData.amount);
     if (amount <= 0) {
       toast.error("O valor deve ser maior que zero");
+      return;
+    }
+
+    // Executar auditoria antes de salvar
+    const auditRes = await auditPayable({
+      supplier_id: formData.supplierId,
+      amount,
+      due_date: formData.dueDate,
+      description: formData.description,
+      payment_method_type: formData.paymentMethodType,
+      boleto_barcode: formData.boletoBarcode,
+      pix_key: formData.pixKey,
+    });
+    setAuditResult(auditRes);
+
+    // Se houver erros críticos, não salvar
+    if (!auditRes.valid) {
+      toast.error("Corrija os erros antes de salvar");
       return;
     }
 
@@ -337,6 +373,13 @@ export function PayableForm({ open, onOpenChange, payable, onSuccess }: PayableF
         </DialogHeader>
 
         <div className="grid gap-4 py-4">
+          {/* Validação IA Auditora */}
+          <AuditValidationBadge
+            result={auditResult}
+            loading={auditLoading}
+            onAudit={handleAudit}
+          />
+
           {/* Fornecedor */}
           <div className="space-y-2">
             <Label>Fornecedor *</Label>
