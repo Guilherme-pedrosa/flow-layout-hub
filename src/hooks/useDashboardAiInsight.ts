@@ -37,6 +37,17 @@ export function useDashboardAiInsight() {
       }
 
       const prompt = `Analise os dados financeiros e dê UM insight estratégico sobre oportunidades ou riscos do negócio.
+      
+      ROTAS DISPONÍVEIS (use apenas estas):
+      - /contas-pagar = lista de contas a pagar (use para ver pagamentos, fornecedores com concentração de gastos, vencimentos)
+      - /contas-receber = lista de contas a receber (use para recebíveis, clientes em atraso)
+      - /conciliacao = conciliação bancária
+      - /financeiro = dashboard financeiro geral
+      - /saldo-estoque = produtos em estoque
+      - /pedidos-compra = pedidos de compra
+      
+      IMPORTANTE: Se identificar concentração de gastos em um fornecedor, a ação deve ser "Ver pagamentos" com rota "/contas-pagar" para ver os itens pagos a esse fornecedor, NÃO para cadastro de fornecedores.
+      
       Responda APENAS com um JSON:
       {
         "type": "opportunity" | "warning" | "info",
@@ -44,7 +55,7 @@ export function useDashboardAiInsight() {
         "description": "descrição detalhada (max 150 chars)",
         "confidence": número de 0-100,
         "actionLabel": "texto do botão (max 20 chars)",
-        "actionHref": "rota relativa"
+        "actionHref": "rota relativa (use apenas as rotas listadas acima)"
       }`;
 
       const response = await fetch(
