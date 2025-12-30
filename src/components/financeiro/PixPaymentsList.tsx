@@ -98,10 +98,18 @@ const PixPaymentsList = React.forwardRef<HTMLDivElement>((_, ref) => {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "completed":
+      case "paid":
         return (
           <Badge variant="outline" className="bg-green-500/10 text-green-600 border-green-500/20">
             <CheckCircle className="mr-1 h-3 w-3" />
-            Concluído
+            Quitado
+          </Badge>
+        );
+      case "sent_to_bank":
+        return (
+          <Badge variant="outline" className="bg-blue-500/10 text-blue-600 border-blue-500/20">
+            <Send className="mr-1 h-3 w-3" />
+            Enviado p/ Aprovação
           </Badge>
         );
       case "pending_approval":
