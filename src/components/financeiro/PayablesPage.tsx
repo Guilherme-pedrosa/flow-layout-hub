@@ -21,6 +21,8 @@ import { PayablesStatusCards, PayableStatusFilter } from "./PayablesStatusCards"
 import { PayablesFilters, PayablesFiltersState } from "./PayablesFilters";
 import { PayablesTable, PayableRow } from "./PayablesTable";
 import { PayablesBulkActions } from "./PayablesBulkActions";
+import { PayablesFooterBar } from "./PayablesFooterBar";
+import { PixPaymentModal } from "./PixPaymentModal";
 import { PayableForm } from "./PayableForm";
 
 interface PayablesPageProps {
@@ -51,6 +53,8 @@ export function PayablesPage({ onRefresh }: PayablesPageProps) {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [deletingPayable, setDeletingPayable] = useState<PayableRow | null>(null);
   const [showSubmitDialog, setShowSubmitDialog] = useState(false);
+  const [showPixModal, setShowPixModal] = useState(false);
+  const [payingPayable, setPayingPayable] = useState<PayableRow | null>(null);
 
   useEffect(() => {
     fetchPayables();
@@ -251,13 +255,44 @@ export function PayablesPage({ onRefresh }: PayablesPageProps) {
   };
 
   const handlePayPix = (payable: PayableRow) => {
-    toast.info("Processando pagamento PIX...");
-    // TODO: Open PIX payment modal
+    setPayingPayable(payable);
+    setShowPixModal(true);
+  };
+
+  const handleConfirmPixPayment = async () => {
+    if (!payingPayable) return;
+    
+    const { data: companies } = await supabase.from("companies").select("id").limit(1);
+    const companyId = companies?.[0]?.id;
+    if (!companyId) throw new Error("Empresa não configurada");
+
+    await supabase
+      .from("payables")
+      .update({ payment_status: "sent_to_bank", submitted_at: new Date().toISOString() })
+      .eq("id", payingPayable.id);
+
+    const { error } = await supabase.functions.invoke("inter-pix-payment", {
+      body: {
+        company_id: companyId,
+        payable_id: payingPayable.id,
+        pix_key: payingPayable.pix_key,
+        pix_key_type: payingPayable.pix_key_type || "cpf",
+        amount: payingPayable.amount,
+        recipient_name: payingPayable.recipient_name || payingPayable.supplier?.nome_fantasia || "Favorecido",
+        recipient_document: payingPayable.recipient_document || payingPayable.supplier?.cpf_cnpj || "",
+        description: payingPayable.description || "",
+      },
+    });
+
+    if (error) throw error;
+    
+    toast.success("Pagamento processado!");
+    fetchPayables();
+    onRefresh?.();
   };
 
   const handlePayBoleto = (payable: PayableRow) => {
     toast.info("Processando pagamento de boleto...");
-    // TODO: Open boleto payment modal
   };
 
   const handleMarkAsPaid = async (payable: PayableRow) => {
