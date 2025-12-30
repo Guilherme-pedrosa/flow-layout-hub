@@ -97,6 +97,7 @@ export function PayablesPage({ onRefresh }: PayablesPageProps) {
       overdue: { count: 0, amount: 0 },
       paid: { count: 0, amount: 0 },
       scheduled: { count: 0, amount: 0 },
+      today: { count: 0, amount: 0 },
     };
 
     payables.forEach((p) => {
@@ -111,7 +112,12 @@ export function PayablesPage({ onRefresh }: PayablesPageProps) {
         calc.scheduled.amount += p.amount;
       } else {
         const dueDate = startOfDay(parseISO(p.due_date));
-        if (isBefore(dueDate, today)) {
+        const isToday = dueDate.getTime() === today.getTime();
+        
+        if (isToday) {
+          calc.today.count++;
+          calc.today.amount += p.amount;
+        } else if (isBefore(dueDate, today)) {
           calc.overdue.count++;
           calc.overdue.amount += p.amount;
         } else {
@@ -131,14 +137,18 @@ export function PayablesPage({ onRefresh }: PayablesPageProps) {
         if (statusFilter === "scheduled") {
           return p.payment_status === "sent_to_bank" || p.payment_status === "submitted_for_approval";
         }
+        if (statusFilter === "today") {
+          const dueDate = startOfDay(parseISO(p.due_date));
+          return !p.is_paid && dueDate.getTime() === today.getTime();
+        }
         if (statusFilter === "overdue") {
           const dueDate = startOfDay(parseISO(p.due_date));
-          return !p.is_paid && isBefore(dueDate, today) && 
+          return !p.is_paid && isBefore(dueDate, today) && dueDate.getTime() !== today.getTime() &&
                  p.payment_status !== "sent_to_bank" && p.payment_status !== "submitted_for_approval";
         }
         if (statusFilter === "pending") {
           const dueDate = startOfDay(parseISO(p.due_date));
-          return !p.is_paid && !isBefore(dueDate, today) && 
+          return !p.is_paid && !isBefore(dueDate, today) && dueDate.getTime() !== today.getTime() &&
                  p.payment_status !== "sent_to_bank" && p.payment_status !== "submitted_for_approval";
         }
         return true;
@@ -174,6 +184,7 @@ export function PayablesPage({ onRefresh }: PayablesPageProps) {
         overdue: calc.overdue.count,
         paid: calc.paid.count,
         scheduled: calc.scheduled.count,
+        today: calc.today.count,
       },
       amounts: {
         all: calc.all.amount,
@@ -181,6 +192,7 @@ export function PayablesPage({ onRefresh }: PayablesPageProps) {
         overdue: calc.overdue.amount,
         paid: calc.paid.amount,
         scheduled: calc.scheduled.amount,
+        today: calc.today.amount,
       },
       filteredPayables: filtered,
     };
@@ -471,20 +483,11 @@ export function PayablesPage({ onRefresh }: PayablesPageProps) {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold text-foreground flex items-center gap-2">
-            <Banknote className="h-6 w-6 text-primary" />
-            Contas a Pagar
-          </h2>
-          <p className="text-sm text-muted-foreground mt-1">
-            Gerencie pagamentos e execute via integração bancária
-          </p>
-        </div>
-        <Button onClick={handleNewPayable} className="gap-2">
-          <Plus className="h-4 w-4" />
-          Nova Conta
-        </Button>
+      <div>
+        <h1 className="text-xl font-semibold text-foreground">Contas a Pagar</h1>
+        <p className="text-sm text-muted-foreground mt-0.5">
+          Gerencie pagamentos e execute via integração bancária
+        </p>
       </div>
 
       {/* Status Cards */}
@@ -499,7 +502,7 @@ export function PayablesPage({ onRefresh }: PayablesPageProps) {
       <PayablesFilters
         filters={filters}
         onFiltersChange={setFilters}
-        showCategoryFilter={false}
+        onAddNew={handleNewPayable}
       />
 
       {/* Summary Bar */}
