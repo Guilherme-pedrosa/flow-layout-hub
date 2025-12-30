@@ -20,8 +20,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { formatCurrency, formatDate } from "@/lib/formatters";
-
-const TEMP_COMPANY_ID = "7875af52-18d0-434e-8ae9-97981bd668e7";
+import { useCompany } from "@/contexts/CompanyContext";
 
 interface BankTransaction {
   id: string;
@@ -35,6 +34,7 @@ interface BankTransaction {
 }
 
 export default function ExtratoBancario() {
+  const { currentCompany } = useCompany();
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [transactions, setTransactions] = useState<BankTransaction[]>([]);
@@ -50,27 +50,33 @@ export default function ExtratoBancario() {
   const [dateTo, setDateTo] = useState(today.toISOString().split("T")[0]);
 
   useEffect(() => {
-    checkCredentials();
-    loadTransactions();
-  }, [dateFrom, dateTo]);
+    if (currentCompany?.id) {
+      checkCredentials();
+      loadTransactions();
+    }
+  }, [dateFrom, dateTo, currentCompany?.id]);
 
   const checkCredentials = async () => {
+    if (!currentCompany?.id) return;
+    
     const { data } = await supabase
       .from("inter_credentials")
       .select("id")
-      .eq("company_id", TEMP_COMPANY_ID)
+      .eq("company_id", currentCompany.id)
       .maybeSingle();
     
     setHasCredentials(!!data);
   };
 
   const loadTransactions = async () => {
+    if (!currentCompany?.id) return;
+    
     setLoading(true);
     try {
       const { data, error } = await supabase
         .from("bank_transactions")
         .select("*")
-        .eq("company_id", TEMP_COMPANY_ID)
+        .eq("company_id", currentCompany.id)
         .gte("transaction_date", dateFrom)
         .lte("transaction_date", dateTo)
         .order("transaction_date", { ascending: false });
@@ -86,6 +92,11 @@ export default function ExtratoBancario() {
   };
 
   const handleSync = async () => {
+    if (!currentCompany?.id) {
+      toast.error("Selecione uma empresa");
+      return;
+    }
+    
     if (!hasCredentials) {
       toast.error("Configure as credenciais do Banco Inter primeiro");
       return;
@@ -95,7 +106,7 @@ export default function ExtratoBancario() {
     try {
       const { data, error } = await supabase.functions.invoke("inter-sync", {
         body: {
-          company_id: TEMP_COMPANY_ID,
+          company_id: currentCompany.id,
           date_from: dateFrom,
           date_to: dateTo,
         },
