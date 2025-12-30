@@ -121,15 +121,22 @@ const menuGroups: MenuGroup[] = [
     items: [
       { title: "Saldo", icon: Package, href: "/saldo-estoque" },
       { title: "Movimentações", icon: ArrowRightLeft, href: "/movimentacoes" },
-      { title: "Imprimir Etiquetas", icon: Printer, href: "/imprimir-etiquetas" },
       { title: "Ajustes", icon: AlertTriangle, href: "/ajustes" },
+    ],
+  },
+  {
+    label: "Produtos",
+    items: [
+      { title: "Gerenciar Produtos", icon: Boxes, href: "/produtos" },
+      { title: "Valores de Venda", icon: CircleDollarSign, href: "/valores-venda" },
+      { title: "Etiquetas", icon: Printer, href: "/etiquetas" },
+      { title: "Categorias e Marcas", icon: Tag, href: "/categorias-produtos" },
     ],
   },
   {
     label: "Cadastros",
     items: [
       { title: "Clientes", icon: Users, href: "/clientes" },
-      { title: "Produtos", icon: Boxes, href: "/produtos" },
       { title: "Serviços", icon: Wrench, href: "/servicos" },
       { title: "Fornecedores", icon: Building2, href: "/fornecedores" },
     ],
