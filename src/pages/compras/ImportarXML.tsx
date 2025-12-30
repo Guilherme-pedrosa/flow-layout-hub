@@ -216,6 +216,32 @@ export default function ImportarXML() {
     setNfeData({ ...nfeData, itens: newItens });
   };
 
+  // Quando a finalidade muda, sugerir CFOP correspondente
+  const handleFinalidadeChange = (novaFinalidade: typeof finalidade) => {
+    setFinalidade(novaFinalidade);
+    
+    if (!nfeData) return;
+    
+    // Determinar prefixo baseado na UF do fornecedor
+    const ufFornecedor = nfeData.fornecedor.uf;
+    const ufEmpresa = "GO"; // TODO: pegar do contexto
+    const prefixo = ufFornecedor === ufEmpresa ? "1" : ufFornecedor === "EX" ? "3" : "2";
+    
+    // Mapeamento de finalidade para sufixo CFOP
+    const cfopMap: Record<typeof finalidade, string> = {
+      comercializacao: `${prefixo}102`,     // Compra para comercialização
+      industrializacao: `${prefixo}101`,    // Compra para industrialização
+      uso_consumo: `${prefixo}556`,         // Material de uso/consumo
+      ativo: `${prefixo}551`,               // Ativo imobilizado
+      garantia: `${prefixo}949`,            // Outras entradas (garantia)
+      outros: `${prefixo}949`,              // Outras entradas
+    };
+    
+    const novoCfop = cfopMap[novaFinalidade];
+    setCfopGeral(novoCfop);
+    handleCfopGeralChange(novoCfop);
+  };
+
   const handleProdutoCadastrado = (productId: string) => {
     if (!nfeData || !itemParaCadastrar) return;
     const newItens = [...nfeData.itens];
@@ -556,7 +582,7 @@ Responda APENAS com o código CFOP de 4 dígitos. Sem explicações.`;
               {/* Campo de Finalidade */}
               <div className="space-y-2">
                 <Label>Finalidade da Nota</Label>
-                <Select value={finalidade} onValueChange={(v: typeof finalidade) => setFinalidade(v)}>
+                <Select value={finalidade} onValueChange={(v: typeof finalidade) => handleFinalidadeChange(v)}>
                   <SelectTrigger>
                     <SelectValue placeholder="Selecione a finalidade..." />
                   </SelectTrigger>
