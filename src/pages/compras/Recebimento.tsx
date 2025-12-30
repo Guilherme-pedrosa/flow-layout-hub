@@ -26,6 +26,7 @@ import {
   Sparkles,
   RefreshCw,
   X,
+  Pencil,
 } from "lucide-react";
 import { usePurchaseReceipt, ReceiptSource, ReceiptItem } from "@/hooks/usePurchaseReceipt";
 import { formatCurrency } from "@/lib/formatters";
@@ -38,6 +39,7 @@ export default function Recebimento() {
     isLoading,
     getReceiptDetails,
     confirmItem,
+    updateItemQuantity,
     finalizeReceipt,
     resetReceipt,
     refetch,
@@ -52,6 +54,10 @@ export default function Recebimento() {
   const [aiInsight, setAiInsight] = useState<string>("");
   const [aiLoading, setAiLoading] = useState(false);
   const [aiDismissed, setAiDismissed] = useState(false);
+  
+  // Estado para edição de quantidade
+  const [editingItemId, setEditingItemId] = useState<string | null>(null);
+  const [editingQuantity, setEditingQuantity] = useState<string>("");
   
   const barcodeInputRef = useRef<HTMLInputElement>(null);
 
@@ -286,6 +292,49 @@ Responda APENAS com o texto do insight, sem JSON.`;
     }
   };
 
+  const handleSaveQuantity = async (item: ReceiptItem) => {
+    if (!selectedSource) return;
+    
+    const newQty = parseInt(editingQuantity, 10);
+    
+    if (isNaN(newQty)) {
+      toast.error("Quantidade inválida");
+      return;
+    }
+    
+    if (newQty < 0 || newQty > item.quantity_total) {
+      toast.error(`Quantidade deve estar entre 0 e ${item.quantity_total}`);
+      return;
+    }
+    
+    try {
+      await updateItemQuantity.mutateAsync({
+        source: selectedSource,
+        item,
+        newQuantity: newQty,
+      });
+
+      // Atualiza localmente
+      setSelectedSource(prev => {
+        if (!prev) return null;
+        return {
+          ...prev,
+          items: prev.items.map(i => 
+            i.id === item.id 
+              ? { ...i, quantity_received: newQty, quantity_pending: i.quantity_total - newQty }
+              : i
+          ),
+        };
+      });
+
+      toast.success("Quantidade atualizada!");
+      setEditingItemId(null);
+      setEditingQuantity("");
+    } catch (error: any) {
+      toast.error(error.message || "Erro ao atualizar quantidade");
+    }
+  };
+
   const totalItems = selectedSource?.items.reduce((sum, i) => sum + i.quantity_total, 0) || 0;
   const totalReceived = selectedSource?.items.reduce((sum, i) => sum + i.quantity_received, 0) || 0;
   const receivedItems = selectedSource?.items.filter(i => i.quantity_received > 0) || [];
@@ -513,7 +562,61 @@ Responda APENAS com o texto do insight, sem JSON.`;
                                 </div>
                               </TableCell>
                               <TableCell className="text-center font-medium">
-                                {item.quantity_received}
+                                {editingItemId === item.id ? (
+                                  <div className="flex items-center justify-center gap-1">
+                                    <Input
+                                      type="number"
+                                      min={0}
+                                      max={item.quantity_total}
+                                      value={editingQuantity}
+                                      onChange={(e) => setEditingQuantity(e.target.value)}
+                                      onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                          handleSaveQuantity(item);
+                                        } else if (e.key === 'Escape') {
+                                          setEditingItemId(null);
+                                          setEditingQuantity("");
+                                        }
+                                      }}
+                                      className="w-16 h-7 text-center p-1"
+                                      autoFocus
+                                    />
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-6 w-6"
+                                      onClick={() => handleSaveQuantity(item)}
+                                    >
+                                      <Check className="h-3 w-3" />
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-6 w-6"
+                                      onClick={() => {
+                                        setEditingItemId(null);
+                                        setEditingQuantity("");
+                                      }}
+                                    >
+                                      <X className="h-3 w-3" />
+                                    </Button>
+                                  </div>
+                                ) : (
+                                  <div className="flex items-center justify-center gap-1">
+                                    <span>{item.quantity_received}</span>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-6 w-6 text-muted-foreground hover:text-foreground"
+                                      onClick={() => {
+                                        setEditingItemId(item.id);
+                                        setEditingQuantity(item.quantity_received.toString());
+                                      }}
+                                    >
+                                      <Pencil className="h-3 w-3" />
+                                    </Button>
+                                  </div>
+                                )}
                               </TableCell>
                               <TableCell className="text-center">
                                 {item.quantity_total}
