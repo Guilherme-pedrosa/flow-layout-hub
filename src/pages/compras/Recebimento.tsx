@@ -295,7 +295,9 @@ Responda APENAS com o texto do insight, sem JSON.`;
   const handleSaveQuantity = async (item: ReceiptItem) => {
     if (!selectedSource) return;
     
-    const newQty = parseInt(editingQuantity, 10);
+    // Converte vírgula para ponto antes de parsear
+    const normalizedValue = editingQuantity.replace(',', '.');
+    const newQty = parseFloat(normalizedValue);
     
     if (isNaN(newQty)) {
       toast.error("Quantidade inválida");
@@ -303,7 +305,7 @@ Responda APENAS com o texto do insight, sem JSON.`;
     }
     
     if (newQty < 0 || newQty > item.quantity_total) {
-      toast.error(`Quantidade deve estar entre 0 e ${item.quantity_total}`);
+      toast.error(`Quantidade deve estar entre 0 e ${item.quantity_total.toLocaleString('pt-BR')}`);
       return;
     }
     
@@ -565,11 +567,14 @@ Responda APENAS com o texto do insight, sem JSON.`;
                                 {editingItemId === item.id ? (
                                   <div className="flex items-center justify-center gap-1">
                                     <Input
-                                      type="number"
-                                      min={0}
-                                      max={item.quantity_total}
+                                      type="text"
+                                      inputMode="decimal"
                                       value={editingQuantity}
-                                      onChange={(e) => setEditingQuantity(e.target.value)}
+                                      onChange={(e) => {
+                                        // Permite apenas números e vírgula
+                                        const value = e.target.value.replace(/[^\d,]/g, '');
+                                        setEditingQuantity(value);
+                                      }}
                                       onKeyDown={(e) => {
                                         if (e.key === 'Enter') {
                                           handleSaveQuantity(item);
@@ -578,7 +583,7 @@ Responda APENAS com o texto do insight, sem JSON.`;
                                           setEditingQuantity("");
                                         }
                                       }}
-                                      className="w-16 h-7 text-center p-1"
+                                      className="w-20 h-7 text-center p-1"
                                       autoFocus
                                     />
                                     <Button
@@ -603,14 +608,14 @@ Responda APENAS com o texto do insight, sem JSON.`;
                                   </div>
                                 ) : (
                                   <div className="flex items-center justify-center gap-1">
-                                    <span>{item.quantity_received}</span>
+                                    <span>{item.quantity_received.toLocaleString('pt-BR')}</span>
                                     <Button
                                       variant="ghost"
                                       size="icon"
                                       className="h-6 w-6 text-muted-foreground hover:text-foreground"
                                       onClick={() => {
                                         setEditingItemId(item.id);
-                                        setEditingQuantity(item.quantity_received.toString());
+                                        setEditingQuantity(item.quantity_received.toLocaleString('pt-BR'));
                                       }}
                                     >
                                       <Pencil className="h-3 w-3" />
@@ -619,10 +624,10 @@ Responda APENAS com o texto do insight, sem JSON.`;
                                 )}
                               </TableCell>
                               <TableCell className="text-center">
-                                {item.quantity_total}
+                                {item.quantity_total.toLocaleString('pt-BR')}
                               </TableCell>
                               <TableCell className="text-center">
-                                {item.quantity_pending}
+                                {item.quantity_pending.toLocaleString('pt-BR')}
                               </TableCell>
                               <TableCell className="text-center">
                                 {isComplete ? (
@@ -692,7 +697,7 @@ Responda APENAS com o texto do insight, sem JSON.`;
                               Cód: {item.product_code}
                             </span>
                             <Badge variant="secondary" className={isPartial ? "bg-yellow-100 text-yellow-700" : "bg-green-100 text-green-700"}>
-                              {item.quantity_received} / {item.quantity_total}
+                              {item.quantity_received.toLocaleString('pt-BR')} / {item.quantity_total.toLocaleString('pt-BR')}
                             </Badge>
                           </div>
                         </div>
