@@ -185,7 +185,8 @@ export function LancamentosPayablesList({ onRefresh }: LancamentosPayablesListPr
   };
 
   // Filter payables based on status
-  const pendingPayables = payables.filter((p) => !p.is_paid);
+  const pendingPayables = payables.filter((p) => !p.is_paid && p.payment_status !== "sent_to_bank" && p.payment_status !== "submitted_for_approval");
+  const sentToBankPayables = payables.filter((p) => !p.is_paid && (p.payment_status === "sent_to_bank" || p.payment_status === "submitted_for_approval"));
   const paidPayables = payables.filter((p) => p.is_paid);
 
   const filteredPayables = (activeTab === "pendentes" ? pendingPayables : paidPayables).filter((p) => {
@@ -740,8 +741,71 @@ export function LancamentosPayablesList({ onRefresh }: LancamentosPayablesListPr
               </Table>
             )
           ) : (
-            /* Histórico - Pagos + PIX */
+            /* Histórico - Enviados ao Banco + Pagos + PIX */
             <div className="space-y-6">
+              {/* Enviados ao Banco */}
+              {sentToBankPayables.length > 0 && (
+                <div>
+                  <h4 className="text-sm font-medium mb-3 text-muted-foreground flex items-center gap-2">
+                    <ArrowUpFromLine className="h-4 w-4" />
+                    Enviados ao Banco ({sentToBankPayables.length})
+                  </h4>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Nº</TableHead>
+                        <TableHead>Fornecedor</TableHead>
+                        <TableHead>Descrição</TableHead>
+                        <TableHead>Vencimento</TableHead>
+                        <TableHead>Método</TableHead>
+                        <TableHead className="text-right">Valor</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead className="w-[80px]">Ações</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {sentToBankPayables.map((payable) => (
+                        <TableRow key={payable.id}>
+                          <TableCell>
+                            <code className="text-xs bg-muted px-2 py-1 rounded font-mono">
+                              {payable.document_number || "-"}
+                            </code>
+                          </TableCell>
+                          <TableCell className="font-medium">
+                            {payable.supplier?.nome_fantasia || payable.supplier?.razao_social || "—"}
+                          </TableCell>
+                          <TableCell>{payable.description || "-"}</TableCell>
+                          <TableCell>
+                            {format(parseISO(payable.due_date), "dd/MM/yyyy", { locale: ptBR })}
+                          </TableCell>
+                          <TableCell>{getMethodBadge(payable.payment_method_type)}</TableCell>
+                          <TableCell className="text-right font-semibold">
+                            {formatCurrency(payable.amount)}
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className="bg-purple-500/10 text-purple-600 border-purple-500/20">
+                              <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                              Processando
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              onClick={() => handleDeletePayable(payable)}
+                              className="text-destructive hover:text-destructive"
+                              title="Excluir"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+
               {/* Títulos Pagos */}
               {paidPayables.length > 0 && (
                 <div>
