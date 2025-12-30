@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { PageHeader } from "@/components/shared";
+import { DeleteConfirmDialog } from "@/components/shared/DeleteConfirmDialog";
 import { Button } from "@/components/ui/button";
-import { Plus, Search, FileSpreadsheet, AlertTriangle, CheckCircle2, Sparkles, RefreshCw, X, MoreHorizontal, FileText, Printer, DollarSign, Download } from "lucide-react";
+import { Plus, Search, FileSpreadsheet, AlertTriangle, CheckCircle2, Sparkles, RefreshCw, X, MoreHorizontal, FileText, Printer, DollarSign, Download, Trash2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -61,8 +62,12 @@ export default function PedidosCompra() {
   const [aiInsight, setAiInsight] = useState<string>("");
   const [aiLoading, setAiLoading] = useState(false);
   const [aiDismissed, setAiDismissed] = useState(false);
+  
+  // Delete state
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [orderToDelete, setOrderToDelete] = useState<PurchaseOrder | null>(null);
 
-  const { orders, isLoading } = usePurchaseOrders();
+  const { orders, isLoading, deleteOrder, canDeleteOrder } = usePurchaseOrders();
   const { statuses } = usePurchaseOrderStatuses();
 
   // Load AI insight on mount
@@ -252,6 +257,29 @@ Foque no que precisa de atenção. Responda APENAS com o texto do insight, sem J
   const handlePrintOrder = async (order: PurchaseOrder) => {
     toast.info("Gerando PDF do pedido de compra...");
     // TODO: Implementar geração de PDF
+  };
+
+  const handleDeleteClick = async (order: PurchaseOrder) => {
+    // Check if can delete before opening dialog
+    const check = await canDeleteOrder(order.id);
+    if (!check.canDelete) {
+      toast.error(check.reason || "Não é possível excluir este pedido");
+      return;
+    }
+    setOrderToDelete(order);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleConfirmDelete = async (): Promise<boolean> => {
+    if (!orderToDelete) return false;
+    try {
+      await deleteOrder.mutateAsync(orderToDelete.id);
+      setOrderToDelete(null);
+      return true;
+    } catch (error) {
+      // Error handled in hook
+      return false;
+    }
   };
 
   const handleDownloadNF = (order: PurchaseOrder) => {
@@ -487,6 +515,14 @@ Foque no que precisa de atenção. Responda APENAS com o texto do insight, sem J
                           <DollarSign className="mr-2 h-4 w-4" />
                           Ver no Financeiro
                         </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem 
+                          onClick={() => handleDeleteClick(order)}
+                          className="text-destructive focus:text-destructive"
+                        >
+                          <Trash2 className="mr-2 h-4 w-4" />
+                          Excluir Pedido
+                        </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </TableCell>
@@ -496,6 +532,15 @@ Foque no que precisa de atenção. Responda APENAS com o texto do insight, sem J
           </Table>
         </div>
       )}
+
+      {/* Delete Confirmation Dialog */}
+      <DeleteConfirmDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        onConfirm={handleConfirmDelete}
+        title="Excluir Pedido de Compra"
+        description={`Tem certeza que deseja excluir o pedido #${orderToDelete?.order_number}? Esta ação não pode ser desfeita. Os registros financeiros associados (não pagos) também serão excluídos.`}
+      />
     </div>
   );
 }

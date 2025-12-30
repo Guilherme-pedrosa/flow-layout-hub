@@ -533,6 +533,97 @@ export function usePurchaseOrders() {
     },
   });
 
+  // Check if order can be deleted (no confirmed financial records)
+  const canDeleteOrder = async (orderId: string): Promise<{ canDelete: boolean; reason?: string }> => {
+    // Check if there are any payables that are paid or have confirmed status
+    const { data: payables, error } = await supabase
+      .from("payables")
+      .select("id, is_paid, financial_situation_id, financial_situations(confirms_payment)")
+      .eq("purchase_order_id", orderId);
+
+    if (error) {
+      console.error("Erro ao verificar payables:", error);
+      return { canDelete: false, reason: "Erro ao verificar registros financeiros" };
+    }
+
+    if (payables && payables.length > 0) {
+      // Check if any payable is paid
+      const paidPayable = payables.find(p => p.is_paid);
+      if (paidPayable) {
+        return { canDelete: false, reason: "Pedido possui título financeiro já pago" };
+      }
+
+      // Check if any payable has confirmed payment status
+      const confirmedPayable = payables.find(p => {
+        const situation = p.financial_situations as any;
+        return situation?.confirms_payment === true;
+      });
+      if (confirmedPayable) {
+        return { canDelete: false, reason: "Pedido possui título financeiro confirmado" };
+      }
+    }
+
+    return { canDelete: true };
+  };
+
+  const deleteOrder = useMutation({
+    mutationFn: async (orderId: string) => {
+      // Verify if can delete
+      const check = await canDeleteOrder(orderId);
+      if (!check.canDelete) {
+        throw new Error(check.reason || "Não é possível excluir este pedido");
+      }
+
+      // Delete related payables first (only forecasts/non-confirmed)
+      const { error: payableError } = await supabase
+        .from("payables")
+        .delete()
+        .eq("purchase_order_id", orderId)
+        .eq("is_paid", false);
+
+      if (payableError) {
+        console.error("Erro ao excluir payables:", payableError);
+      }
+
+      // Delete order items
+      const { error: itemsError } = await supabase
+        .from("purchase_order_items")
+        .delete()
+        .eq("purchase_order_id", orderId);
+
+      if (itemsError) {
+        console.error("Erro ao excluir itens:", itemsError);
+      }
+
+      // Delete divergences
+      const { error: divError } = await supabase
+        .from("purchase_order_divergences")
+        .delete()
+        .eq("purchase_order_id", orderId);
+
+      if (divError) {
+        console.error("Erro ao excluir divergências:", divError);
+      }
+
+      // Delete the order
+      const { error } = await supabase
+        .from("purchase_orders")
+        .delete()
+        .eq("id", orderId);
+
+      if (error) throw error;
+      return orderId;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["purchase_orders"] });
+      queryClient.invalidateQueries({ queryKey: ["payables"] });
+      toast.success("Pedido excluído com sucesso!");
+    },
+    onError: (error) => {
+      toast.error(`Erro ao excluir pedido: ${error.message}`);
+    },
+  });
+
   return {
     orders: ordersQuery.data ?? [],
     isLoading: ordersQuery.isLoading,
@@ -545,6 +636,8 @@ export function usePurchaseOrders() {
     updateOrderStatus,
     markForReapproval,
     clearReapproval,
+    deleteOrder,
+    canDeleteOrder,
     getOrderItems,
     getOrderById,
     getOrderDivergences,
