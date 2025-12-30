@@ -28,3 +28,4 @@ export { PixPaymentResultModal } from './PixPaymentResultModal';
 export { FinancialAIChat } from './FinancialAIChat';
 export { FinancialAIBanner } from './FinancialAIBanner';
 export { AIRiskBadge, calculateRisk, calculatePayerQuality } from './AIRiskBadge';
+export { ReconciliationPanel } from './ReconciliationPanel';
