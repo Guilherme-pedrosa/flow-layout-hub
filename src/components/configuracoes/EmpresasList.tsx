@@ -13,6 +13,7 @@ import { Plus, Pencil, Building2, Search, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { formatCpfCnpj } from "@/lib/formatters";
 import { useCompany } from "@/contexts/CompanyContext";
+import { consultarCnpj } from "@/lib/api/cnpj";
 
 interface Company {
   id: string;
@@ -67,11 +68,54 @@ export function EmpresasList() {
   const [companies, setCompanies] = useState<Company[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [consultingCnpj, setConsultingCnpj] = useState(false);
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingCompany, setEditingCompany] = useState<Company | null>(null);
   const [formData, setFormData] = useState(initialFormData);
   const { refreshCompanies } = useCompany();
+
+  useEffect(() => {
+    fetchCompanies();
+  }, []);
+
+  // Consulta CNPJ automaticamente quando tem 14 dígitos
+  const handleCnpjChange = async (value: string) => {
+    const cnpjLimpo = value.replace(/\D/g, "");
+    setFormData({ ...formData, cnpj: cnpjLimpo });
+
+    if (cnpjLimpo.length === 14) {
+      setConsultingCnpj(true);
+      try {
+        const data = await consultarCnpj(cnpjLimpo);
+        if (data) {
+          const endereco = [data.logradouro, data.numero, data.complemento, data.bairro]
+            .filter(Boolean)
+            .join(", ");
+
+          setFormData((prev) => ({
+            ...prev,
+            cnpj: cnpjLimpo,
+            name: data.fantasia || data.nome || prev.name,
+            razao_social: data.nome || prev.razao_social,
+            endereco: endereco || prev.endereco,
+            cidade: data.municipio || prev.cidade,
+            estado: data.uf || prev.estado,
+            cep: data.cep?.replace(/\D/g, "") || prev.cep,
+            telefone: data.telefone || prev.telefone,
+            email: data.email || prev.email,
+          }));
+          toast.success("Dados do CNPJ carregados!");
+        } else {
+          toast.error("CNPJ não encontrado ou inválido");
+        }
+      } catch {
+        toast.error("Erro ao consultar CNPJ");
+      } finally {
+        setConsultingCnpj(false);
+      }
+    }
+  };
 
   useEffect(() => {
     fetchCompanies();
@@ -266,11 +310,36 @@ export function EmpresasList() {
               {editingCompany ? "Editar Empresa" : "Nova Empresa"}
             </DialogTitle>
             <DialogDescription>
-              Preencha os dados da empresa
+              {editingCompany 
+                ? "Edite os dados da empresa" 
+                : "Digite o CNPJ para preencher automaticamente os dados"}
             </DialogDescription>
           </DialogHeader>
 
           <div className="grid gap-4 py-4">
+            {/* CNPJ em destaque para nova empresa */}
+            <div className="space-y-2">
+              <Label htmlFor="cnpj">CNPJ {!editingCompany && "*"}</Label>
+              <div className="relative">
+                <Input
+                  id="cnpj"
+                  value={formatCpfCnpj(formData.cnpj)}
+                  onChange={(e) => handleCnpjChange(e.target.value)}
+                  placeholder="Digite o CNPJ para buscar automaticamente"
+                  maxLength={18}
+                  disabled={consultingCnpj}
+                />
+                {consultingCnpj && (
+                  <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
+                )}
+              </div>
+              {!editingCompany && (
+                <p className="text-xs text-muted-foreground">
+                  Ao digitar o CNPJ completo, os dados serão preenchidos automaticamente
+                </p>
+              )}
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="name">Nome Fantasia *</Label>
@@ -282,25 +351,14 @@ export function EmpresasList() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="cnpj">CNPJ</Label>
+                <Label htmlFor="razao_social">Razão Social</Label>
                 <Input
-                  id="cnpj"
-                  value={formatCpfCnpj(formData.cnpj)}
-                  onChange={(e) => setFormData({ ...formData, cnpj: e.target.value.replace(/\D/g, "") })}
-                  placeholder="00.000.000/0001-00"
-                  maxLength={18}
+                  id="razao_social"
+                  value={formData.razao_social}
+                  onChange={(e) => setFormData({ ...formData, razao_social: e.target.value })}
+                  placeholder="Razão social completa"
                 />
               </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="razao_social">Razão Social</Label>
-              <Input
-                id="razao_social"
-                value={formData.razao_social}
-                onChange={(e) => setFormData({ ...formData, razao_social: e.target.value })}
-                placeholder="Razão social completa"
-              />
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
