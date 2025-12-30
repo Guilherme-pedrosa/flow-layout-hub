@@ -17,6 +17,8 @@ import { useSales, Sale, SaleProductItem, SaleServiceItem } from "@/hooks/useSal
 import { formatCurrency } from "@/lib/formatters";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { AuditValidationBadge } from "@/components/shared/AuditValidationBadge";
+import { useAiAuditora, AuditResult } from "@/hooks/useAiAuditora";
 
 interface SaleFormProps {
   onClose: () => void;
@@ -28,6 +30,7 @@ const TEMP_COMPANY_ID = "7875af52-18d0-434e-8ae9-97981bd668e7";
 export function SaleForm({ onClose, initialData }: SaleFormProps) {
   const { createSale, updateSale } = useSales();
   const { printDocument, printSummary, isGenerating } = useDocumentPdf();
+  const { auditSale, loading: auditLoading } = useAiAuditora();
   const isEditing = !!initialData?.id;
   
   const [formData, setFormData] = useState({
@@ -60,6 +63,36 @@ export function SaleForm({ onClose, initialData }: SaleFormProps) {
   const [installments, setInstallments] = useState<Installment[]>([]);
   const [attachments, setAttachments] = useState<SaleAttachment[]>([]);
   const [loading, setLoading] = useState(false);
+  const [auditResult, setAuditResult] = useState<AuditResult | null>(null);
+
+  // Executar auditoria quando dados mudam
+  useEffect(() => {
+    const runAudit = async () => {
+      const freightVal = parseFloat(formData.freight_value) || 0;
+      const discountPct = parseFloat(formData.discount_percent) || 0;
+      const discountVal = parseFloat(formData.discount_value) || 0;
+      const productsSum = productItems.reduce((sum, i) => sum + i.subtotal, 0);
+      const servicesSum = serviceItems.reduce((sum, i) => sum + i.subtotal, 0);
+      const subtotal = productsSum + servicesSum + freightVal;
+      const discountAmount = discountPct > 0 ? subtotal * discountPct / 100 : discountVal;
+      const totalVal = subtotal - discountAmount;
+      
+      const result = await auditSale({
+        products_total: productsSum,
+        services_total: servicesSum,
+        freight_value: freightVal,
+        discount_value: discountVal,
+        discount_percent: discountPct,
+        total_value: totalVal,
+        client_id: formData.client_id || undefined,
+        payment_type: formData.payment_type,
+      });
+      setAuditResult(result);
+    };
+    
+    const timeout = setTimeout(runAudit, 500);
+    return () => clearTimeout(timeout);
+  }, [productItems, serviceItems, formData.discount_percent, formData.discount_value, formData.freight_value, formData.client_id, formData.payment_type]);
 
   // Load data when editing
   useEffect(() => {
@@ -220,6 +253,17 @@ export function SaleForm({ onClose, initialData }: SaleFormProps) {
   };
 
   const handleSave = async () => {
+    // Bloquear se auditoria tiver erro crítico
+    if (auditResult?.riskLevel === 'critical') {
+      toast.error('Venda bloqueada: corrija os erros críticos antes de salvar');
+      return;
+    }
+
+    // Alertar se tiver risco alto
+    if (auditResult?.riskLevel === 'high') {
+      toast.warning('Atenção: Esta venda possui alertas importantes. Verifique antes de continuar.');
+    }
+
     const saleData = {
       company_id: TEMP_COMPANY_ID,
       client_id: formData.client_id || null,
@@ -369,6 +413,12 @@ export function SaleForm({ onClose, initialData }: SaleFormProps) {
 
   return (
     <div className="space-y-6">
+      {/* Badge de Auditoria IA */}
+      <AuditValidationBadge
+        result={auditResult}
+        loading={auditLoading}
+      />
+
       <SaleFormDadosGerais formData={formData} onChange={handleChange} />
       <SaleFormProdutos items={productItems} onChange={setProductItems} />
       <SaleFormServicos items={serviceItems} onChange={setServiceItems} />

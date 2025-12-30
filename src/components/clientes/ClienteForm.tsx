@@ -1,9 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
-import { Save, ShoppingCart, FileText, Loader2 } from "lucide-react";
+import { Save, ShoppingCart, FileText, Loader2, Shield } from "lucide-react";
 import { useClientes, ClienteInsert } from "@/hooks/useClientes";
 import { ClienteFormDadosGerais } from "./ClienteFormDadosGerais";
 import { ClienteFormEndereco } from "./ClienteFormEndereco";
@@ -13,6 +13,9 @@ import { ClienteFormOperacional } from "./ClienteFormOperacional";
 import { ClienteFormFiscal } from "./ClienteFormFiscal";
 import { HistoricoAlteracoes } from "@/components/shared/HistoricoAlteracoes";
 import { useToast } from "@/hooks/use-toast";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { supabase } from "@/integrations/supabase/client";
 
 interface ClienteFormProps {
   clienteId?: string;
@@ -62,6 +65,11 @@ export function ClienteForm({ clienteId, onSave }: ClienteFormProps) {
   const [contatos, setContatos] = useState<Contato[]>([]);
   const [duplicateWarning, setDuplicateWarning] = useState(false);
   const [activeTab, setActiveTab] = useState("dados-gerais");
+  const [cnpjValidation, setCnpjValidation] = useState<{
+    status: 'idle' | 'loading' | 'valid' | 'invalid' | 'error';
+    message?: string;
+    data?: any;
+  }>({ status: 'idle' });
 
   // Carregar dados se for edição
   useEffect(() => {
@@ -84,6 +92,70 @@ export function ClienteForm({ clienteId, onSave }: ClienteFormProps) {
     const timeout = setTimeout(checkDuplicate, 500);
     return () => clearTimeout(timeout);
   }, [formData.cpf_cnpj]);
+
+  // Validar CNPJ automaticamente na Receita Federal
+  const validateCnpj = useCallback(async () => {
+    const cnpj = formData.cpf_cnpj?.replace(/\D/g, '');
+    if (!cnpj || cnpj.length !== 14) {
+      setCnpjValidation({ status: 'idle' });
+      return;
+    }
+
+    setCnpjValidation({ status: 'loading' });
+
+    try {
+      const { data, error } = await supabase.functions.invoke('consultar-cnpj', {
+        body: { cnpj }
+      });
+
+      if (error) throw error;
+
+      if (data.status === 'ATIVA') {
+        setCnpjValidation({ 
+          status: 'valid', 
+          message: `CNPJ ativo desde ${data.data_abertura}`,
+          data 
+        });
+        
+        // Preencher dados automaticamente se estiver vazio
+        if (!formData.razao_social && data.razao_social) {
+          setFormData(prev => ({
+            ...prev,
+            razao_social: data.razao_social || prev.razao_social,
+            nome_fantasia: data.nome_fantasia || prev.nome_fantasia,
+            situacao_cadastral: data.status || prev.situacao_cadastral,
+            data_abertura: data.data_abertura || prev.data_abertura,
+            cnae_principal: data.cnae_principal || prev.cnae_principal,
+            logradouro: data.logradouro || prev.logradouro,
+            numero: data.numero || prev.numero,
+            bairro: data.bairro || prev.bairro,
+            cidade: data.cidade || prev.cidade,
+            estado: data.uf || prev.estado,
+            cep: data.cep || prev.cep,
+          }));
+        }
+      } else {
+        setCnpjValidation({ 
+          status: 'invalid', 
+          message: `CNPJ com situação: ${data.status}` 
+        });
+      }
+    } catch (error) {
+      console.error('Erro ao validar CNPJ:', error);
+      setCnpjValidation({ status: 'error', message: 'Erro ao consultar Receita Federal' });
+    }
+  }, [formData.cpf_cnpj]);
+
+  // Validar CNPJ quando o campo muda
+  useEffect(() => {
+    const cnpj = formData.cpf_cnpj?.replace(/\D/g, '');
+    if (formData.tipo_pessoa === 'PJ' && cnpj && cnpj.length === 14) {
+      const timeout = setTimeout(validateCnpj, 1000);
+      return () => clearTimeout(timeout);
+    } else {
+      setCnpjValidation({ status: 'idle' });
+    }
+  }, [formData.cpf_cnpj, formData.tipo_pessoa, validateCnpj]);
 
   const loadCliente = async (id: string) => {
     const cliente = await fetchCliente(id);
@@ -134,6 +206,55 @@ export function ClienteForm({ clienteId, onSave }: ClienteFormProps) {
 
   return (
     <div className="space-y-6">
+      {/* Validação CNPJ Receita Federal */}
+      {formData.tipo_pessoa === 'PJ' && cnpjValidation.status !== 'idle' && (
+        <Alert className={
+          cnpjValidation.status === 'valid' ? 'border-emerald-500/50 bg-emerald-500/10' :
+          cnpjValidation.status === 'invalid' ? 'border-destructive/50 bg-destructive/10' :
+          cnpjValidation.status === 'loading' ? 'border-blue-500/50 bg-blue-500/10' :
+          'border-amber-500/50 bg-amber-500/10'
+        }>
+          <Shield className={`h-4 w-4 ${
+            cnpjValidation.status === 'valid' ? 'text-emerald-600' :
+            cnpjValidation.status === 'invalid' ? 'text-destructive' :
+            cnpjValidation.status === 'loading' ? 'text-blue-600' :
+            'text-amber-600'
+          }`} />
+          <AlertDescription className="flex items-center gap-2">
+            {cnpjValidation.status === 'loading' && (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Consultando Receita Federal...
+              </>
+            )}
+            {cnpjValidation.status === 'valid' && (
+              <>
+                <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20">
+                  CNPJ Válido
+                </Badge>
+                {cnpjValidation.message}
+              </>
+            )}
+            {cnpjValidation.status === 'invalid' && (
+              <>
+                <Badge variant="outline" className="bg-destructive/10 text-destructive border-destructive/20">
+                  Atenção
+                </Badge>
+                {cnpjValidation.message}
+              </>
+            )}
+            {cnpjValidation.status === 'error' && (
+              <>
+                <Badge variant="outline" className="bg-amber-500/10 text-amber-600 border-amber-500/20">
+                  Erro
+                </Badge>
+                {cnpjValidation.message}
+              </>
+            )}
+          </AlertDescription>
+        </Alert>
+      )}
+
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="grid w-full grid-cols-6">
           <TabsTrigger value="dados-gerais">Dados Gerais</TabsTrigger>
