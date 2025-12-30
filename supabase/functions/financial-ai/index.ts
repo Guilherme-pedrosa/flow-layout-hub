@@ -18,7 +18,11 @@ serve(async (req) => {
     const { type, companyId } = body;
     const messages = Array.isArray(body.messages) ? body.messages : [];
 
+    console.log("[financial-ai] Request received:", { type, messagesCount: messages.length });
+    console.log("[financial-ai] First message preview:", messages[0]?.content?.substring(0, 200));
+
     if (!OPENAI_API_KEY) {
+      console.error("[financial-ai] OPENAI_API_KEY is not configured");
       throw new Error("OPENAI_API_KEY is not configured");
     }
 
@@ -174,6 +178,8 @@ ${financialContext}`;
 
     // For CFOP suggestions, don't use streaming (short response)
     const useStreaming = type !== 'cfop_suggestion';
+    
+    console.log("[financial-ai] Calling OpenAI, streaming:", useStreaming, "type:", type);
 
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
@@ -190,6 +196,8 @@ ${financialContext}`;
         stream: useStreaming,
       }),
     });
+    
+    console.log("[financial-ai] OpenAI response status:", response.status);
 
     if (!response.ok) {
       if (response.status === 429) {
@@ -215,6 +223,7 @@ ${financialContext}`;
     // For non-streaming requests, return JSON directly
     if (!useStreaming) {
       const data = await response.json();
+      console.log("[financial-ai] Non-streaming response:", JSON.stringify(data).substring(0, 500));
       return new Response(JSON.stringify(data), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
