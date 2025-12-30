@@ -67,27 +67,44 @@ export function useDashboardAiInsight() {
       const reader = response.body?.getReader();
       const decoder = new TextDecoder();
       let fullText = '';
+      let textBuffer = '';
 
       if (reader) {
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
-          const chunk = decoder.decode(value, { stream: true });
-          const lines = chunk.split('\n');
-          for (const line of lines) {
-            if (line.startsWith('data: ') && line !== 'data: [DONE]') {
-              try {
-                const json = JSON.parse(line.slice(6));
-                const content = json.choices?.[0]?.delta?.content;
-                if (content) fullText += content;
-              } catch {}
+          
+          textBuffer += decoder.decode(value, { stream: true });
+          
+          let newlineIndex: number;
+          while ((newlineIndex = textBuffer.indexOf('\n')) !== -1) {
+            let line = textBuffer.slice(0, newlineIndex);
+            textBuffer = textBuffer.slice(newlineIndex + 1);
+            
+            if (line.endsWith('\r')) line = line.slice(0, -1);
+            if (line.startsWith(':') || line.trim() === '') continue;
+            if (!line.startsWith('data: ')) continue;
+            
+            const jsonStr = line.slice(6).trim();
+            if (jsonStr === '[DONE]') continue;
+            
+            try {
+              const parsed = JSON.parse(jsonStr);
+              const content = parsed.choices?.[0]?.delta?.content;
+              if (content) fullText += content;
+            } catch {
+              // Incomplete JSON, continue
             }
           }
         }
       }
 
-      // Parse JSON da resposta
-      const cleanText = fullText.replace(/```json\n?/g, '').replace(/```/g, '').trim();
+      // Remove markdown code blocks
+      const cleanText = fullText
+        .replace(/```json\n?/gi, '')
+        .replace(/```\n?/g, '')
+        .trim();
+      
       const jsonMatch = cleanText.match(/\{[\s\S]*\}/);
       
       if (jsonMatch) {
@@ -97,23 +114,15 @@ export function useDashboardAiInsight() {
           type: parsed.type || 'info',
           title: parsed.title || 'Insight da IA',
           description: parsed.description || 'Analisando dados...',
-          confidence: parsed.confidence || 80,
+          confidence: typeof parsed.confidence === 'number' ? parsed.confidence : 80,
           action: {
             label: parsed.actionLabel || 'Ver detalhes',
-            href: parsed.actionHref || '/financeiro',
+            href: parsed.actionHref || '/financeiro/contas-pagar',
           },
           createdAt: new Date().toISOString(),
         });
       } else {
-        setInsight({
-          id: `ai-${Date.now()}`,
-          type: 'info',
-          title: 'Análise em andamento',
-          description: 'A IA está processando seus dados financeiros.',
-          confidence: 50,
-          action: { label: 'Ver finanças', href: '/financeiro' },
-          createdAt: new Date().toISOString(),
-        });
+        throw new Error('Resposta inválida da IA');
       }
     } catch (err) {
       setError(err as Error);
