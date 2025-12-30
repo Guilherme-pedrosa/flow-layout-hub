@@ -4,6 +4,14 @@ import { toast } from "sonner";
 
 export type CheckoutSourceType = 'venda' | 'os';
 
+export interface ProductLocation {
+  id: string;
+  code: string;
+  name: string;
+  quantity: number;
+  is_primary: boolean;
+}
+
 export interface CheckoutItem {
   id: string;
   sale_product_item_id?: string;
@@ -16,6 +24,8 @@ export interface CheckoutItem {
   quantity_checked: number;
   quantity_pending: number;
   stock_available: number;
+  locations: ProductLocation[];
+  default_location?: ProductLocation | null;
 }
 
 export interface CheckoutSource {
@@ -106,11 +116,23 @@ export function useCheckout() {
       .from("sale_product_items")
       .select(`
         id, product_id, quantity, subtotal,
-        product:products(id, code, description, barcode, quantity)
+        product:products(id, code, description, barcode, quantity, default_location_id)
       `)
       .eq("sale_id", saleId);
 
     if (itemsError) throw itemsError;
+
+    // Busca localizações de todos os produtos
+    const productIds = productItems?.map(p => p.product_id).filter(Boolean) || [];
+    const { data: productLocations } = await supabase
+      .from("product_stock_locations")
+      .select(`
+        id, product_id, quantity, is_primary,
+        location:stock_locations(id, code, name)
+      `)
+      .in("product_id", productIds)
+      .gt("quantity", 0)
+      .order("is_primary", { ascending: false });
 
     // Busca itens de checkout existentes
     const { data: checkoutItems, error: checkoutError } = await supabase
@@ -136,6 +158,24 @@ export function useCheckout() {
       movementsByProduct[productId] = (movementsByProduct[productId] || 0) + (sm.quantity || 0);
     });
 
+    // Agrupa localizações por product_id
+    const locationsByProduct: Record<string, ProductLocation[]> = {};
+    (productLocations || []).forEach((pl: any) => {
+      const productId = pl.product_id;
+      if (!locationsByProduct[productId]) {
+        locationsByProduct[productId] = [];
+      }
+      if (pl.location) {
+        locationsByProduct[productId].push({
+          id: pl.location.id,
+          code: pl.location.code,
+          name: pl.location.name,
+          quantity: pl.quantity,
+          is_primary: pl.is_primary,
+        });
+      }
+    });
+
     const items: CheckoutItem[] = (productItems || []).map(item => {
       const checkoutItem = checkoutItems?.find(ci => ci.sale_product_item_id === item.id);
       
@@ -146,6 +186,10 @@ export function useCheckout() {
       const quantityChecked = (checkoutItem?.quantity_checked != null && checkoutItem.quantity_checked > 0) 
         ? checkoutItem.quantity_checked 
         : quantityFromMovement;
+
+      // Localizações do produto
+      const locations = locationsByProduct[item.product_id || ''] || [];
+      const defaultLocation = locations.find(l => l.is_primary) || locations[0] || null;
       
       return {
         id: checkoutItem?.id || item.id,
@@ -158,6 +202,8 @@ export function useCheckout() {
         quantity_checked: quantityChecked,
         quantity_pending: item.quantity - quantityChecked,
         stock_available: item.product?.quantity || 0,
+        locations,
+        default_location: defaultLocation,
       };
     });
 
@@ -195,11 +241,23 @@ export function useCheckout() {
       .from("service_order_product_items")
       .select(`
         id, product_id, quantity, subtotal,
-        product:products(id, code, description, barcode, quantity)
+        product:products(id, code, description, barcode, quantity, default_location_id)
       `)
       .eq("service_order_id", osId);
 
     if (itemsError) throw itemsError;
+
+    // Busca localizações de todos os produtos
+    const productIds = productItems?.map(p => p.product_id).filter(Boolean) || [];
+    const { data: productLocations } = await supabase
+      .from("product_stock_locations")
+      .select(`
+        id, product_id, quantity, is_primary,
+        location:stock_locations(id, code, name)
+      `)
+      .in("product_id", productIds)
+      .gt("quantity", 0)
+      .order("is_primary", { ascending: false });
 
     // Busca itens de checkout existentes
     const { data: checkoutItems, error: checkoutError } = await supabase
@@ -224,6 +282,24 @@ export function useCheckout() {
       movementsByProduct[productId] = (movementsByProduct[productId] || 0) + (sm.quantity || 0);
     });
 
+    // Agrupa localizações por product_id
+    const locationsByProduct: Record<string, ProductLocation[]> = {};
+    (productLocations || []).forEach((pl: any) => {
+      const productId = pl.product_id;
+      if (!locationsByProduct[productId]) {
+        locationsByProduct[productId] = [];
+      }
+      if (pl.location) {
+        locationsByProduct[productId].push({
+          id: pl.location.id,
+          code: pl.location.code,
+          name: pl.location.name,
+          quantity: pl.quantity,
+          is_primary: pl.is_primary,
+        });
+      }
+    });
+
     const items: CheckoutItem[] = (productItems || []).map(item => {
       const checkoutItem = checkoutItems?.find(ci => ci.service_order_product_item_id === item.id);
       
@@ -234,6 +310,10 @@ export function useCheckout() {
       const quantityChecked = (checkoutItem?.quantity_checked != null && checkoutItem.quantity_checked > 0) 
         ? checkoutItem.quantity_checked 
         : quantityFromMovement;
+
+      // Localizações do produto
+      const locations = locationsByProduct[item.product_id || ''] || [];
+      const defaultLocation = locations.find(l => l.is_primary) || locations[0] || null;
       
       return {
         id: checkoutItem?.id || item.id,
@@ -246,6 +326,8 @@ export function useCheckout() {
         quantity_checked: quantityChecked,
         quantity_pending: item.quantity - quantityChecked,
         stock_available: item.product?.quantity || 0,
+        locations,
+        default_location: defaultLocation,
       };
     });
 
