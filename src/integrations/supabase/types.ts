@@ -2300,6 +2300,57 @@ export type Database = {
           },
         ]
       }
+      product_stock_locations: {
+        Row: {
+          created_at: string
+          id: string
+          is_primary: boolean | null
+          location_id: string
+          max_quantity: number | null
+          min_quantity: number | null
+          product_id: string
+          quantity: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_primary?: boolean | null
+          location_id: string
+          max_quantity?: number | null
+          min_quantity?: number | null
+          product_id: string
+          quantity?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_primary?: boolean | null
+          location_id?: string
+          max_quantity?: number | null
+          min_quantity?: number | null
+          product_id?: string
+          quantity?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_stock_locations_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "stock_locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_stock_locations_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       product_suppliers: {
         Row: {
           created_at: string
@@ -2347,6 +2398,7 @@ export type Database = {
           code: string
           controls_stock: boolean | null
           created_at: string
+          default_location_id: string | null
           description: string
           description_long: string | null
           extra_fields: Json | null
@@ -2393,6 +2445,7 @@ export type Database = {
           code: string
           controls_stock?: boolean | null
           created_at?: string
+          default_location_id?: string | null
           description: string
           description_long?: string | null
           extra_fields?: Json | null
@@ -2439,6 +2492,7 @@ export type Database = {
           code?: string
           controls_stock?: boolean | null
           created_at?: string
+          default_location_id?: string | null
           description?: string
           description_long?: string | null
           extra_fields?: Json | null
@@ -2474,7 +2528,15 @@ export type Database = {
           weight?: number | null
           width?: number | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "products_default_location_id_fkey"
+            columns: ["default_location_id"]
+            isOneToOne: false
+            referencedRelation: "stock_locations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       purchase_order_divergences: {
         Row: {
@@ -4143,6 +4205,59 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "services_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      stock_locations: {
+        Row: {
+          aisle: string | null
+          code: string
+          company_id: string | null
+          created_at: string
+          description: string | null
+          id: string
+          is_active: boolean
+          level: string | null
+          name: string
+          shelf: string | null
+          updated_at: string
+          zone: string | null
+        }
+        Insert: {
+          aisle?: string | null
+          code: string
+          company_id?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          level?: string | null
+          name: string
+          shelf?: string | null
+          updated_at?: string
+          zone?: string | null
+        }
+        Update: {
+          aisle?: string | null
+          code?: string
+          company_id?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          level?: string | null
+          name?: string
+          shelf?: string | null
+          updated_at?: string
+          zone?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stock_locations_company_id_fkey"
             columns: ["company_id"]
             isOneToOne: false
             referencedRelation: "companies"

@@ -415,6 +415,7 @@ export default function Checkout() {
                       <TableHeader>
                         <TableRow>
                           <TableHead>Produto</TableHead>
+                          <TableHead>Localização</TableHead>
                           <TableHead className="text-center">Conferidos</TableHead>
                           <TableHead className="text-center">Total</TableHead>
                           <TableHead className="text-center">Estoque</TableHead>
@@ -444,6 +445,19 @@ export default function Checkout() {
                                     {item.product_barcode && ` | ${item.product_barcode}`}
                                   </div>
                                 </div>
+                              </TableCell>
+                              <TableCell>
+                                {item.default_location ? (
+                                  <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 font-mono">
+                                    {item.default_location.code}
+                                  </Badge>
+                                ) : item.locations && item.locations.length > 0 ? (
+                                  <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 font-mono">
+                                    {item.locations[0].code}
+                                  </Badge>
+                                ) : (
+                                  <span className="text-xs text-muted-foreground">-</span>
+                                )}
                               </TableCell>
                               <TableCell className="text-center font-medium">
                                 {item.quantity_checked}

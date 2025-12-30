@@ -64,6 +64,7 @@ import GerenciarProdutos from "./pages/produtos/GerenciarProdutos";
 import ValoresVenda from "./pages/produtos/ValoresVenda";
 import Etiquetas from "./pages/produtos/Etiquetas";
 import Categorias from "./pages/produtos/Categorias";
+import Localizacoes from "./pages/produtos/Localizacoes";
 
 // Configurações
 import Empresa from "./pages/configuracoes/Empresa";
@@ -140,6 +141,7 @@ const App = () => (
             <Route path="/valores-venda" element={<ValoresVenda />} />
             <Route path="/etiquetas" element={<Etiquetas />} />
             <Route path="/categorias-produtos" element={<Categorias />} />
+            <Route path="/localizacoes" element={<Localizacoes />} />
             <Route path="/servicos" element={<Servicos />} />
             <Route path="/fornecedores" element={<Fornecedores />} />
             <Route path="/usuarios" element={<Usuarios />} />

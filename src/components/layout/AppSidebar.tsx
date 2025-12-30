@@ -131,6 +131,7 @@ const menuGroups: MenuGroup[] = [
       { title: "Valores de Venda", icon: CircleDollarSign, href: "/valores-venda" },
       { title: "Etiquetas", icon: Printer, href: "/etiquetas" },
       { title: "Categorias e Marcas", icon: Tag, href: "/categorias-produtos" },
+      { title: "Localizações", icon: Target, href: "/localizacoes" },
     ],
   },
   {
