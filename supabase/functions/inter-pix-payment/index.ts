@@ -181,12 +181,17 @@ serve(async (req) => {
       'aleatoria': 'CHAVE_ALEATORIA'
     };
 
-    // Build PIX payment payload for Inter API - pagamento por chave PIX
-    // O valor deve ser decimal como string (ex: R$12,00 = "12.00")
+    // Build PIX payment payload for Inter API - formato correto conforme documentação
+    // O valor deve ser um objeto com "original" como string decimal (ex: "12.00")
     const recipientDoc = paymentData.recipientDocument.replace(/[^\d]/g, "");
+    const valorFormatado = paymentData.amount.toFixed(2);
+    
+    console.log("[inter-pix-payment] 5b. Valor formatado:", valorFormatado);
     
     const pixApiPayload = {
-      valor: paymentData.amount.toFixed(2),
+      valor: {
+        original: valorFormatado
+      },
       chave: paymentData.pixKey,
       destinatario: {
         tipo: recipientDoc.length === 11 ? 'FISICA' : 'JURIDICA',
