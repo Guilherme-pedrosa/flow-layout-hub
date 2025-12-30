@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -40,9 +40,11 @@ import {
   FileUp,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { format, parseISO } from "date-fns";
+import { format, parseISO, differenceInDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { toast } from "sonner";
+import { AIBannerEnhanced } from "@/components/shared/AIBannerEnhanced";
+import { useAiInsights } from "@/hooks/useAiInsights";
 import { useCompany } from "@/contexts/CompanyContext";
 
 interface DDABoleto {
@@ -251,9 +253,54 @@ export function DDABoletosList() {
     if (barcode.length <= 20) return barcode;
     return `${barcode.slice(0, 10)}...${barcode.slice(-10)}`;
   };
+  
+  // AI Insights
+  const { insights, dismiss, markAsRead } = useAiInsights('financial');
+  
+  // Insights locais baseados nos boletos DDA
+  const localInsights = useMemo(() => {
+    const result: any[] = [];
+    const today = new Date();
+    
+    // Boletos vencendo nos próximos 3 dias
+    const urgentBoletos = boletos.filter(b => {
+      if (b.status !== 'pending') return false;
+      const dueDate = parseISO(b.data_vencimento);
+      const daysUntilDue = differenceInDays(dueDate, today);
+      return daysUntilDue >= 0 && daysUntilDue <= 3;
+    });
+    
+    if (urgentBoletos.length > 0) {
+      const totalUrgent = urgentBoletos.reduce((sum, b) => sum + b.valor, 0);
+      result.push({
+        id: 'urgent_dda',
+        type: 'warning' as const,
+        category: 'financial' as const,
+        mode: 'executora' as const,
+        title: 'Boletos Vencendo',
+        message: `Você tem ${urgentBoletos.length} boleto(s) DDA vencendo nos próximos 3 dias, totalizando R$ ${totalUrgent.toFixed(2)}. Deseja agendar o pagamento?`,
+        action_label: 'Agendar',
+        action_url: '/contas-pagar',
+        priority: 8,
+        is_read: false,
+        is_dismissed: false,
+        created_at: new Date().toISOString(),
+      });
+    }
+    
+    return result;
+  }, [boletos]);
 
   return (
     <>
+      {/* AI Banner */}
+      <AIBannerEnhanced
+        insights={[...insights, ...localInsights]}
+        onDismiss={dismiss}
+        onMarkAsRead={markAsRead}
+        defaultMessage="IA monitorando boletos DDA em tempo real"
+        className="mb-4"
+      />
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">

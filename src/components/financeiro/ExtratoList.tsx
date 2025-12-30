@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,6 +23,8 @@ import { toast } from "sonner";
 import { formatCurrency, formatDate } from "@/lib/formatters";
 import { ReconciliationModal } from "./ReconciliationModal";
 import { ReconciliationReverseModal } from "./ReconciliationReverseModal";
+import { AIBannerEnhanced } from "@/components/shared/AIBannerEnhanced";
+import { useAiInsights } from "@/hooks/useAiInsights";
 import { useCompany } from "@/contexts/CompanyContext";
 
 interface BankTransaction {
@@ -153,9 +155,50 @@ export const ExtratoList = () => {
     .filter(t => t.type === "DEBIT")
     .reduce((sum, t) => sum + Math.abs(t.amount), 0);
   const pendingCount = transactions.filter(t => !t.is_reconciled).length;
+  
+  // AI Insights
+  const { insights, dismiss, markAsRead } = useAiInsights('financial');
+  
+  // Insights locais baseados nos dados do extrato
+  const localInsights = useMemo(() => {
+    const result: any[] = [];
+    
+    // Detectar taxas bancárias
+    const bankFees = transactions.filter(t => 
+      t.description?.toLowerCase().includes('tarifa') || 
+      t.description?.toLowerCase().includes('taxa') ||
+      t.description?.toLowerCase().includes('iof')
+    );
+    
+    if (bankFees.length > 0) {
+      const totalFees = bankFees.reduce((sum, t) => sum + Math.abs(t.amount), 0);
+      result.push({
+        id: 'bank_fees',
+        type: 'info' as const,
+        category: 'financial' as const,
+        mode: 'cfo_bot' as const,
+        title: 'Taxas Bancárias',
+        message: `Este extrato contém ${bankFees.length} cobrança(s) de taxas bancárias totalizando R$ ${totalFees.toFixed(2)}.`,
+        priority: 2,
+        is_read: false,
+        is_dismissed: false,
+        created_at: new Date().toISOString(),
+      });
+    }
+    
+    return result;
+  }, [transactions]);
 
   return (
     <div className="space-y-4">
+      {/* AI Banner */}
+      <AIBannerEnhanced
+        insights={[...insights, ...localInsights]}
+        onDismiss={dismiss}
+        onMarkAsRead={markAsRead}
+        defaultMessage="IA analisando movimentações bancárias"
+      />
+
       {!hasCredentials && (
         <Card className="border-amber-500 bg-amber-50 dark:bg-amber-950/20">
           <CardContent className="flex items-center gap-3 py-4">
