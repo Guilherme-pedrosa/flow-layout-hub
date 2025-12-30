@@ -257,13 +257,21 @@ Responda APENAS com o texto do insight, sem JSON.`;
       // Atualiza localmente
       setSelectedSource(prev => {
         if (!prev) return null;
+        
+        const updatedItems = prev.items.map(i => 
+          i.id === item.id 
+            ? { ...i, quantity_received: i.quantity_received + finalQty, quantity_pending: i.quantity_pending - finalQty }
+            : i
+        );
+        
+        // Verifica se todos os itens foram conferidos para atualizar o status
+        const allComplete = updatedItems.every(i => i.quantity_received >= i.quantity_total);
+        const hasReceived = updatedItems.some(i => i.quantity_received > 0);
+        
         return {
           ...prev,
-          items: prev.items.map(i => 
-            i.id === item.id 
-              ? { ...i, quantity_received: i.quantity_received + finalQty, quantity_pending: i.quantity_pending - finalQty }
-              : i
-          ),
+          items: updatedItems,
+          receipt_status: allComplete ? 'complete' : (hasReceived ? 'partial' : 'pending'),
         };
       });
 
@@ -335,13 +343,21 @@ Responda APENAS com o texto do insight, sem JSON.`;
       // Atualiza localmente
       setSelectedSource(prev => {
         if (!prev) return null;
+        
+        const updatedItems = prev.items.map(i => 
+          i.id === item.id 
+            ? { ...i, quantity_received: newQty, quantity_pending: i.quantity_total - newQty }
+            : i
+        );
+        
+        // Verifica se todos os itens foram conferidos para atualizar o status
+        const allComplete = updatedItems.every(i => i.quantity_received >= i.quantity_total);
+        const hasReceived = updatedItems.some(i => i.quantity_received > 0);
+        
         return {
           ...prev,
-          items: prev.items.map(i => 
-            i.id === item.id 
-              ? { ...i, quantity_received: newQty, quantity_pending: i.quantity_total - newQty }
-              : i
-          ),
+          items: updatedItems,
+          receipt_status: allComplete ? 'complete' : (hasReceived ? 'partial' : 'pending'),
         };
       });
 
