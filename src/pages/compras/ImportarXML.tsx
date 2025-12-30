@@ -210,6 +210,13 @@ export default function ImportarXML() {
         supplier_cnpj: nfeData.fornecedor.cnpj,
         supplier_name: nfeData.fornecedor.razaoSocial,
         supplier_address: `${nfeData.fornecedor.endereco}, ${nfeData.fornecedor.bairro}, ${nfeData.fornecedor.cidade}/${nfeData.fornecedor.uf}`,
+        // Campos novos da NF-e
+        nfe_number: nfeData.nota.numero,
+        nfe_series: nfeData.nota.serie,
+        nfe_date: nfeData.nota.dataEmissao,
+        nfe_key: nfeData.nota.chaveAcesso || null,
+        nfe_imported_at: new Date().toISOString(),
+        // Campos legados (manter para compatibilidade)
         invoice_number: nfeData.nota.numero,
         invoice_series: nfeData.nota.serie,
         invoice_date: nfeData.nota.dataEmissao,
