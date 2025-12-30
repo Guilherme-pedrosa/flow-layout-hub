@@ -72,6 +72,7 @@ import Empresa from "./pages/configuracoes/Empresa";
 import Permissoes from "./pages/configuracoes/Permissoes";
 import Integracoes from "./pages/configuracoes/Integracoes";
 import Logs from "./pages/configuracoes/Logs";
+import SituacoesFinanceiras from "./pages/configuracoes/SituacoesFinanceiras";
 
 const queryClient = new QueryClient();
 
@@ -153,6 +154,7 @@ const App = () => (
             <Route path="/permissoes" element={<Permissoes />} />
             <Route path="/integracoes" element={<Integracoes />} />
             <Route path="/logs" element={<Logs />} />
+            <Route path="/situacoes-financeiras" element={<SituacoesFinanceiras />} />
           </Route>
           <Route path="*" element={<NotFound />} />
         </Routes>
