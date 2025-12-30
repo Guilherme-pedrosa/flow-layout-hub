@@ -13,118 +13,108 @@ interface BoletoPaymentRequest {
   payable_id: string;
   boleto_barcode: string;
   amount: number;
-  payment_date?: string; // Data de pagamento (default: hoje)
+  payment_date?: string;
   description?: string;
 }
 
-interface InterCredentials {
-  client_id: string;
-  client_secret: string;
-  certificate_file_path: string;
-  private_key_file_path: string;
-  account_number: string | null;
-}
-
-async function getOAuthToken(
-  credentials: InterCredentials,
-  cert: string,
-  key: string
-): Promise<string> {
-  console.log("[inter-boleto-payment] Obtendo token OAuth...");
+// Helper function to call the Inter proxy
+async function callInterProxy(
+  proxyUrl: string,
+  method: string,
+  url: string,
+  headers: Record<string, string>,
+  data?: unknown
+) {
+  console.log(`[inter-boleto-payment] Calling proxy: ${method} ${url}`);
   
-  const tokenUrl = `${INTER_API_URL}/oauth/v2/token`;
-  
-  const httpClient = Deno.createHttpClient({
-    caCerts: [],
-    cert: cert,
-    key: key,
+  const response = await fetch(proxyUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ method, url, headers, data })
   });
 
+  const responseText = await response.text();
+  console.log(`[inter-boleto-payment] Proxy response status: ${response.status}`);
+  
+  if (responseText.trim().startsWith('<!') || responseText.trim().startsWith('<html')) {
+    throw new Error(`Proxy retornou HTML (status ${response.status})`);
+  }
+
+  let result;
+  try {
+    result = JSON.parse(responseText);
+  } catch {
+    throw new Error(`Resposta inválida do proxy: ${responseText.substring(0, 200)}`);
+  }
+
+  if (!response.ok) {
+    throw new Error(result.error || result.message || result.title || `Erro HTTP ${response.status}`);
+  }
+
+  return result;
+}
+
+// Get OAuth token via proxy
+async function getOAuthToken(
+  proxyUrl: string,
+  clientId: string,
+  clientSecret: string
+): Promise<string> {
+  console.log("[inter-boleto-payment] Obtendo token OAuth via proxy...");
+  
+  const tokenUrl = `${INTER_API_URL}/oauth/v2/token`;
   const params = new URLSearchParams();
-  params.append("client_id", credentials.client_id);
-  params.append("client_secret", credentials.client_secret);
+  params.append("client_id", clientId);
+  params.append("client_secret", clientSecret);
   params.append("grant_type", "client_credentials");
   params.append("scope", "pagamento-boleto.write pagamento-boleto.read");
 
-  const response = await fetch(tokenUrl, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
-    body: params.toString(),
-    client: httpClient,
-  });
+  const result = await callInterProxy(
+    proxyUrl,
+    "POST",
+    tokenUrl,
+    { "Content-Type": "application/x-www-form-urlencoded" },
+    params.toString()
+  );
 
-  httpClient.close();
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error("[inter-boleto-payment] Erro ao obter token:", errorText);
-    throw new Error(`Erro ao obter token OAuth: ${response.status}`);
-  }
-
-  const data = await response.json();
-  console.log("[inter-boleto-payment] Token obtido com sucesso");
-  return data.access_token;
+  return result.access_token;
 }
 
+// Pay boleto via proxy
 async function payBoleto(
+  proxyUrl: string,
   token: string,
-  credentials: InterCredentials,
-  cert: string,
-  key: string,
-  payload: BoletoPaymentRequest
+  accountNumber: string,
+  boletoBarcode: string,
+  amount: number,
+  paymentDate: string
 ): Promise<{ codigoTransacao: string; codigoSolicitacao: string }> {
-  console.log("[inter-boleto-payment] Pagando boleto...");
+  console.log("[inter-boleto-payment] Pagando boleto via proxy...");
   
   const paymentUrl = `${INTER_API_URL}/banking/v2/pagamento`;
   
-  const httpClient = Deno.createHttpClient({
-    caCerts: [],
-    cert: cert,
-    key: key,
-  });
-
-  // Limpar código de barras (remover pontos e espaços)
-  const codigoBarras = payload.boleto_barcode.replace(/[\s.-]/g, "");
-  const dataPagamento = payload.payment_date || new Date().toISOString().split("T")[0];
+  const codigoBarras = boletoBarcode.replace(/[\s.-]/g, "");
 
   const boletoBody = {
     codBarraLinhaDigitavel: codigoBarras,
-    valorPagar: payload.amount.toFixed(2),
-    dataPagamento: dataPagamento,
+    valorPagar: amount.toFixed(2),
+    dataPagamento: paymentDate,
   };
 
   console.log("[inter-boleto-payment] Payload:", JSON.stringify(boletoBody, null, 2));
 
-  const response = await fetch(paymentUrl, {
-    method: "POST",
-    headers: {
+  const result = await callInterProxy(
+    proxyUrl,
+    "POST",
+    paymentUrl,
+    {
       "Authorization": `Bearer ${token}`,
       "Content-Type": "application/json",
-      "x-conta-corrente": credentials.account_number || "",
+      "x-conta-corrente": accountNumber,
     },
-    body: JSON.stringify(boletoBody),
-    client: httpClient,
-  });
+    boletoBody
+  );
 
-  httpClient.close();
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error("[inter-boleto-payment] Erro ao pagar boleto:", errorText);
-    
-    try {
-      const errorJson = JSON.parse(errorText);
-      throw new Error(errorJson.message || errorJson.title || `Erro ${response.status}`);
-    } catch {
-      throw new Error(`Erro ao pagar boleto: ${response.status} - ${errorText}`);
-    }
-  }
-
-  const result = await response.json();
-  console.log("[inter-boleto-payment] Boleto pago:", result);
-  
   return {
     codigoTransacao: result.codigoTransacao || result.id,
     codigoSolicitacao: result.codigoSolicitacao || result.txid,
@@ -152,7 +142,13 @@ serve(async (req) => {
       throw new Error("O valor deve ser maior que zero");
     }
 
-    // Buscar credenciais do Banco Inter
+    // Get proxy URL
+    const proxyUrl = Deno.env.get("GCP_PIX_FUNCTION_URL");
+    if (!proxyUrl) {
+      throw new Error("GCP_PIX_FUNCTION_URL não configurada");
+    }
+
+    // Fetch Inter credentials
     const { data: credentials, error: credError } = await supabase
       .from("inter_credentials")
       .select("*")
@@ -164,41 +160,32 @@ serve(async (req) => {
       throw new Error("Credenciais do Banco Inter não configuradas ou inativas");
     }
 
-    // Buscar certificado e chave privada do storage
-    console.log("[inter-boleto-payment] Buscando certificados...");
-    
-    const { data: certData, error: certError } = await supabase.storage
-      .from("inter-certs")
-      .download(credentials.certificate_file_path);
-
-    if (certError || !certData) {
-      console.error("[inter-boleto-payment] Erro ao buscar certificado:", certError);
-      throw new Error("Certificado não encontrado");
-    }
-
-    const { data: keyData, error: keyError } = await supabase.storage
-      .from("inter-certs")
-      .download(credentials.private_key_file_path);
-
-    if (keyError || !keyData) {
-      console.error("[inter-boleto-payment] Erro ao buscar chave privada:", keyError);
-      throw new Error("Chave privada não encontrada");
-    }
-
-    const cert = await certData.text();
-    const key = await keyData.text();
-
-    // Atualizar payable para processando
+    // Update payable status
     await supabase
       .from("payables")
       .update({ payment_status: "sent_to_bank" })
       .eq("id", payload.payable_id);
 
     try {
-      const token = await getOAuthToken(credentials, cert, key);
-      const boletoResult = await payBoleto(token, credentials, cert, key, payload);
+      // Get OAuth token via proxy
+      const token = await getOAuthToken(
+        proxyUrl,
+        credentials.client_id,
+        credentials.client_secret
+      );
 
-      // Atualizar payable como pago
+      // Pay boleto via proxy
+      const paymentDate = payload.payment_date || new Date().toISOString().split("T")[0];
+      const boletoResult = await payBoleto(
+        proxyUrl,
+        token,
+        credentials.account_number || "",
+        payload.boleto_barcode,
+        payload.amount,
+        paymentDate
+      );
+
+      // Update payable as paid
       await supabase
         .from("payables")
         .update({
@@ -211,7 +198,7 @@ serve(async (req) => {
         })
         .eq("id", payload.payable_id);
 
-      // Log de auditoria
+      // Audit logs
       await supabase.from("payment_audit_logs").insert({
         payable_id: payload.payable_id,
         action: "boleto_paid",
@@ -249,7 +236,6 @@ serve(async (req) => {
       const errorMsg = apiError instanceof Error ? apiError.message : "Erro desconhecido";
       console.error("[inter-boleto-payment] Erro na API:", errorMsg);
 
-      // Marcar como falha
       await supabase
         .from("payables")
         .update({ payment_status: "failed" })
