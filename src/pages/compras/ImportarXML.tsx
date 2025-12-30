@@ -224,22 +224,37 @@ export default function ImportarXML() {
       const cfopSaida = nfeData.itens[0]?.cfopSaida || '';
       const ufFornecedor = nfeData.fornecedor.uf;
       
+      // UF da empresa (destino) - fixo GO por enquanto, TODO: pegar do contexto
+      const ufEmpresa = "GO";
+      
+      // Determinar se é estadual, interestadual ou exterior
+      const tipoOperacao = ufFornecedor === ufEmpresa 
+        ? "ESTADUAL (mesma UF)" 
+        : ufFornecedor === "EX" 
+          ? "IMPORTAÇÃO (exterior)" 
+          : "INTERESTADUAL (UFs diferentes)";
+      
       const prompt = `Analise esta NF-e de compra e sugira o CFOP de ENTRADA mais adequado.
 
 Dados da NF-e:
 - CFOP de saída do fornecedor: ${cfopSaida}
-- UF do fornecedor: ${ufFornecedor}
+- UF do fornecedor (origem): ${ufFornecedor}
+- UF da empresa (destino): ${ufEmpresa}
+- Tipo de operação: ${tipoOperacao}
 - Produtos: ${itensDescricao}
 - Valor total: R$ ${nfeData.nota.valorTotal.toFixed(2)}
 
-Regras:
-- Se operação estadual (mesma UF), usar série 1xxx
-- Se operação interestadual, usar série 2xxx
-- Se importação, usar série 3xxx
+REGRAS IMPORTANTES:
+- Operação ESTADUAL (origem e destino na mesma UF): usar série 1xxx (ex: 1102, 1101, 1556)
+- Operação INTERESTADUAL (UFs diferentes): usar série 2xxx (ex: 2102, 2101, 2556)
+- Operação de IMPORTAÇÃO (exterior): usar série 3xxx
 - Compra para comercialização: x102
 - Compra para industrialização: x101
 - Compra de ativo imobilizado: x551
 - Compra de material de uso/consumo: x556
+
+ATENÇÃO: A UF do fornecedor é ${ufFornecedor} e a UF da empresa é ${ufEmpresa}.
+${ufFornecedor !== ufEmpresa ? `Como são UFs DIFERENTES, use obrigatoriamente série 2xxx!` : `Como são a MESMA UF, use série 1xxx.`}
 
 Responda APENAS com o código CFOP de 4 dígitos mais adequado (ex: 1102 ou 2102). Sem explicações.`;
 
