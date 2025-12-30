@@ -92,7 +92,6 @@ const menuGroups: MenuGroup[] = [
     items: [
       { title: "Pedidos", icon: ShoppingCart, href: "/vendas" },
       { title: "Comissões", icon: Target, href: "/comissoes" },
-      { title: "Checkout", icon: CircleDollarSign, href: "/checkout", badge: 3 },
       { title: "Itens Separados", icon: Package, href: "/itens-separados" },
       { title: "Configurações", icon: UserCog, href: "/vendas-config" },
     ],
@@ -122,6 +121,7 @@ const menuGroups: MenuGroup[] = [
     items: [
       { title: "Saldo", icon: Package, href: "/saldo-estoque" },
       { title: "Movimentações", icon: ArrowRightLeft, href: "/movimentacoes" },
+      { title: "Checkout", icon: CircleDollarSign, href: "/checkout", badge: 3 },
       { title: "Ajustes", icon: AlertTriangle, href: "/ajustes" },
     ],
   },
