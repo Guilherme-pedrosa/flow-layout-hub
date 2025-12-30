@@ -105,6 +105,7 @@ export function PayablesTable({
 }: PayablesTableProps) {
   const [sortField, setSortField] = useState<"due_date" | "amount" | "supplier">("due_date");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
+  const isMobile = useIsMobile();
 
   const selectablePayables = payables.filter(
     (p) => !p.is_paid && p.payment_status !== "sent_to_bank"
@@ -234,8 +235,6 @@ export function PayablesTable({
       </div>
     );
   }
-
-  const isMobile = useIsMobile();
 
   // Mobile card view
   if (isMobile) {
