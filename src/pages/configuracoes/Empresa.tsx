@@ -1,15 +1,15 @@
 import { PageHeader } from "@/components/shared";
-import { EmpresaForm } from "@/components/configuracoes";
+import { EmpresasList } from "@/components/configuracoes";
 
 const Empresa = () => {
   return (
     <div className="space-y-6 animate-fade-in">
       <PageHeader
-        title="Empresa"
-        description="Dados da empresa"
-        breadcrumbs={[{ label: "Configurações" }, { label: "Empresa" }]}
+        title="Empresas"
+        description="Gerencie as empresas do sistema"
+        breadcrumbs={[{ label: "Configurações" }, { label: "Empresas" }]}
       />
-      <EmpresaForm />
+      <EmpresasList />
     </div>
   );
 };
