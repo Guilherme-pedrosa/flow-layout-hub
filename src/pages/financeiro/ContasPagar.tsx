@@ -1,8 +1,8 @@
 import { useState, useEffect } from "react";
 import { PageHeader } from "@/components/shared";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Calendar, Receipt, FileText, CheckCircle } from "lucide-react";
-import { DDABoletosList, ExtratoList, LancamentosPayablesList, ReconciliationReview } from "@/components/financeiro";
+import { Receipt, FileText, CheckCircle, Wallet } from "lucide-react";
+import { DDABoletosList, ExtratoList, ReconciliationReview, PayablesPage } from "@/components/financeiro";
 import { supabase } from "@/integrations/supabase/client";
 
 export default function ContasPagar() {
@@ -10,7 +10,6 @@ export default function ContasPagar() {
   const [companyId, setCompanyId] = useState<string | null>(null);
 
   useEffect(() => {
-    // Buscar company_id das credenciais Inter
     const fetchCompanyId = async () => {
       const { data } = await supabase
         .from("inter_credentials")
@@ -39,35 +38,35 @@ export default function ContasPagar() {
         ]}
       />
       
-      <Tabs defaultValue="lancamentos" className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="lancamentos" className="gap-2">
-            <Calendar className="h-4 w-4" />
+      <Tabs defaultValue="lancamentos" className="space-y-6">
+        <TabsList className="bg-muted/50 p-1">
+          <TabsTrigger value="lancamentos" className="gap-2 data-[state=active]:bg-background">
+            <Wallet className="h-4 w-4" />
             Lançamentos
           </TabsTrigger>
-          <TabsTrigger value="conciliacao" className="gap-2">
+          <TabsTrigger value="conciliacao" className="gap-2 data-[state=active]:bg-background">
             <CheckCircle className="h-4 w-4" />
             Conciliação
           </TabsTrigger>
-          <TabsTrigger value="extrato" className="gap-2">
+          <TabsTrigger value="extrato" className="gap-2 data-[state=active]:bg-background">
             <FileText className="h-4 w-4" />
             Extrato
           </TabsTrigger>
-          <TabsTrigger value="dda" className="gap-2">
+          <TabsTrigger value="dda" className="gap-2 data-[state=active]:bg-background">
             <Receipt className="h-4 w-4" />
             DDA (Boletos)
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="lancamentos">
-          <LancamentosPayablesList key={refreshKey} onRefresh={handleRefresh} />
+        <TabsContent value="lancamentos" className="mt-0">
+          <PayablesPage key={refreshKey} onRefresh={handleRefresh} />
         </TabsContent>
 
         <TabsContent value="conciliacao">
           {companyId ? (
             <ReconciliationReview companyId={companyId} />
           ) : (
-            <div className="text-center py-8 text-muted-foreground">
+            <div className="text-center py-12 text-muted-foreground">
               Configure as credenciais do Banco Inter para usar a conciliação automática.
             </div>
           )}
