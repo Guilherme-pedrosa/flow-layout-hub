@@ -5,6 +5,7 @@ import { Link } from "react-router-dom";
 interface BreadcrumbItem {
   label: string;
   href?: string;
+  onClick?: () => void;
 }
 
 interface PageHeaderProps {
@@ -31,7 +32,14 @@ export function PageHeader({
           {breadcrumbs.map((item, index) => (
             <div key={index} className="flex items-center gap-1.5">
               <ChevronRight className="h-3 w-3" />
-              {item.href ? (
+              {item.onClick ? (
+                <button 
+                  onClick={item.onClick} 
+                  className="hover:text-foreground transition-colors cursor-pointer"
+                >
+                  {item.label}
+                </button>
+              ) : item.href ? (
                 <Link to={item.href} className="hover:text-foreground transition-colors">
                   {item.label}
                 </Link>
