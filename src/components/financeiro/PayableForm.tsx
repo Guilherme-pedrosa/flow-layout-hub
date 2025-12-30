@@ -187,14 +187,21 @@ export function PayableForm({ open, onOpenChange, payable, onSuccess }: PayableF
     setValidatingPix(true);
     setPixValidation(null);
 
+    console.log("[PIX Validation] 1. Iniciando validação...");
+    console.log("[PIX Validation] Chave:", formData.pixKey, "Tipo:", formData.pixKeyType);
+
     try {
+      console.log("[PIX Validation] 2. Buscando empresa...");
       const { data: companies } = await supabase.from("companies").select("id").limit(1);
       const companyId = companies?.[0]?.id;
       
       if (!companyId) {
+        console.error("[PIX Validation] Empresa não encontrada");
         throw new Error("Empresa não configurada");
       }
+      console.log("[PIX Validation] 3. Empresa encontrada:", companyId);
 
+      console.log("[PIX Validation] 4. Chamando edge function inter-validate-pix...");
       const { data, error } = await supabase.functions.invoke("inter-validate-pix", {
         body: {
           company_id: companyId,
@@ -203,20 +210,29 @@ export function PayableForm({ open, onOpenChange, payable, onSuccess }: PayableF
         },
       });
 
-      if (error) throw error;
+      console.log("[PIX Validation] 5. Resposta recebida:", JSON.stringify(data));
+      
+      if (error) {
+        console.error("[PIX Validation] Erro na edge function:", error);
+        throw error;
+      }
 
       setPixValidation(data);
       
       if (data.valid) {
+        console.log("[PIX Validation] 6. Chave válida - mostrando confirmação");
         setShowPixConfirmDialog(true);
       } else {
+        console.log("[PIX Validation] 6. Chave inválida:", data.error);
         toast.error(data.error || "Chave PIX inválida");
       }
     } catch (error) {
-      console.error("Erro ao validar PIX:", error);
-      toast.error("Erro ao validar chave PIX. Tente novamente.");
+      console.error("[PIX Validation] ERRO:", error);
+      const errorMessage = error instanceof Error ? error.message : "Erro desconhecido";
+      toast.error(`Erro ao validar chave PIX: ${errorMessage}`);
     } finally {
       setValidatingPix(false);
+      console.log("[PIX Validation] Finalizado");
     }
   };
 

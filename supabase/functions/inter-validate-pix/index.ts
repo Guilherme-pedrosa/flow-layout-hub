@@ -138,6 +138,8 @@ async function validatePixKeyViaProxy(
     };
 
     console.log("[inter-validate-pix] Chamando proxy para validar chave PIX...");
+    console.log("[inter-validate-pix] Proxy URL:", proxyUrl);
+    console.log("[inter-validate-pix] Action:", proxyPayload.action);
     
     const response = await fetch(proxyUrl, {
       method: "POST",
@@ -149,7 +151,8 @@ async function validatePixKeyViaProxy(
     });
 
     const responseText = await response.text();
-    console.log("[inter-validate-pix] Resposta do proxy:", response.status);
+    console.log("[inter-validate-pix] Resposta do proxy - Status:", response.status);
+    console.log("[inter-validate-pix] Resposta do proxy - Body:", responseText.substring(0, 500));
     
     let result;
     try {
