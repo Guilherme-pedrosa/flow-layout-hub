@@ -264,8 +264,10 @@ serve(async (req) => {
           "Content-Type": "application/json",
           "x-conta-corrente": credentials.account_number
         },
-        data: JSON.stringify(pixApiPayload)
+        data: pixApiPayload  // Enviar como objeto, não string
       };
+
+      console.log("[inter-pix-payment] 11b. Proxy payload completo:", JSON.stringify(pixProxyPayload));
 
       const proxyResponse = await fetch(proxyUrl, {
         method: "POST",
