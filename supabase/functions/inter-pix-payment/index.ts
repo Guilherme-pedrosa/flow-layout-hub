@@ -182,28 +182,30 @@ serve(async (req) => {
     };
 
     // Build PIX payment payload for Inter API - pagamento por chave PIX
-    // O valor deve ser em CENTAVOS como string (ex: R$12,00 = "1200")
-    const valorEmCentavos = Math.round(paymentData.amount * 100).toString();
+    // O valor deve ser decimal como string (ex: R$12,00 = "12.00")
+    const recipientDoc = paymentData.recipientDocument.replace(/[^\d]/g, "");
     
     const pixApiPayload = {
-      valor: valorEmCentavos,
+      valor: paymentData.amount.toFixed(2),
       chave: paymentData.pixKey,
-      pagador: {
-        cpfCnpj: credentials.account_number ? undefined : paymentData.recipientDocument.replace(/[^\d]/g, ""),
-        contaCorrente: credentials.account_number || undefined
+      destinatario: {
+        tipo: recipientDoc.length === 11 ? 'FISICA' : 'JURIDICA',
+        nome: paymentData.recipientName,
+        cpfCnpj: recipientDoc
       },
       dataPagamento: new Date().toISOString().split('T')[0],
       descricao: (paymentData.description || `PIX para ${paymentData.recipientName}`).substring(0, 140)
     };
-    
-    // Remove campos undefined
-    if (!pixApiPayload.pagador?.cpfCnpj) delete pixApiPayload.pagador?.cpfCnpj;
-    if (!pixApiPayload.pagador?.contaCorrente) delete pixApiPayload.pagador?.contaCorrente;
-    if (pixApiPayload.pagador && Object.keys(pixApiPayload.pagador).length === 0) {
-      delete (pixApiPayload as any).pagador;
-    }
 
     console.log("[inter-pix-payment] 6. PIX API payload:", JSON.stringify(pixApiPayload));
+
+    // Verificar se account_number está configurado
+    if (!credentials.account_number) {
+      console.error("[inter-pix-payment] ERRO: account_number não está configurado nas credenciais Inter!");
+      throw new Error("Número da conta corrente não configurado nas credenciais do Banco Inter. Configure o campo account_number na tabela inter_credentials.");
+    }
+
+    console.log("[inter-pix-payment] 6b. Conta corrente:", credentials.account_number);
 
     try {
       // First, get OAuth token via proxy
@@ -260,7 +262,7 @@ serve(async (req) => {
         headers: {
           "Authorization": `Bearer ${tokenData.access_token}`,
           "Content-Type": "application/json",
-          "x-conta-corrente": credentials.account_number || ""
+          "x-conta-corrente": credentials.account_number
         },
         data: JSON.stringify(pixApiPayload)
       };
