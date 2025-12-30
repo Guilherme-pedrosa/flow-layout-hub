@@ -1,28 +1,12 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Receipt, FileText, CheckCircle, Wallet } from "lucide-react";
 import { DDABoletosList, ExtratoList, ReconciliationReview, PayablesPage, FinancialAIChat } from "@/components/financeiro";
-import { supabase } from "@/integrations/supabase/client";
+import { useCompany } from "@/contexts/CompanyContext";
 
 export default function ContasPagar() {
+  const { currentCompany } = useCompany();
   const [refreshKey, setRefreshKey] = useState(0);
-  const [companyId, setCompanyId] = useState<string | null>(null);
-
-  useEffect(() => {
-    const fetchCompanyId = async () => {
-      const { data } = await supabase
-        .from("inter_credentials")
-        .select("company_id")
-        .eq("is_active", true)
-        .limit(1)
-        .single();
-      
-      if (data?.company_id) {
-        setCompanyId(data.company_id);
-      }
-    };
-    fetchCompanyId();
-  }, []);
 
   const handleRefresh = () => setRefreshKey((k) => k + 1);
 
@@ -59,15 +43,15 @@ export default function ContasPagar() {
         </TabsList>
 
         <TabsContent value="lancamentos" className="mt-0">
-          <PayablesPage key={refreshKey} onRefresh={handleRefresh} />
+          <PayablesPage key={`${refreshKey}-${currentCompany?.id}`} onRefresh={handleRefresh} />
         </TabsContent>
 
         <TabsContent value="conciliacao">
-          {companyId ? (
-            <ReconciliationReview companyId={companyId} />
+          {currentCompany?.id ? (
+            <ReconciliationReview companyId={currentCompany.id} />
           ) : (
             <div className="text-center py-12 text-muted-foreground">
-              Configure as credenciais do Banco Inter para usar a conciliação automática.
+              Selecione uma empresa para usar a conciliação.
             </div>
           )}
         </TabsContent>

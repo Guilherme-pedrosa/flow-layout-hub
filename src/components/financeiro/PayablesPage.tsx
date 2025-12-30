@@ -60,6 +60,7 @@ export function PayablesPage({ onRefresh }: PayablesPageProps) {
   const [payingPayable, setPayingPayable] = useState<PayableRow | null>(null);
 
   useEffect(() => {
+    console.log("[PayablesPage] currentCompany changed:", currentCompany?.id, currentCompany?.name);
     if (currentCompany?.id) {
       fetchPayables();
     }
