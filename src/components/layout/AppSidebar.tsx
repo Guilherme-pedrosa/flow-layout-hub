@@ -108,7 +108,7 @@ const menuGroups: MenuGroup[] = [
     label: "Compras",
     items: [
       { title: "Pedidos de Compra", icon: FileSpreadsheet, href: "/pedidos-compra" },
-      { title: "Recebimento", icon: ArrowDownToLine, href: "/recebimento" },
+      { title: "Check-in", icon: ArrowDownToLine, href: "/recebimento" },
       { title: "Solicitações", icon: FileText, href: "/solicitacoes" },
       { title: "Aprovações", icon: CheckSquare, href: "/aprovacoes", badge: 5 },
       { title: "Notas de Compra", icon: FileSpreadsheet, href: "/notas-compra" },
