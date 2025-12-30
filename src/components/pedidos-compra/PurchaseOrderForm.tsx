@@ -322,6 +322,21 @@ export function PurchaseOrderForm({ order, onClose }: PurchaseOrderFormProps) {
                         <SelectValue placeholder="Selecione o fornecedor" />
                       </SelectTrigger>
                       <SelectContent>
+                        <div className="p-2 border-b">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="w-full justify-start gap-2 text-primary hover:text-primary"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              setShowCadastroFornecedor(true);
+                            }}
+                          >
+                            <Plus className="h-4 w-4" />
+                            Cadastrar novo fornecedor
+                          </Button>
+                        </div>
                         {activeFornecedores.map((fornecedor) => (
                           <SelectItem key={fornecedor.id} value={fornecedor.id}>
                             {fornecedor.razao_social || fornecedor.nome_fantasia}
@@ -329,15 +344,6 @@ export function PurchaseOrderForm({ order, onClose }: PurchaseOrderFormProps) {
                         ))}
                       </SelectContent>
                     </Select>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="icon"
-                      onClick={() => setShowCadastroFornecedor(true)}
-                      title="Cadastrar novo fornecedor"
-                    >
-                      <Plus className="h-4 w-4" />
-                    </Button>
                   </div>
                 </div>
 

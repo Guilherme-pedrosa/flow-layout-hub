@@ -392,6 +392,21 @@ export function PayableForm({ open, onOpenChange, payable, onSuccess }: PayableF
                   <SelectValue placeholder="Selecione o fornecedor" />
                 </SelectTrigger>
                 <SelectContent>
+                  <div className="p-2 border-b">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full justify-start gap-2 text-primary hover:text-primary"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setShowCadastrarFornecedor(true);
+                      }}
+                    >
+                      <Plus className="h-4 w-4" />
+                      Cadastrar novo fornecedor
+                    </Button>
+                  </div>
                   {suppliers.map((s) => (
                     <SelectItem key={s.id} value={s.id}>
                       {s.nome_fantasia || s.razao_social || "Sem nome"}
