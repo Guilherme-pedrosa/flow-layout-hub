@@ -91,22 +91,89 @@ export default function PedidosCompra() {
 
       const companyId = credData?.company_id;
       
-      // Pedidos com recebimento pendente (não conferido/entregue no estoque)
+      // Buscar TODOS os itens de TODOS os pedidos
+      const orderIds = orders.map(o => o.id);
+      const { data: allItems } = await supabase
+        .from('purchase_order_items')
+        .select(`
+          *,
+          product:products(code, description, ncm)
+        `)
+        .in('purchase_order_id', orderIds);
+      
+      // Agregar dados dos itens
+      const itemsByProduct: Record<string, { description: string, qty: number, total: number, orders: number }> = {};
+      const itemsBySupplier: Record<string, { name: string, total: number, items: number }> = {};
+      
+      allItems?.forEach(item => {
+        const productKey = item.product_id || item.description || 'sem_produto';
+        const productDesc = item.product?.description || item.description || 'Produto sem descrição';
+        
+        if (!itemsByProduct[productKey]) {
+          itemsByProduct[productKey] = { description: productDesc, qty: 0, total: 0, orders: 0 };
+        }
+        itemsByProduct[productKey].qty += item.quantity || 0;
+        itemsByProduct[productKey].total += item.total_value || 0;
+        itemsByProduct[productKey].orders += 1;
+      });
+      
+      orders.forEach(order => {
+        const supplierKey = order.supplier_id || order.supplier_name || 'sem_fornecedor';
+        const supplierName = order.supplier?.razao_social || order.supplier_name || 'Fornecedor desconhecido';
+        
+        if (!itemsBySupplier[supplierKey]) {
+          itemsBySupplier[supplierKey] = { name: supplierName, total: 0, items: 0 };
+        }
+        itemsBySupplier[supplierKey].total += order.total_value || 0;
+        itemsBySupplier[supplierKey].items += 1;
+      });
+      
+      // Top 5 produtos mais comprados
+      const topProducts = Object.values(itemsByProduct)
+        .sort((a, b) => b.total - a.total)
+        .slice(0, 5)
+        .map(p => `${p.description}: ${p.qty} un, R$ ${p.total.toFixed(2)}`);
+      
+      // Top 3 fornecedores
+      const topSuppliers = Object.values(itemsBySupplier)
+        .sort((a, b) => b.total - a.total)
+        .slice(0, 3)
+        .map(s => `${s.name}: ${s.items} pedidos, R$ ${s.total.toFixed(2)}`);
+      
+      // Estatísticas gerais
       const pendingReceiptOrders = orders.filter(o => o.receipt_status !== 'complete');
       const totalPendingReceipt = pendingReceiptOrders.reduce((sum, o) => sum + (o.total_value || 0), 0);
-      
-      // Pedidos aguardando reaprovação
       const requiresReapproval = orders.filter(o => o.requires_reapproval).length;
-      
-      // Pedidos com recebimento completo
       const completeOrders = orders.filter(o => o.receipt_status === 'complete');
+      const totalGeral = orders.reduce((sum, o) => sum + (o.total_value || 0), 0);
+      const totalItens = allItems?.length || 0;
       
-      const prompt = `Analise estes pedidos de compra e dê UM insight curto (máx 120 caracteres):
-- Total de pedidos: ${orders.length}
-- Aguardando conferência de recebimento: ${pendingReceiptOrders.length} pedidos (R$ ${totalPendingReceipt.toFixed(2)})
+      // Pedidos por finalidade
+      const byPurpose = orders.reduce((acc, o) => {
+        acc[o.purpose] = (acc[o.purpose] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>);
+      
+      const prompt = `Você é JARVIS, o assistente de compras inteligente. Analise TODOS estes dados e dê UM insight estratégico curto (máx 150 caracteres):
+
+📊 VISÃO GERAL:
+- Total: ${orders.length} pedidos, ${totalItens} itens, R$ ${totalGeral.toFixed(2)}
+- Aguardando conferência: ${pendingReceiptOrders.length} pedidos (R$ ${totalPendingReceipt.toFixed(2)})
 - Recebimento concluído: ${completeOrders.length} pedidos
 - Aguardando reaprovação: ${requiresReapproval}
-Foque no que precisa de atenção. Responda APENAS com o texto do insight, sem JSON.`;
+
+📦 TOP 5 PRODUTOS MAIS COMPRADOS:
+${topProducts.join('\n')}
+
+🏭 TOP 3 FORNECEDORES:
+${topSuppliers.join('\n')}
+
+🎯 FINALIDADES:
+- Estoque: ${byPurpose['estoque'] || 0} pedidos
+- Ordem de Serviço: ${byPurpose['ordem_de_servico'] || 0} pedidos  
+- Despesa Operacional: ${byPurpose['despesa_operacional'] || 0} pedidos
+
+Foque no insight mais relevante: pode ser sobre produtos, fornecedores, valores, pendências, oportunidades de economia, ou qualquer padrão interessante. Responda APENAS com o texto do insight, sem JSON.`;
 
       const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/financial-ai`,
@@ -160,7 +227,7 @@ Foque no que precisa de atenção. Responda APENAS com o texto do insight, sem J
         }
       }
 
-      setAiInsight(fullText.trim().slice(0, 200));
+      setAiInsight(fullText.trim().slice(0, 250));
     } catch (error) {
       console.error('Error loading AI insight:', error);
       setAiInsight('Analise seus pedidos de compra para otimizar compras e reduzir custos.');
