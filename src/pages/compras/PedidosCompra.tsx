@@ -77,15 +77,22 @@ export default function PedidosCompra() {
 
       const companyId = credData?.company_id;
       
-      const pendingOrders = orders.filter(o => o.receipt_status !== 'complete');
-      const totalPending = pendingOrders.reduce((sum, o) => sum + (o.total_value || 0), 0);
+      // Pedidos com recebimento pendente (não conferido/entregue no estoque)
+      const pendingReceiptOrders = orders.filter(o => o.receipt_status !== 'complete');
+      const totalPendingReceipt = pendingReceiptOrders.reduce((sum, o) => sum + (o.total_value || 0), 0);
+      
+      // Pedidos aguardando reaprovação
       const requiresReapproval = orders.filter(o => o.requires_reapproval).length;
       
-      const prompt = `Analise estes pedidos de compra e dê UM insight curto (máx 100 caracteres):
+      // Pedidos com recebimento completo
+      const completeOrders = orders.filter(o => o.receipt_status === 'complete');
+      
+      const prompt = `Analise estes pedidos de compra e dê UM insight curto (máx 120 caracteres):
 - Total de pedidos: ${orders.length}
-- Pedidos pendentes de recebimento: ${pendingOrders.length} (R$ ${totalPending.toFixed(2)})
-- Pedidos aguardando reaprovação: ${requiresReapproval}
-Responda APENAS com o texto do insight, sem JSON.`;
+- Aguardando conferência de recebimento: ${pendingReceiptOrders.length} pedidos (R$ ${totalPendingReceipt.toFixed(2)})
+- Recebimento concluído: ${completeOrders.length} pedidos
+- Aguardando reaprovação: ${requiresReapproval}
+Foque no que precisa de atenção. Responda APENAS com o texto do insight, sem JSON.`;
 
       const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/financial-ai`,
