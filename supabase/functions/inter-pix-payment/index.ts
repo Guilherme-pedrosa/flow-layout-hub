@@ -297,8 +297,6 @@ serve(async (req) => {
       // Erro: { title: "...", detail: "...", violacoes: [...] }
       
       const tipoRetorno = pixResult.tipoRetorno?.toUpperCase();
-      const isApproved = tipoRetorno === "APROVACAO" || tipoRetorno === "APROVADO";
-      const isScheduled = tipoRetorno === "AGENDADO";
       const codigoSolicitacao = pixResult.codigoSolicitacao;
       
       // Se não tem tipoRetorno nem codigoSolicitacao, é erro
@@ -307,18 +305,16 @@ serve(async (req) => {
         throw new Error(errorMsg);
       }
 
-      // Determinar status interno
-      let internalStatus: string;
-      if (isApproved) {
-        internalStatus = "completed";
-      } else if (isScheduled) {
-        internalStatus = "pending_approval";
-      } else {
-        // Outros status como PENDENTE, EM_PROCESSAMENTO, etc.
-        internalStatus = "pending_approval";
-      }
+      // IMPORTANTE: Mesmo quando a API retorna APROVACAO, o status interno é "sent_to_bank"
+      // porque o usuário ainda precisa aprovar no app do banco antes do dinheiro sair.
+      // O status só muda para "completed/paid" quando aparecer no extrato/conciliação.
+      const isApproved = tipoRetorno === "APROVACAO" || tipoRetorno === "APROVADO";
+      const isScheduled = tipoRetorno === "AGENDADO";
       
-      const isPendingApproval = internalStatus === "pending_approval";
+      // Status interno: sempre "sent_to_bank" quando enviado com sucesso
+      // Só muda para "completed" quando for conciliado com o extrato
+      let internalStatus = "sent_to_bank";
+      
       console.log("[inter-pix-payment] 12. tipoRetorno:", tipoRetorno, "- codigoSolicitacao:", codigoSolicitacao, "- Status interno:", internalStatus);
       
       await supabase
@@ -329,37 +325,23 @@ serve(async (req) => {
           inter_end_to_end_id: pixResult.endToEndId || null,
           inter_status: tipoRetorno,
           inter_response: pixResult,
-          processed_at: isApproved ? new Date().toISOString() : null,
+          processed_at: new Date().toISOString(),
           error_message: null,
           updated_at: new Date().toISOString()
         })
         .eq("id", pixPaymentId);
 
-      // Update linked payable
+      // Update linked payable - NÃO marcar como pago, apenas como "sent_to_bank"
+      // O pagamento só será marcado como pago quando for conciliado com o extrato
       if (payableId) {
-        if (isApproved) {
-          await supabase
-            .from("payables")
-            .update({
-              is_paid: true,
-              paid_at: new Date().toISOString(),
-              paid_amount: paymentData.amount,
-              payment_method: "pix",
-              payment_status: "paid",
-              inter_payment_id: pixPaymentId,
-              updated_at: new Date().toISOString()
-            })
-            .eq("id", payableId);
-        } else {
-          await supabase
-            .from("payables")
-            .update({
-              payment_status: "pending_approval",
-              inter_payment_id: pixPaymentId,
-              updated_at: new Date().toISOString()
-            })
-            .eq("id", payableId);
-        }
+        await supabase
+          .from("payables")
+          .update({
+            payment_status: "sent_to_bank",
+            inter_payment_id: pixPaymentId,
+            updated_at: new Date().toISOString()
+          })
+          .eq("id", payableId);
       }
 
       // Audit logs
@@ -367,7 +349,7 @@ serve(async (req) => {
         company_id: paymentData.companyId,
         entity: "inter_pix_payments",
         entity_id: pixPaymentId,
-        action: isApproved ? "pix_payment_completed" : "pix_payment_pending",
+        action: "pix_sent_to_bank",
         metadata_json: {
           tipoRetorno,
           codigoSolicitacao,
@@ -380,7 +362,7 @@ serve(async (req) => {
 
       await supabase.from("payment_audit_logs").insert({
         payable_id: payableId || pixPaymentId!,
-        action: isApproved ? "pix_payment_approved" : "pix_payment_scheduled",
+        action: "pix_sent_to_bank",
         old_status: "processing",
         new_status: internalStatus,
         metadata: {
@@ -395,12 +377,14 @@ serve(async (req) => {
       console.log(`[inter-pix-payment] Success - tipoRetorno: ${tipoRetorno}, codigoSolicitacao: ${codigoSolicitacao}`);
 
       // Mensagens amigáveis por status
+      // IMPORTANTE: Mesmo com APROVACAO da API, o status para o usuário é "Enviado para Aprovação"
+      // porque ainda precisa aprovar no app do banco
       const statusMessages: Record<string, string> = {
-        APROVACAO: "Pagamento aprovado! Aguardando processamento.",
-        APROVADO: "Pagamento aprovado! Aguardando processamento.",
-        EMPROCESSAMENTO: "Pagamento em processamento.",
-        AGENDADO: "Pagamento agendado com sucesso.",
-        PENDENTE: "Pagamento pendente de aprovação no app do banco.",
+        APROVACAO: "PIX enviado! Aguardando aprovação no app do banco.",
+        APROVADO: "PIX enviado! Aguardando aprovação no app do banco.",
+        EMPROCESSAMENTO: "PIX em processamento no banco.",
+        AGENDADO: "PIX agendado com sucesso.",
+        PENDENTE: "PIX pendente de processamento.",
       };
 
       const friendlyMessage = statusMessages[tipoRetorno] || `Status: ${tipoRetorno}`;
@@ -410,7 +394,8 @@ serve(async (req) => {
           success: true,
           data: {
             transactionId: codigoSolicitacao,
-            status: tipoRetorno,
+            status: "ENVIADO_APROVACAO", // Status padronizado para o frontend
+            interStatus: tipoRetorno, // Status original do Inter
             paymentDate: pixResult.dataPagamento || pixResult.dataOperacao,
             message: friendlyMessage,
           },
@@ -420,7 +405,7 @@ serve(async (req) => {
           codigoSolicitacao,
           dataPagamento: pixResult.dataPagamento,
           dataOperacao: pixResult.dataOperacao,
-          pendingApproval: isPendingApproval
+          pendingBankApproval: true
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );

@@ -29,30 +29,40 @@ interface PixPaymentResultModalProps {
 }
 
 const STATUS_MESSAGES: Record<string, { label: string; color: string; icon: React.ReactNode }> = {
+  ENVIADO_APROVACAO: {
+    label: "Enviado para aprovação no app do banco.",
+    color: "bg-blue-500/10 text-blue-500 border-blue-500/20",
+    icon: <Clock className="h-5 w-5" />,
+  },
   APROVACAO: {
-    label: "Pagamento aprovado! Aguardando processamento.",
-    color: "bg-green-500/10 text-green-500 border-green-500/20",
-    icon: <CheckCircle className="h-5 w-5" />,
+    label: "Enviado para aprovação no app do banco.",
+    color: "bg-blue-500/10 text-blue-500 border-blue-500/20",
+    icon: <Clock className="h-5 w-5" />,
   },
   APROVADO: {
-    label: "Pagamento aprovado! Aguardando processamento.",
-    color: "bg-green-500/10 text-green-500 border-green-500/20",
-    icon: <CheckCircle className="h-5 w-5" />,
+    label: "Enviado para aprovação no app do banco.",
+    color: "bg-blue-500/10 text-blue-500 border-blue-500/20",
+    icon: <Clock className="h-5 w-5" />,
   },
   EMPROCESSAMENTO: {
-    label: "Pagamento em processamento.",
+    label: "PIX em processamento no banco.",
     color: "bg-blue-500/10 text-blue-500 border-blue-500/20",
     icon: <Clock className="h-5 w-5" />,
   },
   AGENDADO: {
-    label: "Pagamento agendado com sucesso.",
+    label: "PIX agendado com sucesso.",
     color: "bg-blue-500/10 text-blue-500 border-blue-500/20",
     icon: <Clock className="h-5 w-5" />,
   },
   PENDENTE: {
-    label: "Pagamento pendente de aprovação no app do banco.",
+    label: "PIX pendente de processamento.",
     color: "bg-yellow-500/10 text-yellow-500 border-yellow-500/20",
     icon: <AlertTriangle className="h-5 w-5" />,
+  },
+  QUITADO: {
+    label: "Pagamento quitado!",
+    color: "bg-green-500/10 text-green-500 border-green-500/20",
+    icon: <CheckCircle className="h-5 w-5" />,
   },
 };
 
