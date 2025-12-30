@@ -169,7 +169,19 @@ serve(async (req) => {
     
     console.log("[inter-pix-payment] 5. Credenciais encontradas - client_id:", credentials.client_id?.substring(0, 8) + "...");
 
-    // Map PIX key type to Inter API format
+
+    // Build PIX payment payload for Inter API /banking/v2/pix
+    // Formato conforme documentação Inter para pagamento por chave PIX
+    const recipientDoc = paymentData.recipientDocument.replace(/[^\d]/g, "");
+    
+    // O valor deve ser string decimal SEM casas decimais (em centavos) para alguns endpoints
+    // OU string decimal com ponto. Vamos testar o formato que a documentação indica.
+    // Formato: valor como STRING representando o valor em REAIS (ex: "12.00" para R$12,00)
+    const valorEmReais = paymentData.amount.toFixed(2);
+    
+    console.log("[inter-pix-payment] 5b. Valor em reais:", valorEmReais);
+    
+    // Mapeamento do tipo de chave
     const tipoChaveMap: Record<string, string> = {
       'cpf': 'CPF',
       'cnpj': 'CNPJ',
@@ -180,19 +192,11 @@ serve(async (req) => {
       'evp': 'CHAVE_ALEATORIA',
       'aleatoria': 'CHAVE_ALEATORIA'
     };
-
-    // Build PIX payment payload for Inter API - formato correto conforme documentação
-    // O valor deve ser um objeto com "original" como string decimal (ex: "12.00")
-    const recipientDoc = paymentData.recipientDocument.replace(/[^\d]/g, "");
-    const valorFormatado = paymentData.amount.toFixed(2);
-    
-    console.log("[inter-pix-payment] 5b. Valor formatado:", valorFormatado);
     
     const pixApiPayload = {
-      valor: {
-        original: valorFormatado
-      },
+      valor: valorEmReais,  // String direta, não objeto
       chave: paymentData.pixKey,
+      tipoChave: tipoChaveMap[paymentData.pixKeyType.toLowerCase()] || 'CPF',
       destinatario: {
         tipo: recipientDoc.length === 11 ? 'FISICA' : 'JURIDICA',
         nome: paymentData.recipientName,
