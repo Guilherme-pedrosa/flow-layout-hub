@@ -321,6 +321,9 @@ export function XMLUploadButton({
         nfe_date: nfeData.nota.dataEmissao || null,
         nfe_key: nfeData.nota.chaveAcesso,
         nfe_imported_at: new Date().toISOString(),
+        // Salvar dados do fornecedor ORIGINAL da NF-e para auditoria
+        nfe_supplier_cnpj: nfeData.fornecedor.cnpj,
+        nfe_supplier_name: nfeData.fornecedor.razaoSocial,
       };
 
       // Apply header changes if selected

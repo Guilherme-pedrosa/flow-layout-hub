@@ -321,6 +321,9 @@ export function PurchaseOrderForm({ order, onClose }: PurchaseOrderFormProps) {
         purpose={purpose}
         freightValue={parseFloat(freightValue) || 0}
         isEditing={!!order}
+        nfeSupplierCnpj={order?.nfe_supplier_cnpj}
+        nfeSupplierName={order?.nfe_supplier_name}
+        supplierCnpj={activeFornecedores.find(f => f.id === supplierId)?.cpf_cnpj}
       />
 
       {/* Tabs - Mobile optimized with horizontal scroll */}

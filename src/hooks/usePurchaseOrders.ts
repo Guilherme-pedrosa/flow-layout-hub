@@ -23,6 +23,8 @@ export interface PurchaseOrder {
   nfe_series: string | null;
   nfe_date: string | null;
   nfe_imported_at: string | null;
+  nfe_supplier_cnpj: string | null;
+  nfe_supplier_name: string | null;
   // CT-e fields
   cte_xml_url: string | null;
   cte_key: string | null;
