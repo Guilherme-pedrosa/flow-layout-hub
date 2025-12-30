@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/select";
 import { Loader2, Save, X, FileUp, AlertTriangle, Package, FileText, Truck, DollarSign, Plus, Trash2, CheckCircle, Sparkles, Bot } from "lucide-react";
 import { usePurchaseOrders, PurchaseOrder, PurchaseOrderInsert, PurchaseOrderItemInsert } from "@/hooks/usePurchaseOrders";
+import { useCompany } from "@/contexts/CompanyContext";
 import { usePurchaseOrderStatuses } from "@/hooks/usePurchaseOrderStatuses";
 import { usePurchaseOrderLimits } from "@/hooks/usePurchaseOrderLimits";
 import { usePessoas } from "@/hooks/usePessoas";
@@ -104,12 +105,13 @@ export function PurchaseOrderForm({ order, onClose }: PurchaseOrderFormProps) {
   const { activeFornecedores, refetch: refetchPessoas, getPessoaById } = usePessoas();
   const { accounts: chartOfAccounts, fetchAccounts } = useChartOfAccounts();
   const { costCenters, fetchCostCenters } = useCostCenters();
+  const { currentCompany } = useCompany();
   
   // Estado do fornecedor selecionado para validação de CFOP
   const [supplierState, setSupplierState] = useState<string | null>(null);
   
-  // UF da empresa (hardcoded por enquanto, pode vir do contexto)
-  const companyState = "SP"; // TODO: pegar do contexto da empresa
+  // UF da empresa vem do contexto
+  const companyState = currentCompany?.estado || "GO";
 
   // Load financial data
   useEffect(() => {

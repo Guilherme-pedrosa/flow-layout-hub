@@ -9,6 +9,8 @@ interface Company {
   razao_social: string | null;
   logo_url: string | null;
   is_active: boolean | null;
+  estado: string | null;
+  cidade: string | null;
 }
 
 interface UserCompany {
