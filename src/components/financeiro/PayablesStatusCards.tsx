@@ -1,5 +1,4 @@
 import { cn } from "@/lib/utils";
-import { ExternalLink } from "lucide-react";
 
 export type PayableStatusFilter = "all" | "pending" | "overdue" | "paid" | "today" | "scheduled";
 
@@ -84,7 +83,7 @@ export function PayablesStatusCards({
   ];
 
   return (
-    <div className="grid grid-cols-5 gap-3">
+    <div className="flex gap-3 w-full">
       {cards.map((card) => {
         const isActive = activeFilter === card.key;
         
@@ -93,26 +92,25 @@ export function PayablesStatusCards({
             key={card.key}
             onClick={() => onFilterChange(card.key)}
             className={cn(
-              "text-left rounded-lg overflow-hidden border transition-all",
+              "flex-1 min-w-0 text-left rounded-lg overflow-hidden border-2 transition-all",
               isActive 
-                ? "border-primary ring-2 ring-primary/20" 
-                : "border-border hover:border-primary/30"
+                ? "border-primary" 
+                : "border-transparent hover:border-muted"
             )}
           >
             {/* Header */}
             <div className={cn(
-              "flex items-center justify-between px-3 py-2",
+              "px-4 py-2",
               card.headerColor,
               "text-white"
             )}>
-              <span className="text-xs font-medium">{card.label}</span>
-              <ExternalLink className="h-3 w-3 opacity-70" />
+              <span className="text-xs font-medium whitespace-nowrap">{card.label}</span>
             </div>
             
             {/* Value */}
-            <div className="bg-card px-3 py-4">
+            <div className="bg-card px-4 py-3 border border-t-0 border-border rounded-b-lg">
               <p className={cn(
-                "text-xl font-semibold tabular-nums",
+                "text-lg font-semibold tabular-nums truncate",
                 card.valueColor
               )}>
                 {formatCurrency(card.amount)}
