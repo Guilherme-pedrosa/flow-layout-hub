@@ -9,3 +9,4 @@ export { SaleFormAnexos } from "./SaleFormAnexos";
 export { SaleStatusBadge } from "./SaleStatusBadge";
 export { SalesPipeline } from "./SalesPipeline";
 export { NFeValidationDialog } from "./NFeValidationDialog";
+export { CommissionsPanel } from "./CommissionsPanel";
