@@ -224,19 +224,24 @@ Responda APENAS com o texto do insight, sem JSON.`;
     }
     
     // Procura item pelo código de barras ou código do produto
+    // Prioriza itens que ainda têm quantidade pendente
     const item = selectedSource.items.find(
-      i => i.product_barcode === barcode || i.product_code === barcode
+      i => (i.product_barcode === barcode || i.product_code === barcode) && i.quantity_pending > 0
     );
 
     if (!item) {
-      toast.error("Produto não encontrado no pedido");
+      // Verifica se existe o item mas já foi totalmente conferido
+      const existingItem = selectedSource.items.find(
+        i => i.product_barcode === barcode || i.product_code === barcode
+      );
+      
+      if (existingItem) {
+        toast.warning("Todas as unidades deste item já foram conferidas");
+      } else {
+        toast.error("Produto não encontrado no pedido");
+      }
       setBarcodeInput("");
-      return;
-    }
-
-    if (item.quantity_pending <= 0) {
-      toast.warning("Este item já foi totalmente conferido");
-      setBarcodeInput("");
+      setQuantityToAdd("1");
       return;
     }
     
@@ -283,6 +288,7 @@ Responda APENAS com o texto do insight, sem JSON.`;
     }
 
     setBarcodeInput("");
+    setQuantityToAdd("1");
     barcodeInputRef.current?.focus();
   };
 
@@ -485,11 +491,17 @@ Responda APENAS com o texto do insight, sem JSON.`;
                   <div className="flex gap-2">
                     <Input
                       placeholder="Digite o número do pedido..."
-                      value={searchValue}
-                      onChange={(e) => setSearchValue(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+                      value={selectedSource ? `PC #${selectedSource.order_number}` : searchValue}
+                      onChange={(e) => {
+                        if (!selectedSource) {
+                          setSearchValue(e.target.value);
+                        }
+                      }}
+                      onKeyDown={(e) => e.key === 'Enter' && !selectedSource && handleSearch()}
+                      className={selectedSource ? "bg-muted font-medium" : ""}
+                      readOnly={!!selectedSource}
                     />
-                    <Button onClick={handleSearch} disabled={loadingSource}>
+                    <Button onClick={handleSearch} disabled={loadingSource || !!selectedSource}>
                       <Search className="h-4 w-4" />
                     </Button>
                   </div>
