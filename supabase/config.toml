@@ -29,3 +29,6 @@ verify_jwt = false
 
 [functions.inter-conciliacao]
 verify_jwt = false
+
+[functions.financial-ai]
+verify_jwt = false
