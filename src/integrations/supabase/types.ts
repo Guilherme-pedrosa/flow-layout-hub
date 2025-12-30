@@ -3082,6 +3082,192 @@ export type Database = {
           },
         ]
       }
+      purchase_order_receipt_items: {
+        Row: {
+          created_at: string
+          id: string
+          product_id: string | null
+          purchase_order_item_id: string
+          quantity_expected: number
+          quantity_pending: number | null
+          quantity_received: number
+          receipt_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          product_id?: string | null
+          purchase_order_item_id: string
+          quantity_expected?: number
+          quantity_pending?: number | null
+          quantity_received?: number
+          receipt_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          product_id?: string | null
+          purchase_order_item_id?: string
+          quantity_expected?: number
+          quantity_pending?: number | null
+          quantity_received?: number
+          receipt_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "purchase_order_receipt_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_order_receipt_items_purchase_order_item_id_fkey"
+            columns: ["purchase_order_item_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_order_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_order_receipt_items_receipt_id_fkey"
+            columns: ["receipt_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_order_receipts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      purchase_order_receipt_logs: {
+        Row: {
+          action: string
+          barcode_scanned: string | null
+          created_at: string
+          id: string
+          ip_address: string | null
+          metadata: Json | null
+          quantity: number | null
+          receipt_id: string
+          receipt_item_id: string | null
+          user_agent: string | null
+          user_id: string | null
+          user_name: string | null
+        }
+        Insert: {
+          action: string
+          barcode_scanned?: string | null
+          created_at?: string
+          id?: string
+          ip_address?: string | null
+          metadata?: Json | null
+          quantity?: number | null
+          receipt_id: string
+          receipt_item_id?: string | null
+          user_agent?: string | null
+          user_id?: string | null
+          user_name?: string | null
+        }
+        Update: {
+          action?: string
+          barcode_scanned?: string | null
+          created_at?: string
+          id?: string
+          ip_address?: string | null
+          metadata?: Json | null
+          quantity?: number | null
+          receipt_id?: string
+          receipt_item_id?: string | null
+          user_agent?: string | null
+          user_id?: string | null
+          user_name?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "purchase_order_receipt_logs_receipt_id_fkey"
+            columns: ["receipt_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_order_receipts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_order_receipt_logs_receipt_item_id_fkey"
+            columns: ["receipt_item_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_order_receipt_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_order_receipt_logs_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      purchase_order_receipts: {
+        Row: {
+          company_id: string
+          completed_at: string | null
+          completed_by: string | null
+          created_at: string
+          id: string
+          notes: string | null
+          purchase_order_id: string
+          started_at: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          company_id: string
+          completed_at?: string | null
+          completed_by?: string | null
+          created_at?: string
+          id?: string
+          notes?: string | null
+          purchase_order_id: string
+          started_at?: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          company_id?: string
+          completed_at?: string | null
+          completed_by?: string | null
+          created_at?: string
+          id?: string
+          notes?: string | null
+          purchase_order_id?: string
+          started_at?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "purchase_order_receipts_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_order_receipts_completed_by_fkey"
+            columns: ["completed_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_order_receipts_purchase_order_id_fkey"
+            columns: ["purchase_order_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       purchase_order_statuses: {
         Row: {
           color: string | null
@@ -3093,6 +3279,7 @@ export type Database = {
           is_active: boolean
           is_default: boolean | null
           name: string
+          requires_receipt: boolean
           stock_behavior: string
           updated_at: string
         }
@@ -3106,6 +3293,7 @@ export type Database = {
           is_active?: boolean
           is_default?: boolean | null
           name: string
+          requires_receipt?: boolean
           stock_behavior?: string
           updated_at?: string
         }
@@ -3119,6 +3307,7 @@ export type Database = {
           is_active?: boolean
           is_default?: boolean | null
           name?: string
+          requires_receipt?: boolean
           stock_behavior?: string
           updated_at?: string
         }
