@@ -207,19 +207,19 @@ const DashboardFinanceiro = () => {
       </div>
 
       {/* AI Banner */}
-      <Card className="bg-gradient-to-r from-primary to-primary/80 text-primary-foreground border-0">
+      <Card className="bg-gradient-to-r from-primary to-primary/80 border-0">
         <CardContent className="p-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary-foreground/20">
-                <Bot className="h-5 w-5" />
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/20">
+                <Bot className="h-5 w-5 text-white" />
               </div>
               <div>
-                <p className="font-medium">IA prevê déficit de R$ 5.000 na próxima semana</p>
-                <p className="text-sm opacity-80">Sugestão: Considere antecipar recebíveis</p>
+                <p className="font-medium text-white">IA prevê déficit de R$ 5.000 na próxima semana</p>
+                <p className="text-sm text-white/80">Sugestão: Considere antecipar recebíveis</p>
               </div>
             </div>
-            <Button variant="secondary" size="sm" className="bg-primary-foreground text-primary hover:bg-primary-foreground/90">
+            <Button variant="secondary" size="sm" className="bg-white text-primary hover:bg-white/90">
               Ver análise completa
               <ArrowRight className="h-4 w-4 ml-2" />
             </Button>
