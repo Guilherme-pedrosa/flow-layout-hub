@@ -8,20 +8,34 @@ const corsHeaders = {
 
 const INTER_API_URL = "https://cdpj.partners.bancointer.com.br";
 
-// Helper function to call the Inter proxy
-async function callInterProxy(
+// Call GCP proxy with mTLS certificates
+async function callGcpProxy(
   proxyUrl: string,
+  proxySecret: string,
   method: string,
-  url: string,
+  path: string,
   headers: Record<string, string>,
+  certificate: string,
+  privateKey: string,
   data?: unknown
 ) {
-  console.log(`[inter-validate-pix] Calling proxy: ${method} ${url}`);
+  console.log(`[inter-validate-pix] Calling GCP proxy: ${method} ${path}`);
   
   const response = await fetch(proxyUrl, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ method, url, headers, data })
+    headers: { 
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${proxySecret}`
+    },
+    body: JSON.stringify({ 
+      method, 
+      url: `${INTER_API_URL}${path}`,
+      headers, 
+      data,
+      // Pass certificates as base64
+      certificate,
+      privateKey
+    })
   });
 
   const responseText = await response.text();
@@ -41,43 +55,19 @@ async function callInterProxy(
   return { result, status: response.status };
 }
 
-// Get OAuth token via proxy
-async function getOAuthToken(
+// Validate PIX key by calling GCP proxy (which handles mTLS with Inter)
+async function validatePixKeyViaProxy(
   proxyUrl: string,
-  clientId: string,
-  clientSecret: string
-): Promise<string> {
-  console.log("[inter-validate-pix] Obtendo token OAuth via proxy...");
-  
-  const tokenUrl = `${INTER_API_URL}/oauth/v2/token`;
-  const params = new URLSearchParams();
-  params.append("client_id", clientId);
-  params.append("client_secret", clientSecret);
-  params.append("grant_type", "client_credentials");
-  params.append("scope", "pix.read");
-
-  const { result, status } = await callInterProxy(
-    proxyUrl,
-    "POST",
-    tokenUrl,
-    { "Content-Type": "application/x-www-form-urlencoded" },
-    params.toString()
-  );
-
-  if (status !== 200 || !result.access_token) {
-    console.error("[inter-validate-pix] Erro ao obter token:", result);
-    throw new Error(result.message || "Erro ao obter token de acesso");
-  }
-
-  console.log("[inter-validate-pix] Token obtido com sucesso");
-  return result.access_token;
-}
-
-// Validate PIX key via DICT
-async function validatePixKey(
-  proxyUrl: string,
-  token: string,
-  accountNumber: string,
+  proxySecret: string,
+  credentials: {
+    client_id: string;
+    client_secret: string;
+    account_number: string;
+    certificate_file_path: string;
+    private_key_file_path: string;
+  },
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any,
   pixKey: string,
   pixKeyType: string
 ): Promise<{
@@ -89,71 +79,128 @@ async function validatePixKey(
   keyType?: string;
   error?: string;
 }> {
-  console.log("[inter-validate-pix] Consultando chave PIX via DICT...");
-  console.log("[inter-validate-pix] Chave:", pixKey, "Tipo:", pixKeyType);
-  
-  // Map pix key types to Inter API format
-  const pixKeyTypeMap: Record<string, string> = {
-    cpf: "CPF",
-    cnpj: "CNPJ",
-    email: "EMAIL",
-    telefone: "PHONE",
-    phone: "PHONE",
-    aleatorio: "EVP",
-    evp: "EVP",
-  };
-
-  const keyType = pixKeyTypeMap[pixKeyType.toLowerCase()] || "EVP";
-  
-  // Endpoint para consulta DICT no Inter
-  const dictUrl = `${INTER_API_URL}/banking/v2/pix/keys/${encodeURIComponent(pixKey)}`;
+  console.log("[inter-validate-pix] Iniciando validação via GCP proxy...");
   
   try {
-    const { result, status } = await callInterProxy(
-      proxyUrl,
-      "GET",
-      dictUrl,
-      {
-        "Authorization": `Bearer ${token}`,
+    // Download certificates from Supabase Storage
+    console.log("[inter-validate-pix] Baixando certificados do storage...");
+    
+    const { data: certData, error: certError } = await supabase.storage
+      .from("inter-certs")
+      .download(credentials.certificate_file_path);
+    
+    if (certError || !certData) {
+      console.error("[inter-validate-pix] Erro ao baixar certificado:", certError);
+      throw new Error("Erro ao baixar certificado do storage");
+    }
+
+    const { data: keyData, error: keyError } = await supabase.storage
+      .from("inter-certs")
+      .download(credentials.private_key_file_path);
+    
+    if (keyError || !keyData) {
+      console.error("[inter-validate-pix] Erro ao baixar chave privada:", keyError);
+      throw new Error("Erro ao baixar chave privada do storage");
+    }
+
+    // Convert to base64
+    const certArrayBuffer = await certData.arrayBuffer();
+    const keyArrayBuffer = await keyData.arrayBuffer();
+    
+    const certBase64 = btoa(String.fromCharCode(...new Uint8Array(certArrayBuffer)));
+    const keyBase64 = btoa(String.fromCharCode(...new Uint8Array(keyArrayBuffer)));
+    
+    console.log("[inter-validate-pix] Certificados carregados com sucesso");
+
+    // Map pix key types to Inter API format
+    const pixKeyTypeMap: Record<string, string> = {
+      cpf: "CPF",
+      cnpj: "CNPJ",
+      email: "EMAIL",
+      telefone: "PHONE",
+      phone: "PHONE",
+      aleatorio: "EVP",
+      evp: "EVP",
+    };
+    const keyType = pixKeyTypeMap[pixKeyType.toLowerCase()] || "EVP";
+
+    // Call proxy to validate PIX key
+    // The proxy needs to: 1) Get OAuth token, 2) Query DICT
+    const proxyPayload = {
+      action: "validate_pix_key",
+      clientId: credentials.client_id,
+      clientSecret: credentials.client_secret,
+      accountNumber: credentials.account_number || "",
+      certificate: certBase64,
+      privateKey: keyBase64,
+      pixKey,
+      pixKeyType: keyType
+    };
+
+    console.log("[inter-validate-pix] Chamando proxy para validar chave PIX...");
+    
+    const response = await fetch(proxyUrl, {
+      method: "POST",
+      headers: { 
         "Content-Type": "application/json",
-        "x-conta-corrente": accountNumber,
-      }
-    );
+        "Authorization": `Bearer ${proxySecret}`
+      },
+      body: JSON.stringify(proxyPayload)
+    });
 
-    console.log("[inter-validate-pix] Resposta DICT:", JSON.stringify(result));
+    const responseText = await response.text();
+    console.log("[inter-validate-pix] Resposta do proxy:", response.status);
+    
+    let result;
+    try {
+      result = JSON.parse(responseText);
+    } catch {
+      console.error("[inter-validate-pix] Resposta inválida:", responseText.substring(0, 200));
+      throw new Error("Resposta inválida do proxy");
+    }
 
-    if (status === 200 && result) {
-      // Mascara o documento (CPF/CNPJ)
-      const document = result.cpfCnpj || result.documento || "";
-      let documentMasked = document;
+    if (result.error) {
+      console.error("[inter-validate-pix] Erro do proxy:", result.error);
+      return {
+        valid: false,
+        error: result.error
+      };
+    }
+
+    // Handle successful validation response
+    if (result.valid || result.name || result.nome) {
+      const name = result.name || result.nome || result.nomeCorrentista || "Nome não disponível";
+      const document = result.document || result.cpfCnpj || result.documento || "";
       
-      if (document.length === 11) {
-        // CPF: ***.456.789-**
-        documentMasked = `***.${document.substring(3, 6)}.${document.substring(6, 9)}-**`;
-      } else if (document.length === 14) {
-        // CNPJ: **.456.789/0001-**
-        documentMasked = `**.${document.substring(2, 5)}.${document.substring(5, 8)}/${document.substring(8, 12)}-**`;
+      // Mask document
+      let documentMasked = document;
+      const cleanDoc = document.replace(/\D/g, "");
+      if (cleanDoc.length === 11) {
+        documentMasked = `***.${cleanDoc.substring(3, 6)}.${cleanDoc.substring(6, 9)}-**`;
+      } else if (cleanDoc.length === 14) {
+        documentMasked = `**.${cleanDoc.substring(2, 5)}.${cleanDoc.substring(5, 8)}/${cleanDoc.substring(8, 12)}-**`;
       }
 
       return {
         valid: true,
-        name: result.nome || result.nomeCorrentista || result.titular?.nome || "Nome não disponível",
-        document: document,
-        documentMasked: documentMasked,
-        bank: result.ispb || result.banco || result.instituicao || "Instituição",
-        keyType: keyType,
-      };
-    } else {
-      return {
-        valid: false,
-        error: result.message || result.error || "Chave PIX não encontrada",
+        name,
+        document: cleanDoc,
+        documentMasked,
+        bank: result.bank || result.ispb || result.instituicao || "Banco Inter",
+        keyType
       };
     }
-  } catch (error) {
-    console.error("[inter-validate-pix] Erro ao consultar DICT:", error);
+
     return {
       valid: false,
-      error: error instanceof Error ? error.message : "Erro ao validar chave PIX",
+      error: result.message || "Chave PIX não encontrada"
+    };
+
+  } catch (error) {
+    console.error("[inter-validate-pix] Erro na validação:", error);
+    return {
+      valid: false,
+      error: error instanceof Error ? error.message : "Erro ao validar chave PIX"
     };
   }
 }
@@ -178,10 +225,15 @@ serve(async (req) => {
       throw new Error("Campos obrigatórios: company_id, pix_key, pix_key_type");
     }
 
-    // Get proxy URL
+    // Get proxy URL and secret
     const proxyUrl = Deno.env.get("GCP_PIX_FUNCTION_URL");
+    const proxySecret = Deno.env.get("GCP_PIX_FUNCTION_SECRET");
+    
     if (!proxyUrl) {
       throw new Error("GCP_PIX_FUNCTION_URL não configurada");
+    }
+    if (!proxySecret) {
+      throw new Error("GCP_PIX_FUNCTION_SECRET não configurada");
     }
 
     // Fetch Inter credentials
@@ -197,18 +249,14 @@ serve(async (req) => {
       throw new Error("Credenciais Inter não configuradas para esta empresa");
     }
 
-    // Get OAuth token
-    const token = await getOAuthToken(
-      proxyUrl,
-      credentials.client_id,
-      credentials.client_secret
-    );
+    console.log("[inter-validate-pix] Credenciais encontradas - client_id:", credentials.client_id?.substring(0, 8) + "...");
 
-    // Validate PIX key
-    const validation = await validatePixKey(
+    // Validate PIX key via GCP proxy
+    const validation = await validatePixKeyViaProxy(
       proxyUrl,
-      token,
-      credentials.account_number || "",
+      proxySecret,
+      credentials,
+      supabase,
       pix_key,
       pix_key_type
     );

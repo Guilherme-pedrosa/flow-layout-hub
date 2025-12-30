@@ -1,9 +1,8 @@
 const https = require('https');
 
 /**
- * Google Cloud Function for Banco Inter PIX payments with mTLS
- * This function receives all data from the Lovable Edge Function
- * No Supabase connection needed - all data is passed in the request
+ * Google Cloud Function for Banco Inter PIX operations with mTLS
+ * Supports: PIX payments and PIX key validation (DICT lookup)
  */
 exports.interPixPayment = async (req, res) => {
   // CORS headers
@@ -26,73 +25,135 @@ exports.interPixPayment = async (req, res) => {
   }
 
   try {
-    const { 
-      // Payment data
-      pixKey,
-      pixKeyType,
-      amount,
-      recipientName,
-      recipientDocument,
-      description,
-      // Credentials (passed from Edge Function)
-      clientId,
-      clientSecret,
-      accountNumber,
-      // Certificates (passed from Edge Function as base64)
-      certificate,
-      privateKey
-    } = req.body;
+    const { action } = req.body;
 
-    console.log('Processing PIX payment:', { pixKey, amount, recipientName });
-
-    // Validate required fields
-    if (!pixKey || !amount || !recipientName || !recipientDocument) {
-      return res.status(400).json({ error: 'Dados do pagamento incompletos' });
+    // Route to appropriate handler
+    if (action === 'validate_pix_key') {
+      return await handleValidatePixKey(req, res);
+    } else {
+      // Default: PIX payment
+      return await handlePixPayment(req, res);
     }
-
-    if (!clientId || !clientSecret || !certificate || !privateKey) {
-      return res.status(400).json({ error: 'Credenciais Inter incompletas' });
-    }
-
-    // Decode base64 certificates
-    const cert = Buffer.from(certificate, 'base64').toString('utf-8');
-    const key = Buffer.from(privateKey, 'base64').toString('utf-8');
-
-    // Get OAuth token
-    const token = await getOAuthToken({ clientId, clientSecret }, cert, key);
-    console.log('OAuth token obtained successfully');
-
-    // Send PIX payment
-    const result = await sendPixPayment(token, accountNumber, cert, key, {
-      pixKey,
-      pixKeyType,
-      amount,
-      recipientName,
-      recipientDocument,
-      description
-    });
-
-    console.log('PIX payment result:', result);
-    return res.status(200).json(result);
 
   } catch (error) {
-    console.error('PIX payment error:', error);
+    console.error('Error:', error);
     return res.status(500).json({ 
-      error: error.message || 'Erro ao processar pagamento PIX',
+      error: error.message || 'Erro ao processar requisição',
       details: error.toString()
     });
   }
 };
 
 /**
+ * Handle PIX key validation (DICT lookup)
+ */
+async function handleValidatePixKey(req, res) {
+  const { 
+    clientId,
+    clientSecret,
+    accountNumber,
+    certificate,
+    privateKey,
+    pixKey,
+    pixKeyType
+  } = req.body;
+
+  console.log('Validating PIX key:', { pixKey, pixKeyType });
+
+  // Validate required fields
+  if (!pixKey || !pixKeyType) {
+    return res.status(400).json({ error: 'Chave PIX e tipo são obrigatórios' });
+  }
+
+  if (!clientId || !clientSecret || !certificate || !privateKey) {
+    return res.status(400).json({ error: 'Credenciais Inter incompletas' });
+  }
+
+  // Decode base64 certificates
+  const cert = Buffer.from(certificate, 'base64').toString('utf-8');
+  const key = Buffer.from(privateKey, 'base64').toString('utf-8');
+
+  // Get OAuth token
+  const token = await getOAuthToken(
+    { clientId, clientSecret }, 
+    cert, 
+    key,
+    'pix.read'
+  );
+  console.log('OAuth token obtained for PIX validation');
+
+  // Query DICT
+  const result = await queryDict(token, accountNumber, cert, key, pixKey, pixKeyType);
+  console.log('DICT lookup result:', result);
+  
+  return res.status(200).json(result);
+}
+
+/**
+ * Handle PIX payment
+ */
+async function handlePixPayment(req, res) {
+  const { 
+    pixKey,
+    pixKeyType,
+    amount,
+    recipientName,
+    recipientDocument,
+    description,
+    clientId,
+    clientSecret,
+    accountNumber,
+    certificate,
+    privateKey
+  } = req.body;
+
+  console.log('Processing PIX payment:', { pixKey, amount, recipientName });
+
+  // Validate required fields
+  if (!pixKey || !amount || !recipientName || !recipientDocument) {
+    return res.status(400).json({ error: 'Dados do pagamento incompletos' });
+  }
+
+  if (!clientId || !clientSecret || !certificate || !privateKey) {
+    return res.status(400).json({ error: 'Credenciais Inter incompletas' });
+  }
+
+  // Decode base64 certificates
+  const cert = Buffer.from(certificate, 'base64').toString('utf-8');
+  const key = Buffer.from(privateKey, 'base64').toString('utf-8');
+
+  // Get OAuth token
+  const token = await getOAuthToken(
+    { clientId, clientSecret }, 
+    cert, 
+    key,
+    'pagamento-pix.write pagamento-pix.read'
+  );
+  console.log('OAuth token obtained successfully');
+
+  // Send PIX payment
+  const result = await sendPixPayment(token, accountNumber, cert, key, {
+    pixKey,
+    pixKeyType,
+    amount,
+    recipientName,
+    recipientDocument,
+    description
+  });
+
+  console.log('PIX payment result:', result);
+  return res.status(200).json(result);
+}
+
+/**
  * Get OAuth token from Banco Inter using mTLS
  */
-async function getOAuthToken(credentials, cert, key) {
+async function getOAuthToken(credentials, cert, key, scope) {
   return new Promise((resolve, reject) => {
     const postData = new URLSearchParams({
       client_id: credentials.clientId,
       client_secret: credentials.clientSecret,
-      scope: 'pagamento-pix.write pagamento-pix.read',
+      scope: scope || 'pagamento-pix.write pagamento-pix.read',
       grant_type: 'client_credentials'
     }).toString();
 
@@ -133,6 +194,69 @@ async function getOAuthToken(credentials, cert, key) {
 }
 
 /**
+ * Query DICT (PIX key lookup) from Banco Inter using mTLS
+ */
+async function queryDict(token, accountNumber, cert, key, pixKey, pixKeyType) {
+  return new Promise((resolve, reject) => {
+    const encodedKey = encodeURIComponent(pixKey);
+    
+    const options = {
+      hostname: 'cdpj.partners.bancointer.com.br',
+      port: 443,
+      path: `/banking/v2/pix/keys/${encodedKey}`,
+      method: 'GET',
+      cert: cert,
+      key: key,
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+        'x-conta-corrente': accountNumber || ''
+      }
+    };
+
+    console.log('DICT lookup request:', options.path);
+
+    const req = https.request(options, (res) => {
+      let data = '';
+      res.on('data', chunk => data += chunk);
+      res.on('end', () => {
+        console.log('DICT response:', res.statusCode, data);
+        try {
+          const parsed = JSON.parse(data);
+          
+          if (res.statusCode >= 200 && res.statusCode < 300) {
+            // Successful lookup
+            resolve({
+              valid: true,
+              name: parsed.nome || parsed.nomeCorrentista || parsed.titular?.nome,
+              document: parsed.cpfCnpj || parsed.documento,
+              bank: parsed.ispb || parsed.banco || parsed.instituicao,
+              keyType: pixKeyType,
+              raw: parsed
+            });
+          } else if (res.statusCode === 404) {
+            resolve({
+              valid: false,
+              error: 'Chave PIX não encontrada'
+            });
+          } else {
+            resolve({
+              valid: false,
+              error: parsed.message || parsed.erro || `Erro ${res.statusCode}`
+            });
+          }
+        } catch (e) {
+          reject(new Error(`Failed to parse DICT response: ${data}`));
+        }
+      });
+    });
+
+    req.on('error', (e) => reject(new Error(`DICT request failed: ${e.message}`)));
+    req.end();
+  });
+}
+
+/**
  * Send PIX payment to Banco Inter using mTLS
  */
 async function sendPixPayment(token, accountNumber, cert, key, payload) {
@@ -144,6 +268,7 @@ async function sendPixPayment(token, accountNumber, cert, key, payload) {
       'email': 'EMAIL',
       'telefone': 'TELEFONE',
       'celular': 'TELEFONE',
+      'phone': 'TELEFONE',
       'evp': 'CHAVE_ALEATORIA',
       'aleatoria': 'CHAVE_ALEATORIA'
     };
