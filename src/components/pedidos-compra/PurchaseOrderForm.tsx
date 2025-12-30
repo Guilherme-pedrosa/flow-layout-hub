@@ -105,16 +105,25 @@ export function PurchaseOrderForm({ order, onClose }: PurchaseOrderFormProps) {
   // Atualizar UF do fornecedor quando mudar seleção
   useEffect(() => {
     const loadSupplierState = async () => {
+      console.log("[DEBUG] loadSupplierState - supplierId:", supplierId);
+      console.log("[DEBUG] activeFornecedores count:", activeFornecedores.length);
+      
       if (supplierId) {
         const supplier = activeFornecedores.find(f => f.id === supplierId);
+        console.log("[DEBUG] Found supplier in cache:", supplier?.razao_social, "estado:", supplier?.estado);
+        
         if (supplier?.estado) {
           setSupplierState(supplier.estado);
+          console.log("[DEBUG] Set supplierState from cache:", supplier.estado);
         } else {
           // Buscar do banco se não estiver em cache
+          console.log("[DEBUG] Fetching supplier from DB...");
           try {
             const pessoa = await getPessoaById(supplierId);
+            console.log("[DEBUG] Fetched pessoa:", pessoa?.razao_social, "estado:", pessoa?.estado);
             setSupplierState(pessoa?.estado || null);
-          } catch {
+          } catch (err) {
+            console.error("[DEBUG] Error fetching pessoa:", err);
             setSupplierState(null);
           }
         }
