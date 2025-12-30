@@ -23,6 +23,7 @@ import { PayablesTable, PayableRow } from "./PayablesTable";
 import { PayablesBulkActions } from "./PayablesBulkActions";
 import { PayablesFooterBar } from "./PayablesFooterBar";
 import { PixPaymentModal } from "./PixPaymentModal";
+import { FinancialAIBanner } from "./FinancialAIBanner";
 import { PayableForm } from "./PayableForm";
 
 interface PayablesPageProps {
@@ -482,6 +483,12 @@ export function PayablesPage({ onRefresh }: PayablesPageProps) {
 
   return (
     <div className="space-y-6">
+      {/* AI Banner */}
+      <FinancialAIBanner 
+        type="payables" 
+        onActionClick={() => setStatusFilter("overdue")}
+      />
+
       {/* Header */}
       <div>
         <h1 className="text-xl font-semibold text-foreground">Contas a Pagar</h1>
