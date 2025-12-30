@@ -333,6 +333,7 @@ export default function GerenciarProdutos() {
         onDismiss={dismiss}
         onMarkAsRead={markAsRead}
         defaultMessage="IA monitorando estoque, margens e sugerindo otimizações"
+        category="stock"
       />
 
       {/* Cards de Status */}
