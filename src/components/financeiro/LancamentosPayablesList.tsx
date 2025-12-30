@@ -74,6 +74,7 @@ interface Payable {
   recipient_document: string | null;
   is_paid: boolean;
   paid_at: string | null;
+  reconciliation_id: string | null;
   installment_number?: number;
   total_installments?: number;
   supplier?: {
@@ -255,6 +256,9 @@ export function LancamentosPayablesList({ onRefresh }: LancamentosPayablesListPr
     const submittedToBank = payable.payment_status === "sent_to_bank" || 
                            payable.payment_status === "submitted_for_approval";
 
+    // Verificar se foi conciliado
+    const isReconciled = !!payable.reconciliation_id;
+
     if (payable.is_paid) {
       return (
         <div className="flex flex-col gap-1">
@@ -262,6 +266,12 @@ export function LancamentosPayablesList({ onRefresh }: LancamentosPayablesListPr
             <CheckCircle className="mr-1 h-3 w-3" />
             Pago
           </Badge>
+          {isReconciled && (
+            <Badge variant="outline" className="bg-teal-500/10 text-teal-600 border-teal-500/20">
+              <CheckCircle className="mr-1 h-3 w-3" />
+              Conciliado
+            </Badge>
+          )}
         </div>
       );
     }
@@ -273,6 +283,12 @@ export function LancamentosPayablesList({ onRefresh }: LancamentosPayablesListPr
 
     return (
       <div className="flex flex-col gap-1">
+        {isReconciled && (
+          <Badge variant="outline" className="bg-teal-500/10 text-teal-600 border-teal-500/20">
+            <CheckCircle className="mr-1 h-3 w-3" />
+            Conciliado
+          </Badge>
+        )}
         {submittedToBank && (
           <Badge variant="outline" className="bg-purple-500/10 text-purple-600 border-purple-500/20">
             <ArrowUpFromLine className="mr-1 h-3 w-3" />
