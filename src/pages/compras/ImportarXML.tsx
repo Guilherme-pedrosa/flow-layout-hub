@@ -67,7 +67,7 @@ export default function ImportarXML() {
   const [itemParaCadastrar, setItemParaCadastrar] = useState<{ index: number; item: NFEItem } | null>(null);
   
   const { products, createProduct } = useProducts();
-  const { createOrder, createOrderItems } = usePurchaseOrders();
+  const { createOrder, createOrderItems, createOrderInstallments } = usePurchaseOrders();
   const { createMovement } = useStockMovements();
   const { getDefaultStatus, getActiveStatuses } = usePurchaseOrderStatuses();
 
@@ -478,6 +478,21 @@ Responda APENAS com o código CFOP de 4 dígitos. Sem explicações.`;
       }));
 
       await createOrderItems.mutateAsync(orderItems);
+
+      // Salvar parcelas da NF-e (se não for garantia)
+      if (finalidade !== "garantia" && nfeData.financeiro.parcelas && nfeData.financeiro.parcelas.length > 0) {
+        const installments = nfeData.financeiro.parcelas.map((parcela, index) => ({
+          purchase_order_id: orderData.id,
+          installment_number: index + 1,
+          due_date: parcela.dataVencimento,
+          amount: parcela.valor,
+          source: 'nfe',
+          nfe_original_date: parcela.dataVencimento,
+          nfe_original_amount: parcela.valor,
+        }));
+        
+        await createOrderInstallments.mutateAsync(installments);
+      }
 
       // IMPORTANTE: Só criar movimentação de estoque se o status tiver stock_behavior = 'entry'
       // Se for 'forecast' (em trânsito), não dá entrada no estoque - fica só como previsão
