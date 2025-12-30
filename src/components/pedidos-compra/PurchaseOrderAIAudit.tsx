@@ -38,6 +38,11 @@ interface PurchaseOrderAIAuditProps {
   purpose: string;
   freightValue: number;
   isEditing: boolean;
+  // Dados do fornecedor da NF-e importada (para validação de divergência)
+  nfeSupplierCnpj?: string | null;
+  nfeSupplierName?: string | null;
+  // CNPJ do fornecedor selecionado
+  supplierCnpj?: string | null;
 }
 
 interface AuditAlert {
@@ -84,7 +89,10 @@ export function PurchaseOrderAIAudit({
   totalValue, 
   purpose, 
   freightValue,
-  isEditing 
+  isEditing,
+  nfeSupplierCnpj,
+  nfeSupplierName,
+  supplierCnpj
 }: PurchaseOrderAIAuditProps) {
   const [loading, setLoading] = useState(false);
   const [isOpen, setIsOpen] = useState(true);
@@ -105,6 +113,29 @@ export function PurchaseOrderAIAudit({
     const newAlerts: AuditAlert[] = [];
 
     try {
+      // 0. CRÍTICO: Verificar divergência de fornecedor com NF-e importada
+      if (nfeSupplierCnpj && supplierCnpj) {
+        const normalizedNfeCnpj = nfeSupplierCnpj.replace(/[^\d]/g, '');
+        const normalizedSupplierCnpj = supplierCnpj.replace(/[^\d]/g, '');
+        
+        if (normalizedNfeCnpj !== normalizedSupplierCnpj) {
+          newAlerts.push({
+            id: 'supplier_nfe_mismatch',
+            type: 'error',
+            category: 'Crítico',
+            title: 'FORNECEDOR DIFERENTE DA NF-e',
+            message: `O fornecedor selecionado NÃO é o mesmo da NF-e importada. NF-e: ${nfeSupplierName || normalizedNfeCnpj}`,
+            suggestion: 'Este pedido foi criado com NF-e de outro fornecedor. Corrija imediatamente para evitar problemas fiscais e contábeis.',
+            data: { 
+              nfeSupplierCnpj: normalizedNfeCnpj, 
+              nfeSupplierName,
+              selectedSupplierCnpj: normalizedSupplierCnpj 
+            }
+          });
+        }
+      }
+
+      // 1. Buscar histórico do fornecedor
       // 1. Buscar histórico do fornecedor
       const supplierOrdersResult: any = await dbClient
         .from('purchase_orders')
@@ -405,7 +436,7 @@ Dê sua recomendação de forma direta e prática.`
     } finally {
       setLoading(false);
     }
-  }, [supplierId, items, totalValue, purpose, freightValue, isEditing]);
+  }, [supplierId, items, totalValue, purpose, freightValue, isEditing, nfeSupplierCnpj, nfeSupplierName, supplierCnpj]);
 
   // Debounce para não rodar toda hora
   useEffect(() => {
