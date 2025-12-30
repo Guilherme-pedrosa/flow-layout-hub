@@ -6,6 +6,183 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+const INTER_API_URL = "https://cdpj.partners.bancointer.com.br";
+
+// Call GCP proxy with generic format: url, method, headers, data, certificate, privateKey
+async function callProxy(
+  proxyUrl: string,
+  proxySecret: string,
+  method: string,
+  url: string,
+  headers: Record<string, string>,
+  certificate: string,
+  privateKey: string,
+  data?: string
+): Promise<{ result: unknown; status: number }> {
+  console.log(`[inter-validate-pix] Proxy call: ${method} ${url}`);
+  
+  const response = await fetch(proxyUrl, {
+    method: "POST",
+    headers: { 
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${proxySecret}`
+    },
+    body: JSON.stringify({ 
+      method, 
+      url,
+      headers, 
+      data,
+      certificate,
+      privateKey
+    })
+  });
+
+  const responseText = await response.text();
+  console.log(`[inter-validate-pix] Proxy response: ${response.status}`);
+  console.log(`[inter-validate-pix] Proxy body: ${responseText.substring(0, 500)}`);
+  
+  let result;
+  try {
+    result = JSON.parse(responseText);
+  } catch {
+    console.error("[inter-validate-pix] Parse error:", responseText.substring(0, 200));
+    throw new Error(`Resposta inválida do proxy: ${responseText.substring(0, 100)}`);
+  }
+
+  return { result, status: response.status };
+}
+
+// Get OAuth token via proxy
+async function getOAuthToken(
+  proxyUrl: string,
+  proxySecret: string,
+  clientId: string,
+  clientSecret: string,
+  certBase64: string,
+  keyBase64: string
+): Promise<string> {
+  console.log("[inter-validate-pix] Obtendo token OAuth...");
+  
+  const tokenUrl = `${INTER_API_URL}/oauth/v2/token`;
+  const params = new URLSearchParams();
+  params.append("client_id", clientId);
+  params.append("client_secret", clientSecret);
+  params.append("grant_type", "client_credentials");
+  params.append("scope", "pix.read");
+
+  const { result, status } = await callProxy(
+    proxyUrl,
+    proxySecret,
+    "POST",
+    tokenUrl,
+    { "Content-Type": "application/x-www-form-urlencoded" },
+    certBase64,
+    keyBase64,
+    params.toString()
+  );
+
+  const tokenResult = result as { access_token?: string; error?: string; message?: string; error_description?: string };
+  
+  if (status !== 200 || !tokenResult.access_token) {
+    console.error("[inter-validate-pix] Token error:", JSON.stringify(result));
+    throw new Error(tokenResult.error_description || tokenResult.message || tokenResult.error || "Erro ao obter token");
+  }
+
+  console.log("[inter-validate-pix] Token obtido com sucesso");
+  return tokenResult.access_token;
+}
+
+// Query DICT for PIX key validation via proxy
+async function queryDict(
+  proxyUrl: string,
+  proxySecret: string,
+  token: string,
+  accountNumber: string,
+  certBase64: string,
+  keyBase64: string,
+  pixKey: string
+): Promise<{
+  valid: boolean;
+  name?: string;
+  document?: string;
+  documentMasked?: string;
+  bank?: string;
+  error?: string;
+}> {
+  console.log("[inter-validate-pix] Consultando DICT para chave:", pixKey);
+  
+  const dictUrl = `${INTER_API_URL}/banking/v2/pix/keys/${encodeURIComponent(pixKey)}`;
+  
+  const headers: Record<string, string> = {
+    "Authorization": `Bearer ${token}`,
+    "Content-Type": "application/json",
+  };
+  
+  if (accountNumber) {
+    headers["x-conta-corrente"] = accountNumber;
+  }
+
+  const { result, status } = await callProxy(
+    proxyUrl,
+    proxySecret,
+    "GET",
+    dictUrl,
+    headers,
+    certBase64,
+    keyBase64
+  );
+
+  console.log("[inter-validate-pix] DICT response:", status, JSON.stringify(result));
+
+  const dictResult = result as { 
+    nome?: string; 
+    nomeCorrentista?: string;
+    titular?: { nome?: string };
+    cpfCnpj?: string; 
+    documento?: string;
+    ispb?: string;
+    banco?: string;
+    instituicao?: string;
+    error?: string;
+    message?: string;
+  };
+
+  if (status >= 200 && status < 300 && (dictResult.nome || dictResult.nomeCorrentista || dictResult.titular?.nome)) {
+    const name = dictResult.nome || dictResult.nomeCorrentista || dictResult.titular?.nome || "Nome não disponível";
+    const document = dictResult.cpfCnpj || dictResult.documento || "";
+    
+    return {
+      valid: true,
+      name,
+      document: document.replace(/\D/g, ""),
+      documentMasked: maskDocument(document),
+      bank: dictResult.ispb || dictResult.banco || dictResult.instituicao || "Instituição",
+    };
+  }
+
+  if (status === 404) {
+    return {
+      valid: false,
+      error: "Chave PIX não encontrada",
+    };
+  }
+
+  return {
+    valid: false,
+    error: dictResult.message || dictResult.error || `Erro ${status}`,
+  };
+}
+
+function maskDocument(document: string): string {
+  const cleanDoc = document.replace(/\D/g, "");
+  if (cleanDoc.length === 11) {
+    return `***.${cleanDoc.substring(3, 6)}.${cleanDoc.substring(6, 9)}-**`;
+  } else if (cleanDoc.length === 14) {
+    return `**.${cleanDoc.substring(2, 5)}.${cleanDoc.substring(5, 8)}/${cleanDoc.substring(8, 12)}-**`;
+  }
+  return document;
+}
+
 serve(async (req) => {
   console.log("[inter-validate-pix] ========== INICIANDO ==========");
   
@@ -75,87 +252,41 @@ serve(async (req) => {
       throw new Error("Erro ao baixar chave privada do storage");
     }
 
-    // Convert to base64 - use TextDecoder to properly handle the PEM content
+    // Convert to base64
     const certText = await certData.text();
     const keyText = await keyData.text();
     
-    // Encode as base64 properly (PEM files are already text, so we encode the text itself)
     const certBase64 = btoa(certText);
     const keyBase64 = btoa(keyText);
     
-    console.log("[inter-validate-pix] Certificados carregados e convertidos para base64");
-    console.log("[inter-validate-pix] Cert length:", certBase64.length, "Key length:", keyBase64.length);
+    console.log("[inter-validate-pix] Certificados carregados - Cert length:", certBase64.length, "Key length:", keyBase64.length);
 
-    // Map PIX key type
-    const pixKeyTypeMap: Record<string, string> = {
-      cpf: "cpf",
-      cnpj: "cnpj",
-      email: "email",
-      telefone: "telefone",
-      phone: "telefone",
-      aleatorio: "evp",
-      evp: "evp",
+    // Step 1: Get OAuth token
+    const token = await getOAuthToken(
+      proxyUrl,
+      proxySecret,
+      credentials.client_id,
+      credentials.client_secret,
+      certBase64,
+      keyBase64
+    );
+
+    // Step 2: Query DICT for PIX key validation
+    const validation = await queryDict(
+      proxyUrl,
+      proxySecret,
+      token,
+      credentials.account_number || "",
+      certBase64,
+      keyBase64,
+      pix_key
+    );
+
+    const result = { 
+      ...validation, 
+      keyType: pix_key_type.toUpperCase() 
     };
-    const mappedKeyType = pixKeyTypeMap[pix_key_type.toLowerCase()] || "evp";
-
-    // Call GCP proxy with action for validate_pix_key
-    console.log("[inter-validate-pix] Chamando GCP proxy com action: validate_pix_key");
     
-    const proxyResponse = await fetch(proxyUrl, {
-      method: "POST",
-      headers: { 
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${proxySecret}`
-      },
-      body: JSON.stringify({
-        action: "validate_pix_key",
-        clientId: credentials.client_id,
-        clientSecret: credentials.client_secret,
-        accountNumber: credentials.account_number || "",
-        certificate: certBase64,
-        privateKey: keyBase64,
-        pixKey: pix_key,
-        pixKeyType: mappedKeyType
-      })
-    });
-
-    const responseText = await proxyResponse.text();
-    console.log("[inter-validate-pix] Proxy response status:", proxyResponse.status);
-    console.log("[inter-validate-pix] Proxy response body:", responseText.substring(0, 500));
-
-    let proxyResult;
-    try {
-      proxyResult = JSON.parse(responseText);
-    } catch {
-      console.error("[inter-validate-pix] Erro ao parsear resposta:", responseText);
-      throw new Error("Resposta inválida do proxy");
-    }
-
-    if (proxyResult.error) {
-      console.error("[inter-validate-pix] Erro do proxy:", proxyResult.error);
-      return new Response(
-        JSON.stringify({ 
-          valid: false, 
-          error: proxyResult.error 
-        }),
-        { 
-          status: 200,
-          headers: { ...corsHeaders, "Content-Type": "application/json" } 
-        }
-      );
-    }
-
-    // Format response
-    const result = {
-      valid: proxyResult.valid || false,
-      name: proxyResult.name,
-      document: proxyResult.document,
-      documentMasked: proxyResult.document ? maskDocument(proxyResult.document) : undefined,
-      bank: proxyResult.bank,
-      keyType: pix_key_type.toUpperCase(),
-      error: proxyResult.error
-    };
-
     console.log("[inter-validate-pix] Resultado final:", JSON.stringify(result));
 
     return new Response(
@@ -177,13 +308,3 @@ serve(async (req) => {
     );
   }
 });
-
-function maskDocument(document: string): string {
-  const cleanDoc = document.replace(/\D/g, "");
-  if (cleanDoc.length === 11) {
-    return `***.${cleanDoc.substring(3, 6)}.${cleanDoc.substring(6, 9)}-**`;
-  } else if (cleanDoc.length === 14) {
-    return `**.${cleanDoc.substring(2, 5)}.${cleanDoc.substring(5, 8)}/${cleanDoc.substring(8, 12)}-**`;
-  }
-  return document;
-}
