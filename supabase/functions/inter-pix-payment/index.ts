@@ -188,7 +188,7 @@ serve(async (req) => {
       destinatario: {
         tipo: recipientDoc.length === 11 ? 'FISICA' : 'JURIDICA',
         nome: paymentData.recipientName,
-        contaCorrente: credentials.account_number || ""
+        cpfCnpj: recipientDoc
       },
       dataPagamento: new Date().toISOString().split('T')[0],
       chave: paymentData.pixKey,
