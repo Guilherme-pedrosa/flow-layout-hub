@@ -389,6 +389,9 @@ serve(async (req) => {
     
     console.log('Parsed NFe data:', {
       fornecedor: nfeData.fornecedor.razaoSocial,
+      fornecedorCNPJ: nfeData.fornecedor.cnpj,
+      fornecedorUF: nfeData.fornecedor.uf,
+      fornecedorCidade: nfeData.fornecedor.cidade,
       nota: nfeData.nota.numero,
       itensCount: nfeData.itens.length,
       parcelasCount: nfeData.financeiro.parcelas.length,
