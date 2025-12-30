@@ -200,8 +200,7 @@ Foque no que precisa de atenção. Responda APENAS com o texto do insight, sem J
 
   const { updateOrderStatus } = usePurchaseOrders();
 
-  const handleStatusChange = async (e: React.MouseEvent, orderId: string, newStatusId: string) => {
-    e.stopPropagation();
+  const handleStatusChange = async (orderId: string, newStatusId: string) => {
     try {
       await updateOrderStatus.mutateAsync({ id: orderId, status_id: newStatusId });
     } catch (error) {
@@ -390,7 +389,7 @@ Foque no que precisa de atenção. Responda APENAS com o texto do insight, sem J
                   <TableCell className="text-center" onClick={(e) => e.stopPropagation()}>
                     <Select
                       value={order.status_id || ""}
-                      onValueChange={(value) => handleStatusChange({} as React.MouseEvent, order.id, value)}
+                      onValueChange={(value) => handleStatusChange(order.id, value)}
                     >
                       <SelectTrigger className="h-8 w-[140px] mx-auto">
                         <div className="flex items-center gap-2">

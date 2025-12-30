@@ -36,37 +36,34 @@ export function usePurchaseReceipt() {
 
   // Buscar pedidos pendentes de recebimento (com status que requires_receipt = true)
   const pendingOrdersQuery = useQuery({
-    queryKey: ["purchase_orders_pending_receipt", companyId],
+    queryKey: ["purchase_orders_pending_receipt"],
     queryFn: async (): Promise<any[]> => {
-      // Buscar os status que requerem recebimento (sem filtrar por company_id se não existir)
-      let statusQuery = supabase
+      // Buscar os status que requerem recebimento
+      const { data: statuses, error: statusError } = await supabase
         .from("purchase_order_statuses" as any)
         .select("id")
-        .eq("is_active", true);
-      
-      // Só filtra por company_id se existir
-      if (companyId) {
-        statusQuery = statusQuery.eq("company_id", companyId);
-      }
-      
-      const { data: statuses } = await (statusQuery as any).eq("requires_receipt", true);
+        .eq("is_active", true)
+        .eq("requires_receipt", true);
+
+      console.log("Status que requerem recebimento:", statuses, statusError);
 
       if (!statuses || statuses.length === 0) return [];
       const statusIds = statuses.map((s: any) => s.id);
 
-      // Buscar todos os pedidos de compra
-      const { data: orders } = await supabase
+      console.log("Status IDs:", statusIds);
+
+      // Buscar pedidos que estão nesses status e não estão completos
+      const { data: orders, error: ordersError } = await supabase
         .from("purchase_orders" as any)
-        .select("*");
+        .select("*")
+        .in("status_id", statusIds)
+        .neq("receipt_status", "complete");
+
+      console.log("Pedidos encontrados:", orders, ordersError);
       
-      // Filtrar localmente por status que requer recebimento e não completo
-      const filteredOrders = (orders || []).filter(
-        (order: any) => statusIds.includes(order.status_id) && order.receipt_status !== 'complete'
-      );
+      if (!orders || orders.length === 0) return [];
       
-      if (filteredOrders.length === 0) return [];
-      
-      const supplierIds = filteredOrders.map((d: any) => d.supplier_id).filter(Boolean);
+      const supplierIds = orders.map((d: any) => d.supplier_id).filter(Boolean);
       
       let suppliers: any[] = [];
       if (supplierIds.length > 0) {
@@ -77,7 +74,7 @@ export function usePurchaseReceipt() {
         suppliers = suppliersData || [];
       }
 
-      return filteredOrders.map((order: any) => {
+      return orders.map((order: any) => {
         const supplier = suppliers.find((s: any) => s.id === order.supplier_id);
         return { ...order, supplier };
       });
