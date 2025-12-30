@@ -17,6 +17,7 @@ import Checkout from "./pages/operacao/Checkout";
 import ItensSeparados from "./pages/operacao/ItensSeparados";
 import OrdensServico from "./pages/servicos/OrdensServico";
 import ConfiguracoesOS from "./pages/servicos/ConfiguracoesOS";
+import Comissoes from "./pages/vendas/Comissoes";
 
 // Páginas públicas
 import OrcamentoView from "./pages/public/OrcamentoView";
@@ -85,6 +86,7 @@ const App = () => (
             {/* Operação */}
             <Route path="/vendas" element={<Vendas />} />
             <Route path="/vendas-config" element={<ConfiguracoesVendas />} />
+            <Route path="/comissoes" element={<Comissoes />} />
             <Route path="/checkout" element={<Checkout />} />
             <Route path="/itens-separados" element={<ItensSeparados />} />
             <Route path="/ordens-servico" element={<OrdensServico />} />

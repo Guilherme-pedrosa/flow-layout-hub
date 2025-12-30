@@ -61,6 +61,7 @@ const menuGroups: { label: string; items: MenuItem[] }[] = [
     label: "Operação",
     items: [
       { title: "Vendas", icon: ShoppingCart, href: "/vendas" },
+      { title: "Comissões", icon: Target, href: "/comissoes" },
       { title: "Config. Vendas", icon: Wrench, href: "/vendas-config" },
       { title: "Checkout", icon: CircleDollarSign, href: "/checkout", badge: 3 },
       { title: "Itens Separados", icon: Package, href: "/itens-separados" },
