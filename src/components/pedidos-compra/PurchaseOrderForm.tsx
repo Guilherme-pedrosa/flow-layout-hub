@@ -389,11 +389,34 @@ export function PurchaseOrderForm({ order, onClose }: PurchaseOrderFormProps) {
               <CardTitle className="text-lg">Informações do Pedido</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
+              {/* Validação: tem NF-e vinculada? Bloquear troca de fornecedor */}
+              {order?.nfe_key && (
+                <div className="flex items-center gap-2 p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg text-amber-800 dark:text-amber-200">
+                  <AlertTriangle className="h-4 w-4 shrink-0" />
+                  <span className="text-sm">
+                    Este pedido possui NF-e vinculada. O fornecedor não pode ser alterado.
+                  </span>
+                </div>
+              )}
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Fornecedor *</Label>
                   <div className="flex gap-2">
-                    <Select value={supplierId} onValueChange={setSupplierId}>
+                    <Select 
+                      value={supplierId} 
+                      onValueChange={(newSupplierId) => {
+                        // Bloquear alteração se tem NF-e vinculada
+                        if (order?.nfe_key && order?.supplier_id && newSupplierId !== order.supplier_id) {
+                          toast.error("Não é possível alterar o fornecedor", {
+                            description: "Este pedido possui uma NF-e vinculada. O fornecedor deve corresponder ao emitente da nota fiscal."
+                          });
+                          return;
+                        }
+                        setSupplierId(newSupplierId);
+                      }}
+                      disabled={!!order?.nfe_key}
+                    >
                       <SelectTrigger className="flex-1">
                         <SelectValue placeholder="Selecione o fornecedor" />
                       </SelectTrigger>
@@ -408,6 +431,7 @@ export function PurchaseOrderForm({ order, onClose }: PurchaseOrderFormProps) {
                               e.stopPropagation();
                               setShowCadastroFornecedor(true);
                             }}
+                            disabled={!!order?.nfe_key}
                           >
                             <Plus className="h-4 w-4" />
                             Cadastrar novo fornecedor
