@@ -36,7 +36,6 @@ import {
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import logoPontoAPonto from "@/assets/logo-ponto-a-ponto.png";
 
 interface AppSidebarProps {
   collapsed: boolean;
@@ -135,27 +134,23 @@ export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
   return (
     <aside
       className={cn(
-        "fixed left-0 top-0 z-40 flex h-screen flex-col bg-sidebar transition-all duration-300 ease-in-out",
-        collapsed ? "w-[68px]" : "w-[260px]"
+        "fixed left-0 top-0 z-40 flex h-screen flex-col bg-sidebar transition-all duration-200",
+        collapsed ? "w-16" : "w-60"
       )}
     >
-      {/* Logo Area */}
-      <div className="flex h-16 items-center justify-between border-b border-sidebar-border px-4">
+      {/* Header */}
+      <div className="flex h-14 items-center justify-between border-b border-sidebar-border px-3">
         {!collapsed && (
-          <div className="flex items-center gap-3 animate-fade-in">
-            <img
-              src={logoPontoAPonto}
-              alt="Wedo ERP"
-              className="h-9 object-contain"
-            />
-          </div>
+          <span className="text-sm font-semibold text-sidebar-foreground">
+            Wedo ERP
+          </span>
         )}
         <Button
           variant="ghost"
           size="icon"
           onClick={onToggle}
           className={cn(
-            "h-8 w-8 text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent",
+            "h-8 w-8 text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent",
             collapsed && "mx-auto"
           )}
         >
@@ -164,14 +159,16 @@ export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
       </div>
 
       {/* Navigation */}
-      <ScrollArea className="flex-1 py-4 scrollbar-thin">
-        <nav className="space-y-6 px-3">
+      <ScrollArea className="flex-1 py-2">
+        <nav className="px-2">
           {menuGroups.map((group, groupIndex) => (
-            <div key={groupIndex}>
+            <div key={groupIndex} className={cn(group.label && "mt-4")}>
               {!collapsed && group.label && (
-                <h3 className="mb-2 px-3 text-[11px] font-semibold uppercase tracking-wider text-sidebar-foreground/40">
-                  {group.label}
-                </h3>
+                <div className="px-3 py-2">
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-sidebar-foreground/40">
+                    {group.label}
+                  </span>
+                </div>
               )}
               <ul className="space-y-0.5">
                 {group.items.map((item) => (
@@ -180,24 +177,21 @@ export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
                       to={item.href}
                       className={({ isActive }) =>
                         cn(
-                          "group flex items-center gap-3 rounded-lg px-3 py-2.5 text-[14px] font-medium transition-all duration-200",
+                          "flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors",
                           collapsed && "justify-center px-2",
                           isActive
-                            ? "bg-sidebar-accent text-sidebar-foreground relative before:absolute before:left-0 before:top-1/2 before:-translate-y-1/2 before:w-[3px] before:h-5 before:bg-accent before:rounded-r"
-                            : "text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent/50"
+                            ? "bg-sidebar-accent text-sidebar-foreground"
+                            : "text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent/50"
                         )
                       }
                       title={collapsed ? item.title : undefined}
                     >
-                      <item.icon className={cn(
-                        "h-[18px] w-[18px] shrink-0 transition-colors",
-                        "group-hover:text-sidebar-foreground"
-                      )} />
+                      <item.icon className="h-4 w-4 flex-shrink-0" />
                       {!collapsed && (
                         <>
                           <span className="flex-1 truncate">{item.title}</span>
                           {item.badge && item.badge > 0 && (
-                            <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-accent px-1.5 text-[11px] font-semibold text-accent-foreground">
+                            <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-error text-[10px] font-medium text-error-foreground">
                               {item.badge}
                             </span>
                           )}
@@ -211,15 +205,6 @@ export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
           ))}
         </nav>
       </ScrollArea>
-
-      {/* Footer */}
-      {!collapsed && (
-        <div className="border-t border-sidebar-border p-4">
-          <div className="text-[11px] text-sidebar-foreground/40 text-center">
-            Wedo ERP v2.0
-          </div>
-        </div>
-      )}
     </aside>
   );
 }
