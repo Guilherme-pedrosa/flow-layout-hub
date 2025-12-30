@@ -131,6 +131,219 @@ export type Database = {
           },
         ]
       }
+      ai_insights: {
+        Row: {
+          action_data: Json | null
+          action_label: string | null
+          action_url: string | null
+          category: string
+          company_id: string
+          context: string | null
+          created_at: string
+          dismissed_at: string | null
+          dismissed_by: string | null
+          expires_at: string | null
+          id: string
+          is_dismissed: boolean
+          is_read: boolean
+          message: string
+          metadata: Json | null
+          mode: string
+          priority: number
+          title: string
+          type: string
+          updated_at: string
+        }
+        Insert: {
+          action_data?: Json | null
+          action_label?: string | null
+          action_url?: string | null
+          category: string
+          company_id: string
+          context?: string | null
+          created_at?: string
+          dismissed_at?: string | null
+          dismissed_by?: string | null
+          expires_at?: string | null
+          id?: string
+          is_dismissed?: boolean
+          is_read?: boolean
+          message: string
+          metadata?: Json | null
+          mode: string
+          priority?: number
+          title: string
+          type: string
+          updated_at?: string
+        }
+        Update: {
+          action_data?: Json | null
+          action_label?: string | null
+          action_url?: string | null
+          category?: string
+          company_id?: string
+          context?: string | null
+          created_at?: string
+          dismissed_at?: string | null
+          dismissed_by?: string | null
+          expires_at?: string | null
+          id?: string
+          is_dismissed?: boolean
+          is_read?: boolean
+          message?: string
+          metadata?: Json | null
+          mode?: string
+          priority?: number
+          title?: string
+          type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_insights_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_insights_dismissed_by_fkey"
+            columns: ["dismissed_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ai_reconciliation_rules: {
+        Row: {
+          category: string | null
+          chart_account_id: string | null
+          company_id: string
+          created_at: string
+          description_pattern: string
+          id: string
+          is_active: boolean
+          match_type: string
+          name: string
+          supplier_id: string | null
+          times_used: number
+          updated_at: string
+        }
+        Insert: {
+          category?: string | null
+          chart_account_id?: string | null
+          company_id: string
+          created_at?: string
+          description_pattern: string
+          id?: string
+          is_active?: boolean
+          match_type: string
+          name: string
+          supplier_id?: string | null
+          times_used?: number
+          updated_at?: string
+        }
+        Update: {
+          category?: string | null
+          chart_account_id?: string | null
+          company_id?: string
+          created_at?: string
+          description_pattern?: string
+          id?: string
+          is_active?: boolean
+          match_type?: string
+          name?: string
+          supplier_id?: string | null
+          times_used?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_reconciliation_rules_chart_account_id_fkey"
+            columns: ["chart_account_id"]
+            isOneToOne: false
+            referencedRelation: "chart_of_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_reconciliation_rules_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_reconciliation_rules_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "pessoas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ai_settings: {
+        Row: {
+          auditora_enabled: boolean
+          cash_flow_alert_days: number | null
+          cash_flow_critical_days: number | null
+          cfo_bot_enabled: boolean
+          company_id: string
+          created_at: string
+          email_alerts_enabled: boolean
+          especialista_enabled: boolean
+          executora_enabled: boolean
+          id: string
+          max_purchase_excess_percent: number | null
+          min_margin_threshold: number | null
+          notifications_enabled: boolean
+          stock_alert_days_coverage: number | null
+          updated_at: string
+        }
+        Insert: {
+          auditora_enabled?: boolean
+          cash_flow_alert_days?: number | null
+          cash_flow_critical_days?: number | null
+          cfo_bot_enabled?: boolean
+          company_id: string
+          created_at?: string
+          email_alerts_enabled?: boolean
+          especialista_enabled?: boolean
+          executora_enabled?: boolean
+          id?: string
+          max_purchase_excess_percent?: number | null
+          min_margin_threshold?: number | null
+          notifications_enabled?: boolean
+          stock_alert_days_coverage?: number | null
+          updated_at?: string
+        }
+        Update: {
+          auditora_enabled?: boolean
+          cash_flow_alert_days?: number | null
+          cash_flow_critical_days?: number | null
+          cfo_bot_enabled?: boolean
+          company_id?: string
+          created_at?: string
+          email_alerts_enabled?: boolean
+          especialista_enabled?: boolean
+          executora_enabled?: boolean
+          id?: string
+          max_purchase_excess_percent?: number | null
+          min_margin_threshold?: number | null
+          notifications_enabled?: boolean
+          stock_alert_days_coverage?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_settings_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: true
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       audit_logs: {
         Row: {
           action: string
