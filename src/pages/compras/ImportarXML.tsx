@@ -513,12 +513,10 @@ Responda APENAS com o código CFOP de 4 dígitos mais adequado (ex: 1102 ou 2102
                       <SelectValue placeholder="Selecione o CFOP de entrada..." />
                     </SelectTrigger>
                     <SelectContent className="max-h-[300px]">
-                      <SelectItem value="" disabled>Selecione...</SelectItem>
-                      
                       {/* Operações Estaduais */}
-                      <SelectItem value="header-estadual" disabled className="font-bold text-primary">
-                        --- Estadual (1xxx) ---
-                      </SelectItem>
+                      <div className="px-2 py-1.5 text-sm font-semibold text-primary">
+                        Estadual (1xxx)
+                      </div>
                       {CFOPS_ENTRADA_ESTADUAL.slice(0, 10).map(cfop => (
                         <SelectItem key={cfop.codigo} value={cfop.codigo}>
                           {cfop.codigo} - {cfop.descricao.slice(0, 50)}...
@@ -526,9 +524,9 @@ Responda APENAS com o código CFOP de 4 dígitos mais adequado (ex: 1102 ou 2102
                       ))}
                       
                       {/* Operações Interestaduais */}
-                      <SelectItem value="header-interestadual" disabled className="font-bold text-primary">
-                        --- Interestadual (2xxx) ---
-                      </SelectItem>
+                      <div className="px-2 py-1.5 text-sm font-semibold text-primary border-t mt-1 pt-1">
+                        Interestadual (2xxx)
+                      </div>
                       {CFOPS_ENTRADA_INTERESTADUAL.slice(0, 10).map(cfop => (
                         <SelectItem key={cfop.codigo} value={cfop.codigo}>
                           {cfop.codigo} - {cfop.descricao.slice(0, 50)}...
@@ -536,9 +534,9 @@ Responda APENAS com o código CFOP de 4 dígitos mais adequado (ex: 1102 ou 2102
                       ))}
                       
                       {/* Importação */}
-                      <SelectItem value="header-exterior" disabled className="font-bold text-primary">
-                        --- Importação (3xxx) ---
-                      </SelectItem>
+                      <div className="px-2 py-1.5 text-sm font-semibold text-primary border-t mt-1 pt-1">
+                        Importação (3xxx)
+                      </div>
                       {CFOPS_ENTRADA_EXTERIOR.slice(0, 5).map(cfop => (
                         <SelectItem key={cfop.codigo} value={cfop.codigo}>
                           {cfop.codigo} - {cfop.descricao.slice(0, 50)}...
