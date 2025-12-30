@@ -17,3 +17,4 @@ export { LancamentosPayablesList } from './LancamentosPayablesList';
 export { PaymentLogs, usePaymentLogs } from './PaymentLogs';
 export { PixConfirmationModal } from './PixConfirmationModal';
 export { PixPaymentResultModal } from './PixPaymentResultModal';
+export { ReconciliationReview } from './ReconciliationReview';
