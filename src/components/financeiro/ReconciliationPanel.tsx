@@ -216,6 +216,15 @@ export function ReconciliationPanel() {
       const tx = suggestion.transaction;
       const totalAmount = Math.abs(tx.amount);
 
+      // Buscar situação "Conciliado Automático" para atribuição automática
+      const { data: situacaoAutomatica } = await supabase
+        .from("financial_situations")
+        .select("id")
+        .eq("company_id", companyId)
+        .ilike("name", "%conciliado autom%")
+        .eq("is_active", true)
+        .single();
+
       // 1. Criar registro de conciliação
       const { data: reconciliation, error: recError } = await supabase
         .from("bank_reconciliations")
@@ -256,20 +265,31 @@ export function ReconciliationPanel() {
         })
         .eq("id", tx.id);
 
-      // 4. Atualizar títulos financeiros
+      // 4. Atualizar títulos financeiros com situação automática
       for (const entry of suggestion.entries) {
         const table = entry.type === 'receivable' ? 'accounts_receivable' : 'payables';
         
+        const updateData: Record<string, unknown> = {
+          is_paid: true,
+          paid_at: tx.transaction_date,
+          paid_amount: entry.amount_used,
+          reconciled_at: new Date().toISOString(),
+          reconciliation_id: reconciliation.id,
+          payment_method: 'transferencia'
+        };
+
+        // Adicionar situação financeira automaticamente (Conciliado Automático)
+        if (situacaoAutomatica?.id) {
+          updateData.financial_situation_id = situacaoAutomatica.id;
+        }
+
+        if (entry.type === 'receivable') {
+          updateData.bank_transaction_id = tx.id;
+        }
+        
         await supabase
           .from(table)
-          .update({
-            is_paid: true,
-            paid_at: tx.transaction_date,
-            paid_amount: entry.amount_used,
-            reconciled_at: new Date().toISOString(),
-            reconciliation_id: reconciliation.id,
-            ...(entry.type === 'receivable' ? { bank_transaction_id: tx.id, payment_method: 'transferencia' } : { payment_method: 'transferencia' })
-          })
+          .update(updateData)
           .eq("id", entry.id);
       }
 
