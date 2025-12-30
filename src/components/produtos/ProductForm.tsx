@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ArrowLeft, ArrowRight, Save, X, Loader2 } from "lucide-react";
@@ -11,6 +11,8 @@ import { ProductFormFiscal } from "./ProductFormFiscal";
 import { ProductFormFornecedores } from "./ProductFormFornecedores";
 import { toast } from "sonner";
 import { useProducts } from "@/hooks/useProducts";
+import { AuditValidationBadge } from "@/components/shared/AuditValidationBadge";
+import { useAiAuditora, AuditResult } from "@/hooks/useAiAuditora";
 
 interface ProductImage {
   id?: string;
@@ -165,8 +167,33 @@ export function ProductForm({ initialData, onSubmit, onCancel, isLoading }: Prod
   const [activeTab, setActiveTab] = useState('dados');
   const [isCodeLoading, setIsCodeLoading] = useState(false);
   const [isBarcodeLoading, setIsBarcodeLoading] = useState(false);
+  const [auditResult, setAuditResult] = useState<AuditResult | null>(null);
   
   const { getNextCode, generateBarcode } = useProducts();
+  const { auditProduct, loading: auditLoading } = useAiAuditora();
+
+  // Executar auditoria quando dados mudam
+  useEffect(() => {
+    const runAudit = async () => {
+      if (!formData.description) return;
+      
+      const result = await auditProduct({
+        code: formData.code,
+        description: formData.description,
+        barcode: formData.barcode || undefined,
+        ncm: formData.ncm || undefined,
+        purchase_price: formData.purchase_price,
+        sale_price: formData.final_cost * 1.3, // Estimativa de margem
+        quantity: formData.quantity,
+        min_stock: formData.min_stock,
+        max_stock: formData.max_stock,
+      });
+      setAuditResult(result);
+    };
+    
+    const timeout = setTimeout(runAudit, 500);
+    return () => clearTimeout(timeout);
+  }, [formData.code, formData.description, formData.barcode, formData.ncm, formData.purchase_price, formData.min_stock, formData.max_stock]);
 
   const handleChange = (field: string, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -237,6 +264,12 @@ export function ProductForm({ initialData, onSubmit, onCancel, isLoading }: Prod
 
   return (
     <div className="space-y-6">
+      {/* Badge de Auditoria IA */}
+      <AuditValidationBadge
+        result={auditResult}
+        loading={auditLoading}
+      />
+
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="w-full justify-start">
           {tabs.map(tab => (
