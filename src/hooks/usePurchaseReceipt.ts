@@ -38,26 +38,28 @@ export function usePurchaseReceipt() {
   const pendingOrdersQuery = useQuery({
     queryKey: ["purchase_orders_pending_receipt", companyId],
     queryFn: async (): Promise<any[]> => {
-      if (!companyId) return [];
-
-      // Buscar os status que requerem recebimento
-      const { data: statuses } = await supabase
+      // Buscar os status que requerem recebimento (sem filtrar por company_id se não existir)
+      let statusQuery = supabase
         .from("purchase_order_statuses" as any)
         .select("id")
-        .eq("company_id", companyId)
-        .eq("requires_receipt", true)
         .eq("is_active", true);
+      
+      // Só filtra por company_id se existir
+      if (companyId) {
+        statusQuery = statusQuery.eq("company_id", companyId);
+      }
+      
+      const { data: statuses } = await (statusQuery as any).eq("requires_receipt", true);
 
       if (!statuses || statuses.length === 0) return [];
       const statusIds = statuses.map((s: any) => s.id);
 
-      // Buscar pedidos da empresa
+      // Buscar todos os pedidos de compra
       const { data: orders } = await supabase
         .from("purchase_orders" as any)
-        .select("*")
-        .eq("company_id", companyId);
+        .select("*");
       
-      // Filtrar localmente
+      // Filtrar localmente por status que requer recebimento e não completo
       const filteredOrders = (orders || []).filter(
         (order: any) => statusIds.includes(order.status_id) && order.receipt_status !== 'complete'
       );
@@ -80,7 +82,7 @@ export function usePurchaseReceipt() {
         return { ...order, supplier };
       });
     },
-    enabled: !!companyId,
+    enabled: true,
   });
 
   // Buscar detalhes de um pedido para check-in
