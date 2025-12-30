@@ -181,20 +181,25 @@ serve(async (req) => {
       'aleatoria': 'CHAVE_ALEATORIA'
     };
 
-    // Build PIX payment payload for Inter API
-    const recipientDoc = paymentData.recipientDocument.replace(/[^\d]/g, "");
+    // Build PIX payment payload for Inter API - pagamento por chave PIX
+    // Para PIX por chave, não é necessário enviar destinatario - a chave já identifica o recebedor
     const pixApiPayload = {
       valor: paymentData.amount.toFixed(2),
-      destinatario: {
-        tipo: recipientDoc.length === 11 ? 'FISICA' : 'JURIDICA',
-        nome: paymentData.recipientName,
-        cpfCnpj: recipientDoc
+      chave: paymentData.pixKey,
+      pagador: {
+        cpfCnpj: credentials.account_number ? undefined : paymentData.recipientDocument.replace(/[^\d]/g, ""),
+        contaCorrente: credentials.account_number || undefined
       },
       dataPagamento: new Date().toISOString().split('T')[0],
-      chave: paymentData.pixKey,
-      tipoChave: tipoChaveMap[paymentData.pixKeyType.toLowerCase()] || 'CHAVE_ALEATORIA',
       descricao: (paymentData.description || `PIX para ${paymentData.recipientName}`).substring(0, 140)
     };
+    
+    // Remove campos undefined
+    if (!pixApiPayload.pagador?.cpfCnpj) delete pixApiPayload.pagador?.cpfCnpj;
+    if (!pixApiPayload.pagador?.contaCorrente) delete pixApiPayload.pagador?.contaCorrente;
+    if (pixApiPayload.pagador && Object.keys(pixApiPayload.pagador).length === 0) {
+      delete (pixApiPayload as any).pagador;
+    }
 
     console.log("[inter-pix-payment] 6. PIX API payload:", JSON.stringify(pixApiPayload));
 
