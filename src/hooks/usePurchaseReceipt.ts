@@ -318,6 +318,87 @@ export function usePurchaseReceipt() {
     },
   });
 
+  // Atualizar quantidade de item recebido
+  const updateItemQuantity = useMutation({
+    mutationFn: async ({
+      source,
+      item,
+      newQuantity,
+    }: {
+      source: ReceiptSource;
+      item: ReceiptItem;
+      newQuantity: number;
+    }) => {
+      if (!companyId) throw new Error("Empresa não selecionada");
+      if (newQuantity < 0) throw new Error("Quantidade não pode ser negativa");
+      if (newQuantity > item.quantity_total) throw new Error(`Quantidade máxima: ${item.quantity_total}`);
+
+      let receiptId = source.receipt_id;
+
+      // Se não há recebimento e a quantidade é 0, não fazer nada
+      if (!receiptId && newQuantity === 0) return;
+
+      // Se não há recebimento, criar um
+      if (!receiptId) {
+        receiptId = await startReceipt.mutateAsync(source.id);
+      }
+
+      // Buscar ou criar item de recebimento
+      let receiptItemId = item.receipt_item_id;
+      
+      if (!receiptItemId) {
+        const { data: receiptItem } = await supabase
+          .from("purchase_order_receipt_items")
+          .select("id")
+          .eq("receipt_id", receiptId)
+          .eq("purchase_order_item_id", item.purchase_order_item_id)
+          .maybeSingle();
+
+        receiptItemId = receiptItem?.id;
+      }
+
+      if (!receiptItemId) {
+        // Criar item de recebimento se não existir
+        const { data: newItem, error: createError } = await supabase
+          .from("purchase_order_receipt_items")
+          .insert({
+            receipt_id: receiptId,
+            purchase_order_item_id: item.purchase_order_item_id,
+            product_id: item.product_id,
+            quantity_expected: item.quantity_total,
+            quantity_received: 0,
+          })
+          .select("id")
+          .single();
+
+        if (createError) throw createError;
+        receiptItemId = newItem.id;
+      }
+
+      // Atualizar quantidade recebida
+      const { error: updateError } = await supabase
+        .from("purchase_order_receipt_items")
+        .update({ quantity_received: newQuantity })
+        .eq("id", receiptItemId);
+
+      if (updateError) throw updateError;
+
+      // Registrar log
+      await supabase.from("purchase_order_receipt_logs").insert({
+        receipt_id: receiptId,
+        receipt_item_id: receiptItemId,
+        action: 'quantity_updated',
+        quantity: newQuantity,
+        user_name: 'Usuário',
+      });
+
+      return { receiptId, receiptItemId, newQuantity };
+    },
+    onError: (error) => {
+      toast.error(error.message || "Erro ao atualizar quantidade");
+    },
+  });
+
   // Finalizar recebimento
   const finalizeReceipt = useMutation({
     mutationFn: async (source: ReceiptSource) => {
@@ -422,6 +503,7 @@ export function usePurchaseReceipt() {
     getReceiptDetails,
     startReceipt,
     confirmItem,
+    updateItemQuantity,
     finalizeReceipt,
     resetReceipt,
     refetch: pendingOrdersQuery.refetch,
