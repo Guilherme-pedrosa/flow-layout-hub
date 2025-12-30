@@ -24,7 +24,7 @@ import { PurchaseOrderItems, LocalItem } from "./PurchaseOrderItems";
 import { CadastrarPessoaDialog } from "@/components/shared/CadastrarPessoaDialog";
 import { XMLUploadButton } from "./XMLUploadButton";
 import { PurchaseOrderAIAudit } from "./PurchaseOrderAIAudit";
-import { CFOPS_ENTRADA_ESTADUAL, CFOPS_ENTRADA_INTERESTADUAL, CFOPS_ENTRADA_EXTERIOR } from "@/lib/cfops";
+import { CFOPSelect } from "@/components/shared/CFOPSelect";
 import {
   Table,
   TableBody,
@@ -406,44 +406,9 @@ export function PurchaseOrderForm({ order, onClose }: PurchaseOrderFormProps) {
                 <div className="space-y-2">
                   <Label className="flex items-center gap-2">
                     CFOP de Entrada *
-                    <span className="text-xs text-muted-foreground">(Código Fiscal de Operações)</span>
+                    <span className="text-xs text-muted-foreground">(Código Fiscal de Operações - SEFAZ)</span>
                   </Label>
-                  <Select value={cfopGeral} onValueChange={setCfopGeral}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecione o CFOP..." />
-                    </SelectTrigger>
-                    <SelectContent className="max-h-[300px]">
-                      {/* Operações Estaduais */}
-                      <div className="px-2 py-1.5 text-sm font-semibold text-primary">
-                        Estadual (1xxx)
-                      </div>
-                      {CFOPS_ENTRADA_ESTADUAL.slice(0, 15).map(cfop => (
-                        <SelectItem key={cfop.codigo} value={cfop.codigo}>
-                          {cfop.codigo} - {cfop.descricao.slice(0, 45)}...
-                        </SelectItem>
-                      ))}
-                      
-                      {/* Operações Interestaduais */}
-                      <div className="px-2 py-1.5 text-sm font-semibold text-primary border-t mt-1 pt-1">
-                        Interestadual (2xxx)
-                      </div>
-                      {CFOPS_ENTRADA_INTERESTADUAL.slice(0, 15).map(cfop => (
-                        <SelectItem key={cfop.codigo} value={cfop.codigo}>
-                          {cfop.codigo} - {cfop.descricao.slice(0, 45)}...
-                        </SelectItem>
-                      ))}
-                      
-                      {/* Importação */}
-                      <div className="px-2 py-1.5 text-sm font-semibold text-primary border-t mt-1 pt-1">
-                        Importação (3xxx)
-                      </div>
-                      {CFOPS_ENTRADA_EXTERIOR.slice(0, 10).map(cfop => (
-                        <SelectItem key={cfop.codigo} value={cfop.codigo}>
-                          {cfop.codigo} - {cfop.descricao.slice(0, 45)}...
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <CFOPSelect value={cfopGeral} onValueChange={setCfopGeral} />
                 </div>
               </div>
 
