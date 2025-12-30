@@ -47,13 +47,15 @@ export interface ProductFormData {
   description: string;
   barcode: string;
   product_group: string;
+  group_id: string;
+  subgroup_id: string;
   controls_stock: boolean;
   has_invoice: boolean;
   has_variations: boolean;
   has_composition: boolean;
   unit: string;
   unit_conversions: UnitConversion[];
-  supplier_code: string; // Referência (código do fornecedor)
+  supplier_code: string;
   
   // Detalhes
   weight: number;
@@ -103,6 +105,8 @@ const initialFormData: ProductFormData = {
   description: '',
   barcode: '',
   product_group: '',
+  group_id: '',
+  subgroup_id: '',
   controls_stock: true,
   has_invoice: true,
   has_variations: false,
