@@ -87,10 +87,6 @@ serve(async (req) => {
       const current = salesByProduct.get(item.product_id) || 0;
       salesByProduct.set(item.product_id, current + item.quantity);
     }
-      
-      const current = salesByProduct.get(item.product_id) || 0;
-      salesByProduct.set(item.product_id, current + item.quantity);
-    }
 
     // 3. Buscar fornecedores por produto
     const { data: suppliers } = await supabase
