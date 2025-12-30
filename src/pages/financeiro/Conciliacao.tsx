@@ -8,7 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PageHeader } from "@/components/shared";
-import { ReconciliationModal, ReconciliationReverseModal } from "@/components/financeiro";
+import { ReconciliationModal, ReconciliationReverseModal, ReconciliationPanel } from "@/components/financeiro";
 import {
   RefreshCw,
   Download,
@@ -298,6 +298,10 @@ export default function Conciliacao() {
       {/* Tabs */}
       <Tabs defaultValue="pendentes" className="space-y-4">
         <TabsList>
+          <TabsTrigger value="sugestoes">
+            Sugestões IA
+            <Badge className="ml-2 bg-primary/20 text-primary">Novo</Badge>
+          </TabsTrigger>
           <TabsTrigger value="pendentes">
             Pendentes de Conciliação
             <Badge variant="destructive" className="ml-2">{allPendingTransactions.length}</Badge>
@@ -311,6 +315,11 @@ export default function Conciliacao() {
             <Badge variant="secondary" className="ml-2">{receivables.length}</Badge>
           </TabsTrigger>
         </TabsList>
+
+        {/* Tab: Sugestões IA */}
+        <TabsContent value="sugestoes" className="space-y-4">
+          <ReconciliationPanel />
+        </TabsContent>
 
         {/* Tab: Pendentes de Conciliação */}
         <TabsContent value="pendentes" className="space-y-4">
