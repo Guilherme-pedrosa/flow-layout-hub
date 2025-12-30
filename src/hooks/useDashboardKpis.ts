@@ -4,87 +4,80 @@ import { KpiData } from '@/lib/types';
 import { getCurrentMonthRange } from '@/lib/utils';
 import { subMonths, startOfMonth, endOfMonth } from 'date-fns';
 
-export function useDashboardKpis() {
+async function fetchSalesTotal(startDate: Date, endDate: Date, companyId?: string | null) {
+  let query = supabase
+    .from('sales')
+    .select('total_value')
+    .gte('created_at', startDate.toISOString())
+    .lte('created_at', endDate.toISOString());
+  
+  if (companyId) {
+    query = query.eq('company_id', companyId);
+  }
+  
+  const { data } = await query;
+  return data?.reduce((sum, item) => sum + (item.total_value || 0), 0) || 0;
+}
+
+async function fetchPayablesTotal(isPaid: boolean, companyId?: string | null, maxDueDate?: Date) {
+  let query = supabase.from('payables').select('amount').eq('is_paid', isPaid);
+  if (maxDueDate) query = query.lte('due_date', maxDueDate.toISOString());
+  if (companyId) query = query.eq('company_id', companyId);
+  
+  const { data } = await query;
+  return data?.reduce((sum, item) => sum + (item.amount || 0), 0) || 0;
+}
+
+async function fetchReceivablesTotal(isPaid: boolean, companyId?: string | null, maxDueDate?: Date) {
+  let query = supabase.from('accounts_receivable').select('amount').eq('is_paid', isPaid);
+  if (maxDueDate) query = query.lte('due_date', maxDueDate.toISOString());
+  if (companyId) query = query.eq('company_id', companyId);
+  
+  const { data } = await query;
+  return data?.reduce((sum, item) => sum + (item.amount || 0), 0) || 0;
+}
+
+async function fetchLowStockCount(companyId?: string | null) {
+  let query: any = supabase
+    .from('products')
+    .select('id, quantity, min_stock')
+    .eq('is_active', true)
+    .eq('controls_stock', true);
+  
+  if (companyId) {
+    query = query.eq('company_id', companyId);
+  }
+  
+  const { data } = await query;
+  return (data as any[])?.filter((p) => (p.quantity || 0) < (p.min_stock || 0)).length || 0;
+}
+
+export function useDashboardKpis(companyId?: string | null) {
   return useQuery<KpiData[], Error>({
-    queryKey: ['dashboard', 'kpis'],
+    queryKey: ['dashboard', 'kpis', companyId],
     queryFn: async () => {
       const { start, end } = getCurrentMonthRange();
       const now = new Date();
       const prevStart = startOfMonth(subMonths(now, 1));
       const prevEnd = endOfMonth(subMonths(now, 1));
 
-      // Executa todas as queries em paralelo
       const [
-        salesResult,
-        prevSalesResult,
-        payablesResult,
-        prevPayablesResult,
-        receivablesResult,
-        prevReceivablesResult,
-        lowStockResult,
+        sales,
+        prevSales,
+        payables,
+        prevPayables,
+        receivables,
+        prevReceivables,
+        lowStockCount,
       ] = await Promise.all([
-        // 1. Vendas do mês atual
-        supabase
-          .from('sales')
-          .select('total_value')
-          .gte('created_at', start.toISOString())
-          .lte('created_at', end.toISOString()),
-
-        // 2. Vendas do mês anterior
-        supabase
-          .from('sales')
-          .select('total_value')
-          .gte('created_at', prevStart.toISOString())
-          .lte('created_at', prevEnd.toISOString()),
-
-        // 3. Contas a pagar (pendentes)
-        supabase
-          .from('payables')
-          .select('amount')
-          .eq('is_paid', false),
-
-        // 4. Contas a pagar do mês anterior
-        supabase
-          .from('payables')
-          .select('amount')
-          .eq('is_paid', false)
-          .lte('due_date', prevEnd.toISOString()),
-
-        // 5. Contas a receber (pendentes)
-        supabase
-          .from('accounts_receivable')
-          .select('amount')
-          .eq('is_paid', false),
-
-        // 6. Contas a receber do mês anterior
-        supabase
-          .from('accounts_receivable')
-          .select('amount')
-          .eq('is_paid', false)
-          .lte('due_date', prevEnd.toISOString()),
-
-        // 7. Produtos com estoque baixo
-        supabase
-          .from('products')
-          .select('id, quantity, min_stock')
-          .eq('is_active', true)
-          .eq('controls_stock', true),
+        fetchSalesTotal(start, end, companyId),
+        fetchSalesTotal(prevStart, prevEnd, companyId),
+        fetchPayablesTotal(false, companyId),
+        fetchPayablesTotal(false, companyId, prevEnd),
+        fetchReceivablesTotal(false, companyId),
+        fetchReceivablesTotal(false, companyId, prevEnd),
+        fetchLowStockCount(companyId),
       ]);
-
-      // Calcula os totais
-      const sales = salesResult.data?.reduce((sum, item) => sum + (item.total_value || 0), 0) || 0;
-      const prevSales = prevSalesResult.data?.reduce((sum, item) => sum + (item.total_value || 0), 0) || 0;
-      
-      const payables = payablesResult.data?.reduce((sum, item) => sum + (item.amount || 0), 0) || 0;
-      const prevPayables = prevPayablesResult.data?.reduce((sum, item) => sum + (item.amount || 0), 0) || 0;
-      
-      const receivables = receivablesResult.data?.reduce((sum, item) => sum + (item.amount || 0), 0) || 0;
-      const prevReceivables = prevReceivablesResult.data?.reduce((sum, item) => sum + (item.amount || 0), 0) || 0;
-
-      // Conta produtos com estoque baixo
-      const lowStockCount = lowStockResult.data?.filter(
-        (p) => (p.quantity || 0) < (p.min_stock || 0)
-      ).length || 0;
 
       return [
         {
@@ -125,7 +118,7 @@ export function useDashboardKpis() {
         },
       ] as KpiData[];
     },
-    staleTime: 5 * 60 * 1000, // 5 minutos
+    staleTime: 5 * 60 * 1000,
     refetchOnWindowFocus: true,
   });
 }

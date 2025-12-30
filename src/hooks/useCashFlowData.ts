@@ -11,9 +11,9 @@ export interface CashFlowPoint {
   saldo: number;
 }
 
-export function useCashFlowData(months: number = 6) {
+export function useCashFlowData(months: number = 6, companyId?: string | null) {
   return useQuery<CashFlowPoint[], Error>({
-    queryKey: ['dashboard', 'cashFlow', months],
+    queryKey: ['dashboard', 'cashFlow', months, companyId],
     queryFn: async () => {
       const results: CashFlowPoint[] = [];
 
@@ -23,21 +23,31 @@ export function useCashFlowData(months: number = 6) {
         const start = startOfMonth(targetMonth);
         const end = endOfMonth(targetMonth);
 
-        // Busca receitas (contas a receber pagas)
-        const { data: receivablesData } = await supabase
+        // Build queries
+        let receivablesQuery = supabase
           .from('accounts_receivable')
           .select('paid_amount')
           .eq('is_paid', true)
           .gte('paid_at', start.toISOString())
           .lte('paid_at', end.toISOString());
 
-        // Busca despesas (contas a pagar pagas)
-        const { data: payablesData } = await supabase
+        let payablesQuery = supabase
           .from('payables')
           .select('paid_amount')
           .eq('is_paid', true)
           .gte('paid_at', start.toISOString())
           .lte('paid_at', end.toISOString());
+
+        // Apply company filter if provided
+        if (companyId) {
+          receivablesQuery = receivablesQuery.eq('company_id', companyId);
+          payablesQuery = payablesQuery.eq('company_id', companyId);
+        }
+
+        const [{ data: receivablesData }, { data: payablesData }] = await Promise.all([
+          receivablesQuery,
+          payablesQuery,
+        ]);
 
         const receitas = receivablesData?.reduce((sum, item) => sum + (item.paid_amount || 0), 0) || 0;
         const despesas = payablesData?.reduce((sum, item) => sum + (item.paid_amount || 0), 0) || 0;
@@ -53,6 +63,6 @@ export function useCashFlowData(months: number = 6) {
 
       return results;
     },
-    staleTime: 10 * 60 * 1000, // 10 minutos
+    staleTime: 10 * 60 * 1000,
   });
 }
