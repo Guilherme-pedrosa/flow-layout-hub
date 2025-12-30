@@ -94,6 +94,7 @@ const menuGroups: MenuGroup[] = [
       { title: "Comissões", icon: Target, href: "/comissoes" },
       { title: "Checkout", icon: CircleDollarSign, href: "/checkout", badge: 3 },
       { title: "Itens Separados", icon: Package, href: "/itens-separados" },
+      { title: "Configurações", icon: UserCog, href: "/vendas-config" },
     ],
   },
   {
@@ -101,6 +102,7 @@ const menuGroups: MenuGroup[] = [
     items: [
       { title: "Lista de OS", icon: ClipboardList, href: "/ordens-servico" },
       { title: "Faturar OS", icon: Receipt, href: "/faturar-os", badge: 2 },
+      { title: "Configurações", icon: UserCog, href: "/ordens-servico-config" },
     ],
   },
   {
@@ -111,6 +113,7 @@ const menuGroups: MenuGroup[] = [
       { title: "Aprovações", icon: CheckSquare, href: "/aprovacoes", badge: 5 },
       { title: "Notas de Compra", icon: FileSpreadsheet, href: "/notas-compra" },
       { title: "Importar XML", icon: FileSpreadsheet, href: "/importar-xml" },
+      { title: "Configurações", icon: UserCog, href: "/compras-config" },
     ],
   },
   {
