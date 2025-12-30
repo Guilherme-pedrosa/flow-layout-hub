@@ -169,54 +169,94 @@ serve(async (req) => {
     
     console.log("[inter-pix-payment] 5. Credenciais encontradas - client_id:", credentials.client_id?.substring(0, 8) + "...");
 
-    // Download certificates from storage
-    console.log("[inter-pix-payment] 6. Baixando certificados...");
-    
-    const { data: certData } = await supabase.storage
-      .from("inter-certs")
-      .download(credentials.certificate_file_path);
-    
-    const { data: keyData } = await supabase.storage
-      .from("inter-certs")
-      .download(credentials.private_key_file_path);
+    // Map PIX key type to Inter API format
+    const tipoChaveMap: Record<string, string> = {
+      'cpf': 'CPF',
+      'cnpj': 'CNPJ',
+      'email': 'EMAIL',
+      'telefone': 'TELEFONE',
+      'celular': 'TELEFONE',
+      'phone': 'TELEFONE',
+      'evp': 'CHAVE_ALEATORIA',
+      'aleatoria': 'CHAVE_ALEATORIA'
+    };
 
-    if (!certData || !keyData) {
-      throw new Error("Certificados não encontrados no storage");
-    }
+    // Build PIX payment payload for Inter API
+    const recipientDoc = paymentData.recipientDocument.replace(/[^\d]/g, "");
+    const pixApiPayload = {
+      valor: paymentData.amount.toFixed(2),
+      destinatario: {
+        tipo: recipientDoc.length === 11 ? 'FISICA' : 'JURIDICA',
+        nome: paymentData.recipientName,
+        contaCorrente: credentials.account_number || ""
+      },
+      dataPagamento: new Date().toISOString().split('T')[0],
+      chave: paymentData.pixKey,
+      tipoChave: tipoChaveMap[paymentData.pixKeyType.toLowerCase()] || 'CHAVE_ALEATORIA',
+      descricao: (paymentData.description || `PIX para ${paymentData.recipientName}`).substring(0, 140)
+    };
 
-    const certificate = await certData.text();
-    const privateKey = await keyData.text();
-
-    // Encode to base64 for the proxy
-    const certificateBase64 = btoa(certificate);
-    const privateKeyBase64 = btoa(privateKey);
-
-    console.log("[inter-pix-payment] 7. Certificados carregados, enviando para proxy...");
+    console.log("[inter-pix-payment] 6. PIX API payload:", JSON.stringify(pixApiPayload));
 
     try {
-      // Call the GCP proxy with all payment data
-      const proxyPayload = {
-        pixKey: paymentData.pixKey,
-        pixKeyType: paymentData.pixKeyType,
-        amount: paymentData.amount,
-        recipientName: paymentData.recipientName,
-        recipientDocument: paymentData.recipientDocument.replace(/[^\d]/g, ""),
-        description: paymentData.description || `PIX para ${paymentData.recipientName}`,
-        clientId: credentials.client_id,
-        clientSecret: credentials.client_secret,
-        accountNumber: credentials.account_number || "",
-        certificate: certificateBase64,
-        privateKey: privateKeyBase64,
+      // First, get OAuth token via proxy
+      console.log("[inter-pix-payment] 7. Obtendo token OAuth via proxy...");
+      
+      const tokenPayload = new URLSearchParams({
+        client_id: credentials.client_id,
+        client_secret: credentials.client_secret,
+        scope: 'pagamento-pix.write pagamento-pix.read',
+        grant_type: 'client_credentials'
+      }).toString();
+
+      const tokenProxyPayload = {
+        method: "POST",
+        url: "https://cdpj.partners.bancointer.com.br/oauth/v2/token",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded"
+        },
+        data: tokenPayload
       };
 
-      console.log("[inter-pix-payment] 8. Proxy payload (sem secrets):", JSON.stringify({
-        pixKey: proxyPayload.pixKey,
-        pixKeyType: proxyPayload.pixKeyType,
-        amount: proxyPayload.amount,
-        recipientName: proxyPayload.recipientName,
-        recipientDocument: proxyPayload.recipientDocument,
-        description: proxyPayload.description,
-      }));
+      console.log("[inter-pix-payment] 8. Token proxy request:", JSON.stringify({ url: tokenProxyPayload.url }));
+
+      const tokenResponse = await fetch(proxyUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${proxySecret}`,
+        },
+        body: JSON.stringify(tokenProxyPayload),
+      });
+
+      const tokenText = await tokenResponse.text();
+      console.log("[inter-pix-payment] 9. Token response status:", tokenResponse.status);
+      
+      if (!tokenResponse.ok) {
+        console.error("[inter-pix-payment] Token error:", tokenText);
+        throw new Error(`Erro ao obter token OAuth: ${tokenText}`);
+      }
+
+      const tokenData = JSON.parse(tokenText);
+      if (!tokenData.access_token) {
+        throw new Error(`Token inválido: ${tokenText}`);
+      }
+
+      console.log("[inter-pix-payment] 10. Token obtido com sucesso");
+
+      // Now send PIX payment via proxy
+      console.log("[inter-pix-payment] 11. Enviando pagamento PIX via proxy...");
+
+      const pixProxyPayload = {
+        method: "POST",
+        url: "https://cdpj.partners.bancointer.com.br/banking/v2/pix",
+        headers: {
+          "Authorization": `Bearer ${tokenData.access_token}`,
+          "Content-Type": "application/json",
+          "x-conta-corrente": credentials.account_number || ""
+        },
+        data: JSON.stringify(pixApiPayload)
+      };
 
       const proxyResponse = await fetch(proxyUrl, {
         method: "POST",
@@ -224,7 +264,7 @@ serve(async (req) => {
           "Content-Type": "application/json",
           "Authorization": `Bearer ${proxySecret}`,
         },
-        body: JSON.stringify(proxyPayload),
+        body: JSON.stringify(pixProxyPayload),
       });
 
       const responseText = await proxyResponse.text();
