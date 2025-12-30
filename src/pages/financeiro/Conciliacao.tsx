@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,6 +9,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PageHeader } from "@/components/shared";
 import { ReconciliationModal, ReconciliationReverseModal, ReconciliationPanel } from "@/components/financeiro";
+import { AIBannerEnhanced } from "@/components/shared/AIBannerEnhanced";
+import { useAiInsights } from "@/hooks/useAiInsights";
 import {
   RefreshCw,
   Download,
@@ -67,6 +69,35 @@ export default function Conciliacao() {
   const [syncing, setSyncing] = useState(false);
   const [transactions, setTransactions] = useState<BankTransaction[]>([]);
   const [receivables, setReceivables] = useState<AccountReceivable[]>([]);
+  
+  // AI Insights para conciliação
+  const { insights, dismiss, markAsRead } = useAiInsights('financial');
+  
+  // Gerar insights locais baseados nos dados
+  const localInsights = useMemo(() => {
+    const result: any[] = [];
+    
+    // Verifica transações pendentes de conciliação
+    const pendingCount = transactions.filter(t => !t.is_reconciled).length;
+    if (pendingCount > 0) {
+      result.push({
+        id: 'pending_reconciliation',
+        type: 'info' as const,
+        category: 'financial' as const,
+        mode: 'executora' as const,
+        title: 'Conciliação Pendente',
+        message: `Existem ${pendingCount} transações aguardando conciliação. A IA pode conciliar automaticamente as transações com padrões identificados.`,
+        action_label: 'Ver Pendentes',
+        action_url: '/conciliacao',
+        priority: 1,
+        is_read: false,
+        is_dismissed: false,
+        created_at: new Date().toISOString(),
+      });
+    }
+    
+    return result;
+  }, [transactions]);
   const [hasCredentials, setHasCredentials] = useState(false);
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [receivableFilter, setReceivableFilter] = useState<string>("all");
@@ -202,6 +233,14 @@ export default function Conciliacao() {
         title="Conciliação Bancária"
         description="Vincule transações do extrato a títulos financeiros"
         breadcrumbs={[{ label: "Financeiro" }, { label: "Conciliação" }]}
+      />
+
+      {/* AI Banner */}
+      <AIBannerEnhanced
+        insights={[...insights, ...localInsights]}
+        onDismiss={dismiss}
+        onMarkAsRead={markAsRead}
+        defaultMessage="IA monitorando conciliação bancária em tempo real"
       />
 
       {!hasCredentials && (

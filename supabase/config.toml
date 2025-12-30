@@ -41,3 +41,15 @@ verify_jwt = false
 
 [functions.focusnfe]
 verify_jwt = false
+
+[functions.monitor-financial-health]
+verify_jwt = false
+
+[functions.monitor-stock-levels]
+verify_jwt = false
+
+[functions.purchase-suggestion]
+verify_jwt = false
+
+[functions.calculate-commissions]
+verify_jwt = false
