@@ -24,21 +24,27 @@ import {
   Edit,
   QrCode,
   Receipt,
-  CheckCircle,
   Copy,
   Trash2,
   ShoppingCart,
-  AlertTriangle,
-  Clock,
-  Calendar,
   ArrowUpDown,
   Link2,
 } from "lucide-react";
-import { format, parseISO, isBefore, startOfDay } from "date-fns";
+import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
-import { toast } from "sonner";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { SituationSelect } from "./SituationSelect";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
+
+interface FinancialSituation {
+  id: string;
+  name: string;
+  color: string;
+  confirms_payment: boolean;
+  allows_manual_change: boolean;
+}
 
 export interface PayableRow {
   id: string;
@@ -59,6 +65,7 @@ export interface PayableRow {
   is_paid: boolean;
   paid_at: string | null;
   reconciliation_id: string | null;
+  financial_situation_id: string | null;
   supplier?: {
     razao_social: string | null;
     nome_fantasia: string | null;
@@ -67,6 +74,7 @@ export interface PayableRow {
   purchase_order?: {
     order_number: number;
   } | null;
+  financial_situation?: FinancialSituation | null;
 }
 
 interface PayablesTableProps {
@@ -78,8 +86,8 @@ interface PayablesTableProps {
   onDelete: (payable: PayableRow) => void;
   onPayPix: (payable: PayableRow) => void;
   onPayBoleto: (payable: PayableRow) => void;
-  onMarkAsPaid: (payable: PayableRow) => void;
   onDuplicate: (payable: PayableRow) => void;
+  onRefresh?: () => void;
   loading?: boolean;
 }
 
@@ -99,8 +107,8 @@ export function PayablesTable({
   onDelete,
   onPayPix,
   onPayBoleto,
-  onMarkAsPaid,
   onDuplicate,
+  onRefresh,
   loading,
 }: PayablesTableProps) {
   const [sortField, setSortField] = useState<"due_date" | "amount" | "supplier">("due_date");
@@ -139,53 +147,22 @@ export function PayablesTable({
     return sortOrder === "asc" ? comparison : -comparison;
   });
 
-  const getStatusBadge = (payable: PayableRow) => {
-    const today = startOfDay(new Date());
-    const dueDate = startOfDay(parseISO(payable.due_date));
-    const isOverdue = isBefore(dueDate, today);
-    const isReconciled = !!payable.reconciliation_id;
+  // Handler para atualizar situação financeira
+  const handleSituationChange = async (payableId: string, situationId: string) => {
+    try {
+      const { error } = await supabase
+        .from("payables")
+        .update({ financial_situation_id: situationId })
+        .eq("id", payableId);
 
-    if (payable.is_paid) {
-      return (
-        <div className="flex flex-wrap gap-1">
-          <Badge className="bg-emerald-500/10 text-emerald-600 border-emerald-500/30 hover:bg-emerald-500/20">
-            <CheckCircle className="mr-1 h-3 w-3" />
-            Pago
-          </Badge>
-          {isReconciled && (
-            <Badge variant="outline" className="bg-teal-500/10 text-teal-600 border-teal-500/30">
-              <Link2 className="mr-1 h-3 w-3" />
-              Conciliado
-            </Badge>
-          )}
-        </div>
-      );
+      if (error) throw error;
+      
+      toast.success("Situação atualizada");
+      onRefresh?.();
+    } catch (error) {
+      console.error("Erro ao atualizar situação:", error);
+      toast.error("Erro ao atualizar situação");
     }
-
-    if (payable.payment_status === "sent_to_bank" || payable.payment_status === "submitted_for_approval") {
-      return (
-        <Badge className="bg-purple-500/10 text-purple-600 border-purple-500/30 hover:bg-purple-500/20">
-          <Calendar className="mr-1 h-3 w-3" />
-          Agendado
-        </Badge>
-      );
-    }
-
-    if (isOverdue) {
-      return (
-        <Badge className="bg-red-500/10 text-red-600 border-red-500/30 hover:bg-red-500/20">
-          <AlertTriangle className="mr-1 h-3 w-3" />
-          Vencida
-        </Badge>
-      );
-    }
-
-    return (
-      <Badge className="bg-amber-500/10 text-amber-600 border-amber-500/30 hover:bg-amber-500/20">
-        <Clock className="mr-1 h-3 w-3" />
-        Pendente
-      </Badge>
-    );
   };
 
   const getPaymentMethodBadge = (method: string | null) => {
@@ -292,19 +269,13 @@ export function PayablesTable({
                     {!payable.is_paid && payable.pix_key && (
                       <DropdownMenuItem onClick={() => onPayPix(payable)}>
                         <QrCode className="mr-2 h-4 w-4 text-emerald-600" />
-                        Pagar com PIX
+                        Enviar para Aprovação
                       </DropdownMenuItem>
                     )}
                     {!payable.is_paid && payable.boleto_barcode && (
                       <DropdownMenuItem onClick={() => onPayBoleto(payable)}>
                         <Receipt className="mr-2 h-4 w-4 text-blue-600" />
-                        Pagar Boleto
-                      </DropdownMenuItem>
-                    )}
-                    {!payable.is_paid && (
-                      <DropdownMenuItem onClick={() => onMarkAsPaid(payable)}>
-                        <CheckCircle className="mr-2 h-4 w-4 text-emerald-600" />
-                        Marcar como pago
+                        Enviar Boleto
                       </DropdownMenuItem>
                     )}
                     <DropdownMenuSeparator />
@@ -331,7 +302,15 @@ export function PayablesTable({
                   {format(parseISO(payable.due_date), "dd/MM/yyyy")}
                 </span>
                 {getPaymentMethodBadge(payable.payment_method_type)}
-                {getStatusBadge(payable)}
+              </div>
+
+              {/* Situação */}
+              <div className="pt-1">
+                <SituationSelect
+                  value={payable.financial_situation_id}
+                  onValueChange={(situationId) => handleSituationChange(payable.id, situationId)}
+                  className="w-full"
+                />
               </div>
 
               {/* Footer */}
@@ -347,7 +326,7 @@ export function PayablesTable({
                     className="h-8 text-xs gap-1"
                   >
                     <QrCode className="h-3.5 w-3.5" />
-                    Pagar
+                    Enviar
                   </Button>
                 )}
               </div>
@@ -406,7 +385,7 @@ export function PayablesTable({
                 <ArrowUpDown className="ml-1 h-3 w-3" />
               </Button>
             </TableHead>
-            <TableHead>Status</TableHead>
+            <TableHead>Situação</TableHead>
             <TableHead className="w-12"></TableHead>
           </TableRow>
         </TableHeader>
@@ -472,7 +451,12 @@ export function PayablesTable({
                     {formatCurrency(payable.amount)}
                   </span>
                 </TableCell>
-                <TableCell>{getStatusBadge(payable)}</TableCell>
+                <TableCell>
+                  <SituationSelect
+                    value={payable.financial_situation_id}
+                    onValueChange={(situationId) => handleSituationChange(payable.id, situationId)}
+                  />
+                </TableCell>
                 <TableCell>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
@@ -502,21 +486,14 @@ export function PayablesTable({
                       {!payable.is_paid && payable.pix_key && (
                         <DropdownMenuItem onClick={() => onPayPix(payable)}>
                           <QrCode className="mr-2 h-4 w-4 text-emerald-600" />
-                          Pagar com PIX
+                          Enviar para Aprovação
                         </DropdownMenuItem>
                       )}
                       
                       {!payable.is_paid && payable.boleto_barcode && (
                         <DropdownMenuItem onClick={() => onPayBoleto(payable)}>
                           <Receipt className="mr-2 h-4 w-4 text-blue-600" />
-                          Pagar Boleto
-                        </DropdownMenuItem>
-                      )}
-                      
-                      {!payable.is_paid && (
-                        <DropdownMenuItem onClick={() => onMarkAsPaid(payable)}>
-                          <CheckCircle className="mr-2 h-4 w-4 text-emerald-600" />
-                          Marcar como pago
+                          Enviar Boleto
                         </DropdownMenuItem>
                       )}
                       

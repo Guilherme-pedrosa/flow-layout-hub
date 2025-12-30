@@ -1,11 +1,10 @@
 import { Button } from "@/components/ui/button";
-import { Send, CheckCircle, Trash2, X, Loader2 } from "lucide-react";
+import { Send, Trash2, X, Loader2 } from "lucide-react";
 
 interface PayablesBulkActionsProps {
   selectedCount: number;
   totalAmount: number;
   onSubmitToBank: () => void;
-  onMarkAsPaid: () => void;
   onDelete: () => void;
   onClearSelection: () => void;
   isProcessing?: boolean;
@@ -22,7 +21,6 @@ export function PayablesBulkActions({
   selectedCount,
   totalAmount,
   onSubmitToBank,
-  onMarkAsPaid,
   onDelete,
   onClearSelection,
   isProcessing,
@@ -60,18 +58,7 @@ export function PayablesBulkActions({
             ) : (
               <Send className="h-4 w-4" />
             )}
-            Pagar em Lote
-          </Button>
-
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={onMarkAsPaid}
-            disabled={isProcessing}
-            className="gap-2"
-          >
-            <CheckCircle className="h-4 w-4" />
-            <span className="hidden sm:inline">Marcar Pago</span>
+            Enviar para Aprovação
           </Button>
 
           <Button

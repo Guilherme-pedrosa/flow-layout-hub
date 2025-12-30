@@ -314,26 +314,7 @@ export function PayablesPage({ onRefresh }: PayablesPageProps) {
     toast.info("Processando pagamento de boleto...");
   };
 
-  const handleMarkAsPaid = async (payable: PayableRow) => {
-    try {
-      const { error } = await supabase
-        .from("payables")
-        .update({
-          is_paid: true,
-          paid_at: new Date().toISOString(),
-          payment_status: "paid",
-        })
-        .eq("id", payable.id);
-
-      if (error) throw error;
-      
-      toast.success("Conta marcada como paga");
-      fetchPayables();
-    } catch (error) {
-      console.error("Erro ao marcar como pago:", error);
-      toast.error("Erro ao atualizar conta");
-    }
-  };
+  // Removido: handleMarkAsPaid - pagamento só via conciliação
 
   const handleDuplicate = async (payable: PayableRow) => {
     try {
@@ -434,30 +415,7 @@ export function PayablesPage({ onRefresh }: PayablesPageProps) {
     }
   };
 
-  const handleBulkMarkAsPaid = async () => {
-    setProcessing(true);
-    try {
-      for (const id of selectedIds) {
-        await supabase
-          .from("payables")
-          .update({
-            is_paid: true,
-            paid_at: new Date().toISOString(),
-            payment_status: "paid",
-          })
-          .eq("id", id);
-      }
-
-      toast.success(`${selectedIds.size} conta(s) marcada(s) como paga(s)`);
-      setSelectedIds(new Set());
-      fetchPayables();
-    } catch (error) {
-      console.error("Erro:", error);
-      toast.error("Erro ao atualizar contas");
-    } finally {
-      setProcessing(false);
-    }
-  };
+  // Removido: handleBulkMarkAsPaid - pagamento só via conciliação
 
   const handleBulkDelete = async () => {
     setProcessing(true);
@@ -538,8 +496,8 @@ export function PayablesPage({ onRefresh }: PayablesPageProps) {
         onDelete={handleDelete}
         onPayPix={handlePayPix}
         onPayBoleto={handlePayBoleto}
-        onMarkAsPaid={handleMarkAsPaid}
         onDuplicate={handleDuplicate}
+        onRefresh={fetchPayables}
         loading={loading}
       />
 
@@ -548,7 +506,6 @@ export function PayablesPage({ onRefresh }: PayablesPageProps) {
         selectedCount={selectedIds.size}
         totalAmount={selectedTotal}
         onSubmitToBank={handleBulkSubmit}
-        onMarkAsPaid={handleBulkMarkAsPaid}
         onDelete={handleBulkDelete}
         onClearSelection={() => setSelectedIds(new Set())}
         isProcessing={processing}
