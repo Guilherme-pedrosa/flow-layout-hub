@@ -14,3 +14,6 @@ export { PaymentApprovalList } from './PaymentApprovalList';
 export { DDABoletosList } from './DDABoletosList';
 export { ExtratoList } from './ExtratoList';
 export { LancamentosPayablesList } from './LancamentosPayablesList';
+export { PaymentLogs, usePaymentLogs } from './PaymentLogs';
+export { PixConfirmationModal } from './PixConfirmationModal';
+export { PixPaymentResultModal } from './PixPaymentResultModal';
