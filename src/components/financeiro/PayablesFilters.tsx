@@ -13,8 +13,10 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { Search, ChevronLeft, ChevronRight, Settings2, X } from "lucide-react";
-import { format, addMonths, subMonths, startOfMonth, endOfMonth } from "date-fns";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
+import { Search, ChevronLeft, ChevronRight, Settings2, X, CalendarDays } from "lucide-react";
+import { format, addMonths, subMonths, startOfMonth } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
@@ -46,7 +48,15 @@ const CATEGORIES = [
   { value: "fornecedores", label: "Fornecedores" },
   { value: "servicos", label: "Serviços" },
   { value: "equipamentos", label: "Equipamentos" },
+  { value: "marketing", label: "Marketing" },
   { value: "outros", label: "Outros" },
+];
+
+const PAYMENT_METHODS = [
+  { value: "pix", label: "PIX" },
+  { value: "boleto", label: "Boleto" },
+  { value: "transferencia", label: "Transferência" },
+  { value: "outro", label: "Outro" },
 ];
 
 export function PayablesFilters({
@@ -55,6 +65,14 @@ export function PayablesFilters({
   showCategoryFilter = true,
 }: PayablesFiltersProps) {
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [visibleColumns, setVisibleColumns] = useState({
+    description: true,
+    supplier: true,
+    category: true,
+    dueDate: true,
+    amount: true,
+    status: true,
+  });
 
   useEffect(() => {
     const fetchSuppliers = async () => {
@@ -107,35 +125,41 @@ export function PayablesFilters({
     });
   };
 
+  const isCurrentMonth = format(filters.currentMonth, "MM-yyyy") === format(new Date(), "MM-yyyy");
+
   return (
     <div className="space-y-4">
-      {/* Month Navigator */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
+      {/* Month Navigator - Layout profissional */}
+      <div className="flex items-center justify-between bg-muted/30 rounded-lg p-2">
+        <div className="flex items-center gap-1">
           <Button
-            variant="outline"
+            variant="ghost"
             size="icon"
             onClick={handlePreviousMonth}
-            className="h-8 w-8"
+            className="h-9 w-9 hover:bg-background"
           >
-            <ChevronLeft className="h-4 w-4" />
+            <ChevronLeft className="h-5 w-5" />
           </Button>
           
           <Button
-            variant="ghost"
+            variant={isCurrentMonth ? "secondary" : "ghost"}
             onClick={handleCurrentMonth}
-            className="min-w-[160px] font-semibold text-base capitalize"
+            className={cn(
+              "min-w-[180px] font-bold text-base capitalize h-9",
+              isCurrentMonth && "bg-primary text-primary-foreground hover:bg-primary/90"
+            )}
           >
+            <CalendarDays className="mr-2 h-4 w-4" />
             {format(filters.currentMonth, "MMMM yyyy", { locale: ptBR })}
           </Button>
           
           <Button
-            variant="outline"
+            variant="ghost"
             size="icon"
             onClick={handleNextMonth}
-            className="h-8 w-8"
+            className="h-9 w-9 hover:bg-background"
           >
-            <ChevronRight className="h-4 w-4" />
+            <ChevronRight className="h-5 w-5" />
           </Button>
         </div>
 
@@ -144,24 +168,24 @@ export function PayablesFilters({
             variant="ghost"
             size="sm"
             onClick={clearFilters}
-            className="text-muted-foreground hover:text-foreground"
+            className="text-muted-foreground hover:text-foreground gap-1"
           >
-            <X className="h-4 w-4 mr-1" />
+            <X className="h-4 w-4" />
             Limpar filtros
           </Button>
         )}
       </div>
 
-      {/* Filters Row */}
+      {/* Filters Row - Layout profissional */}
       <div className="flex flex-wrap items-center gap-3">
         {/* Search */}
-        <div className="relative flex-1 min-w-[240px] max-w-md">
+        <div className="relative flex-1 min-w-[280px] max-w-lg">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
-            placeholder="Buscar por descrição, documento ou valor..."
+            placeholder="Buscar por descrição, fornecedor ou valor..."
             value={filters.search}
             onChange={(e) => onFiltersChange({ ...filters, search: e.target.value })}
-            className="pl-9 h-9"
+            className="pl-10 h-10 bg-background border-input"
           />
         </div>
 
@@ -170,7 +194,10 @@ export function PayablesFilters({
           value={filters.supplierId}
           onValueChange={(value) => onFiltersChange({ ...filters, supplierId: value })}
         >
-          <SelectTrigger className="w-[180px] h-9">
+          <SelectTrigger className={cn(
+            "w-[200px] h-10 bg-background",
+            filters.supplierId !== "all" && "border-primary"
+          )}>
             <SelectValue placeholder="Fornecedor" />
           </SelectTrigger>
           <SelectContent>
@@ -189,7 +216,10 @@ export function PayablesFilters({
             value={filters.category}
             onValueChange={(value) => onFiltersChange({ ...filters, category: value })}
           >
-            <SelectTrigger className="w-[160px] h-9">
+            <SelectTrigger className={cn(
+              "w-[170px] h-10 bg-background",
+              filters.category !== "all" && "border-primary"
+            )}>
               <SelectValue placeholder="Categoria" />
             </SelectTrigger>
             <SelectContent>
@@ -208,30 +238,63 @@ export function PayablesFilters({
           value={filters.paymentMethod}
           onValueChange={(value) => onFiltersChange({ ...filters, paymentMethod: value })}
         >
-          <SelectTrigger className="w-[140px] h-9">
+          <SelectTrigger className={cn(
+            "w-[150px] h-10 bg-background",
+            filters.paymentMethod !== "all" && "border-primary"
+          )}>
             <SelectValue placeholder="Método" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todos Métodos</SelectItem>
-            <SelectItem value="pix">PIX</SelectItem>
-            <SelectItem value="boleto">Boleto</SelectItem>
-            <SelectItem value="transfer">Transferência</SelectItem>
+            {PAYMENT_METHODS.map((method) => (
+              <SelectItem key={method.value} value={method.value}>
+                {method.label}
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
 
-        {/* Settings */}
+        {/* Settings - Column Visibility */}
         <Popover>
           <PopoverTrigger asChild>
-            <Button variant="outline" size="icon" className="h-9 w-9">
+            <Button variant="outline" size="icon" className="h-10 w-10 bg-background">
               <Settings2 className="h-4 w-4" />
             </Button>
           </PopoverTrigger>
-          <PopoverContent align="end" className="w-56">
-            <div className="space-y-2">
-              <h4 className="font-medium text-sm">Configurações</h4>
-              <p className="text-xs text-muted-foreground">
-                Personalize as colunas visíveis na tabela.
-              </p>
+          <PopoverContent align="end" className="w-64">
+            <div className="space-y-4">
+              <div>
+                <h4 className="font-semibold text-sm mb-1">Colunas Visíveis</h4>
+                <p className="text-xs text-muted-foreground">
+                  Personalize as colunas exibidas na tabela.
+                </p>
+              </div>
+              <div className="space-y-3">
+                {[
+                  { key: "description", label: "Descrição" },
+                  { key: "supplier", label: "Fornecedor" },
+                  { key: "category", label: "Categoria" },
+                  { key: "dueDate", label: "Vencimento" },
+                  { key: "amount", label: "Valor" },
+                  { key: "status", label: "Status" },
+                ].map((col) => (
+                  <div key={col.key} className="flex items-center space-x-2">
+                    <Checkbox
+                      id={col.key}
+                      checked={visibleColumns[col.key as keyof typeof visibleColumns]}
+                      onCheckedChange={(checked) =>
+                        setVisibleColumns((prev) => ({
+                          ...prev,
+                          [col.key]: !!checked,
+                        }))
+                      }
+                    />
+                    <Label htmlFor={col.key} className="text-sm cursor-pointer">
+                      {col.label}
+                    </Label>
+                  </div>
+                ))}
+              </div>
             </div>
           </PopoverContent>
         </Popover>

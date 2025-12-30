@@ -8,6 +8,8 @@ export { PayablesList } from './PayablesList';
 export { PayablesPage } from './PayablesPage';
 export { PayablesStatusCards } from './PayablesStatusCards';
 export { PayablesFilters } from './PayablesFilters';
+export { PayablesFooterBar } from './PayablesFooterBar';
+export { PixPaymentModal } from './PixPaymentModal';
 export { PayablesTable } from './PayablesTable';
 export { PayablesBulkActions } from './PayablesBulkActions';
 export { PixPaymentForm } from './PixPaymentForm';
