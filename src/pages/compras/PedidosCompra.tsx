@@ -48,6 +48,7 @@ const purposeLabels: Record<string, string> = {
   estoque: "Estoque",
   ordem_de_servico: "Ordem de Serviço",
   despesa_operacional: "Despesa Operacional",
+  garantia: "Garantia",
 };
 
 export default function PedidosCompra() {

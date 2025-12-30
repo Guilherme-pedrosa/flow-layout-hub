@@ -64,7 +64,7 @@ export function PurchaseOrderForm({ order, onClose }: PurchaseOrderFormProps) {
 
   // Form state
   const [supplierId, setSupplierId] = useState(order?.supplier_id || "");
-  const [purpose, setPurpose] = useState<"estoque" | "ordem_de_servico" | "despesa_operacional">(
+  const [purpose, setPurpose] = useState<"estoque" | "ordem_de_servico" | "despesa_operacional" | "garantia">(
     order?.purpose || "estoque"
   );
   const [observations, setObservations] = useState(order?.observations || "");
@@ -246,6 +246,23 @@ export function PurchaseOrderForm({ order, onClose }: PurchaseOrderFormProps) {
     if (items.length === 0) {
       toast.error("Adicione pelo menos um item");
       return;
+    }
+
+    // CRÍTICO: Validar divergência de fornecedor com NF-e
+    if (order?.nfe_supplier_cnpj) {
+      const selectedSupplier = activeFornecedores.find(f => f.id === supplierId);
+      if (selectedSupplier?.cpf_cnpj) {
+        const normalizedNfeCnpj = order.nfe_supplier_cnpj.replace(/[^\d]/g, '');
+        const normalizedSupplierCnpj = selectedSupplier.cpf_cnpj.replace(/[^\d]/g, '');
+        
+        if (normalizedNfeCnpj !== normalizedSupplierCnpj) {
+          toast.error("Fornecedor diferente da NF-e", {
+            description: `O fornecedor selecionado não corresponde ao emitente da NF-e importada (${order.nfe_supplier_name || normalizedNfeCnpj}). Corrija antes de salvar.`,
+            duration: 8000,
+          });
+          return;
+        }
+      }
     }
 
     setSaving(true);
@@ -481,8 +498,14 @@ export function PurchaseOrderForm({ order, onClose }: PurchaseOrderFormProps) {
                       <SelectItem value="estoque">Estoque</SelectItem>
                       <SelectItem value="ordem_de_servico">Ordem de Serviço</SelectItem>
                       <SelectItem value="despesa_operacional">Despesa Operacional</SelectItem>
+                      <SelectItem value="garantia">Garantia</SelectItem>
                     </SelectContent>
                   </Select>
+                  {purpose === "garantia" && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Garantia: não gera financeiro nem frete
+                    </p>
+                  )}
                 </div>
 
                 <div className="space-y-2">
@@ -503,30 +526,33 @@ export function PurchaseOrderForm({ order, onClose }: PurchaseOrderFormProps) {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Frete Informado (R$)</Label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    value={freightValue}
-                    onChange={(e) => setFreightValue(e.target.value)}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Frete Externo (CT-e)?</Label>
-                  <div className="flex items-center gap-2 h-10">
-                    <Switch
-                      checked={hasExternalFreight}
-                      onCheckedChange={setHasExternalFreight}
+              {/* Ocultar frete se finalidade for garantia */}
+              {purpose !== "garantia" && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Frete Informado (R$)</Label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      value={freightValue}
+                      onChange={(e) => setFreightValue(e.target.value)}
                     />
-                    <span className="text-sm text-muted-foreground">
-                      {hasExternalFreight ? "Sim" : "Não"}
-                    </span>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Frete Externo (CT-e)?</Label>
+                    <div className="flex items-center gap-2 h-10">
+                      <Switch
+                        checked={hasExternalFreight}
+                        onCheckedChange={setHasExternalFreight}
+                      />
+                      <span className="text-sm text-muted-foreground">
+                        {hasExternalFreight ? "Sim" : "Não"}
+                      </span>
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
@@ -614,6 +640,21 @@ export function PurchaseOrderForm({ order, onClose }: PurchaseOrderFormProps) {
               <CardTitle className="text-lg">Configuração de Pagamento</CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
+              {/* Aviso se for garantia */}
+              {purpose === "garantia" && (
+                <div className="p-4 rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30">
+                  <div className="flex items-center gap-2 text-amber-800 dark:text-amber-200">
+                    <AlertTriangle className="h-5 w-5" />
+                    <p className="font-medium">Pedido de Garantia</p>
+                  </div>
+                  <p className="text-sm text-amber-700 dark:text-amber-300 mt-1">
+                    Pedidos com finalidade "Garantia" não geram contas a pagar. Não há configuração financeira para este tipo de pedido.
+                  </p>
+                </div>
+              )}
+
+              {purpose !== "garantia" && (
+                <>
               {/* Configuração das parcelas */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-2">
@@ -709,6 +750,8 @@ export function PurchaseOrderForm({ order, onClose }: PurchaseOrderFormProps) {
                   Quando o status do pedido mudar para um que gere financeiro, as previsões se tornarão contas a pagar efetivas.
                 </p>
               </div>
+              </>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

@@ -12,7 +12,7 @@ export interface PurchaseOrder {
   supplier_name: string | null;
   supplier_address: string | null;
   requester_id: string | null;
-  purpose: "estoque" | "ordem_de_servico" | "despesa_operacional";
+  purpose: "estoque" | "ordem_de_servico" | "despesa_operacional" | "garantia";
   observations: string | null;
   freight_value: number;
   has_external_freight: boolean;
@@ -120,7 +120,7 @@ export interface PurchaseOrderInsert {
   supplier_name?: string;
   supplier_address?: string;
   requester_id?: string;
-  purpose?: "estoque" | "ordem_de_servico" | "despesa_operacional";
+  purpose?: "estoque" | "ordem_de_servico" | "despesa_operacional" | "garantia";
   observations?: string;
   freight_value?: number;
   has_external_freight?: boolean;

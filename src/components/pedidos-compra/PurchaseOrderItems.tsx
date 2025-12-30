@@ -57,7 +57,7 @@ export interface LocalItem {
 interface PurchaseOrderItemsProps {
   items: LocalItem[];
   onItemsChange: (items: LocalItem[]) => void;
-  purpose: "estoque" | "ordem_de_servico" | "despesa_operacional";
+  purpose: "estoque" | "ordem_de_servico" | "despesa_operacional" | "garantia";
 }
 
 const formatCurrency = (value: number) => {
