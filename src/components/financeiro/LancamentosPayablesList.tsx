@@ -714,7 +714,7 @@ export function LancamentosPayablesList({ onRefresh }: LancamentosPayablesListPr
                             variant="ghost" 
                             size="icon" 
                             onClick={() => handleDeletePayable(payable)}
-                            disabled={payable.is_paid || payable.payment_status === "sent_to_bank"}
+                            disabled={payable.is_paid}
                             className="text-destructive hover:text-destructive"
                           >
                             <Trash2 className="h-4 w-4" />
