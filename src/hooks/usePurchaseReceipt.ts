@@ -119,7 +119,7 @@ export function usePurchaseReceipt() {
         product_id,
         quantity,
         unit_price,
-        product:products(code, name, barcode)
+        product:products(code, description, barcode)
       `)
       .eq("purchase_order_id", orderId);
 
@@ -146,7 +146,7 @@ export function usePurchaseReceipt() {
         purchase_order_item_id: item.id,
         product_id: item.product_id,
         product_code: item.product?.code || '',
-        product_description: item.product?.name || 'Produto não identificado',
+        product_description: item.product?.description || 'Produto não identificado',
         product_barcode: item.product?.barcode || null,
         quantity_total: item.quantity,
         quantity_received: quantityReceived,
