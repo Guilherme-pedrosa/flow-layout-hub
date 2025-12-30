@@ -198,6 +198,17 @@ Foque no que precisa de atenção. Responda APENAS com o texto do insight, sem J
     setEditingOrder(null);
   };
 
+  const { updateOrderStatus } = usePurchaseOrders();
+
+  const handleStatusChange = async (e: React.MouseEvent, orderId: string, newStatusId: string) => {
+    e.stopPropagation();
+    try {
+      await updateOrderStatus.mutateAsync({ id: orderId, status_id: newStatusId });
+    } catch (error) {
+      // Error handled in hook
+    }
+  };
+
   const getStatusBadge = (order: PurchaseOrder) => {
     const status = order.purchase_order_status;
     if (!status) return <Badge variant="outline">Sem status</Badge>;
@@ -376,8 +387,38 @@ Foque no que precisa de atenção. Responda APENAS com o texto do insight, sem J
                   <TableCell className="text-right font-medium">
                     {formatCurrency(order.total_value)}
                   </TableCell>
-                  <TableCell className="text-center">
-                    {getStatusBadge(order)}
+                  <TableCell className="text-center" onClick={(e) => e.stopPropagation()}>
+                    <Select
+                      value={order.status_id || ""}
+                      onValueChange={(value) => handleStatusChange({} as React.MouseEvent, order.id, value)}
+                    >
+                      <SelectTrigger className="h-8 w-[140px] mx-auto">
+                        <div className="flex items-center gap-2">
+                          {order.purchase_order_status && (
+                            <div
+                              className="w-2 h-2 rounded-full flex-shrink-0"
+                              style={{ backgroundColor: order.purchase_order_status.color || "#6b7280" }}
+                            />
+                          )}
+                          <span className="truncate text-xs">
+                            {order.purchase_order_status?.name || "Sem status"}
+                          </span>
+                        </div>
+                      </SelectTrigger>
+                      <SelectContent>
+                        {statuses.map((status) => (
+                          <SelectItem key={status.id} value={status.id}>
+                            <div className="flex items-center gap-2">
+                              <div
+                                className="w-2 h-2 rounded-full"
+                                style={{ backgroundColor: status.color || "#6b7280" }}
+                              />
+                              {status.name}
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </TableCell>
                   <TableCell className="text-center">
                     {getReceiptStatusBadge(order.receipt_status)}
