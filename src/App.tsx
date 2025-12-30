@@ -55,10 +55,15 @@ import ExtratoBancario from "./pages/financeiro/ExtratoBancario";
 
 // Cadastros
 import Clientes from "./pages/cadastros/Clientes";
-import Produtos from "./pages/cadastros/Produtos";
 import Servicos from "./pages/cadastros/Servicos";
 import Fornecedores from "./pages/cadastros/Fornecedores";
 import Usuarios from "./pages/cadastros/Usuarios";
+
+// Produtos
+import GerenciarProdutos from "./pages/produtos/GerenciarProdutos";
+import ValoresVenda from "./pages/produtos/ValoresVenda";
+import Etiquetas from "./pages/produtos/Etiquetas";
+import Categorias from "./pages/produtos/Categorias";
 
 // Configurações
 import Empresa from "./pages/configuracoes/Empresa";
@@ -129,7 +134,12 @@ const App = () => (
             <Route path="/clientes" element={<Clientes />} />
             <Route path="/clientes/:id" element={<Clientes />} />
             <Route path="/clientes/:id/:action" element={<Clientes />} />
-            <Route path="/produtos" element={<Produtos />} />
+            
+            {/* Produtos */}
+            <Route path="/produtos" element={<GerenciarProdutos />} />
+            <Route path="/valores-venda" element={<ValoresVenda />} />
+            <Route path="/etiquetas" element={<Etiquetas />} />
+            <Route path="/categorias-produtos" element={<Categorias />} />
             <Route path="/servicos" element={<Servicos />} />
             <Route path="/fornecedores" element={<Fornecedores />} />
             <Route path="/usuarios" element={<Usuarios />} />

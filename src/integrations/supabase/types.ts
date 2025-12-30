@@ -2138,6 +2138,133 @@ export type Database = {
           },
         ]
       }
+      product_brands: {
+        Row: {
+          company_id: string | null
+          created_at: string
+          description: string | null
+          id: string
+          is_active: boolean | null
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          company_id?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          company_id?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      product_categories: {
+        Row: {
+          company_id: string | null
+          created_at: string
+          description: string | null
+          id: string
+          is_active: boolean | null
+          name: string
+          parent_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          company_id?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          name: string
+          parent_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          company_id?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          parent_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_categories_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "product_categories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      product_cost_history: {
+        Row: {
+          created_at: string
+          custo_anterior: number
+          custo_novo: number
+          documento_referencia: string | null
+          estoque_anterior: number | null
+          estoque_novo: number | null
+          id: string
+          observacoes: string | null
+          product_id: string
+          quantidade: number | null
+          tipo_movimentacao: string
+          usuario_id: string | null
+          usuario_nome: string | null
+        }
+        Insert: {
+          created_at?: string
+          custo_anterior?: number
+          custo_novo?: number
+          documento_referencia?: string | null
+          estoque_anterior?: number | null
+          estoque_novo?: number | null
+          id?: string
+          observacoes?: string | null
+          product_id: string
+          quantidade?: number | null
+          tipo_movimentacao: string
+          usuario_id?: string | null
+          usuario_nome?: string | null
+        }
+        Update: {
+          created_at?: string
+          custo_anterior?: number
+          custo_novo?: number
+          documento_referencia?: string | null
+          estoque_anterior?: number | null
+          estoque_novo?: number | null
+          id?: string
+          observacoes?: string | null
+          product_id?: string
+          quantidade?: number | null
+          tipo_movimentacao?: string
+          usuario_id?: string | null
+          usuario_nome?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_cost_history_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       product_images: {
         Row: {
           created_at: string
@@ -2211,8 +2338,11 @@ export type Database = {
       products: {
         Row: {
           accessory_expenses: number | null
+          average_cost: number | null
           barcode: string | null
           benefit_code: string | null
+          brand_id: string | null
+          category_id: string | null
           cest: string | null
           code: string
           controls_stock: boolean | null
@@ -2232,6 +2362,7 @@ export type Database = {
           is_pdv_available: boolean | null
           is_sold_separately: boolean | null
           length: number | null
+          location: string | null
           max_stock: number | null
           min_stock: number | null
           ncm: string | null
@@ -2253,8 +2384,11 @@ export type Database = {
         }
         Insert: {
           accessory_expenses?: number | null
+          average_cost?: number | null
           barcode?: string | null
           benefit_code?: string | null
+          brand_id?: string | null
+          category_id?: string | null
           cest?: string | null
           code: string
           controls_stock?: boolean | null
@@ -2274,6 +2408,7 @@ export type Database = {
           is_pdv_available?: boolean | null
           is_sold_separately?: boolean | null
           length?: number | null
+          location?: string | null
           max_stock?: number | null
           min_stock?: number | null
           ncm?: string | null
@@ -2295,8 +2430,11 @@ export type Database = {
         }
         Update: {
           accessory_expenses?: number | null
+          average_cost?: number | null
           barcode?: string | null
           benefit_code?: string | null
+          brand_id?: string | null
+          category_id?: string | null
           cest?: string | null
           code?: string
           controls_stock?: boolean | null
@@ -2316,6 +2454,7 @@ export type Database = {
           is_pdv_available?: boolean | null
           is_sold_separately?: boolean | null
           length?: number | null
+          location?: string | null
           max_stock?: number | null
           min_stock?: number | null
           ncm?: string | null
