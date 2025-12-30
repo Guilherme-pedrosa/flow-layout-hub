@@ -71,6 +71,7 @@ interface Payable {
   pix_key_type: string | null;
   payment_status: string;
   recipient_name: string | null;
+  recipient_document: string | null;
   is_paid: boolean;
   paid_at: string | null;
   installment_number?: number;
@@ -78,6 +79,7 @@ interface Payable {
   supplier?: {
     razao_social: string | null;
     nome_fantasia: string | null;
+    cpf_cnpj?: string | null;
   };
   purchase_order?: {
     order_number: number;
@@ -141,7 +143,7 @@ export function LancamentosPayablesList({ onRefresh }: LancamentosPayablesListPr
         .from("payables")
         .select(`
           *,
-          supplier:pessoas!payables_supplier_id_fkey(razao_social, nome_fantasia),
+          supplier:pessoas!payables_supplier_id_fkey(razao_social, nome_fantasia, cpf_cnpj),
           purchase_order:purchase_orders!payables_purchase_order_id_fkey(order_number)
         `)
         .order("due_date", { ascending: true });
@@ -376,36 +378,110 @@ export function LancamentosPayablesList({ onRefresh }: LancamentosPayablesListPr
     }
 
     setProcessing(true);
+    let successCount = 0;
+    let errorCount = 0;
+    const errors: string[] = [];
+
     try {
-      // Atualizar status para sent_to_bank (enviado ao banco)
-      const { error } = await supabase
-        .from("payables")
-        .update({
-          payment_status: "sent_to_bank",
-          submitted_at: new Date().toISOString(),
-        })
-        .in("id", Array.from(selectedIds));
+      // Get company_id
+      const { data: companies } = await supabase.from("companies").select("id").limit(1);
+      const companyId = companies?.[0]?.id;
+      if (!companyId) throw new Error("Empresa não configurada");
 
-      if (error) throw error;
+      // Process each selected payable
+      for (const payableId of selectedIds) {
+        const payable = payables.find(p => p.id === payableId);
+        if (!payable) continue;
 
-      // Log de auditoria
-      const auditLogs = Array.from(selectedIds).map((id) => ({
-        payable_id: id,
-        action: "sent_to_bank",
-        old_status: "ready_to_pay",
-        new_status: "sent_to_bank",
-        metadata: { submitted_count: selectedIds.size },
-      }));
+        // Check if it's a PIX payment
+        if (payable.payment_method_type === "pix" && payable.pix_key) {
+          try {
+            // Update status to processing
+            await supabase
+              .from("payables")
+              .update({ payment_status: "sent_to_bank", submitted_at: new Date().toISOString() })
+              .eq("id", payableId);
 
-      await supabase.from("payment_audit_logs").insert(auditLogs);
+            // Call edge function to process PIX
+            const { data, error } = await supabase.functions.invoke("inter-pix-payment", {
+              body: {
+                company_id: companyId,
+                payable_id: payableId,
+                pix_key: payable.pix_key,
+                pix_key_type: payable.pix_key_type || "cpf",
+                amount: payable.amount,
+                recipient_name: payable.recipient_name || payable.supplier?.nome_fantasia || payable.supplier?.razao_social || "Favorecido",
+                recipient_document: payable.recipient_document || payable.supplier?.cpf_cnpj || "",
+                description: payable.description || `Pagamento ${payable.document_number || ""}`,
+              },
+            });
 
-      toast.success(
-        `${selectedIds.size} título(s) enviado(s) ao banco com sucesso!`,
-        {
-          description: "Os títulos foram marcados para pagamento e aguardam processamento bancário.",
-          duration: 5000,
+            if (error || !data?.success) {
+              errorCount++;
+              const errMsg = error?.message || data?.error || "Erro desconhecido";
+              errors.push(`${payable.supplier?.nome_fantasia || payable.id}: ${errMsg}`);
+              // Update status to failed
+              await supabase
+                .from("payables")
+                .update({ payment_status: "failed" })
+                .eq("id", payableId);
+            } else {
+              successCount++;
+              // Update payable with PIX payment info
+              await supabase
+                .from("payables")
+                .update({ 
+                  inter_payment_id: data.paymentId,
+                  payment_status: data.pendingApproval ? "submitted_for_approval" : "paid",
+                  is_paid: !data.pendingApproval,
+                  paid_at: data.pendingApproval ? null : new Date().toISOString(),
+                } as any)
+                .eq("id", payableId);
+            }
+
+            // Audit log
+            await supabase.from("payment_audit_logs").insert({
+              payable_id: payableId,
+              action: error ? "pix_payment_failed" : "pix_payment_sent",
+              old_status: "ready_to_pay",
+              new_status: error ? "failed" : (data?.pendingApproval ? "submitted_for_approval" : "paid"),
+              metadata: { error: error?.message || data?.error },
+            });
+          } catch (err: any) {
+            errorCount++;
+            errors.push(`${payable.supplier?.nome_fantasia || payable.id}: ${err.message}`);
+          }
+        } else if (payable.payment_method_type === "boleto" && payable.boleto_barcode) {
+          // TODO: Implement boleto payment via Inter API
+          // For now, just mark as sent_to_bank
+          await supabase
+            .from("payables")
+            .update({ payment_status: "sent_to_bank", submitted_at: new Date().toISOString() })
+            .eq("id", payableId);
+          successCount++;
+        } else {
+          // No payment method configured, just mark as sent
+          await supabase
+            .from("payables")
+            .update({ payment_status: "sent_to_bank", submitted_at: new Date().toISOString() })
+            .eq("id", payableId);
+          successCount++;
         }
-      );
+      }
+
+      if (successCount > 0) {
+        toast.success(`${successCount} título(s) processado(s) com sucesso!`, {
+          description: "Os pagamentos foram enviados ao banco.",
+          duration: 5000,
+        });
+      }
+      if (errorCount > 0) {
+        toast.error(`${errorCount} título(s) com erro`, {
+          description: errors.slice(0, 3).join("; "),
+          duration: 8000,
+        });
+      }
+
       setSelectedIds(new Set());
       fetchData();
       onRefresh?.();
