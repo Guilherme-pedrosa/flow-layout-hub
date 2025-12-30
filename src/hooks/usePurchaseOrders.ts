@@ -26,6 +26,7 @@ export interface PurchaseOrder {
   nfe_supplier_cnpj: string | null;
   nfe_supplier_name: string | null;
   nfe_cfop_saida: string | null;
+  nfe_natureza_operacao: string | null; // Ex: "Venda", "Remessa em garantia"
   // CT-e fields
   cte_xml_url: string | null;
   cte_key: string | null;

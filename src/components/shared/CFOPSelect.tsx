@@ -39,6 +39,7 @@ interface CFOPSelectProps {
   purpose?: string; // Finalidade: estoque, ordem_de_servico, despesa_operacional
   productDescription?: string; // Descrição do produto/serviço
   nfeCfopSaida?: string | null; // CFOP de saída da NF-e (para calcular entrada)
+  nfeNaturezaOperacao?: string | null; // Natureza da operação da NF-e (Venda, Remessa, Garantia, etc)
 }
 
 export function CFOPSelect({ 
@@ -49,7 +50,8 @@ export function CFOPSelect({
   companyState,
   purpose,
   productDescription,
-  nfeCfopSaida
+  nfeCfopSaida,
+  nfeNaturezaOperacao
 }: CFOPSelectProps) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -140,23 +142,41 @@ export function CFOPSelect({
 Contexto da operação de ENTRADA:
 - UF do Fornecedor (emitente): ${supplierState}
 - UF da Empresa (destinatário): ${companyState}
-- Finalidade: ${purpose === 'estoque' ? 'Compra para revenda/comercialização' : purpose === 'ordem_de_servico' ? 'Uso em ordem de serviço' : 'Despesa operacional/uso e consumo'}
-${productDescription ? `- Descrição: ${productDescription}` : ''}
+- Finalidade SELECIONADA pelo usuário: ${purpose === 'estoque' ? 'Compra para revenda/comercialização' : purpose === 'ordem_de_servico' ? 'Uso em ordem de serviço' : 'Despesa operacional/uso e consumo'}
+${productDescription ? `- Descrição dos produtos: ${productDescription}` : ''}
 ${nfeCfopSaida ? `- CFOP de SAÍDA da NF-e (usado pelo fornecedor): ${nfeCfopSaida}` : ''}
+${nfeNaturezaOperacao ? `- NATUREZA DA OPERAÇÃO da NF-e: "${nfeNaturezaOperacao}" (MUITO IMPORTANTE - indica o tipo real da operação!)` : ''}
 
-Tipo de operação: ${operationType === 'estadual' ? 'Estadual (mesma UF) - CFOPs 1xxx' : operationType === 'interestadual' ? 'Interestadual (UFs diferentes) - CFOPs 2xxx' : 'Importação - CFOPs 3xxx'}
+Tipo de operação geográfica: ${operationType === 'estadual' ? 'Estadual (mesma UF) - CFOPs 1xxx' : operationType === 'interestadual' ? 'Interestadual (UFs diferentes) - CFOPs 2xxx' : 'Importação - CFOPs 3xxx'}
 
-REGRA IMPORTANTE: O CFOP de entrada é o "espelho" do CFOP de saída:
-- Se o fornecedor usou 5.102 (venda de mercadoria adquirida), o comprador usa 1.102 (compra para comercialização)
-- Se o fornecedor usou 6.102 (interestadual), o comprador usa 2.102
-- CFOPs 5xxx viram 1xxx, CFOPs 6xxx viram 2xxx, CFOPs 7xxx viram 3xxx
+REGRAS IMPORTANTES:
+1. A NATUREZA DA OPERAÇÃO é o indicador mais importante do tipo de operação:
+   - "Venda" / "Venda de mercadoria" = Compra para comercialização (x102, x101)
+   - "Remessa em garantia" / "Remessa para troca em garantia" = Entrada de mercadoria remetida em garantia (x949, x915)
+   - "Remessa para conserto" / "Remessa para reparo" = Entrada de mercadoria para conserto (x915)
+   - "Remessa por conta e ordem" = Entrada por conta e ordem (x949)
+   - "Devolução" = Devolução de venda (x202)
+   - "Transferência" = Transferência entre estabelecimentos (x152, x551)
+   - "Bonificação" = Entrada de mercadoria em bonificação (x910)
+   - "Amostra grátis" = Entrada de amostra grátis (x911)
 
-${nfeCfopSaida ? `O CFOP de saída ${nfeCfopSaida} indica que o CFOP de entrada deve ser ${
-  nfeCfopSaida.startsWith('5') ? '1' + nfeCfopSaida.slice(1) :
-  nfeCfopSaida.startsWith('6') ? '2' + nfeCfopSaida.slice(1) :
-  nfeCfopSaida.startsWith('7') ? '3' + nfeCfopSaida.slice(1) : 
-  'baseado na natureza da operação'
-}.` : 'Sem CFOP de saída informado, sugira baseado na finalidade.'}
+2. O CFOP de entrada deve corresponder à natureza da operação, NÃO à finalidade selecionada pelo usuário.
+   - Se a NF-e diz "Remessa em garantia", use CFOP de garantia mesmo que o usuário tenha selecionado "Estoque"
+
+3. O primeiro dígito é definido pela origem:
+   - Operação estadual (mesma UF) = 1xxx
+   - Operação interestadual = 2xxx
+   - Importação = 3xxx
+
+${nfeNaturezaOperacao ? 
+  `A natureza "${nfeNaturezaOperacao}" indica claramente o tipo de operação. Sugira o CFOP de ENTRADA correspondente.` : 
+  nfeCfopSaida ? `O CFOP de saída ${nfeCfopSaida} indica que o CFOP de entrada deve ser ${
+    nfeCfopSaida.startsWith('5') ? '1' + nfeCfopSaida.slice(1) :
+    nfeCfopSaida.startsWith('6') ? '2' + nfeCfopSaida.slice(1) :
+    nfeCfopSaida.startsWith('7') ? '3' + nfeCfopSaida.slice(1) : 
+    'baseado na natureza da operação'
+  }.` : 'Sem informações da NF-e, sugira baseado na finalidade selecionada.'
+}
 
 Sugira o CFOP de ENTRADA mais adequado. Responda APENAS com o código de 4 dígitos, sem explicação.`;
 

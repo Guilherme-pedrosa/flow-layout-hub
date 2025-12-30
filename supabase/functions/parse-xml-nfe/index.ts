@@ -65,6 +65,7 @@ interface NFEData {
     valorDesconto: number;
     valorOutros: number;
     chaveAcesso: string;
+    naturezaOperacao: string; // ADICIONADO: natOp - ex: "Venda", "Remessa em garantia", etc
   };
   transportador: Transportador | null;
   financeiro: {
@@ -341,6 +342,7 @@ function parseNFEXml(xmlContent: string): NFEData {
       valorDesconto: parseFloat(extractTextContent(icmsTotContent, 'vDesc')) || 0,
       valorOutros: parseFloat(extractTextContent(icmsTotContent, 'vOutro')) || 0,
       chaveAcesso: chaveAcesso,
+      naturezaOperacao: extractTextContent(ideContent, 'natOp'), // Ex: "Venda", "Remessa em garantia"
     },
     transportador: extractTransportador(xmlContent),
     financeiro: {
@@ -393,6 +395,7 @@ serve(async (req) => {
       fornecedorUF: nfeData.fornecedor.uf,
       fornecedorCidade: nfeData.fornecedor.cidade,
       nota: nfeData.nota.numero,
+      naturezaOperacao: nfeData.nota.naturezaOperacao, // IMPORTANTE: Log para debug
       itensCount: nfeData.itens.length,
       parcelasCount: nfeData.financeiro.parcelas.length,
       transportador: nfeData.transportador?.razaoSocial || 'N/A',
