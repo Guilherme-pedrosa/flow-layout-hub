@@ -456,6 +456,7 @@ export function PurchaseOrderForm({ order, onClose }: PurchaseOrderFormProps) {
                     companyState={companyState}
                     purpose={purpose}
                     productDescription={items.length > 0 ? items.map(i => i.description).join(", ") : undefined}
+                    nfeCfopSaida={order?.nfe_cfop_saida || undefined}
                   />
                 </div>
               </div>
