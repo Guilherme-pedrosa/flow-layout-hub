@@ -48,6 +48,7 @@ import {
   RotateCcw,
   ArrowUpFromLine,
   Banknote,
+  Trash2,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { format, isToday, isThisWeek, parseISO } from "date-fns";
@@ -124,6 +125,9 @@ export function LancamentosPayablesList({ onRefresh }: LancamentosPayablesListPr
   const [editingPayable, setEditingPayable] = useState<Payable | null>(null);
   const [retrying, setRetrying] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"pendentes" | "historico">("pendentes");
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [deletingPayable, setDeletingPayable] = useState<Payable | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -421,6 +425,38 @@ export function LancamentosPayablesList({ onRefresh }: LancamentosPayablesListPr
     setShowPayableForm(true);
   };
 
+  const handleDeletePayable = (payable: Payable) => {
+    setDeletingPayable(payable);
+    setShowDeleteDialog(true);
+  };
+
+  const confirmDeletePayable = async () => {
+    if (!deletingPayable) return;
+    
+    setDeleting(true);
+    try {
+      const { error } = await supabase
+        .from("payables")
+        .delete()
+        .eq("id", deletingPayable.id);
+
+      if (error) throw error;
+
+      toast.success("Conta excluída com sucesso!");
+      fetchData();
+      onRefresh?.();
+    } catch (error: any) {
+      console.error("Erro ao excluir:", error);
+      toast.error("Erro ao excluir conta", {
+        description: error?.message || "Tente novamente.",
+      });
+    } finally {
+      setDeleting(false);
+      setShowDeleteDialog(false);
+      setDeletingPayable(null);
+    }
+  };
+
   const handleRetryPix = async (payment: PixPayment) => {
     setRetrying(payment.id);
     try {
@@ -670,9 +706,20 @@ export function LancamentosPayablesList({ onRefresh }: LancamentosPayablesListPr
                       </TableCell>
                       <TableCell>{getPayableStatusBadge(payable)}</TableCell>
                       <TableCell>
-                        <Button variant="ghost" size="icon" onClick={() => handleEditPayable(payable)}>
-                          <Edit className="h-4 w-4" />
-                        </Button>
+                        <div className="flex items-center gap-1">
+                          <Button variant="ghost" size="icon" onClick={() => handleEditPayable(payable)}>
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            onClick={() => handleDeletePayable(payable)}
+                            disabled={payable.is_paid || payable.payment_status === "sent_to_bank"}
+                            className="text-destructive hover:text-destructive"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -866,6 +913,50 @@ export function LancamentosPayablesList({ onRefresh }: LancamentosPayablesListPr
                 <>
                   <Send className="mr-2 h-4 w-4" />
                   Confirmar Envio
+                </>
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+      </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Dialog de confirmação de exclusão */}
+      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir Conta</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja excluir esta conta a pagar?
+              {deletingPayable && (
+                <>
+                  <br /><br />
+                  <strong>Fornecedor:</strong> {deletingPayable.supplier?.nome_fantasia || deletingPayable.supplier?.razao_social || "—"}
+                  <br />
+                  <strong>Valor:</strong> {formatCurrency(deletingPayable.amount)}
+                  <br />
+                  <strong>Vencimento:</strong> {format(parseISO(deletingPayable.due_date), "dd/MM/yyyy", { locale: ptBR })}
+                </>
+              )}
+              <br /><br />
+              Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={confirmDeletePayable} 
+              disabled={deleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Excluindo...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Excluir
                 </>
               )}
             </AlertDialogAction>
