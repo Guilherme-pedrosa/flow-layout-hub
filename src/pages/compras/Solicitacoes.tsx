@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { PageHeader } from "@/components/shared";
+import { AIBannerEnhanced } from "@/components/shared/AIBannerEnhanced";
+import { useAiInsights } from "@/hooks/useAiInsights";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -8,6 +10,7 @@ import { PurchaseSuggestionPanel } from "@/components/compras";
 
 export default function Solicitacoes() {
   const [activeTab, setActiveTab] = useState("sugestoes");
+  const { insights, dismiss, markAsRead } = useAiInsights('purchases');
 
   return (
     <div className="space-y-6">
@@ -18,6 +21,13 @@ export default function Solicitacoes() {
           { label: "Compras" },
           { label: "Solicitações" },
         ]}
+      />
+
+      <AIBannerEnhanced
+        insights={insights}
+        onDismiss={dismiss}
+        onMarkAsRead={markAsRead}
+        defaultMessage="IA analisando demanda e sugerindo reposições inteligentes"
       />
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">

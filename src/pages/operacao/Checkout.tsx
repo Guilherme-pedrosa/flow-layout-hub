@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { PageHeader } from "@/components/shared";
+import { AIBannerEnhanced } from "@/components/shared/AIBannerEnhanced";
+import { useAiInsights } from "@/hooks/useAiInsights";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -54,6 +56,7 @@ export default function Checkout() {
   } = useCheckout();
 
   const { isGenerating, printCheckout, printSummary } = useCheckoutPdf();
+  const { insights, dismiss, markAsRead } = useAiInsights('stock');
 
   const [activeTab, setActiveTab] = useState<"vendas" | "os">("vendas");
   const [selectedSource, setSelectedSource] = useState<CheckoutSource | null>(null);
@@ -219,6 +222,13 @@ export default function Checkout() {
         title="Checkout"
         description="Conferência e baixa de estoque a partir de vendas e ordens de serviço"
         breadcrumbs={[{ label: "Operação" }, { label: "Checkout" }]}
+      />
+
+      <AIBannerEnhanced
+        insights={insights}
+        onDismiss={dismiss}
+        onMarkAsRead={markAsRead}
+        defaultMessage="IA monitorando conferência de pedidos e estoque disponível"
       />
 
       <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-4 mt-4 min-h-0">

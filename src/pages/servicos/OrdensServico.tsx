@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { PageHeader } from "@/components/shared";
+import { AIBannerEnhanced } from "@/components/shared/AIBannerEnhanced";
+import { useAiInsights } from "@/hooks/useAiInsights";
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
 import { ServiceOrdersList, ServiceOrderForm } from "@/components/ordens-servico";
@@ -23,6 +25,8 @@ const OrdensServico = () => {
     setEditingOrder(null);
   };
 
+  const { insights, dismiss, markAsRead } = useAiInsights('services');
+
   return (
     <div className="animate-fade-in space-y-6">
       <PageHeader
@@ -37,6 +41,13 @@ const OrdensServico = () => {
             </Button>
           )
         }
+      />
+
+      <AIBannerEnhanced
+        insights={insights}
+        onDismiss={dismiss}
+        onMarkAsRead={markAsRead}
+        defaultMessage="IA monitorando ordens de serviço e prazos"
       />
 
       {showForm ? (

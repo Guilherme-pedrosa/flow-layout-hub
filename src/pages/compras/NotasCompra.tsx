@@ -1,5 +1,7 @@
 import { useState, useEffect } from "react";
 import { PageHeader } from "@/components/shared";
+import { AIBannerEnhanced } from "@/components/shared/AIBannerEnhanced";
+import { useAiInsights } from "@/hooks/useAiInsights";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -64,6 +66,7 @@ export default function NotasCompra() {
   const { statuses, getActiveStatuses } = usePurchaseOrderStatuses();
   const { createMovement } = useStockMovements();
   const { products } = useProducts();
+  const { insights, dismiss, markAsRead } = useAiInsights('purchases');
 
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -205,6 +208,13 @@ export default function NotasCompra() {
           { label: "Compras" },
           { label: "Notas de Compra" },
         ]}
+      />
+
+      <AIBannerEnhanced
+        insights={insights}
+        onDismiss={dismiss}
+        onMarkAsRead={markAsRead}
+        defaultMessage="IA analisando notas fiscais de entrada e conferindo divergências"
       />
 
       <Card>

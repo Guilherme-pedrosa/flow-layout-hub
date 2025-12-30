@@ -1,4 +1,7 @@
 import { useState, useEffect } from "react";
+import { PageHeader } from "@/components/shared";
+import { AIBannerEnhanced } from "@/components/shared/AIBannerEnhanced";
+import { useAiInsights } from "@/hooks/useAiInsights";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -35,6 +38,7 @@ interface BankTransaction {
 
 export default function ExtratoBancario() {
   const { currentCompany } = useCompany();
+  const { insights, dismiss, markAsRead } = useAiInsights('financial');
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [transactions, setTransactions] = useState<BankTransaction[]>([]);
@@ -199,34 +203,39 @@ export default function ExtratoBancario() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Extrato Bancário</h1>
-          <p className="text-muted-foreground">
-            Conciliação de transações com o Banco Inter
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={loadTransactions} disabled={loading}>
-            <RefreshCw className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`} />
-            Atualizar
-          </Button>
-          <Button onClick={handleSync} disabled={syncing || !hasCredentials}>
-            {syncing ? (
-              <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Sincronizando...
-              </>
-            ) : (
-              <>
-                <Download className="h-4 w-4 mr-2" />
-                Sincronizar com Inter
-              </>
-            )}
-          </Button>
-        </div>
-      </div>
+      <PageHeader
+        title="Extrato Bancário"
+        description="Conciliação de transações com o Banco Inter"
+        breadcrumbs={[{ label: "Financeiro" }, { label: "Extrato" }]}
+        actions={
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={loadTransactions} disabled={loading}>
+              <RefreshCw className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`} />
+              Atualizar
+            </Button>
+            <Button onClick={handleSync} disabled={syncing || !hasCredentials}>
+              {syncing ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Sincronizando...
+                </>
+              ) : (
+                <>
+                  <Download className="h-4 w-4 mr-2" />
+                  Sincronizar com Inter
+                </>
+              )}
+            </Button>
+          </div>
+        }
+      />
 
+      <AIBannerEnhanced
+        insights={insights}
+        onDismiss={dismiss}
+        onMarkAsRead={markAsRead}
+        defaultMessage="IA analisando transações bancárias e identificando padrões"
+      />
       {!hasCredentials && (
         <Card className="border-amber-500 bg-amber-50 dark:bg-amber-950/20">
           <CardContent className="flex items-center gap-3 py-4">
