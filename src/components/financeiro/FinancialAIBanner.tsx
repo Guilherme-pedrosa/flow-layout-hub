@@ -2,25 +2,60 @@ import { useState, useEffect } from "react";
 import { Brain, ChevronRight, Loader2, RefreshCw, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/integrations/supabase/client";
 
 interface FinancialAIBannerProps {
   type: "payables" | "receivables";
   onActionClick?: () => void;
 }
 
-const COMPANY_ID = "e7b9c8a5-6d4f-4e3b-8c2a-1b5d9f7e6a3c";
-
 export function FinancialAIBanner({ type, onActionClick }: FinancialAIBannerProps) {
   const [insight, setInsight] = useState<string | null>(null);
   const [actionLabel, setActionLabel] = useState<string>("Ver detalhes");
   const [isLoading, setIsLoading] = useState(true);
   const [isDismissed, setIsDismissed] = useState(false);
+  const [companyId, setCompanyId] = useState<string | null>(null);
+
+  // Fetch company ID on mount
+  useEffect(() => {
+    const fetchCompanyId = async () => {
+      const { data } = await supabase
+        .from("inter_credentials")
+        .select("company_id")
+        .eq("is_active", true)
+        .limit(1)
+        .maybeSingle();
+      
+      if (data?.company_id) {
+        setCompanyId(data.company_id);
+      } else {
+        // Fallback: try to get from payables
+        const { data: payable } = await supabase
+          .from("payables")
+          .select("company_id")
+          .limit(1)
+          .maybeSingle();
+        
+        if (payable?.company_id) {
+          setCompanyId(payable.company_id);
+        } else {
+          setIsLoading(false);
+          setInsight("Configure as credenciais bancárias para análise IA");
+        }
+      }
+    };
+    fetchCompanyId();
+  }, []);
 
   useEffect(() => {
-    loadInsight();
-  }, [type]);
+    if (companyId) {
+      loadInsight();
+    }
+  }, [type, companyId]);
 
   const loadInsight = async () => {
+    if (!companyId) return;
+    
     setIsLoading(true);
     setIsDismissed(false);
     
@@ -49,7 +84,7 @@ export function FinancialAIBanner({ type, onActionClick }: FinancialAIBannerProp
           },
           body: JSON.stringify({
             messages: [{ role: "user", content: prompt }],
-            companyId: COMPANY_ID
+            companyId: companyId
           }),
         }
       );
@@ -142,7 +177,7 @@ export function FinancialAIBanner({ type, onActionClick }: FinancialAIBannerProp
             variant="ghost"
             size="icon"
             onClick={loadInsight}
-            disabled={isLoading}
+            disabled={isLoading || !companyId}
             className="h-8 w-8 text-white/60 hover:text-white hover:bg-white/10"
           >
             <RefreshCw className={cn("h-4 w-4", isLoading && "animate-spin")} />
