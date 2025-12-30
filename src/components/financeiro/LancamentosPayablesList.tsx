@@ -435,6 +435,19 @@ export function LancamentosPayablesList({ onRefresh }: LancamentosPayablesListPr
     
     setDeleting(true);
     try {
+      // Primeiro remove os logs de auditoria relacionados
+      await supabase
+        .from("payment_audit_logs")
+        .delete()
+        .eq("payable_id", deletingPayable.id);
+
+      // Remove pagamentos PIX relacionados
+      await supabase
+        .from("inter_pix_payments")
+        .delete()
+        .eq("payable_id", deletingPayable.id);
+
+      // Agora exclui o payable
       const { error } = await supabase
         .from("payables")
         .delete()
