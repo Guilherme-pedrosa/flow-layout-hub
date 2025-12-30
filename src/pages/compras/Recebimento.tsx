@@ -48,6 +48,7 @@ export default function Recebimento() {
   const [selectedSource, setSelectedSource] = useState<ReceiptSource | null>(null);
   const [searchValue, setSearchValue] = useState("");
   const [barcodeInput, setBarcodeInput] = useState("");
+  const [quantityToAdd, setQuantityToAdd] = useState<string>("1");
   const [loadingSource, setLoadingSource] = useState(false);
   
   // AI Insight state
@@ -213,6 +214,15 @@ Responda APENAS com o texto do insight, sem JSON.`;
 
     const barcode = barcodeInput.trim();
     
+    // Converte a quantidade digitada (suporta vírgula)
+    const normalizedQty = quantityToAdd.replace(',', '.');
+    const qtyToConfirm = parseFloat(normalizedQty) || 1;
+    
+    if (qtyToConfirm <= 0) {
+      toast.error("Quantidade deve ser maior que zero");
+      return;
+    }
+    
     // Procura item pelo código de barras ou código do produto
     const item = selectedSource.items.find(
       i => i.product_barcode === barcode || i.product_code === barcode
@@ -229,12 +239,18 @@ Responda APENAS com o texto do insight, sem JSON.`;
       setBarcodeInput("");
       return;
     }
+    
+    // Verifica se a quantidade não excede o pendente
+    const finalQty = Math.min(qtyToConfirm, item.quantity_pending);
+    if (qtyToConfirm > item.quantity_pending) {
+      toast.warning(`Quantidade ajustada para ${item.quantity_pending.toLocaleString('pt-BR')} (máximo pendente)`);
+    }
 
     try {
       await confirmItem.mutateAsync({
         source: selectedSource,
         item,
-        quantity: 1,
+        quantity: finalQty,
         barcode,
       });
 
@@ -245,13 +261,13 @@ Responda APENAS com o texto do insight, sem JSON.`;
           ...prev,
           items: prev.items.map(i => 
             i.id === item.id 
-              ? { ...i, quantity_received: i.quantity_received + 1, quantity_pending: i.quantity_pending - 1 }
+              ? { ...i, quantity_received: i.quantity_received + finalQty, quantity_pending: i.quantity_pending - finalQty }
               : i
           ),
         };
       });
 
-      toast.success(`${item.product_description} conferido!`);
+      toast.success(`${item.product_description}: ${finalQty.toLocaleString('pt-BR')} unidade(s) conferida(s)!`);
     } catch (error: any) {
       toast.error(error.message || "Erro ao conferir item", {
         duration: 5000,
@@ -474,9 +490,9 @@ Responda APENAS com o texto do insight, sem JSON.`;
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4 mt-4">
+              <div className="grid grid-cols-3 gap-4 mt-4">
                 {/* Código do item (bipagem) */}
-                <form onSubmit={handleBarcodeSubmit} className="space-y-2">
+                <form onSubmit={handleBarcodeSubmit} className="space-y-2 col-span-1">
                   <Label>Código do item</Label>
                   <Input
                     ref={barcodeInputRef}
@@ -487,13 +503,36 @@ Responda APENAS com o texto do insight, sem JSON.`;
                   />
                 </form>
 
-                {/* Quantidade de itens */}
+                {/* Quantidade a conferir */}
                 <div className="space-y-2">
-                  <Label>Quantidade de itens</Label>
+                  <Label>Qtd. a conferir</Label>
                   <Input 
-                    value={selectedSource ? `${totalReceived}/${totalItems}` : '0/0'} 
+                    type="text"
+                    inputMode="decimal"
+                    value={quantityToAdd}
+                    onChange={(e) => {
+                      const value = e.target.value.replace(/[^\d,]/g, '');
+                      setQuantityToAdd(value);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && barcodeInput.trim()) {
+                        e.preventDefault();
+                        handleBarcodeSubmit(e as any);
+                      }
+                    }}
+                    disabled={!selectedSource}
+                    className="text-center font-medium"
+                    placeholder="1"
+                  />
+                </div>
+
+                {/* Quantidade de itens (resumo) */}
+                <div className="space-y-2">
+                  <Label>Total conferido</Label>
+                  <Input 
+                    value={selectedSource ? `${totalReceived.toLocaleString('pt-BR')}/${totalItems.toLocaleString('pt-BR')}` : '0/0'} 
                     disabled 
-                    className="bg-muted"
+                    className="bg-muted text-center"
                   />
                 </div>
               </div>
