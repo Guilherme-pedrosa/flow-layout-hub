@@ -25,3 +25,4 @@ export { PaymentLogs, usePaymentLogs } from './PaymentLogs';
 export { PixConfirmationModal } from './PixConfirmationModal';
 export { PixPaymentResultModal } from './PixPaymentResultModal';
 export { ReconciliationReview } from './ReconciliationReview';
+export { FinancialAIChat } from './FinancialAIChat';

@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Receipt, FileText, CheckCircle, Wallet } from "lucide-react";
-import { DDABoletosList, ExtratoList, ReconciliationReview, PayablesPage } from "@/components/financeiro";
+import { DDABoletosList, ExtratoList, ReconciliationReview, PayablesPage, FinancialAIChat } from "@/components/financeiro";
 import { supabase } from "@/integrations/supabase/client";
 
 export default function ContasPagar() {
@@ -80,6 +80,9 @@ export default function ContasPagar() {
           <DDABoletosList />
         </TabsContent>
       </Tabs>
+
+      {/* AI Chat */}
+      <FinancialAIChat />
     </div>
   );
 }

@@ -1,5 +1,6 @@
 import { PageHeader } from "@/components/shared";
 import { ArrowDownToLine } from "lucide-react";
+import { FinancialAIChat } from "@/components/financeiro";
 
 export default function ContasReceber() {
   return (
@@ -19,6 +20,9 @@ export default function ContasReceber() {
           Área para gerenciar títulos a receber.
         </p>
       </div>
+
+      {/* AI Chat */}
+      <FinancialAIChat />
     </div>
   );
 }
