@@ -84,13 +84,7 @@ async function getExtrato(
   accountNumber: string,
   dateFrom: string,
   dateTo: string
-): Promise<Array<{
-  dataMovimento: string;
-  descricao: string;
-  valor: number;
-  tipoOperacao: string;
-  nsu?: string;
-}>> {
+): Promise<unknown> {
   console.log(`[inter-sync] Buscando extrato de ${dateFrom} a ${dateTo}`);
   
   const extratoUrl = `${INTER_API_URL}/banking/v2/extrato?dataInicio=${dateFrom}&dataFim=${dateTo}`;
@@ -106,7 +100,8 @@ async function getExtrato(
     }
   );
 
-  return result.transacoes || [];
+  console.log(`[inter-sync] Estrutura da resposta:`, JSON.stringify(result).substring(0, 500));
+  return result;
 }
 
 serve(async (req) => {
@@ -148,7 +143,7 @@ serve(async (req) => {
     );
 
     // Get bank statement via proxy
-    const transacoes = await getExtrato(
+    const extratoResult = await getExtrato(
       proxyUrl,
       token,
       credentials.account_number || "",
@@ -156,26 +151,58 @@ serve(async (req) => {
       date_to
     );
 
+    // A API do Inter retorna as transações em diferentes formatos
+    // Pode ser: { transacoes: [...] } ou diretamente um array
+    const transacoes = Array.isArray(extratoResult) 
+      ? extratoResult 
+      : (extratoResult as { transacoes?: unknown[] })?.transacoes || [];
+
     console.log(`[inter-sync] Recebidas ${transacoes.length} transações`);
+    if (transacoes.length > 0) {
+      console.log(`[inter-sync] Exemplo de transação:`, JSON.stringify(transacoes[0]));
+    }
 
     // Import transactions
     let importedCount = 0;
     for (const tx of transacoes) {
-      const amount = tx.tipoOperacao === "C" ? Math.abs(tx.valor) : -Math.abs(tx.valor);
-      const nsu = tx.nsu || `INTER-${tx.dataMovimento}-${Math.random().toString(36).substr(2, 9)}`;
+      const txData = tx as Record<string, unknown>;
+      
+      // A API Inter pode retornar diferentes campos dependendo da versão
+      // Campos comuns: dataMovimento/dataEntrada, descricao/titulo, valor, tipoOperacao/tipo
+      const dataMovimento = String(txData.dataMovimento || txData.dataEntrada || txData.data || "");
+      const descricao = String(txData.descricao || txData.titulo || txData.detalhe || "");
+      const valor = Number(txData.valor || 0);
+      const tipoOperacao = String(txData.tipoOperacao || txData.tipo || (valor >= 0 ? "C" : "D"));
+      const nsuOriginal = txData.nsu || txData.codigoTransacao || txData.idTransacao;
+      
+      // Se não tiver NSU, criar um único baseado na data + descrição + valor
+      const nsu = nsuOriginal 
+        ? String(nsuOriginal) 
+        : `INTER-${dataMovimento}-${descricao.substring(0, 20).replace(/[^a-zA-Z0-9]/g, '')}-${Math.abs(valor).toFixed(2)}`;
+      
+      const amount = tipoOperacao === "C" || tipoOperacao === "CREDITO" 
+        ? Math.abs(valor) 
+        : -Math.abs(valor);
+      
+      console.log(`[inter-sync] Processando: ${dataMovimento} | ${descricao} | ${valor} | NSU: ${nsu}`);
       
       const { error } = await supabase
         .from("bank_transactions")
         .upsert({
           company_id,
-          transaction_date: tx.dataMovimento,
-          description: tx.descricao,
+          transaction_date: dataMovimento,
+          description: descricao,
           amount: amount,
-          type: tx.tipoOperacao === "C" ? "CREDIT" : "DEBIT",
+          type: tipoOperacao === "C" || tipoOperacao === "CREDITO" ? "CREDIT" : "DEBIT",
           nsu: nsu,
+          raw_data: txData,
         }, { onConflict: "company_id,nsu", ignoreDuplicates: true });
       
-      if (!error) importedCount++;
+      if (error) {
+        console.log(`[inter-sync] Erro ao salvar transação: ${error.message}`);
+      } else {
+        importedCount++;
+      }
     }
 
     // Update last sync timestamp
