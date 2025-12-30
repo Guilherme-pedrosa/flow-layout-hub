@@ -63,6 +63,7 @@ export interface NFENota {
   valorDesconto: number;
   valorOutros: number;
   chaveAcesso: string;
+  naturezaOperacao?: string;
 }
 
 export interface NFEImpostos {
