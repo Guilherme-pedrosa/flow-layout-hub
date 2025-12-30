@@ -3433,6 +3433,7 @@ export type Database = {
           nfe_date: string | null
           nfe_imported_at: string | null
           nfe_key: string | null
+          nfe_natureza_operacao: string | null
           nfe_number: string | null
           nfe_series: string | null
           nfe_supplier_cnpj: string | null
@@ -3484,6 +3485,7 @@ export type Database = {
           nfe_date?: string | null
           nfe_imported_at?: string | null
           nfe_key?: string | null
+          nfe_natureza_operacao?: string | null
           nfe_number?: string | null
           nfe_series?: string | null
           nfe_supplier_cnpj?: string | null
@@ -3535,6 +3537,7 @@ export type Database = {
           nfe_date?: string | null
           nfe_imported_at?: string | null
           nfe_key?: string | null
+          nfe_natureza_operacao?: string | null
           nfe_number?: string | null
           nfe_series?: string | null
           nfe_supplier_cnpj?: string | null
