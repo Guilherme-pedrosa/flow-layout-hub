@@ -1,4 +1,4 @@
-import { Bell, Search, User, LogOut, Settings, ChevronDown, Menu, MoreHorizontal } from "lucide-react";
+import { Search, User, LogOut, Settings, ChevronDown, Menu, MoreHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -10,8 +10,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
 import { CompanySelector } from "./CompanySelector";
+import { AINotificationsDropdown } from "./AINotificationsDropdown";
 import { useLocation } from "react-router-dom";
 
 interface AppHeaderProps {
@@ -120,42 +120,8 @@ export function AppHeader({ onMenuClick, showMenuButton }: AppHeaderProps) {
           <Search className="h-5 w-5 text-muted-foreground" />
         </Button>
 
-        {/* Notifications */}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="relative h-9 w-9">
-              <Bell className="h-5 w-5 text-muted-foreground" />
-              <span className="absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-destructive text-[10px] font-semibold text-destructive-foreground">
-                3
-              </span>
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-80">
-            <DropdownMenuLabel className="flex items-center justify-between">
-              <span>Notificações</span>
-              <Button variant="ghost" size="sm" className="h-auto p-0 text-xs text-primary">
-                Marcar todas como lidas
-              </Button>
-            </DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem className="flex flex-col items-start gap-1 py-3 cursor-pointer">
-              <span className="font-medium text-sm">Nova venda realizada</span>
-              <span className="text-xs text-muted-foreground">Cliente XYZ - R$ 1.500,00 • Há 5 minutos</span>
-            </DropdownMenuItem>
-            <DropdownMenuItem className="flex flex-col items-start gap-1 py-3 cursor-pointer">
-              <span className="font-medium text-sm">Conta a receber vencendo hoje</span>
-              <span className="text-xs text-muted-foreground">3 títulos totalizando R$ 8.200,00 • Há 1 hora</span>
-            </DropdownMenuItem>
-            <DropdownMenuItem className="flex flex-col items-start gap-1 py-3 cursor-pointer">
-              <span className="font-medium text-sm">Estoque baixo: Produto XYZ</span>
-              <span className="text-xs text-muted-foreground">Quantidade atual: 5 unidades • Há 2 horas</span>
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem className="justify-center text-primary cursor-pointer">
-              Ver todas as notificações
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        {/* AI Notifications */}
+        <AINotificationsDropdown />
 
         {/* More Actions */}
         <DropdownMenu>
