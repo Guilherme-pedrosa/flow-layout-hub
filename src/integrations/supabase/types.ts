@@ -25,6 +25,7 @@ export type Database = {
           document_number: string | null
           document_type: string | null
           due_date: string
+          financial_situation_id: string | null
           id: string
           inter_boleto_id: string | null
           inter_codigo_barras: string | null
@@ -39,6 +40,7 @@ export type Database = {
           reconciled_at: string | null
           reconciliation_id: string | null
           sale_id: string | null
+          situation_id: string | null
           updated_at: string
         }
         Insert: {
@@ -51,6 +53,7 @@ export type Database = {
           document_number?: string | null
           document_type?: string | null
           due_date: string
+          financial_situation_id?: string | null
           id?: string
           inter_boleto_id?: string | null
           inter_codigo_barras?: string | null
@@ -65,6 +68,7 @@ export type Database = {
           reconciled_at?: string | null
           reconciliation_id?: string | null
           sale_id?: string | null
+          situation_id?: string | null
           updated_at?: string
         }
         Update: {
@@ -77,6 +81,7 @@ export type Database = {
           document_number?: string | null
           document_type?: string | null
           due_date?: string
+          financial_situation_id?: string | null
           id?: string
           inter_boleto_id?: string | null
           inter_codigo_barras?: string | null
@@ -91,6 +96,7 @@ export type Database = {
           reconciled_at?: string | null
           reconciliation_id?: string | null
           sale_id?: string | null
+          situation_id?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -116,6 +122,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "accounts_receivable_financial_situation_id_fkey"
+            columns: ["financial_situation_id"]
+            isOneToOne: false
+            referencedRelation: "financial_situations"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "accounts_receivable_reconciliation_id_fkey"
             columns: ["reconciliation_id"]
             isOneToOne: false
@@ -127,6 +140,13 @@ export type Database = {
             columns: ["sale_id"]
             isOneToOne: false
             referencedRelation: "sales"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "accounts_receivable_situation_id_fkey"
+            columns: ["situation_id"]
+            isOneToOne: false
+            referencedRelation: "financial_situations"
             referencedColumns: ["id"]
           },
         ]
@@ -1120,6 +1140,62 @@ export type Database = {
           },
         ]
       }
+      financial_situations: {
+        Row: {
+          allows_editing: boolean
+          allows_manual_change: boolean
+          color: string
+          company_id: string
+          confirms_payment: boolean
+          created_at: string
+          display_order: number | null
+          id: string
+          is_active: boolean
+          is_default: boolean
+          name: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          allows_editing?: boolean
+          allows_manual_change?: boolean
+          color?: string
+          company_id: string
+          confirms_payment?: boolean
+          created_at?: string
+          display_order?: number | null
+          id?: string
+          is_active?: boolean
+          is_default?: boolean
+          name: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          allows_editing?: boolean
+          allows_manual_change?: boolean
+          color?: string
+          company_id?: string
+          confirms_payment?: boolean
+          created_at?: string
+          display_order?: number | null
+          id?: string
+          is_active?: boolean
+          is_default?: boolean
+          name?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "financial_situations_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       inter_company_transfers: {
         Row: {
           amount: number
@@ -1707,6 +1783,7 @@ export type Database = {
           document_number: string | null
           document_type: string
           due_date: string
+          financial_situation_id: string | null
           forecast_converted_at: string | null
           id: string
           inter_payment_id: string | null
@@ -1749,6 +1826,7 @@ export type Database = {
           document_number?: string | null
           document_type?: string
           due_date: string
+          financial_situation_id?: string | null
           forecast_converted_at?: string | null
           id?: string
           inter_payment_id?: string | null
@@ -1791,6 +1869,7 @@ export type Database = {
           document_number?: string | null
           document_type?: string
           due_date?: string
+          financial_situation_id?: string | null
           forecast_converted_at?: string | null
           id?: string
           inter_payment_id?: string | null
@@ -1859,6 +1938,13 @@ export type Database = {
             columns: ["cost_center_id"]
             isOneToOne: false
             referencedRelation: "cost_centers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payables_financial_situation_id_fkey"
+            columns: ["financial_situation_id"]
+            isOneToOne: false
+            referencedRelation: "financial_situations"
             referencedColumns: ["id"]
           },
           {

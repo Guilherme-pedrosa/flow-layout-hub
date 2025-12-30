@@ -36,6 +36,7 @@ import {
   X,
   LogOut,
   ChevronDown,
+  CircleDot,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -149,6 +150,7 @@ const menuGroups: MenuGroup[] = [
       { title: "Empresa", icon: Building, href: "/empresa" },
       { title: "Usuários", icon: UserCog, href: "/usuarios" },
       { title: "Permissões", icon: Shield, href: "/permissoes" },
+      { title: "Situações Financeiras", icon: CircleDot, href: "/situacoes-financeiras" },
       { title: "Integrações", icon: Plug, href: "/integracoes" },
       { title: "Logs", icon: LogsIcon, href: "/logs" },
     ],
