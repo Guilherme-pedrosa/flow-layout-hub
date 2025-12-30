@@ -2,14 +2,23 @@ import { useState, useCallback, useEffect } from "react";
 import { PageHeader } from "@/components/shared";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Check, Loader2, AlertTriangle } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
+import { Check, Loader2, AlertTriangle, Sparkles } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { useProducts } from "@/hooks/useProducts";
 import { usePurchaseOrders } from "@/hooks/usePurchaseOrders";
 import { useStockMovements } from "@/hooks/useStockMovements";
 import { usePurchaseOrderStatuses } from "@/hooks/usePurchaseOrderStatuses";
 import { toast } from "sonner";
-import { sugerirCfopEntrada } from "@/lib/cfops";
+import { sugerirCfopEntrada, CFOPS_ENTRADA_ESTADUAL, CFOPS_ENTRADA_INTERESTADUAL, CFOPS_ENTRADA_EXTERIOR } from "@/lib/cfops";
 import {
   ImportarXMLUpload,
   FornecedorCard,
@@ -34,7 +43,13 @@ export default function ImportarXML() {
   
   // Estados para cadastro
   const [fornecedorCadastrado, setFornecedorCadastrado] = useState(false);
+  const [fornecedorId, setFornecedorId] = useState<string | null>(null);
   const [transportadorCadastrado, setTransportadorCadastrado] = useState(false);
+  
+  // Estado para CFOP geral
+  const [cfopGeral, setCfopGeral] = useState<string>("");
+  const [sugestaoAiCfop, setSugestaoAiCfop] = useState<string>("");
+  const [loadingAiCfop, setLoadingAiCfop] = useState(false);
   
   // Estados financeiros adicionais
   const [financeiroObservacao, setFinanceiroObservacao] = useState("");
@@ -63,12 +78,30 @@ export default function ImportarXML() {
 
   const checkFornecedorCadastrado = async () => {
     if (!nfeData?.fornecedor.cnpj) return;
-    const { data } = await supabase
+    
+    // Buscar na tabela pessoas (fornecedores)
+    const { data: pessoaData } = await supabase
+      .from("pessoas")
+      .select("id")
+      .eq("cpf_cnpj", nfeData.fornecedor.cnpj)
+      .eq("is_fornecedor", true)
+      .maybeSingle();
+    
+    if (pessoaData) {
+      setFornecedorCadastrado(true);
+      setFornecedorId(pessoaData.id);
+      return;
+    }
+    
+    // Fallback para tabela clientes (legado)
+    const { data: clienteData } = await supabase
       .from("clientes")
       .select("id")
       .eq("cpf_cnpj", nfeData.fornecedor.cnpj)
       .maybeSingle();
-    setFornecedorCadastrado(!!data);
+    
+    setFornecedorCadastrado(!!clienteData);
+    setFornecedorId(null);
   };
 
   const checkTransportadorCadastrado = async () => {
@@ -176,8 +209,135 @@ export default function ImportarXML() {
     setItemParaCadastrar(null);
   };
 
+  const handleFornecedorCadastrado = async () => {
+    setFornecedorCadastrado(true);
+    // Recarregar para obter o ID
+    await checkFornecedorCadastrado();
+  };
+
+  const sugerirCfopComIA = async () => {
+    if (!nfeData) return;
+    
+    setLoadingAiCfop(true);
+    try {
+      const itensDescricao = nfeData.itens.map(i => `${i.descricao} (NCM: ${i.ncm || 'N/A'}, Qtd: ${i.quantidade})`).join('; ');
+      const cfopSaida = nfeData.itens[0]?.cfopSaida || '';
+      const ufFornecedor = nfeData.fornecedor.uf;
+      
+      const prompt = `Analise esta NF-e de compra e sugira o CFOP de ENTRADA mais adequado.
+
+Dados da NF-e:
+- CFOP de saída do fornecedor: ${cfopSaida}
+- UF do fornecedor: ${ufFornecedor}
+- Produtos: ${itensDescricao}
+- Valor total: R$ ${nfeData.nota.valorTotal.toFixed(2)}
+
+Regras:
+- Se operação estadual (mesma UF), usar série 1xxx
+- Se operação interestadual, usar série 2xxx
+- Se importação, usar série 3xxx
+- Compra para comercialização: x102
+- Compra para industrialização: x101
+- Compra de ativo imobilizado: x551
+- Compra de material de uso/consumo: x556
+
+Responda APENAS com o código CFOP de 4 dígitos mais adequado (ex: 1102 ou 2102). Sem explicações.`;
+
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/financial-ai`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+          },
+          body: JSON.stringify({
+            messages: [{ role: 'user', content: prompt }],
+          }),
+        }
+      );
+
+      if (!response.ok) throw new Error('Erro ao consultar IA');
+
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+      let fullText = '';
+      let textBuffer = '';
+
+      if (reader) {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          
+          textBuffer += decoder.decode(value, { stream: true });
+          
+          let newlineIndex: number;
+          while ((newlineIndex = textBuffer.indexOf('\n')) !== -1) {
+            let line = textBuffer.slice(0, newlineIndex);
+            textBuffer = textBuffer.slice(newlineIndex + 1);
+            
+            if (line.endsWith('\r')) line = line.slice(0, -1);
+            if (line.startsWith(':') || line.trim() === '') continue;
+            if (!line.startsWith('data: ')) continue;
+            
+            const jsonStr = line.slice(6).trim();
+            if (jsonStr === '[DONE]') continue;
+            
+            try {
+              const parsed = JSON.parse(jsonStr);
+              const content = parsed.choices?.[0]?.delta?.content;
+              if (content) fullText += content;
+            } catch {
+              // Incomplete JSON
+            }
+          }
+        }
+      }
+
+      // Extrair apenas o código CFOP (4 dígitos)
+      const cfopMatch = fullText.match(/\d{4}/);
+      if (cfopMatch) {
+        const sugeridoCfop = cfopMatch[0];
+        setSugestaoAiCfop(sugeridoCfop);
+        setCfopGeral(sugeridoCfop);
+        
+        // Aplicar a todos os itens
+        const newItens = nfeData.itens.map(item => ({
+          ...item,
+          cfopEntrada: sugeridoCfop
+        }));
+        setNfeData({ ...nfeData, itens: newItens });
+        
+        toast.success(`CFOP sugerido: ${sugeridoCfop}`);
+      }
+    } catch (error) {
+      console.error('Erro ao sugerir CFOP:', error);
+      toast.error('Não foi possível sugerir o CFOP');
+    } finally {
+      setLoadingAiCfop(false);
+    }
+  };
+
+  const handleCfopGeralChange = (cfop: string) => {
+    setCfopGeral(cfop);
+    if (!nfeData) return;
+    
+    // Aplicar a todos os itens
+    const newItens = nfeData.itens.map(item => ({
+      ...item,
+      cfopEntrada: cfop
+    }));
+    setNfeData({ ...nfeData, itens: newItens });
+  };
+
   const handleFinalize = async () => {
     if (!nfeData) return;
+    
+    // Validar CFOP obrigatório
+    if (!cfopGeral) {
+      toast.error("CFOP de entrada é obrigatório para cumprir a legislação fiscal");
+      return;
+    }
 
     setIsProcessing(true);
     try {
@@ -207,6 +367,7 @@ export default function ImportarXML() {
 
       // Criar pedido de compra com dados financeiros
       const orderData = await createOrder.mutateAsync({
+        supplier_id: fornecedorId || undefined,
         supplier_cnpj: nfeData.fornecedor.cnpj,
         supplier_name: nfeData.fornecedor.razaoSocial,
         supplier_address: `${nfeData.fornecedor.endereco}, ${nfeData.fornecedor.bairro}, ${nfeData.fornecedor.cidade}/${nfeData.fornecedor.uf}`,
@@ -286,11 +447,14 @@ export default function ImportarXML() {
     setNfeData(null);
     setNotaDuplicada(false);
     setFornecedorCadastrado(false);
+    setFornecedorId(null);
     setTransportadorCadastrado(false);
     setFinanceiroObservacao("");
     setPlanoContasId("");
     setCentroCustoId("");
     setFormaPagamentoSelecionada("");
+    setCfopGeral("");
+    setSugestaoAiCfop("");
   };
 
   return (
@@ -331,6 +495,84 @@ export default function ImportarXML() {
               onCadastrar={() => setDialogTransportador(true)}
             />
           </div>
+
+          {/* CFOP de Entrada - Campo Obrigatório */}
+          <Card className="border-primary/50">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                CFOP de Entrada
+                <span className="text-destructive">*</span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="flex items-end gap-3">
+                <div className="flex-1 space-y-2">
+                  <Label>Código Fiscal de Operação (obrigatório)</Label>
+                  <Select value={cfopGeral} onValueChange={handleCfopGeralChange}>
+                    <SelectTrigger className={!cfopGeral ? "border-destructive" : ""}>
+                      <SelectValue placeholder="Selecione o CFOP de entrada..." />
+                    </SelectTrigger>
+                    <SelectContent className="max-h-[300px]">
+                      <SelectItem value="" disabled>Selecione...</SelectItem>
+                      
+                      {/* Operações Estaduais */}
+                      <SelectItem value="header-estadual" disabled className="font-bold text-primary">
+                        --- Estadual (1xxx) ---
+                      </SelectItem>
+                      {CFOPS_ENTRADA_ESTADUAL.slice(0, 10).map(cfop => (
+                        <SelectItem key={cfop.codigo} value={cfop.codigo}>
+                          {cfop.codigo} - {cfop.descricao.slice(0, 50)}...
+                        </SelectItem>
+                      ))}
+                      
+                      {/* Operações Interestaduais */}
+                      <SelectItem value="header-interestadual" disabled className="font-bold text-primary">
+                        --- Interestadual (2xxx) ---
+                      </SelectItem>
+                      {CFOPS_ENTRADA_INTERESTADUAL.slice(0, 10).map(cfop => (
+                        <SelectItem key={cfop.codigo} value={cfop.codigo}>
+                          {cfop.codigo} - {cfop.descricao.slice(0, 50)}...
+                        </SelectItem>
+                      ))}
+                      
+                      {/* Importação */}
+                      <SelectItem value="header-exterior" disabled className="font-bold text-primary">
+                        --- Importação (3xxx) ---
+                      </SelectItem>
+                      {CFOPS_ENTRADA_EXTERIOR.slice(0, 5).map(cfop => (
+                        <SelectItem key={cfop.codigo} value={cfop.codigo}>
+                          {cfop.codigo} - {cfop.descricao.slice(0, 50)}...
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Button 
+                  variant="outline" 
+                  onClick={sugerirCfopComIA}
+                  disabled={loadingAiCfop}
+                  className="gap-2"
+                >
+                  {loadingAiCfop ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Sparkles className="h-4 w-4" />
+                  )}
+                  Sugerir com IA
+                </Button>
+              </div>
+              {sugestaoAiCfop && (
+                <p className="text-sm text-muted-foreground">
+                  IA sugeriu: <span className="font-medium text-primary">{sugestaoAiCfop}</span> com base nos produtos da nota
+                </p>
+              )}
+              {!cfopGeral && (
+                <p className="text-sm text-destructive">
+                  O CFOP de entrada é obrigatório para cumprir a legislação fiscal brasileira.
+                </p>
+              )}
+            </CardContent>
+          </Card>
 
           {/* Financeiro e Impostos */}
           <div className="grid md:grid-cols-2 gap-4">
@@ -386,7 +628,7 @@ export default function ImportarXML() {
         onOpenChange={setDialogFornecedor}
         dados={nfeData?.fornecedor || null}
         tipo="fornecedor"
-        onSuccess={() => setFornecedorCadastrado(true)}
+        onSuccess={handleFornecedorCadastrado}
       />
 
       <CadastrarFornecedorDialog
