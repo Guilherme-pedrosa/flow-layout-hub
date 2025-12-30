@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { PageHeader } from "@/components/shared";
 import { Button } from "@/components/ui/button";
@@ -22,7 +22,8 @@ import {
 import { usePurchaseOrders, PurchaseOrder } from "@/hooks/usePurchaseOrders";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Search, Package, CheckCircle2, Clock, AlertCircle, PackageCheck } from "lucide-react";
+import { Search, Package, CheckCircle2, Clock, AlertCircle, PackageCheck, Sparkles, RefreshCw, X } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 
 const formatCurrency = (value: number | null) => {
   if (value === null || value === undefined) return "R$ 0,00";
@@ -36,8 +37,110 @@ export default function Recebimento() {
   const navigate = useNavigate();
   const [search, setSearch] = useState("");
   const [receiptFilter, setReceiptFilter] = useState<string>("pending");
+  
+  // AI Insight state
+  const [aiInsight, setAiInsight] = useState<string>("");
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiDismissed, setAiDismissed] = useState(false);
 
   const { orders, isLoading } = usePurchaseOrders();
+
+  // Load AI insight on mount
+  useEffect(() => {
+    if (orders.length > 0 && !aiDismissed) {
+      loadAiInsight();
+    }
+  }, [orders.length]);
+
+  const loadAiInsight = async () => {
+    if (orders.length === 0) return;
+    
+    setAiLoading(true);
+    try {
+      const { data: credData } = await supabase
+        .from('inter_credentials')
+        .select('company_id')
+        .eq('is_active', true)
+        .limit(1)
+        .maybeSingle();
+
+      const companyId = credData?.company_id;
+      
+      const pendingOrders = orders.filter(o => o.receipt_status === 'pending');
+      const partialOrders = orders.filter(o => o.receipt_status === 'partial');
+      const completeOrders = orders.filter(o => o.receipt_status === 'complete');
+      const totalPendingValue = orders
+        .filter(o => o.receipt_status !== 'complete')
+        .reduce((sum, o) => sum + (o.total_value || 0), 0);
+      
+      const prompt = `Analise o status de recebimento de mercadorias e dê UM insight curto (máx 120 caracteres):
+- Total de pedidos: ${orders.length}
+- Aguardando conferência: ${pendingOrders.length} pedidos
+- Recebimento parcial: ${partialOrders.length} pedidos
+- Recebimento completo: ${completeOrders.length} pedidos
+- Valor pendente de conferência: R$ ${totalPendingValue.toFixed(2)}
+Foque em prioridades de conferência. Responda APENAS com o texto do insight, sem JSON.`;
+
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/financial-ai`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+          },
+          body: JSON.stringify({
+            messages: [{ role: 'user', content: prompt }],
+            companyId,
+          }),
+        }
+      );
+
+      if (!response.ok) throw new Error('Erro ao carregar insight');
+
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+      let fullText = '';
+      let textBuffer = '';
+
+      if (reader) {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          
+          textBuffer += decoder.decode(value, { stream: true });
+          
+          let newlineIndex: number;
+          while ((newlineIndex = textBuffer.indexOf('\n')) !== -1) {
+            let line = textBuffer.slice(0, newlineIndex);
+            textBuffer = textBuffer.slice(newlineIndex + 1);
+            
+            if (line.endsWith('\r')) line = line.slice(0, -1);
+            if (line.startsWith(':') || line.trim() === '') continue;
+            if (!line.startsWith('data: ')) continue;
+            
+            const jsonStr = line.slice(6).trim();
+            if (jsonStr === '[DONE]') continue;
+            
+            try {
+              const parsed = JSON.parse(jsonStr);
+              const content = parsed.choices?.[0]?.delta?.content;
+              if (content) fullText += content;
+            } catch {
+              // Incomplete JSON
+            }
+          }
+        }
+      }
+
+      setAiInsight(fullText.trim().slice(0, 200));
+    } catch (error) {
+      console.error('Error loading AI insight:', error);
+      setAiInsight('Confira os pedidos pendentes para dar entrada no estoque.');
+    } finally {
+      setAiLoading(false);
+    }
+  };
 
   // Filter orders that need receipt attention (exclude complete)
   const filteredOrders = orders.filter((order) => {
@@ -101,6 +204,42 @@ export default function Recebimento() {
           { label: "Recebimento" },
         ]}
       />
+
+      {/* AI Insight Banner */}
+      {!aiDismissed && (
+        <div className="ai-banner">
+          <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-primary/10 flex-shrink-0">
+            <Sparkles className="h-5 w-5 text-primary" />
+          </div>
+          <div className="flex-1 min-w-0">
+            {aiLoading ? (
+              <div className="flex items-center gap-2">
+                <div className="animate-spin rounded-full h-4 w-4 border-2 border-primary border-t-transparent" />
+                <span className="text-sm text-muted-foreground">Analisando recebimentos...</span>
+              </div>
+            ) : (
+              <p className="text-sm text-foreground">{aiInsight || 'Clique em atualizar para gerar insights sobre recebimentos.'}</p>
+            )}
+          </div>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 flex-shrink-0"
+            onClick={() => loadAiInsight()}
+            disabled={aiLoading}
+          >
+            <RefreshCw className={`h-4 w-4 ${aiLoading ? 'animate-spin' : ''}`} />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 flex-shrink-0"
+            onClick={() => setAiDismissed(true)}
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
+      )}
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
