@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
+import { Separator } from '@/components/ui/separator';
 import {
   Table,
   TableBody,
@@ -18,6 +19,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
+  DialogDescription,
 } from '@/components/ui/dialog';
 import {
   Select,
@@ -27,8 +29,20 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Search, Edit, Landmark, Wallet, PiggyBank } from 'lucide-react';
+import { Plus, Search, Edit, Landmark, Wallet, PiggyBank, Settings, Upload, Key, FileKey, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
+import { useCompany } from '@/contexts/CompanyContext';
+
+interface InterCredentials {
+  id: string;
+  client_id: string;
+  certificate_file_path: string;
+  private_key_file_path: string;
+  account_number: string | null;
+  is_active: boolean;
+  last_sync_at: string | null;
+}
 
 const accountTypeLabels: Record<string, string> = {
   corrente: 'Conta Corrente',
@@ -43,9 +57,11 @@ const accountTypeIcons: Record<string, React.ReactNode> = {
 };
 
 export function BancosList() {
+  const { currentCompany } = useCompany();
   const { bankAccounts, loading, fetchBankAccounts, createBankAccount, updateBankAccount, toggleBankAccountStatus } = useBankAccounts();
   const [search, setSearch] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [interDialogOpen, setInterDialogOpen] = useState(false);
   const [editingAccount, setEditingAccount] = useState<BankAccount | null>(null);
   const [formData, setFormData] = useState({
     name: '',
@@ -56,6 +72,17 @@ export function BancosList() {
     initial_balance: 0,
   });
   const [companyId, setCompanyId] = useState<string>('');
+  
+  // Inter API Config State
+  const [interLoading, setInterLoading] = useState(false);
+  const [interSaving, setInterSaving] = useState(false);
+  const [interCredentials, setInterCredentials] = useState<InterCredentials | null>(null);
+  const [interClientId, setInterClientId] = useState('');
+  const [interClientSecret, setInterClientSecret] = useState('');
+  const [interAccountNumber, setInterAccountNumber] = useState('');
+  const [interCertFile, setInterCertFile] = useState<File | null>(null);
+  const [interKeyFile, setInterKeyFile] = useState<File | null>(null);
+  const [selectedAccountForInter, setSelectedAccountForInter] = useState<BankAccount | null>(null);
 
   useEffect(() => {
     fetchBankAccounts();
@@ -67,6 +94,130 @@ export function BancosList() {
     if (data?.[0]?.id) {
       setCompanyId(data[0].id);
     }
+  };
+
+  const loadInterCredentials = async () => {
+    if (!currentCompany?.id) return;
+    
+    setInterLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from("inter_credentials")
+        .select("id, client_id, certificate_file_path, private_key_file_path, account_number, is_active, last_sync_at")
+        .eq("company_id", currentCompany.id)
+        .maybeSingle();
+
+      if (error) throw error;
+      
+      if (data) {
+        setInterCredentials(data);
+        setInterClientId(data.client_id);
+        setInterAccountNumber(data.account_number || "");
+      } else {
+        setInterCredentials(null);
+        setInterClientId("");
+        setInterAccountNumber("");
+      }
+    } catch (error) {
+      console.error("Erro ao carregar credenciais:", error);
+    } finally {
+      setInterLoading(false);
+    }
+  };
+
+  const handleOpenInterDialog = (account: BankAccount) => {
+    setSelectedAccountForInter(account);
+    setInterAccountNumber(account.account_number || "");
+    loadInterCredentials();
+    setInterDialogOpen(true);
+  };
+
+  const handleInterFileChange = (
+    e: React.ChangeEvent<HTMLInputElement>,
+    setter: React.Dispatch<React.SetStateAction<File | null>>
+  ) => {
+    if (e.target.files && e.target.files.length > 0) {
+      setter(e.target.files[0]);
+    }
+  };
+
+  const handleSaveInterConfig = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!currentCompany?.id) {
+      toast.error("Selecione uma empresa");
+      return;
+    }
+
+    if (!interClientId || !interClientSecret) {
+      toast.error("Preencha o Client ID e Client Secret");
+      return;
+    }
+
+    if (!interAccountNumber) {
+      toast.error("O número da conta corrente é obrigatório");
+      return;
+    }
+
+    if (!interCredentials && (!interCertFile || !interKeyFile)) {
+      toast.error("Faça upload do certificado e da chave privada");
+      return;
+    }
+
+    setInterSaving(true);
+
+    try {
+      let certPath = interCredentials?.certificate_file_path || "";
+      let keyPath = interCredentials?.private_key_file_path || "";
+
+      if (interCertFile) {
+        certPath = `${currentCompany.id}/cert.crt`;
+        const { error: certError } = await supabase.storage
+          .from("inter-certs")
+          .upload(certPath, interCertFile, { upsert: true });
+
+        if (certError) throw new Error(`Erro no upload do certificado: ${certError.message}`);
+      }
+
+      if (interKeyFile) {
+        keyPath = `${currentCompany.id}/key.key`;
+        const { error: keyError } = await supabase.storage
+          .from("inter-certs")
+          .upload(keyPath, interKeyFile, { upsert: true });
+
+        if (keyError) throw new Error(`Erro no upload da chave: ${keyError.message}`);
+      }
+
+      const { error: dbError } = await supabase
+        .from("inter_credentials")
+        .upsert({
+          company_id: currentCompany.id,
+          client_id: interClientId,
+          client_secret: interClientSecret,
+          certificate_file_path: certPath,
+          private_key_file_path: keyPath,
+          account_number: interAccountNumber || null,
+        }, { onConflict: "company_id" });
+
+      if (dbError) throw dbError;
+
+      toast.success("Configuração do Banco Inter salva com sucesso!");
+      setInterCertFile(null);
+      setInterKeyFile(null);
+      setInterClientSecret("");
+      setInterDialogOpen(false);
+      loadInterCredentials();
+    } catch (error: any) {
+      console.error("Erro ao salvar:", error);
+      toast.error(error.message || "Erro ao salvar configuração");
+    } finally {
+      setInterSaving(false);
+    }
+  };
+
+  const isInterBank = (bankName: string | null) => {
+    if (!bankName) return false;
+    return bankName.toLowerCase().includes('inter');
   };
 
   const filteredAccounts = bankAccounts.filter(
@@ -208,6 +359,9 @@ export function BancosList() {
                     <div className="flex items-center gap-2">
                       {accountTypeIcons[account.account_type] || <Landmark className="h-4 w-4" />}
                       {account.name}
+                      {isInterBank(account.bank_name) && (
+                        <Badge variant="secondary" className="text-xs">Inter</Badge>
+                      )}
                     </div>
                   </TableCell>
                   <TableCell>{account.bank_name || '-'}</TableCell>
@@ -233,13 +387,25 @@ export function BancosList() {
                     />
                   </TableCell>
                   <TableCell className="text-right">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => handleOpenDialog(account)}
-                    >
-                      <Edit className="h-4 w-4" />
-                    </Button>
+                    <div className="flex items-center justify-end gap-1">
+                      {isInterBank(account.bank_name) && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleOpenInterDialog(account)}
+                          title="Configurar API Inter"
+                        >
+                          <Settings className="h-4 w-4" />
+                        </Button>
+                      )}
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleOpenDialog(account)}
+                      >
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))
@@ -336,6 +502,159 @@ export function BancosList() {
               {editingAccount ? 'Salvar' : 'Criar'}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Inter API Config Dialog */}
+      <Dialog open={interDialogOpen} onOpenChange={setInterDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Settings className="h-5 w-5" />
+              Configurar API Banco Inter
+            </DialogTitle>
+            <DialogDescription>
+              Configure as credenciais da API do Banco Inter para {selectedAccountForInter?.name}
+            </DialogDescription>
+          </DialogHeader>
+          
+          {interLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            </div>
+          ) : (
+            <form onSubmit={handleSaveInterConfig} className="space-y-4">
+              {/* Status atual */}
+              {interCredentials ? (
+                <div className="flex items-center gap-2 p-3 rounded-lg bg-green-500/10 border border-green-500/20">
+                  <CheckCircle className="h-5 w-5 text-green-500" />
+                  <div className="text-sm">
+                    <p className="font-medium text-green-600">Integração configurada</p>
+                    <p className="text-muted-foreground">
+                      Última sincronização: {interCredentials.last_sync_at 
+                        ? new Date(interCredentials.last_sync_at).toLocaleString("pt-BR") 
+                        : "Nunca"}
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 p-3 rounded-lg bg-muted">
+                  <AlertCircle className="h-5 w-5 text-muted-foreground" />
+                  <p className="text-sm text-muted-foreground">Integração não configurada</p>
+                </div>
+              )}
+
+              <div className="space-y-2">
+                <Label htmlFor="interClientId">Client ID</Label>
+                <Input
+                  id="interClientId"
+                  value={interClientId}
+                  onChange={(e) => setInterClientId(e.target.value)}
+                  placeholder="Seu Client ID do Banco Inter"
+                  required
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="interClientSecret">
+                  Client Secret
+                  {interCredentials && (
+                    <span className="text-xs text-muted-foreground ml-2">
+                      (deixe em branco para manter o atual)
+                    </span>
+                  )}
+                </Label>
+                <Input
+                  id="interClientSecret"
+                  type="password"
+                  value={interClientSecret}
+                  onChange={(e) => setInterClientSecret(e.target.value)}
+                  placeholder={interCredentials ? "••••••••••••" : "Seu Client Secret"}
+                  required={!interCredentials}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="interAccountNumber">Número da Conta Corrente</Label>
+                <Input
+                  id="interAccountNumber"
+                  value={interAccountNumber}
+                  onChange={(e) => setInterAccountNumber(e.target.value)}
+                  placeholder="Ex: 12345678-9"
+                  required
+                />
+              </div>
+
+              <Separator />
+
+              <div className="space-y-2">
+                <Label htmlFor="interCertFile" className="flex items-center gap-2">
+                  <FileKey className="h-4 w-4" />
+                  Certificado Digital (.crt)
+                  {interCredentials?.certificate_file_path && !interCertFile && (
+                    <Badge variant="outline" className="ml-2">
+                      <CheckCircle className="h-3 w-3 mr-1" />
+                      Configurado
+                    </Badge>
+                  )}
+                </Label>
+                <Input
+                  id="interCertFile"
+                  type="file"
+                  accept=".crt,.pem,.cer"
+                  onChange={(e) => handleInterFileChange(e, setInterCertFile)}
+                />
+                {interCertFile && (
+                  <p className="text-sm text-muted-foreground">
+                    Arquivo selecionado: {interCertFile.name}
+                  </p>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="interKeyFile" className="flex items-center gap-2">
+                  <Key className="h-4 w-4" />
+                  Chave Privada (.key)
+                  {interCredentials?.private_key_file_path && !interKeyFile && (
+                    <Badge variant="outline" className="ml-2">
+                      <CheckCircle className="h-3 w-3 mr-1" />
+                      Configurado
+                    </Badge>
+                  )}
+                </Label>
+                <Input
+                  id="interKeyFile"
+                  type="file"
+                  accept=".key,.pem"
+                  onChange={(e) => handleInterFileChange(e, setInterKeyFile)}
+                />
+                {interKeyFile && (
+                  <p className="text-sm text-muted-foreground">
+                    Arquivo selecionado: {interKeyFile.name}
+                  </p>
+                )}
+              </div>
+
+              <DialogFooter>
+                <Button variant="outline" type="button" onClick={() => setInterDialogOpen(false)}>
+                  Cancelar
+                </Button>
+                <Button type="submit" disabled={interSaving}>
+                  {interSaving ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Salvando...
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="h-4 w-4 mr-2" />
+                      {interCredentials ? "Atualizar" : "Configurar"}
+                    </>
+                  )}
+                </Button>
+              </DialogFooter>
+            </form>
+          )}
         </DialogContent>
       </Dialog>
     </div>
