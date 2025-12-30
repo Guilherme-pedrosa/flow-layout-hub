@@ -8,8 +8,7 @@ import { Separator } from "@/components/ui/separator";
 import { Building2, Upload, Key, FileKey, CheckCircle, AlertCircle, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-
-const TEMP_COMPANY_ID = "7875af52-18d0-434e-8ae9-97981bd668e7";
+import { useCompany } from "@/contexts/CompanyContext";
 
 interface InterCredentials {
   id: string;
@@ -22,6 +21,7 @@ interface InterCredentials {
 }
 
 export default function ConfiguracaoBancaria() {
+  const { currentCompany } = useCompany();
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [credentials, setCredentials] = useState<InterCredentials | null>(null);
@@ -33,16 +33,20 @@ export default function ConfiguracaoBancaria() {
   const [keyFile, setKeyFile] = useState<File | null>(null);
 
   useEffect(() => {
-    loadCredentials();
-  }, []);
+    if (currentCompany?.id) {
+      loadCredentials();
+    }
+  }, [currentCompany?.id]);
 
   const loadCredentials = async () => {
+    if (!currentCompany?.id) return;
+    
     setLoading(true);
     try {
       const { data, error } = await supabase
         .from("inter_credentials")
         .select("id, client_id, certificate_file_path, private_key_file_path, account_number, is_active, last_sync_at")
-        .eq("company_id", TEMP_COMPANY_ID)
+        .eq("company_id", currentCompany.id)
         .maybeSingle();
 
       if (error) throw error;
@@ -51,6 +55,11 @@ export default function ConfiguracaoBancaria() {
         setCredentials(data);
         setClientId(data.client_id);
         setAccountNumber(data.account_number || "");
+      } else {
+        // Reset form when switching to a company without credentials
+        setCredentials(null);
+        setClientId("");
+        setAccountNumber("");
       }
     } catch (error) {
       console.error("Erro ao carregar credenciais:", error);
@@ -71,6 +80,11 @@ export default function ConfiguracaoBancaria() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    if (!currentCompany?.id) {
+      toast.error("Selecione uma empresa");
+      return;
+    }
+
     if (!clientId || !clientSecret) {
       toast.error("Preencha o Client ID e Client Secret");
       return;
@@ -89,7 +103,7 @@ export default function ConfiguracaoBancaria() {
 
       // Upload do certificado se fornecido
       if (certFile) {
-        certPath = `${TEMP_COMPANY_ID}/cert.crt`;
+        certPath = `${currentCompany.id}/cert.crt`;
         const { error: certError } = await supabase.storage
           .from("inter-certs")
           .upload(certPath, certFile, { upsert: true });
@@ -99,7 +113,7 @@ export default function ConfiguracaoBancaria() {
 
       // Upload da chave privada se fornecida
       if (keyFile) {
-        keyPath = `${TEMP_COMPANY_ID}/key.key`;
+        keyPath = `${currentCompany.id}/key.key`;
         const { error: keyError } = await supabase.storage
           .from("inter-certs")
           .upload(keyPath, keyFile, { upsert: true });
@@ -111,7 +125,7 @@ export default function ConfiguracaoBancaria() {
       const { error: dbError } = await supabase
         .from("inter_credentials")
         .upsert({
-          company_id: TEMP_COMPANY_ID,
+          company_id: currentCompany.id,
           client_id: clientId,
           client_secret: clientSecret,
           certificate_file_path: certPath,
@@ -149,6 +163,12 @@ export default function ConfiguracaoBancaria() {
         <p className="text-muted-foreground">
           Configure a integração com o Banco Inter para conciliação automática
         </p>
+        {currentCompany && (
+          <Badge variant="outline" className="mt-2">
+            <Building2 className="h-3 w-3 mr-1" />
+            {currentCompany.name}
+          </Badge>
+        )}
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
@@ -160,7 +180,7 @@ export default function ConfiguracaoBancaria() {
               API Banco Inter
             </CardTitle>
             <CardDescription>
-              Insira as credenciais de acesso à API do Banco Inter
+              Insira as credenciais de acesso à API do Banco Inter para <strong>{currentCompany?.name}</strong>
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -255,7 +275,7 @@ export default function ConfiguracaoBancaria() {
                 )}
               </div>
 
-              <Button type="submit" className="w-full" disabled={saving}>
+              <Button type="submit" className="w-full" disabled={saving || !currentCompany}>
                 {saving ? (
                   <>
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -329,7 +349,7 @@ export default function ConfiguracaoBancaria() {
                 <AlertCircle className="h-12 w-12 text-muted-foreground/50 mb-4" />
                 <p className="font-medium">Integração não configurada</p>
                 <p className="text-sm text-muted-foreground">
-                  Preencha as credenciais ao lado para habilitar a integração
+                  Preencha as credenciais ao lado para habilitar a integração com <strong>{currentCompany?.name}</strong>
                 </p>
               </div>
             )}
