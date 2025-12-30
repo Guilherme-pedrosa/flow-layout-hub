@@ -37,67 +37,47 @@ export function usePurchaseReceipt() {
   // Buscar pedidos pendentes de recebimento (com status que requires_receipt = true)
   const pendingOrdersQuery = useQuery({
     queryKey: ["purchase_orders_pending_receipt", companyId],
-    queryFn: async () => {
+    queryFn: async (): Promise<any[]> => {
       if (!companyId) return [];
 
-      // Primeiro, buscar os status que requerem recebimento
-      const { data: statuses, error: statusError } = await supabase
-        .from("purchase_order_statuses")
+      // Buscar os status que requerem recebimento
+      const { data: statuses } = await supabase
+        .from("purchase_order_statuses" as any)
         .select("id")
         .eq("company_id", companyId)
         .eq("requires_receipt", true)
         .eq("is_active", true);
 
-      if (statusError) throw statusError;
       if (!statuses || statuses.length === 0) return [];
+      const statusIds = statuses.map((s: any) => s.id);
 
-      const statusIds = statuses.map(s => s.id);
-
-      // Buscar pedidos com esses status e que não têm recebimento completo
-      const { data, error } = await supabase.rpc('get_pending_receipt_orders' as any, {
-        p_company_id: companyId,
-        p_status_ids: statusIds
-      }).catch(() => ({ data: null, error: null }));
-
-      // Fallback: busca direta se RPC não existir
-      if (!data) {
-        const result = await supabase
-          .from("purchase_orders")
-          .select("*")
-          .eq("company_id", companyId)
-          .neq("receipt_status", "complete");
-        
-        const filteredData = (result.data || []).filter((o: any) => statusIds.includes(o.status_id));
-        
-        const supplierIds = filteredData.map((d: any) => d.supplier_id).filter(Boolean);
-        const { data: suppliers } = await supabase
+      // Buscar pedidos da empresa
+      const { data: orders } = await supabase
+        .from("purchase_orders" as any)
+        .select("*")
+        .eq("company_id", companyId);
+      
+      // Filtrar localmente
+      const filteredOrders = (orders || []).filter(
+        (order: any) => statusIds.includes(order.status_id) && order.receipt_status !== 'complete'
+      );
+      
+      if (filteredOrders.length === 0) return [];
+      
+      const supplierIds = filteredOrders.map((d: any) => d.supplier_id).filter(Boolean);
+      
+      let suppliers: any[] = [];
+      if (supplierIds.length > 0) {
+        const { data: suppliersData } = await supabase
           .from("pessoas")
           .select("id, razao_social, nome_fantasia")
-          .in("id", supplierIds.length > 0 ? supplierIds : ['00000000-0000-0000-0000-000000000000']);
-
-        return filteredData.map((order: any) => {
-          const supplier = suppliers?.find((s: any) => s.id === order.supplier_id);
-          return { ...order, supplier };
-        });
+          .in("id", supplierIds);
+        suppliers = suppliersData || [];
       }
 
-      return data || [];
-
-      if (error) throw error;
-      
-      // Buscar fornecedores separadamente
-      const supplierIds = (data || []).map(d => d.supplier_id).filter(Boolean);
-      const { data: suppliers } = await supabase
-        .from("pessoas")
-        .select("id, razao_social, nome_fantasia")
-        .in("id", supplierIds);
-
-      return (data || []).map(order => {
-        const supplier = suppliers?.find(s => s.id === order.supplier_id);
-        return {
-          ...order,
-          supplier,
-        };
+      return filteredOrders.map((order: any) => {
+        const supplier = suppliers.find((s: any) => s.id === order.supplier_id);
+        return { ...order, supplier };
       });
     },
     enabled: !!companyId,
