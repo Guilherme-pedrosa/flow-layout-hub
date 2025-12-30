@@ -54,6 +54,7 @@ const menuGroups: { label: string; items: MenuItem[] }[] = [
     label: "",
     items: [
       { title: "Dashboard", icon: LayoutDashboard, href: "/" },
+      { title: "Financeiro", icon: CircleDollarSign, href: "/financeiro" },
     ],
   },
   {

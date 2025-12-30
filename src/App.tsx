@@ -38,6 +38,7 @@ import ImprimirEtiquetas from "./pages/estoque/ImprimirEtiquetas";
 import FaturarOS from "./pages/faturamento/FaturarOS";
 
 // Financeiro
+import DashboardFinanceiro from "./pages/financeiro/DashboardFinanceiro";
 import ContasReceber from "./pages/financeiro/ContasReceber";
 import ContasPagar from "./pages/financeiro/ContasPagar";
 import Renegociacoes from "./pages/financeiro/Renegociacoes";
@@ -105,6 +106,7 @@ const App = () => (
             <Route path="/faturar-os" element={<FaturarOS />} />
             
             {/* Financeiro */}
+            <Route path="/financeiro" element={<DashboardFinanceiro />} />
             <Route path="/contas-receber" element={<ContasReceber />} />
             <Route path="/contas-pagar" element={<ContasPagar />} />
             <Route path="/renegociacoes" element={<Renegociacoes />} />
