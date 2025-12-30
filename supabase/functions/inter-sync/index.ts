@@ -6,10 +6,107 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+const INTER_API_URL = "https://cdpj.partners.bancointer.com.br";
+
 interface SyncRequest {
   company_id: string;
   date_from: string;
   date_to: string;
+}
+
+// Helper function to call the Inter proxy
+async function callInterProxy(
+  proxyUrl: string,
+  method: string,
+  url: string,
+  headers: Record<string, string>,
+  data?: unknown
+) {
+  console.log(`[inter-sync] Calling proxy: ${method} ${url}`);
+  
+  const response = await fetch(proxyUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ method, url, headers, data })
+  });
+
+  const responseText = await response.text();
+  console.log(`[inter-sync] Proxy response status: ${response.status}`);
+  
+  if (responseText.trim().startsWith('<!') || responseText.trim().startsWith('<html')) {
+    throw new Error(`Proxy retornou HTML (status ${response.status})`);
+  }
+
+  let result;
+  try {
+    result = JSON.parse(responseText);
+  } catch {
+    throw new Error(`Resposta inválida do proxy: ${responseText.substring(0, 200)}`);
+  }
+
+  if (!response.ok) {
+    throw new Error(result.error || result.message || `Erro HTTP ${response.status}`);
+  }
+
+  return result;
+}
+
+// Get OAuth token via proxy
+async function getOAuthToken(
+  proxyUrl: string,
+  clientId: string,
+  clientSecret: string
+): Promise<string> {
+  console.log("[inter-sync] Obtendo token OAuth via proxy...");
+  
+  const tokenUrl = `${INTER_API_URL}/oauth/v2/token`;
+  const params = new URLSearchParams();
+  params.append("client_id", clientId);
+  params.append("client_secret", clientSecret);
+  params.append("grant_type", "client_credentials");
+  params.append("scope", "extrato.read");
+
+  const result = await callInterProxy(
+    proxyUrl,
+    "POST",
+    tokenUrl,
+    { "Content-Type": "application/x-www-form-urlencoded" },
+    params.toString()
+  );
+
+  return result.access_token;
+}
+
+// Get bank statement via proxy
+async function getExtrato(
+  proxyUrl: string,
+  token: string,
+  accountNumber: string,
+  dateFrom: string,
+  dateTo: string
+): Promise<Array<{
+  dataMovimento: string;
+  descricao: string;
+  valor: number;
+  tipoOperacao: string;
+  nsu?: string;
+}>> {
+  console.log(`[inter-sync] Buscando extrato de ${dateFrom} a ${dateTo}`);
+  
+  const extratoUrl = `${INTER_API_URL}/banking/v2/extrato?dataInicio=${dateFrom}&dataFim=${dateTo}`;
+
+  const result = await callInterProxy(
+    proxyUrl,
+    "GET",
+    extratoUrl,
+    {
+      "Authorization": `Bearer ${token}`,
+      "Content-Type": "application/json",
+      "x-conta-corrente": accountNumber,
+    }
+  );
+
+  return result.transacoes || [];
 }
 
 serve(async (req) => {
@@ -25,70 +122,69 @@ serve(async (req) => {
     const { company_id, date_from, date_to }: SyncRequest = await req.json();
     console.log(`[inter-sync] Sincronização: ${company_id}, ${date_from} a ${date_to}`);
 
+    // Get proxy URL
+    const proxyUrl = Deno.env.get("GCP_PIX_FUNCTION_URL");
+    if (!proxyUrl) {
+      throw new Error("GCP_PIX_FUNCTION_URL não configurada");
+    }
+
+    // Fetch Inter credentials
     const { data: credentials, error: credError } = await supabase
       .from("inter_credentials")
       .select("*")
       .eq("company_id", company_id)
+      .eq("is_active", true)
       .single();
 
     if (credError || !credentials) {
       throw new Error("Credenciais do Banco Inter não configuradas");
     }
 
-  // Gerar transações de demonstração (MVP) - NSUs determinísticos para evitar duplicatas
-    const mockTransactions = [];
-    const startDate = new Date(date_from);
-    const endDate = new Date(date_to);
-    let currentDate = new Date(startDate);
+    // Get OAuth token via proxy
+    const token = await getOAuthToken(
+      proxyUrl,
+      credentials.client_id,
+      credentials.client_secret
+    );
 
-    // Seed para gerar valores consistentes baseados na data
-    const seededRandom = (seed: number) => {
-      const x = Math.sin(seed) * 10000;
-      return x - Math.floor(x);
-    };
+    // Get bank statement via proxy
+    const transacoes = await getExtrato(
+      proxyUrl,
+      token,
+      credentials.account_number || "",
+      date_from,
+      date_to
+    );
 
-    while (currentDate <= endDate) {
-      const dateStr = currentDate.toISOString().split("T")[0];
-      const dateSeed = currentDate.getTime();
-      
-      // Gerar 1-2 transações por dia de forma determinística
-      const txCount = Math.floor(seededRandom(dateSeed) * 2) + 1;
-      
-      for (let i = 0; i < txCount; i++) {
-        const seed = dateSeed + i;
-        const isCredit = seededRandom(seed) > 0.4;
-        const amount = Math.round((seededRandom(seed * 2) * 950 + 50) * 100) / 100;
-        
-        mockTransactions.push({
-          date: dateStr,
-          description: isCredit ? "PIX RECEBIDO" : "PAGAMENTO BOLETO",
-          amount: isCredit ? amount : -amount,
-          type: isCredit ? "CREDIT" : "DEBIT",
-          nsu: `INTER-${dateStr}-${i}`, // NSU determinístico baseado na data
-        });
-      }
-      currentDate.setDate(currentDate.getDate() + 1);
-    }
+    console.log(`[inter-sync] Recebidas ${transacoes.length} transações`);
 
+    // Import transactions
     let importedCount = 0;
-    for (const tx of mockTransactions) {
+    for (const tx of transacoes) {
+      const amount = tx.tipoOperacao === "C" ? Math.abs(tx.valor) : -Math.abs(tx.valor);
+      const nsu = tx.nsu || `INTER-${tx.dataMovimento}-${Math.random().toString(36).substr(2, 9)}`;
+      
       const { error } = await supabase
         .from("bank_transactions")
         .upsert({
           company_id,
-          transaction_date: tx.date,
-          description: tx.description,
-          amount: tx.amount,
-          type: tx.type,
-          nsu: tx.nsu,
+          transaction_date: tx.dataMovimento,
+          description: tx.descricao,
+          amount: amount,
+          type: tx.tipoOperacao === "C" ? "CREDIT" : "DEBIT",
+          nsu: nsu,
         }, { onConflict: "company_id,nsu", ignoreDuplicates: true });
+      
       if (!error) importedCount++;
     }
 
+    // Update last sync timestamp
     await supabase
       .from("inter_credentials")
       .update({ last_sync_at: new Date().toISOString() })
       .eq("company_id", company_id);
+
+    console.log(`[inter-sync] Importadas ${importedCount} transações`);
 
     return new Response(
       JSON.stringify({ success: true, imported: importedCount }),
