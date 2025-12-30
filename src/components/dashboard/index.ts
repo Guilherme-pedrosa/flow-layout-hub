@@ -5,3 +5,4 @@ export { KpiCard } from "./KpiCard";
 export { SalesChart } from "./SalesChart";
 export { CashFlowChart } from "./CashFlowChart";
 export { AiInsightCard } from "./AiInsightCard";
+export { TasksList } from "./TasksList";
