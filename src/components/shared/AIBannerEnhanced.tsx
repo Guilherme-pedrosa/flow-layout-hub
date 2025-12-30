@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
-import { Sparkles, X, ChevronRight, AlertTriangle, CheckCircle, Info, Bot, Shield, TrendingUp, Cog } from 'lucide-react';
+import { Sparkles, X, ChevronRight, AlertTriangle, CheckCircle, Info, Bot, Shield, TrendingUp, Cog, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { useNavigate } from 'react-router-dom';
 import { AiInsight } from '@/hooks/useAiInsights';
+import { useAiAnalysis } from '@/hooks/useAiAnalysis';
 
 interface AIBannerEnhancedProps {
   insights: AiInsight[];
@@ -12,6 +13,7 @@ interface AIBannerEnhancedProps {
   className?: string;
   defaultMessage?: string;
   showModeIcon?: boolean;
+  category?: string;
 }
 
 const modeIcons = {
@@ -58,7 +60,10 @@ export function AIBannerEnhanced({
   className, 
   defaultMessage = "IA monitorando em tempo real",
   showModeIcon = true,
+  category,
 }: AIBannerEnhancedProps) {
+  // Trigger AI analysis when component mounts
+  const { isAnalyzing } = useAiAnalysis(category);
   const navigate = useNavigate();
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
   const [currentInsight, setCurrentInsight] = useState<AiInsight | null>(null);
@@ -100,10 +105,14 @@ export function AIBannerEnhanced({
         className
       )}>
         <div className="flex-shrink-0 text-muted-foreground">
-          <Sparkles className="h-5 w-5 animate-pulse" />
+          {isAnalyzing ? (
+            <Loader2 className="h-5 w-5 animate-spin" />
+          ) : (
+            <Sparkles className="h-5 w-5 animate-pulse" />
+          )}
         </div>
         <p className="text-sm text-muted-foreground">
-          {defaultMessage}
+          {isAnalyzing ? "IA analisando dados do sistema..." : defaultMessage}
         </p>
       </div>
     );

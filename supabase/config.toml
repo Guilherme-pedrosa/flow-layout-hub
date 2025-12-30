@@ -1,5 +1,8 @@
 project_id = "qxxhwzxxneciskhemqmi"
 
+[functions.analyze-and-generate-insights]
+verify_jwt = false
+
 [functions.consultar-cnpj]
 verify_jwt = false
 
