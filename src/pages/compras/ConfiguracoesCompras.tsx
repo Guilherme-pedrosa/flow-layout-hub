@@ -81,6 +81,7 @@ interface StatusFormData {
   color: string;
   stock_behavior: StockBehavior;
   financial_behavior: FinancialBehavior;
+  requires_receipt: boolean;
   is_default: boolean;
   is_active: boolean;
 }
@@ -90,6 +91,7 @@ const initialFormData: StatusFormData = {
   color: '#6b7280',
   stock_behavior: 'none',
   financial_behavior: 'none',
+  requires_receipt: false,
   is_default: false,
   is_active: true,
 };
@@ -162,6 +164,7 @@ export default function ConfiguracoesCompras() {
       color: status.color,
       stock_behavior: status.stock_behavior,
       financial_behavior: status.financial_behavior,
+      requires_receipt: status.requires_receipt,
       is_default: status.is_default,
       is_active: status.is_active,
     });
@@ -341,6 +344,7 @@ export default function ConfiguracoesCompras() {
                       <TableHead>Nome</TableHead>
                       <TableHead>Estoque</TableHead>
                       <TableHead>Financeiro</TableHead>
+                      <TableHead className="text-center">Recebimento</TableHead>
                       <TableHead className="text-center">Padrão</TableHead>
                       <TableHead className="text-center">Ativo</TableHead>
                       <TableHead className="w-24">Ações</TableHead>
@@ -369,6 +373,16 @@ export default function ConfiguracoesCompras() {
                         <TableCell>
                           {getFinancialBehaviorBadge(status.financial_behavior) || (
                             <span className="text-muted-foreground text-sm">Nenhum</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {status.requires_receipt ? (
+                            <Badge variant="outline" className="gap-1 bg-blue-50 text-blue-700 border-blue-200">
+                              <Package className="h-3 w-3" />
+                              Sim
+                            </Badge>
+                          ) : (
+                            <span className="text-muted-foreground text-sm">Não</span>
                           )}
                         </TableCell>
                         <TableCell className="text-center">
@@ -617,6 +631,17 @@ export default function ConfiguracoesCompras() {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+
+            <div className="flex items-center gap-2 pt-2 pb-2 border-t">
+              <Switch
+                checked={formData.requires_receipt}
+                onCheckedChange={(checked) => setFormData({ ...formData, requires_receipt: checked })}
+              />
+              <div>
+                <Label>Vai para recebimento (Check-in)</Label>
+                <p className="text-xs text-muted-foreground">Pedidos com este status aparecem na tela de recebimento</p>
+              </div>
             </div>
 
             <div className="flex items-center justify-between pt-2">

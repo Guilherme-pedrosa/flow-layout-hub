@@ -13,6 +13,7 @@ export interface PurchaseOrderStatus {
   is_default: boolean;
   stock_behavior: StockBehavior;
   financial_behavior: FinancialBehavior;
+  requires_receipt: boolean;
   display_order: number;
   is_active: boolean;
   created_at: string;
@@ -26,6 +27,7 @@ export interface PurchaseOrderStatusInsert {
   is_default?: boolean;
   stock_behavior: StockBehavior;
   financial_behavior: FinancialBehavior;
+  requires_receipt?: boolean;
   display_order?: number;
   is_active?: boolean;
 }
@@ -36,6 +38,7 @@ export interface PurchaseOrderStatusUpdate {
   is_default?: boolean;
   stock_behavior?: StockBehavior;
   financial_behavior?: FinancialBehavior;
+  requires_receipt?: boolean;
   display_order?: number;
   is_active?: boolean;
 }
