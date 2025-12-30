@@ -10,3 +10,4 @@ export { CadastrarProdutoDialog } from "./CadastrarProdutoDialog";
 export { PrintLabelDialog } from "./PrintLabelDialog";
 export * from "./types";
 export { PurchaseSuggestionPanel } from "./PurchaseSuggestionPanel";
+export { FiscalDocumentsMonitor } from "./FiscalDocumentsMonitor";
