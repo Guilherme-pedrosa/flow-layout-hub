@@ -14,13 +14,14 @@ import { Loader2 } from "lucide-react";
 import { NFEFornecedor, Transportador } from "./types";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { useQueryClient } from "@tanstack/react-query";
 
 interface CadastrarFornecedorDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   dados: NFEFornecedor | Transportador | null;
   tipo: "fornecedor" | "transportador";
-  onSuccess: () => void;
+  onSuccess: (pessoaId?: string) => void;
 }
 
 export function CadastrarFornecedorDialog({
@@ -31,6 +32,7 @@ export function CadastrarFornecedorDialog({
   onSuccess,
 }: CadastrarFornecedorDialogProps) {
   const [loading, setLoading] = useState(false);
+  const queryClient = useQueryClient();
 
   if (!dados) return null;
 
@@ -41,8 +43,8 @@ export function CadastrarFornecedorDialog({
   const handleCadastrar = async () => {
     setLoading(true);
     try {
-      // Cadastrar como cliente (fornecedor)
-      const clienteData = isFornecedor
+      // Cadastrar na tabela pessoas (unificada)
+      const pessoaData = isFornecedor
         ? {
             tipo_pessoa: "PJ" as const,
             cpf_cnpj: fornecedor.cnpj,
@@ -57,6 +59,11 @@ export function CadastrarFornecedorDialog({
             telefone: fornecedor.telefone,
             email: fornecedor.email,
             status: "ativo" as const,
+            is_active: true,
+            is_fornecedor: true,
+            is_cliente: false,
+            is_colaborador: false,
+            is_transportadora: false,
           }
         : {
             tipo_pessoa: transportador.cnpj?.length === 11 ? "PF" as const : "PJ" as const,
@@ -67,14 +74,26 @@ export function CadastrarFornecedorDialog({
             cidade: transportador.cidade,
             estado: transportador.uf,
             status: "ativo" as const,
+            is_active: true,
+            is_fornecedor: false,
+            is_cliente: false,
+            is_colaborador: false,
+            is_transportadora: true,
           };
 
-      const { error } = await supabase.from("clientes").insert(clienteData);
+      const { data, error } = await supabase
+        .from("pessoas")
+        .insert(pessoaData)
+        .select("id")
+        .single();
 
       if (error) throw error;
 
+      // Invalidar cache do react-query para atualizar todas as listas
+      await queryClient.invalidateQueries({ queryKey: ["pessoas"] });
+
       toast.success(`${isFornecedor ? "Fornecedor" : "Transportador"} cadastrado com sucesso!`);
-      onSuccess();
+      onSuccess(data?.id);
       onOpenChange(false);
     } catch (error: any) {
       toast.error(`Erro ao cadastrar: ${error.message}`);
