@@ -51,6 +51,9 @@ export default function ImportarXML() {
   const [sugestaoAiCfop, setSugestaoAiCfop] = useState<string>("");
   const [loadingAiCfop, setLoadingAiCfop] = useState(false);
   
+  // Estado para finalidade da nota
+  const [finalidade, setFinalidade] = useState<"comercializacao" | "industrializacao" | "uso_consumo" | "ativo" | "garantia" | "outros">("comercializacao");
+  
   // Estados financeiros adicionais
   const [financeiroObservacao, setFinanceiroObservacao] = useState("");
   const [planoContasId, setPlanoContasId] = useState("");
@@ -165,6 +168,18 @@ export default function ImportarXML() {
 
       setNfeData({ ...data.data, itens: itensComCfop });
       setStep("review");
+      
+      // Detectar finalidade automaticamente baseado na natureza da operação
+      const natOp = (data.data.nota.naturezaOperacao || '').toLowerCase();
+      if (natOp.includes('garantia') || natOp.includes('substituição') || natOp.includes('subst')) {
+        setFinalidade('garantia');
+        toast.info("Detectada nota de garantia - financeiro desabilitado automaticamente.");
+      } else if (natOp.includes('remessa') || natOp.includes('demonstração') || natOp.includes('conserto')) {
+        setFinalidade('outros');
+      } else {
+        setFinalidade('comercializacao');
+      }
+      
       toast.success("XML processado com sucesso!");
     } catch (error) {
       console.error("Error processing XML:", error);
@@ -529,15 +544,39 @@ Responda APENAS com o código CFOP de 4 dígitos. Sem explicações.`;
             />
           </div>
 
-          {/* CFOP de Entrada - Campo Obrigatório */}
+          {/* Finalidade e CFOP de Entrada - Campo Obrigatório */}
           <Card className="border-primary/50">
             <CardHeader className="pb-3">
               <CardTitle className="text-base flex items-center gap-2">
-                CFOP de Entrada
+                Finalidade e CFOP de Entrada
                 <span className="text-destructive">*</span>
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3">
+            <CardContent className="space-y-4">
+              {/* Campo de Finalidade */}
+              <div className="space-y-2">
+                <Label>Finalidade da Nota</Label>
+                <Select value={finalidade} onValueChange={(v: typeof finalidade) => setFinalidade(v)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione a finalidade..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="comercializacao">Compra para Comercialização</SelectItem>
+                    <SelectItem value="industrializacao">Compra para Industrialização</SelectItem>
+                    <SelectItem value="uso_consumo">Uso e Consumo</SelectItem>
+                    <SelectItem value="ativo">Ativo Imobilizado</SelectItem>
+                    <SelectItem value="garantia">Garantia / Substituição</SelectItem>
+                    <SelectItem value="outros">Outras Operações</SelectItem>
+                  </SelectContent>
+                </Select>
+                {finalidade === "garantia" && (
+                  <p className="text-sm text-amber-600 dark:text-amber-400">
+                    ⚠️ Notas de garantia não geram lançamentos financeiros (contas a pagar).
+                  </p>
+                )}
+              </div>
+
+              {/* Campo de CFOP */}
               <div className="flex items-end gap-3">
                 <div className="flex-1 space-y-2">
                   <Label>Código Fiscal de Operação (obrigatório)</Label>
@@ -545,34 +584,34 @@ Responda APENAS com o código CFOP de 4 dígitos. Sem explicações.`;
                     <SelectTrigger className={!cfopGeral ? "border-destructive" : ""}>
                       <SelectValue placeholder="Selecione o CFOP de entrada..." />
                     </SelectTrigger>
-                    <SelectContent className="max-h-[300px]">
+                    <SelectContent className="max-h-[400px]">
                       {/* Operações Estaduais */}
-                      <div className="px-2 py-1.5 text-sm font-semibold text-primary">
+                      <div className="px-2 py-1.5 text-sm font-semibold text-primary bg-muted/50">
                         Estadual (1xxx)
                       </div>
-                      {CFOPS_ENTRADA_ESTADUAL.slice(0, 10).map(cfop => (
+                      {CFOPS_ENTRADA_ESTADUAL.map(cfop => (
                         <SelectItem key={cfop.codigo} value={cfop.codigo}>
-                          {cfop.codigo} - {cfop.descricao.slice(0, 50)}...
+                          {cfop.codigo} - {cfop.descricao.length > 55 ? cfop.descricao.slice(0, 55) + '...' : cfop.descricao}
                         </SelectItem>
                       ))}
                       
                       {/* Operações Interestaduais */}
-                      <div className="px-2 py-1.5 text-sm font-semibold text-primary border-t mt-1 pt-1">
+                      <div className="px-2 py-1.5 text-sm font-semibold text-primary border-t mt-1 pt-1 bg-muted/50">
                         Interestadual (2xxx)
                       </div>
-                      {CFOPS_ENTRADA_INTERESTADUAL.slice(0, 10).map(cfop => (
+                      {CFOPS_ENTRADA_INTERESTADUAL.map(cfop => (
                         <SelectItem key={cfop.codigo} value={cfop.codigo}>
-                          {cfop.codigo} - {cfop.descricao.slice(0, 50)}...
+                          {cfop.codigo} - {cfop.descricao.length > 55 ? cfop.descricao.slice(0, 55) + '...' : cfop.descricao}
                         </SelectItem>
                       ))}
                       
                       {/* Importação */}
-                      <div className="px-2 py-1.5 text-sm font-semibold text-primary border-t mt-1 pt-1">
+                      <div className="px-2 py-1.5 text-sm font-semibold text-primary border-t mt-1 pt-1 bg-muted/50">
                         Importação (3xxx)
                       </div>
-                      {CFOPS_ENTRADA_EXTERIOR.slice(0, 5).map(cfop => (
+                      {CFOPS_ENTRADA_EXTERIOR.map(cfop => (
                         <SelectItem key={cfop.codigo} value={cfop.codigo}>
-                          {cfop.codigo} - {cfop.descricao.slice(0, 50)}...
+                          {cfop.codigo} - {cfop.descricao.length > 55 ? cfop.descricao.slice(0, 55) + '...' : cfop.descricao}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -607,19 +646,35 @@ Responda APENAS com o código CFOP de 4 dígitos. Sem explicações.`;
 
           {/* Financeiro e Impostos */}
           <div className="grid md:grid-cols-2 gap-4">
-            <FinanceiroCard
-              formaPagamento={nfeData.financeiro.formaPagamento}
-              parcelas={nfeData.financeiro.parcelas}
-              valorTotal={nfeData.nota.valorTotal}
-              observacao={financeiroObservacao}
-              planoContasId={planoContasId}
-              centroCustoId={centroCustoId}
-              formaPagamentoSelecionada={formaPagamentoSelecionada}
-              onObservacaoChange={setFinanceiroObservacao}
-              onPlanoContasChange={setPlanoContasId}
-              onCentroCustoChange={setCentroCustoId}
-              onFormaPagamentoChange={setFormaPagamentoSelecionada}
-            />
+            {finalidade !== "garantia" ? (
+              <FinanceiroCard
+                formaPagamento={nfeData.financeiro.formaPagamento}
+                parcelas={nfeData.financeiro.parcelas}
+                valorTotal={nfeData.nota.valorTotal}
+                observacao={financeiroObservacao}
+                planoContasId={planoContasId}
+                centroCustoId={centroCustoId}
+                formaPagamentoSelecionada={formaPagamentoSelecionada}
+                onObservacaoChange={setFinanceiroObservacao}
+                onPlanoContasChange={setPlanoContasId}
+                onCentroCustoChange={setCentroCustoId}
+                onFormaPagamentoChange={setFormaPagamentoSelecionada}
+              />
+            ) : (
+              <Card className="bg-amber-50/50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800">
+                <CardHeader>
+                  <CardTitle className="text-base text-amber-700 dark:text-amber-400">
+                    Financeiro
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-sm text-amber-600 dark:text-amber-400">
+                    ⚠️ Notas de <strong>Garantia/Substituição</strong> não geram lançamentos financeiros (contas a pagar).
+                    A entrada dos produtos será registrada apenas para controle de estoque.
+                  </p>
+                </CardContent>
+              </Card>
+            )}
             <ImpostosCard
               impostos={nfeData.impostos}
               observacoes={nfeData.observacoes}
