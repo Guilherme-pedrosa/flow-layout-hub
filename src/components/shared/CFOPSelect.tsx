@@ -38,6 +38,7 @@ interface CFOPSelectProps {
   companyState?: string | null; // UF da empresa
   purpose?: string; // Finalidade: estoque, ordem_de_servico, despesa_operacional
   productDescription?: string; // Descrição do produto/serviço
+  nfeCfopSaida?: string | null; // CFOP de saída da NF-e (para calcular entrada)
 }
 
 export function CFOPSelect({ 
@@ -47,7 +48,8 @@ export function CFOPSelect({
   supplierState,
   companyState,
   purpose,
-  productDescription
+  productDescription,
+  nfeCfopSaida
 }: CFOPSelectProps) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -135,26 +137,48 @@ export function CFOPSelect({
     try {
       const prompt = `Você é um especialista em CFOP (Código Fiscal de Operações e Prestações) brasileiro.
 
-Contexto da operação:
-- UF do Fornecedor: ${supplierState}
+Contexto da operação de ENTRADA:
+- UF do Fornecedor (emitente): ${supplierState}
 - UF da Empresa (destinatário): ${companyState}
 - Finalidade: ${purpose === 'estoque' ? 'Compra para revenda/comercialização' : purpose === 'ordem_de_servico' ? 'Uso em ordem de serviço' : 'Despesa operacional/uso e consumo'}
 ${productDescription ? `- Descrição: ${productDescription}` : ''}
+${nfeCfopSaida ? `- CFOP de SAÍDA da NF-e (usado pelo fornecedor): ${nfeCfopSaida}` : ''}
 
 Tipo de operação: ${operationType === 'estadual' ? 'Estadual (mesma UF) - CFOPs 1xxx' : operationType === 'interestadual' ? 'Interestadual (UFs diferentes) - CFOPs 2xxx' : 'Importação - CFOPs 3xxx'}
 
-Sugira o CFOP mais adequado. Responda APENAS com o código de 4 dígitos, sem explicação.`;
+REGRA IMPORTANTE: O CFOP de entrada é o "espelho" do CFOP de saída:
+- Se o fornecedor usou 5.102 (venda de mercadoria adquirida), o comprador usa 1.102 (compra para comercialização)
+- Se o fornecedor usou 6.102 (interestadual), o comprador usa 2.102
+- CFOPs 5xxx viram 1xxx, CFOPs 6xxx viram 2xxx, CFOPs 7xxx viram 3xxx
+
+${nfeCfopSaida ? `O CFOP de saída ${nfeCfopSaida} indica que o CFOP de entrada deve ser ${
+  nfeCfopSaida.startsWith('5') ? '1' + nfeCfopSaida.slice(1) :
+  nfeCfopSaida.startsWith('6') ? '2' + nfeCfopSaida.slice(1) :
+  nfeCfopSaida.startsWith('7') ? '3' + nfeCfopSaida.slice(1) : 
+  'baseado na natureza da operação'
+}.` : 'Sem CFOP de saída informado, sugira baseado na finalidade.'}
+
+Sugira o CFOP de ENTRADA mais adequado. Responda APENAS com o código de 4 dígitos, sem explicação.`;
 
       const { data, error } = await supabase.functions.invoke('financial-ai', {
         body: { 
-          prompt,
+          messages: [{ role: 'user', content: prompt }],
           type: 'cfop_suggestion'
         }
       });
 
       if (error) throw error;
 
-      const suggestedCFOP = data?.response?.match(/\d{4}/)?.[0];
+      // Handle streaming response or direct response
+      let suggestedCFOP: string | undefined;
+      
+      if (typeof data === 'string') {
+        suggestedCFOP = data.match(/\d{4}/)?.[0];
+      } else if (data?.response) {
+        suggestedCFOP = data.response.match(/\d{4}/)?.[0];
+      } else if (data?.choices?.[0]?.message?.content) {
+        suggestedCFOP = data.choices[0].message.content.match(/\d{4}/)?.[0];
+      }
       
       if (suggestedCFOP) {
         // Verificar se o CFOP existe na lista disponível

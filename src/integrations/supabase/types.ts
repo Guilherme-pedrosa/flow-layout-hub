@@ -3429,6 +3429,7 @@ export type Database = {
           invoice_date: string | null
           invoice_number: string | null
           invoice_series: string | null
+          nfe_cfop_saida: string | null
           nfe_date: string | null
           nfe_imported_at: string | null
           nfe_key: string | null
@@ -3479,6 +3480,7 @@ export type Database = {
           invoice_date?: string | null
           invoice_number?: string | null
           invoice_series?: string | null
+          nfe_cfop_saida?: string | null
           nfe_date?: string | null
           nfe_imported_at?: string | null
           nfe_key?: string | null
@@ -3529,6 +3531,7 @@ export type Database = {
           invoice_date?: string | null
           invoice_number?: string | null
           invoice_series?: string | null
+          nfe_cfop_saida?: string | null
           nfe_date?: string | null
           nfe_imported_at?: string | null
           nfe_key?: string | null

@@ -172,6 +172,9 @@ IMPORTANTE:
 
 ${financialContext}`;
 
+    // For CFOP suggestions, don't use streaming (short response)
+    const useStreaming = type !== 'cfop_suggestion';
+
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -184,7 +187,7 @@ ${financialContext}`;
           { role: "system", content: systemPrompt },
           ...messages,
         ],
-        stream: true,
+        stream: useStreaming,
       }),
     });
 
@@ -205,6 +208,14 @@ ${financialContext}`;
       console.error("AI gateway error:", response.status, t);
       return new Response(JSON.stringify({ error: "AI gateway error" }), {
         status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // For non-streaming requests, return JSON directly
+    if (!useStreaming) {
+      const data = await response.json();
+      return new Response(JSON.stringify(data), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }

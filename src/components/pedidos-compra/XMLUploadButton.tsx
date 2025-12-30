@@ -324,6 +324,8 @@ export function XMLUploadButton({
         // Salvar dados do fornecedor ORIGINAL da NF-e para auditoria
         nfe_supplier_cnpj: nfeData.fornecedor.cnpj,
         nfe_supplier_name: nfeData.fornecedor.razaoSocial,
+        // Salvar CFOP de saída da NF-e para sugestão de CFOP de entrada
+        nfe_cfop_saida: nfeData.itens?.[0]?.cfopSaida || null,
       };
 
       // Apply header changes if selected
