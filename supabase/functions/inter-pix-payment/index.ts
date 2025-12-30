@@ -137,6 +137,9 @@ async function sendPixPayment(
 }
 
 serve(async (req) => {
+  console.log("[inter-pix-payment] ========== INICIANDO ==========");
+  console.log("[inter-pix-payment] Method:", req.method);
+  
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
@@ -148,10 +151,12 @@ serve(async (req) => {
 
   try {
     const payload = await req.json();
-    console.log("[inter-pix-payment] Request received:", JSON.stringify(payload));
+    console.log("[inter-pix-payment] 1. Payload recebido:", JSON.stringify(payload));
 
     // Get proxy URL
     const proxyUrl = Deno.env.get("GCP_PIX_FUNCTION_URL");
+    console.log("[inter-pix-payment] 2. Proxy URL configurada:", proxyUrl ? "SIM" : "NÃO");
+    
     if (!proxyUrl) {
       throw new Error("GCP_PIX_FUNCTION_URL não configurada");
     }
@@ -266,9 +271,11 @@ serve(async (req) => {
       }
     }
 
-    console.log(`[inter-pix-payment] Payment ID: ${pixPaymentId}`);
+    console.log(`[inter-pix-payment] 3. Payment ID criado: ${pixPaymentId}`);
 
     // Fetch Inter credentials
+    console.log("[inter-pix-payment] 4. Buscando credenciais Inter para company:", paymentData.companyId);
+    
     const { data: credentials, error: credError } = await supabase
       .from("inter_credentials")
       .select("*")
@@ -277,29 +284,37 @@ serve(async (req) => {
       .single();
 
     if (credError || !credentials) {
+      console.error("[inter-pix-payment] Erro ao buscar credenciais:", credError);
       throw new Error("Credenciais Inter não configuradas para esta empresa");
     }
+    
+    console.log("[inter-pix-payment] 5. Credenciais encontradas - client_id:", credentials.client_id?.substring(0, 8) + "...");
 
     try {
       // Get OAuth token via proxy
+      console.log("[inter-pix-payment] 6. Obtendo access token via proxy...");
       const token = await getOAuthToken(
         proxyUrl,
         credentials.client_id,
         credentials.client_secret
       );
+      console.log("[inter-pix-payment] 7. Access token obtido:", token ? "SIM" : "NÃO");
 
       // Send PIX payment via proxy
+      console.log("[inter-pix-payment] 8. Enviando PIX via proxy...");
       const pixResult = await sendPixPayment(
         proxyUrl,
         token,
         credentials.account_number || "",
         paymentData
       );
+      console.log("[inter-pix-payment] 9. Resposta PIX:", JSON.stringify(pixResult));
 
       // Check if pending approval
       const isPendingApproval = ["AGUARDANDO_APROVACAO", "PENDENTE", "EM_PROCESSAMENTO", "AGENDADO"]
         .includes(pixResult.status);
       
+      console.log("[inter-pix-payment] 10. Status:", pixResult.status, "- Pendente aprovação:", isPendingApproval);
       const internalStatus = isPendingApproval ? "pending_approval" : "completed";
       
       await supabase
