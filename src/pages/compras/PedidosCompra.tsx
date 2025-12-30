@@ -1,8 +1,8 @@
 import { useState, useEffect } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, useNavigate } from "react-router-dom";
 import { PageHeader } from "@/components/shared";
 import { Button } from "@/components/ui/button";
-import { Plus, Search, FileSpreadsheet, AlertTriangle, CheckCircle2, Sparkles, RefreshCw, X } from "lucide-react";
+import { Plus, Search, FileSpreadsheet, AlertTriangle, CheckCircle2, Sparkles, RefreshCw, X, MoreHorizontal, FileText, Printer, DollarSign, Download } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -20,12 +20,20 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { usePurchaseOrders, PurchaseOrder } from "@/hooks/usePurchaseOrders";
 import { usePurchaseOrderStatuses } from "@/hooks/usePurchaseOrderStatuses";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { PurchaseOrderForm } from "@/components/pedidos-compra/PurchaseOrderForm";
 import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 const formatCurrency = (value: number | null) => {
   if (value === null || value === undefined) return "R$ 0,00";
@@ -43,6 +51,7 @@ const purposeLabels: Record<string, string> = {
 
 export default function PedidosCompra() {
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
   const [showForm, setShowForm] = useState(false);
   const [editingOrder, setEditingOrder] = useState<PurchaseOrder | null>(null);
   const [search, setSearch] = useState("");
@@ -235,6 +244,24 @@ Foque no que precisa de atenção. Responda APENAS com o texto do insight, sem J
     }
   };
 
+  const handleViewFinanceiro = (order: PurchaseOrder) => {
+    // Redireciona para contas a pagar filtrado pelo fornecedor
+    navigate(`/contas-pagar?supplier=${order.supplier_id}`);
+  };
+
+  const handlePrintOrder = async (order: PurchaseOrder) => {
+    toast.info("Gerando PDF do pedido de compra...");
+    // TODO: Implementar geração de PDF
+  };
+
+  const handleDownloadNF = (order: PurchaseOrder) => {
+    if (order.nfe_xml_url) {
+      window.open(order.nfe_xml_url, '_blank');
+    } else {
+      toast.warning("NF-e não disponível para download");
+    }
+  };
+
   if (showForm) {
     return (
       <div className="space-y-6">
@@ -354,12 +381,13 @@ Foque no que precisa de atenção. Responda APENAS com o texto do insight, sem J
               <TableRow>
                 <TableHead className="w-[80px]">Nº</TableHead>
                 <TableHead>Fornecedor</TableHead>
+                <TableHead>NF Entrada</TableHead>
                 <TableHead>Finalidade</TableHead>
                 <TableHead>Data</TableHead>
                 <TableHead className="text-right">Valor Total</TableHead>
                 <TableHead className="text-center">Status</TableHead>
                 <TableHead className="text-center">Recebimento</TableHead>
-                <TableHead className="text-center">Alertas</TableHead>
+                <TableHead className="text-center w-[80px]">Ações</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -374,6 +402,16 @@ Foque no que precisa de atenção. Responda APENAS com o texto do insight, sem J
                   </TableCell>
                   <TableCell>
                     {order.supplier?.razao_social || order.supplier_name || "-"}
+                  </TableCell>
+                  <TableCell>
+                    {order.nfe_number ? (
+                      <div className="flex items-center gap-1">
+                        <FileText className="h-3.5 w-3.5 text-muted-foreground" />
+                        <span className="font-mono text-sm">{order.nfe_number}</span>
+                      </div>
+                    ) : (
+                      <span className="text-muted-foreground text-sm">-</span>
+                    )}
                   </TableCell>
                   <TableCell>
                     {purposeLabels[order.purpose] || order.purpose}
@@ -422,25 +460,35 @@ Foque no que precisa de atenção. Responda APENAS com o texto do insight, sem J
                   <TableCell className="text-center">
                     {getReceiptStatusBadge(order.receipt_status)}
                   </TableCell>
-                  <TableCell className="text-center">
-                    <div className="flex items-center justify-center gap-1">
-                      {order.requires_reapproval && (
-                        <Badge variant="destructive" className="gap-1">
-                          <AlertTriangle className="h-3 w-3" />
-                          Reaprovação
-                        </Badge>
-                      )}
-                      {order.nfe_imported_at && (
-                        <span title="NF-e importada">
-                          <CheckCircle2 className="h-4 w-4 text-green-500" />
-                        </span>
-                      )}
-                      {order.cte_imported_at && (
-                        <span title="CT-e importado">
-                          <CheckCircle2 className="h-4 w-4 text-blue-500" />
-                        </span>
-                      )}
-                    </div>
+                  <TableCell className="text-center" onClick={(e) => e.stopPropagation()}>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" className="h-8 w-8">
+                          <MoreHorizontal className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => handleEditOrder(order)}>
+                          <FileText className="mr-2 h-4 w-4" />
+                          Ver Detalhes
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handlePrintOrder(order)}>
+                          <Printer className="mr-2 h-4 w-4" />
+                          Imprimir Pedido
+                        </DropdownMenuItem>
+                        {order.nfe_number && (
+                          <DropdownMenuItem onClick={() => handleDownloadNF(order)}>
+                            <Download className="mr-2 h-4 w-4" />
+                            Baixar NF-e
+                          </DropdownMenuItem>
+                        )}
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem onClick={() => handleViewFinanceiro(order)}>
+                          <DollarSign className="mr-2 h-4 w-4" />
+                          Ver no Financeiro
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </TableCell>
                 </TableRow>
               ))}
