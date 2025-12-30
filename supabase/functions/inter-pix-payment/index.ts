@@ -182,9 +182,11 @@ serve(async (req) => {
     };
 
     // Build PIX payment payload for Inter API - pagamento por chave PIX
-    // Para PIX por chave, não é necessário enviar destinatario - a chave já identifica o recebedor
+    // O valor deve ser em CENTAVOS como string (ex: R$12,00 = "1200")
+    const valorEmCentavos = Math.round(paymentData.amount * 100).toString();
+    
     const pixApiPayload = {
-      valor: paymentData.amount.toFixed(2),
+      valor: valorEmCentavos,
       chave: paymentData.pixKey,
       pagador: {
         cpfCnpj: credentials.account_number ? undefined : paymentData.recipientDocument.replace(/[^\d]/g, ""),
