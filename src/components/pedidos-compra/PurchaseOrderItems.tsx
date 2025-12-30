@@ -30,10 +30,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, Trash2, Package, ChevronsUpDown, Check } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Plus, Trash2, Package, ChevronsUpDown, Check, Loader2 } from "lucide-react";
 import { useProducts } from "@/hooks/useProducts";
 import { useChartOfAccounts, useCostCenters } from "@/hooks/useFinanceiro";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 
 export interface LocalItem {
   id?: string;
@@ -60,10 +68,36 @@ const formatCurrency = (value: number) => {
 };
 
 export function PurchaseOrderItems({ items, onItemsChange, purpose }: PurchaseOrderItemsProps) {
-  const { products, isLoading: productsLoading } = useProducts();
+  const { products, isLoading: productsLoading, createProduct, refetch: refetchProducts } = useProducts();
   const { accounts: chartOfAccounts, fetchAccounts } = useChartOfAccounts();
   const { costCenters, fetchCostCenters } = useCostCenters();
   const [openProductPopover, setOpenProductPopover] = useState<number | null>(null);
+  const [showCadastrarProduto, setShowCadastrarProduto] = useState(false);
+  const [newProductData, setNewProductData] = useState({ code: '', description: '' });
+  const [creatingProduct, setCreatingProduct] = useState(false);
+
+  const handleCreateProduct = async () => {
+    if (!newProductData.code || !newProductData.description) {
+      toast.error("Preencha código e descrição");
+      return;
+    }
+    setCreatingProduct(true);
+    try {
+      await createProduct.mutateAsync({
+        code: newProductData.code,
+        description: newProductData.description,
+        is_active: true,
+      });
+      toast.success("Produto criado com sucesso!");
+      setShowCadastrarProduto(false);
+      setNewProductData({ code: '', description: '' });
+      refetchProducts();
+    } catch (error) {
+      toast.error("Erro ao criar produto");
+    } finally {
+      setCreatingProduct(false);
+    }
+  };
 
   useEffect(() => {
     fetchAccounts();
@@ -157,6 +191,22 @@ export function PurchaseOrderItems({ items, onItemsChange, purpose }: PurchaseOr
         avoidCollisions={true}
       >
         <Command>
+          <div className="p-2 border-b">
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full justify-start gap-2 text-primary hover:text-primary"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setShowCadastrarProduto(true);
+                setOpenProductPopover(null);
+              }}
+            >
+              <Plus className="h-4 w-4" />
+              Cadastrar novo produto
+            </Button>
+          </div>
           <CommandInput placeholder="Buscar por código ou descrição..." />
           <CommandList className="max-h-[250px]">
             <CommandEmpty>Nenhum produto encontrado.</CommandEmpty>
@@ -195,6 +245,7 @@ export function PurchaseOrderItems({ items, onItemsChange, purpose }: PurchaseOr
   );
 
   return (
+    <>
     <Card>
       <CardHeader className="flex flex-row items-center justify-between pb-3">
         <CardTitle className="text-lg">Itens do Pedido</CardTitle>
@@ -426,5 +477,45 @@ export function PurchaseOrderItems({ items, onItemsChange, purpose }: PurchaseOr
         )}
       </CardContent>
     </Card>
+
+    {/* Dialog de Cadastro Rápido de Produto */}
+    <Dialog open={showCadastrarProduto} onOpenChange={setShowCadastrarProduto}>
+      <DialogContent className="sm:max-w-[400px]">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Package className="h-5 w-5" />
+            Cadastrar Produto Rápido
+          </DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4 py-4">
+          <div className="space-y-2">
+            <Label>Código *</Label>
+            <Input
+              value={newProductData.code}
+              onChange={(e) => setNewProductData({ ...newProductData, code: e.target.value })}
+              placeholder="Ex: PROD001"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>Descrição *</Label>
+            <Input
+              value={newProductData.description}
+              onChange={(e) => setNewProductData({ ...newProductData, description: e.target.value })}
+              placeholder="Nome do produto"
+            />
+          </div>
+        </div>
+        <div className="flex justify-end gap-2">
+          <Button variant="outline" onClick={() => setShowCadastrarProduto(false)}>
+            Cancelar
+          </Button>
+          <Button onClick={handleCreateProduct} disabled={creatingProduct}>
+            {creatingProduct && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            Salvar
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }
