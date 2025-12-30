@@ -37,7 +37,7 @@ export function AiInsightCard({ insight, isLoading, onRefresh }: AiInsightCardPr
 
   if (isLoading) {
     return (
-      <Card className="p-6 bg-gradient-to-br from-slate-800 to-slate-900 text-white">
+      <Card className="p-6 bg-gradient-to-br from-purple-600 to-blue-600 text-white border-0">
         <div className="flex items-start gap-4">
           <Skeleton className="h-12 w-12 rounded-xl bg-white/10" />
           <div className="flex-1">
@@ -59,7 +59,7 @@ export function AiInsightCard({ insight, isLoading, onRefresh }: AiInsightCardPr
   });
 
   return (
-    <Card className="overflow-hidden bg-gradient-to-br from-slate-800 to-slate-900 text-white border-0">
+    <Card className="overflow-hidden bg-gradient-to-br from-purple-600 to-blue-600 text-white border-0">
       <div className="p-6">
         <div className="flex items-start gap-4">
           <div className={cn('h-12 w-12 rounded-xl flex items-center justify-center shadow-lg', config.bgClass)}>
