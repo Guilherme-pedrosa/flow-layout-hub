@@ -5,7 +5,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Sparkles, Loader2, Check, X, Info } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Sparkles, Loader2, Check, X, Info, Lightbulb } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -15,6 +16,19 @@ interface NcmValidation {
   ncmDescription?: string;
   suggestion?: string;
   confidence?: string;
+  notes?: string;
+  error?: string;
+}
+
+interface NcmSuggestion {
+  ncm: string;
+  description: string;
+  confidence: 'alta' | 'média' | 'baixa';
+  reason: string;
+}
+
+interface NcmSuggestionResult {
+  suggestions: NcmSuggestion[];
   notes?: string;
   error?: string;
 }
@@ -33,6 +47,7 @@ interface ProductFormFiscalProps {
     benefit_code: string;
     description: string;
     icms_rate: number;
+    product_group?: string;
   };
   onChange: (field: string, value: any) => void;
 }
@@ -57,6 +72,12 @@ const specificProductOptions = [
   { value: 'arma', label: 'Arma de fogo' },
 ];
 
+const confidenceColors = {
+  alta: 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20',
+  média: 'bg-amber-500/10 text-amber-600 border-amber-500/20',
+  baixa: 'bg-orange-500/10 text-orange-600 border-orange-500/20',
+};
+
 const LabelWithTooltip = ({ label, tooltip }: { label: string; tooltip: string }) => (
   <div className="flex items-center gap-1">
     <Label className="text-sm">{label}</Label>
@@ -76,6 +97,50 @@ const LabelWithTooltip = ({ label, tooltip }: { label: string; tooltip: string }
 export function ProductFormFiscal({ formData, onChange }: ProductFormFiscalProps) {
   const [validating, setValidating] = useState(false);
   const [validation, setValidation] = useState<NcmValidation | null>(null);
+  const [suggesting, setSuggesting] = useState(false);
+  const [suggestions, setSuggestions] = useState<NcmSuggestionResult | null>(null);
+
+  const suggestNCM = async () => {
+    if (!formData.description) {
+      toast.error('Informe a descrição do produto para sugerir NCM');
+      return;
+    }
+
+    setSuggesting(true);
+    setSuggestions(null);
+
+    try {
+      const { data, error } = await supabase.functions.invoke('suggest-ncm', {
+        body: { 
+          productDescription: formData.description,
+          productCategory: formData.product_group 
+        },
+      });
+
+      if (error) throw error;
+
+      if (data.error) {
+        toast.error(data.error);
+        return;
+      }
+
+      setSuggestions(data);
+      toast.success('Sugestões de NCM geradas!');
+    } catch (error) {
+      console.error('Error suggesting NCM:', error);
+      toast.error('Erro ao sugerir NCM');
+    } finally {
+      setSuggesting(false);
+    }
+  };
+
+  const applyNcmSuggestion = (suggestion: NcmSuggestion) => {
+    onChange('ncm', suggestion.ncm);
+    onChange('ncm_description', suggestion.description);
+    onChange('ncm_validated', false);
+    setSuggestions(null);
+    toast.success(`NCM ${suggestion.ncm} aplicado!`);
+  };
 
   const validateNCM = async () => {
     if (!formData.ncm) {
@@ -167,6 +232,21 @@ export function ProductFormFiscal({ formData, onChange }: ProductFormFiscalProps
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
                 <Sparkles className="h-4 w-4" />
+              )}
+            </Button>
+            <Button 
+              type="button" 
+              variant="outline" 
+              size="icon"
+              onClick={suggestNCM}
+              disabled={suggesting || !formData.description}
+              title="Sugerir NCM com IA Especialista"
+              className="text-amber-600 hover:text-amber-700"
+            >
+              {suggesting ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Lightbulb className="h-4 w-4" />
               )}
             </Button>
           </div>
@@ -315,6 +395,54 @@ export function ProductFormFiscal({ formData, onChange }: ProductFormFiscalProps
                 )}
               </div>
             </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Sugestões NCM - IA Especialista */}
+      {suggestions && suggestions.suggestions && suggestions.suggestions.length > 0 && (
+        <Card className="border-amber-500/50">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Lightbulb className="h-5 w-5 text-amber-600" />
+              Sugestões de NCM (IA Especialista)
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {suggestions.suggestions.map((suggestion, index) => (
+              <div 
+                key={index} 
+                className="flex items-start gap-3 p-3 rounded-lg border bg-muted/30 hover:bg-muted/50 transition-colors"
+              >
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="font-mono font-bold">{suggestion.ncm}</span>
+                    <Badge 
+                      variant="outline" 
+                      className={confidenceColors[suggestion.confidence]}
+                    >
+                      {suggestion.confidence}
+                    </Badge>
+                  </div>
+                  <p className="text-sm text-muted-foreground">{suggestion.description}</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    💡 {suggestion.reason}
+                  </p>
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => applyNcmSuggestion(suggestion)}
+                >
+                  Usar
+                </Button>
+              </div>
+            ))}
+            {suggestions.notes && (
+              <p className="text-xs text-muted-foreground mt-2 italic">
+                ⚠️ {suggestions.notes}
+              </p>
+            )}
           </CardContent>
         </Card>
       )}
