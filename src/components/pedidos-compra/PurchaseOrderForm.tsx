@@ -74,6 +74,21 @@ export function PurchaseOrderForm({ order, onClose }: PurchaseOrderFormProps) {
   const [costCenterId, setCostCenterId] = useState(order?.cost_center_id || "");
   const [cfopGeral, setCfopGeral] = useState("");
 
+  // Sincronizar estado com os dados do pedido quando mudar
+  useEffect(() => {
+    if (order) {
+      console.log("[DEBUG] Order changed, syncing state:", order.supplier_id, order.supplier?.razao_social);
+      setSupplierId(order.supplier_id || "");
+      setPurpose(order.purpose || "estoque");
+      setObservations(order.observations || "");
+      setFreightValue(order.freight_value?.toString() || "0");
+      setHasExternalFreight(order.has_external_freight || false);
+      setStatusId(order.status_id || "");
+      setChartAccountId(order.chart_account_id || "");
+      setCostCenterId(order.cost_center_id || "");
+    }
+  }, [order?.id]);
+
   // Items state (managed here, passed to child)
   const [items, setItems] = useState<LocalItem[]>([]);
 

@@ -297,7 +297,7 @@ Foque no que precisa de atenção. Responda APENAS com o texto do insight, sem J
           title={editingOrder ? `Pedido #${editingOrder.order_number}` : "Novo Pedido de Compra"}
           description={editingOrder ? "Editar pedido de compra" : "Criar novo pedido de compra"}
           breadcrumbs={[
-            { label: "Compras", href: "/pedidos-compra" },
+            { label: "Compras" },
             { label: "Pedidos de Compra", href: "/pedidos-compra" },
             { label: editingOrder ? `#${editingOrder.order_number}` : "Novo" },
           ]}
@@ -316,7 +316,7 @@ Foque no que precisa de atenção. Responda APENAS com o texto do insight, sem J
         title="Pedidos de Compra"
         description="Gerencie pedidos de compra com importação de XML e validação de divergências"
         breadcrumbs={[
-          { label: "Compras", href: "/pedidos-compra" },
+          { label: "Compras" },
           { label: "Pedidos de Compra" },
         ]}
         actions={
