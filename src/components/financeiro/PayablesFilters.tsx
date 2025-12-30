@@ -75,21 +75,21 @@ export function PayablesFilters({
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3 md:space-y-4">
       {/* Action Buttons Row */}
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         {/* Add Button */}
-        <Button onClick={onAddNew} className="bg-green-600 hover:bg-green-700 text-white gap-2">
+        <Button onClick={onAddNew} className="bg-green-600 hover:bg-green-700 text-white gap-2 h-9 md:h-10 text-sm">
           <Plus className="h-4 w-4" />
-          Adicionar
+          <span className="hidden sm:inline">Adicionar</span>
         </Button>
 
         {/* More Actions Dropdown */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" className="bg-gray-800 text-white hover:bg-gray-700 border-gray-700 gap-2">
+            <Button variant="outline" className="bg-gray-800 text-white hover:bg-gray-700 border-gray-700 gap-1 md:gap-2 h-9 md:h-10 text-sm">
               <Settings className="h-4 w-4" />
-              Mais ações
+              <span className="hidden sm:inline">Mais ações</span>
               <ChevronDown className="h-4 w-4" />
             </Button>
           </DropdownMenuTrigger>
@@ -100,23 +100,25 @@ export function PayablesFilters({
           </DropdownMenuContent>
         </DropdownMenu>
 
-        <div className="flex-1" />
+        <div className="flex-1 min-w-0" />
 
         {/* Month Selector */}
         <div className="flex items-center">
           <Button
             variant="outline"
-            className="bg-gray-800 text-white hover:bg-gray-700 border-gray-700 rounded-r-none border-r-0 gap-2"
+            className="bg-gray-800 text-white hover:bg-gray-700 border-gray-700 rounded-r-none border-r-0 gap-1 md:gap-2 h-9 md:h-10 text-xs md:text-sm px-2 md:px-4"
             onClick={() => {}}
           >
-            <Calendar className="h-4 w-4" />
-            {format(filters.currentMonth, "MMMM 'de' yyyy", { locale: ptBR })}
+            <Calendar className="h-4 w-4 hidden sm:block" />
+            <span className="truncate max-w-[100px] md:max-w-none">
+              {format(filters.currentMonth, "MMM/yy", { locale: ptBR })}
+            </span>
             <ChevronDown className="h-4 w-4" />
           </Button>
           <Button
             variant="outline"
             size="icon"
-            className="bg-gray-800 text-white hover:bg-gray-700 border-gray-700 rounded-l-none"
+            className="bg-gray-800 text-white hover:bg-gray-700 border-gray-700 rounded-l-none h-9 md:h-10 w-9 md:w-10"
             onClick={handlePreviousMonth}
           >
             <Filter className="h-4 w-4" />
@@ -124,9 +126,9 @@ export function PayablesFilters({
         </div>
 
         {/* Advanced Search */}
-        <Button variant="outline" className="bg-green-600 hover:bg-green-700 text-white border-green-600 gap-2">
+        <Button variant="outline" className="bg-green-600 hover:bg-green-700 text-white border-green-600 gap-1 md:gap-2 h-9 md:h-10 text-sm">
           <Search className="h-4 w-4" />
-          Busca avançada
+          <span className="hidden sm:inline">Busca avançada</span>
         </Button>
       </div>
     </div>

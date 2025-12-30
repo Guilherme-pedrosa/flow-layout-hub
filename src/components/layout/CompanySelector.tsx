@@ -50,27 +50,27 @@ export function CompanySelector() {
       <DropdownMenuTrigger asChild>
         <Button
           variant="ghost"
-          className="flex items-center gap-2 h-auto py-2 px-3 hover:bg-secondary"
+          className="flex items-center gap-1.5 md:gap-2 h-auto py-1.5 md:py-2 px-2 md:px-3 hover:bg-secondary max-w-[180px] md:max-w-none"
         >
-          <Avatar className="h-8 w-8 rounded-md">
+          <Avatar className="h-7 w-7 md:h-8 md:w-8 rounded-md flex-shrink-0">
             {currentCompany.logo_url ? (
               <AvatarImage src={currentCompany.logo_url} alt={currentCompany.name} />
             ) : null}
-            <AvatarFallback className="rounded-md bg-primary text-primary-foreground text-xs">
+            <AvatarFallback className="rounded-md bg-primary text-primary-foreground text-[10px] md:text-xs">
               {getInitials(currentCompany.name)}
             </AvatarFallback>
           </Avatar>
-          <div className="hidden flex-col items-start text-left md:flex">
-            <span className="text-sm font-medium max-w-[150px] truncate">
+          <div className="hidden sm:flex flex-col items-start text-left min-w-0">
+            <span className="text-xs md:text-sm font-medium max-w-[100px] md:max-w-[150px] truncate">
               {currentCompany.name}
             </span>
             {currentCompany.cnpj && (
-              <span className="text-xs text-muted-foreground">
+              <span className="text-[10px] md:text-xs text-muted-foreground truncate max-w-[100px] md:max-w-[150px]">
                 {formatCNPJ(currentCompany.cnpj)}
               </span>
             )}
           </div>
-          <ChevronDown className="h-4 w-4 text-muted-foreground ml-1" />
+          <ChevronDown className="h-3.5 w-3.5 md:h-4 md:w-4 text-muted-foreground flex-shrink-0" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-72">

@@ -38,6 +38,7 @@ import { format, parseISO, isBefore, startOfDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 export interface PayableRow {
   id: string;
@@ -234,8 +235,133 @@ export function PayablesTable({
     );
   }
 
+  const isMobile = useIsMobile();
+
+  // Mobile card view
+  if (isMobile) {
+    return (
+      <div className="space-y-3">
+        {sortedPayables.map((payable) => {
+          const isSelected = selectedIds.has(payable.id);
+          const canSelect = !payable.is_paid && payable.payment_status !== "sent_to_bank";
+          
+          return (
+            <div
+              key={payable.id}
+              className={cn(
+                "rounded-lg border bg-card p-3 space-y-3",
+                isSelected && "ring-2 ring-primary bg-primary/5"
+              )}
+            >
+              {/* Header */}
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex items-start gap-2 flex-1 min-w-0">
+                  {canSelect && (
+                    <Checkbox
+                      checked={isSelected}
+                      onCheckedChange={() => onToggleSelect(payable.id)}
+                      className="mt-0.5"
+                    />
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <p className="font-medium text-sm line-clamp-1">
+                      {payable.description || "Sem descrição"}
+                    </p>
+                    <p className="text-xs text-muted-foreground truncate">
+                      {payable.supplier?.nome_fantasia || payable.supplier?.razao_social || "—"}
+                    </p>
+                  </div>
+                </div>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon" className="h-8 w-8 -mr-1">
+                      <MoreHorizontal className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-48">
+                    <DropdownMenuItem onClick={() => onEdit(payable)}>
+                      <Eye className="mr-2 h-4 w-4" />
+                      Ver detalhes
+                    </DropdownMenuItem>
+                    {!payable.is_paid && (
+                      <DropdownMenuItem onClick={() => onEdit(payable)}>
+                        <Edit className="mr-2 h-4 w-4" />
+                        Editar
+                      </DropdownMenuItem>
+                    )}
+                    <DropdownMenuSeparator />
+                    {!payable.is_paid && payable.pix_key && (
+                      <DropdownMenuItem onClick={() => onPayPix(payable)}>
+                        <QrCode className="mr-2 h-4 w-4 text-emerald-600" />
+                        Pagar com PIX
+                      </DropdownMenuItem>
+                    )}
+                    {!payable.is_paid && payable.boleto_barcode && (
+                      <DropdownMenuItem onClick={() => onPayBoleto(payable)}>
+                        <Receipt className="mr-2 h-4 w-4 text-blue-600" />
+                        Pagar Boleto
+                      </DropdownMenuItem>
+                    )}
+                    {!payable.is_paid && (
+                      <DropdownMenuItem onClick={() => onMarkAsPaid(payable)}>
+                        <CheckCircle className="mr-2 h-4 w-4 text-emerald-600" />
+                        Marcar como pago
+                      </DropdownMenuItem>
+                    )}
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => onDuplicate(payable)}>
+                      <Copy className="mr-2 h-4 w-4" />
+                      Duplicar
+                    </DropdownMenuItem>
+                    {!payable.is_paid && (
+                      <DropdownMenuItem
+                        onClick={() => onDelete(payable)}
+                        className="text-destructive focus:text-destructive"
+                      >
+                        <Trash2 className="mr-2 h-4 w-4" />
+                        Excluir
+                      </DropdownMenuItem>
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+
+              {/* Details */}
+              <div className="flex flex-wrap items-center gap-2 text-xs">
+                <span className="tabular-nums text-muted-foreground">
+                  {format(parseISO(payable.due_date), "dd/MM/yyyy")}
+                </span>
+                {getPaymentMethodBadge(payable.payment_method_type)}
+                {getStatusBadge(payable)}
+              </div>
+
+              {/* Footer */}
+              <div className="flex items-center justify-between pt-2 border-t border-border">
+                <span className="text-lg font-bold tabular-nums">
+                  {formatCurrency(payable.amount)}
+                </span>
+                {!payable.is_paid && payable.pix_key && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => onPayPix(payable)}
+                    className="h-8 text-xs gap-1"
+                  >
+                    <QrCode className="h-3.5 w-3.5" />
+                    Pagar
+                  </Button>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+
+  // Desktop table view
   return (
-    <div className="border rounded-lg overflow-hidden">
+    <div className="border rounded-lg overflow-hidden overflow-x-auto">
       <Table>
         <TableHeader>
           <TableRow className="bg-muted/50 hover:bg-muted/50">

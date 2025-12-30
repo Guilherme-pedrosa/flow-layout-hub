@@ -1,4 +1,4 @@
-import { NavLink } from "react-router-dom";
+import { NavLink, useLocation } from "react-router-dom";
 import {
   LayoutDashboard,
   ShoppingCart,
@@ -32,14 +32,18 @@ import {
   Target,
   Tag,
   Printer,
+  X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { useEffect } from "react";
 
 interface AppSidebarProps {
   collapsed: boolean;
   onToggle: () => void;
+  mobileOpen?: boolean;
+  onMobileClose?: () => void;
 }
 
 interface MenuItem {
@@ -132,14 +136,16 @@ const menuGroups: { label: string; items: MenuItem[] }[] = [
   },
 ];
 
-export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
-  return (
-    <aside
-      className={cn(
-        "fixed left-0 top-0 z-40 flex h-screen flex-col bg-sidebar transition-all duration-200",
-        collapsed ? "w-16" : "w-60"
-      )}
-    >
+export function AppSidebar({ collapsed, onToggle, mobileOpen, onMobileClose }: AppSidebarProps) {
+  const location = useLocation();
+
+  // Close mobile menu when route changes
+  useEffect(() => {
+    onMobileClose?.();
+  }, [location.pathname]);
+
+  const sidebarContent = (
+    <>
       {/* Header */}
       <div className="flex h-14 items-center justify-between border-b border-sidebar-border px-3">
         {!collapsed && (
@@ -150,13 +156,19 @@ export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
         <Button
           variant="ghost"
           size="icon"
-          onClick={onToggle}
+          onClick={mobileOpen ? onMobileClose : onToggle}
           className={cn(
             "h-8 w-8 text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent",
-            collapsed && "mx-auto"
+            collapsed && !mobileOpen && "mx-auto"
           )}
         >
-          {collapsed ? <Menu className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+          {mobileOpen ? (
+            <X className="h-4 w-4" />
+          ) : collapsed ? (
+            <Menu className="h-4 w-4" />
+          ) : (
+            <ChevronLeft className="h-4 w-4" />
+          )}
         </Button>
       </div>
 
@@ -179,17 +191,17 @@ export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
                       to={item.href}
                       className={({ isActive }) =>
                         cn(
-                          "flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors",
-                          collapsed && "justify-center px-2",
+                          "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors",
+                          collapsed && !mobileOpen && "justify-center px-2",
                           isActive
                             ? "bg-sidebar-accent text-sidebar-foreground"
                             : "text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent/50"
                         )
                       }
-                      title={collapsed ? item.title : undefined}
+                      title={collapsed && !mobileOpen ? item.title : undefined}
                     >
                       <item.icon className="h-4 w-4 flex-shrink-0" />
-                      {!collapsed && (
+                      {(!collapsed || mobileOpen) && (
                         <>
                           <span className="flex-1 truncate">{item.title}</span>
                           {item.badge && item.badge > 0 && (
@@ -207,6 +219,45 @@ export function AppSidebar({ collapsed, onToggle }: AppSidebarProps) {
           ))}
         </nav>
       </ScrollArea>
+    </>
+  );
+
+  // Mobile: drawer from left
+  if (mobileOpen !== undefined) {
+    return (
+      <>
+        {/* Desktop sidebar */}
+        <aside
+          className={cn(
+            "fixed left-0 top-0 z-40 hidden md:flex h-screen flex-col bg-sidebar transition-all duration-200",
+            collapsed ? "w-16" : "w-60"
+          )}
+        >
+          {sidebarContent}
+        </aside>
+
+        {/* Mobile sidebar (drawer) */}
+        <aside
+          className={cn(
+            "fixed left-0 top-0 z-50 flex md:hidden h-screen w-72 flex-col bg-sidebar transition-transform duration-300",
+            mobileOpen ? "translate-x-0" : "-translate-x-full"
+          )}
+        >
+          {sidebarContent}
+        </aside>
+      </>
+    );
+  }
+
+  // Fallback for non-mobile aware usage
+  return (
+    <aside
+      className={cn(
+        "fixed left-0 top-0 z-40 flex h-screen flex-col bg-sidebar transition-all duration-200",
+        collapsed ? "w-16" : "w-60"
+      )}
+    >
+      {sidebarContent}
     </aside>
   );
 }

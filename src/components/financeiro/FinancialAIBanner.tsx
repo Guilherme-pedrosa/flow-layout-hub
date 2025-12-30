@@ -166,7 +166,7 @@ export function FinancialAIBanner({ type, onActionClick }: FinancialAIBannerProp
   if (isDismissed) return null;
 
   return (
-    <div className="relative bg-gradient-to-r from-slate-800 to-slate-900 rounded-xl p-4 mb-6 overflow-hidden">
+    <div className="relative bg-gradient-to-r from-slate-800 to-slate-900 rounded-xl p-3 md:p-4 mb-4 md:mb-6 overflow-hidden">
       {/* Background pattern */}
       <div className="absolute inset-0 opacity-5">
         <div className="absolute inset-0" style={{
@@ -175,40 +175,40 @@ export function FinancialAIBanner({ type, onActionClick }: FinancialAIBannerProp
         }} />
       </div>
 
-      <div className="relative flex items-center justify-between gap-4">
-        <div className="flex items-center gap-4 flex-1 min-w-0">
+      <div className="relative flex items-start md:items-center justify-between gap-3 md:gap-4">
+        <div className="flex items-start md:items-center gap-3 md:gap-4 flex-1 min-w-0">
           {/* AI Icon */}
-          <div className="flex-shrink-0 h-12 w-12 rounded-xl bg-gradient-to-br from-pink-500 to-purple-600 flex items-center justify-center shadow-lg">
+          <div className="flex-shrink-0 h-10 w-10 md:h-12 md:w-12 rounded-xl bg-gradient-to-br from-pink-500 to-purple-600 flex items-center justify-center shadow-lg">
             {isLoading ? (
-              <Loader2 className="h-6 w-6 text-white animate-spin" />
+              <Loader2 className="h-5 w-5 md:h-6 md:w-6 text-white animate-spin" />
             ) : (
-              <Brain className="h-6 w-6 text-white" />
+              <Brain className="h-5 w-5 md:h-6 md:w-6 text-white" />
             )}
           </div>
 
           {/* Content */}
           <div className="flex-1 min-w-0">
-            <p className="text-white font-medium">
-              <span className="text-pink-400 font-semibold">IA identificou: </span>
+            <p className="text-white text-sm md:text-base font-medium">
+              <span className="text-pink-400 font-semibold">IA: </span>
               {isLoading ? (
-                <span className="text-white/70">Analisando transações...</span>
+                <span className="text-white/70">Analisando...</span>
               ) : (
-                <span>{insight}</span>
+                <span className="line-clamp-2">{insight}</span>
               )}
             </p>
           </div>
         </div>
 
         {/* Actions */}
-        <div className="flex items-center gap-2 flex-shrink-0">
+        <div className="flex items-center gap-1 md:gap-2 flex-shrink-0">
           <Button
             variant="ghost"
             size="icon"
             onClick={loadInsight}
             disabled={isLoading || !companyId}
-            className="h-8 w-8 text-white/60 hover:text-white hover:bg-white/10"
+            className="h-7 w-7 md:h-8 md:w-8 text-white/60 hover:text-white hover:bg-white/10"
           >
-            <RefreshCw className={cn("h-4 w-4", isLoading && "animate-spin")} />
+            <RefreshCw className={cn("h-3.5 w-3.5 md:h-4 md:w-4", isLoading && "animate-spin")} />
           </Button>
           
           {!isLoading && (
@@ -216,10 +216,10 @@ export function FinancialAIBanner({ type, onActionClick }: FinancialAIBannerProp
               variant="outline"
               size="sm"
               onClick={onActionClick}
-              className="bg-white/10 border-white/20 text-white hover:bg-white/20 hover:text-white gap-1"
+              className="hidden sm:flex bg-white/10 border-white/20 text-white hover:bg-white/20 hover:text-white gap-1 h-8 text-xs md:text-sm"
             >
               {actionLabel}
-              <ChevronRight className="h-4 w-4" />
+              <ChevronRight className="h-3.5 w-3.5 md:h-4 md:w-4" />
             </Button>
           )}
 
@@ -227,9 +227,9 @@ export function FinancialAIBanner({ type, onActionClick }: FinancialAIBannerProp
             variant="ghost"
             size="icon"
             onClick={() => setIsDismissed(true)}
-            className="h-8 w-8 text-white/40 hover:text-white hover:bg-white/10"
+            className="h-7 w-7 md:h-8 md:w-8 text-white/40 hover:text-white hover:bg-white/10"
           >
-            <X className="h-4 w-4" />
+            <X className="h-3.5 w-3.5 md:h-4 md:w-4" />
           </Button>
         </div>
       </div>
