@@ -297,8 +297,8 @@ Foque no que precisa de atenção. Responda APENAS com o texto do insight, sem J
           title={editingOrder ? `Pedido #${editingOrder.order_number}` : "Novo Pedido de Compra"}
           description={editingOrder ? "Editar pedido de compra" : "Criar novo pedido de compra"}
           breadcrumbs={[
-            { label: "Compras" },
-            { label: "Pedidos de Compra", href: "/pedidos-compra" },
+            { label: "Compras", onClick: handleCloseForm },
+            { label: "Pedidos de Compra", onClick: handleCloseForm },
             { label: editingOrder ? `#${editingOrder.order_number}` : "Novo" },
           ]}
         />
