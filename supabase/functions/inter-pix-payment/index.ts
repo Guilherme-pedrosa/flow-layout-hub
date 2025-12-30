@@ -27,10 +27,17 @@ serve(async (req) => {
     const proxyUrl = Deno.env.get("GCP_PIX_FUNCTION_URL");
     const proxySecret = Deno.env.get("GCP_PIX_FUNCTION_SECRET");
     
-    console.log("[inter-pix-payment] 2. Proxy URL configurada:", proxyUrl ? "SIM" : "NÃO");
+    console.log("[inter-pix-payment] 2. Proxy URL (primeiros 50 chars):", proxyUrl?.substring(0, 50));
+    console.log("[inter-pix-payment] 2b. Proxy URL length:", proxyUrl?.length);
+    console.log("[inter-pix-payment] 2c. Proxy Secret configurado:", proxySecret ? "SIM" : "NÃO");
     
     if (!proxyUrl) {
       throw new Error("GCP_PIX_FUNCTION_URL não configurada");
+    }
+    
+    // Validate URL format
+    if (!proxyUrl.startsWith("https://")) {
+      throw new Error(`URL inválida - deve começar com https://. Recebido: ${proxyUrl.substring(0, 30)}`);
     }
 
     let paymentData: {
