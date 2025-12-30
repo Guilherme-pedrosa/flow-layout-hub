@@ -26,6 +26,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { toast } from "sonner";
+import { PixConfirmationModal } from "./PixConfirmationModal";
+import { PixPaymentResultModal } from "./PixPaymentResultModal";
+import { usePaymentLogs, PaymentLogEntry } from "./PaymentLogs";
 
 interface PixPayment {
   id: string;
@@ -49,7 +52,17 @@ export function PixApprovalList({ onApproved }: PixApprovalListProps) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [processing, setProcessing] = useState(false);
   const [showRejectDialog, setShowRejectDialog] = useState(false);
-  const [showApproveDialog, setShowApproveDialog] = useState(false);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [showResultModal, setShowResultModal] = useState(false);
+  const [paymentResult, setPaymentResult] = useState<{
+    success: boolean;
+    transactionId?: string;
+    status?: string;
+    paymentDate?: string;
+    message?: string;
+    error?: string;
+  } | null>(null);
+  const { logs, addLog, clearLogs } = usePaymentLogs();
 
   useEffect(() => {
     fetchPendingPayments();
@@ -109,63 +122,136 @@ export function PixApprovalList({ onApproved }: PixApprovalListProps) {
     }
   };
 
-  const handleApproveSelected = async () => {
+  // Prepara os dados para o modal de confirmação
+  const getSelectedPaymentsData = () => {
+    const selectedPayments = payments.filter(p => selectedIds.has(p.id));
+    if (selectedPayments.length === 1) {
+      const p = selectedPayments[0];
+      return {
+        amount: p.amount,
+        recipientName: p.recipient_name,
+        recipientDocument: p.recipient_document,
+        pixKey: p.pix_key,
+        pixKeyType: p.pix_key_type,
+        description: p.description || undefined,
+      };
+    }
+    // Múltiplos pagamentos
+    return {
+      amount: totalSelected,
+      recipientName: `${selectedPayments.length} destinatários`,
+      recipientDocument: "",
+      pixKey: "Múltiplas chaves",
+      pixKeyType: "diversos",
+      description: `Lote de ${selectedPayments.length} pagamentos`,
+    };
+  };
+
+  const handleOpenConfirmModal = () => {
     if (selectedIds.size === 0) {
       toast.error("Selecione pelo menos um pagamento");
       return;
     }
+    setShowConfirmModal(true);
+  };
 
+  const handleApproveSelected = async () => {
+    setShowConfirmModal(false);
     setProcessing(true);
+    clearLogs();
+    setPaymentResult(null);
+    setShowResultModal(true);
+
     let successCount = 0;
     let errorCount = 0;
+    let lastResult: typeof paymentResult = null;
 
     try {
+      addLog("Iniciando processamento de pagamentos PIX...", "loading");
+
       const { data: companies } = await supabase.from("companies").select("id").limit(1);
       const companyId = companies?.[0]?.id;
+
+      if (!companyId) {
+        throw new Error("Empresa não configurada");
+      }
+
+      addLog("Validando dados da empresa...", "success");
 
       for (const paymentId of selectedIds) {
         const payment = payments.find(p => p.id === paymentId);
         if (!payment) continue;
 
-        // Chamar edge function para processar o PIX
-        const { data, error } = await supabase.functions.invoke("inter-pix-payment", {
-          body: {
-            company_id: companyId,
-            payment_id: paymentId, // Indica que é aprovação de um existente
-            recipient_name: payment.recipient_name,
-            recipient_document: payment.recipient_document,
-            pix_key: payment.pix_key,
-            pix_key_type: payment.pix_key_type,
-            amount: payment.amount,
-            description: payment.description,
-            is_approval: true,
-          },
-        });
+        const logId = addLog(`Processando PIX para ${payment.recipient_name}...`, "loading");
 
-        if (error || !data?.success) {
+        try {
+          addLog("Enviando requisição para o Banco Inter...", "loading");
+
+          const { data, error } = await supabase.functions.invoke("inter-pix-payment", {
+            body: {
+              company_id: companyId,
+              payment_id: paymentId,
+              recipient_name: payment.recipient_name,
+              recipient_document: payment.recipient_document,
+              pix_key: payment.pix_key,
+              pix_key_type: payment.pix_key_type,
+              amount: payment.amount,
+              description: payment.description,
+              is_approval: true,
+            },
+          });
+
+          if (error || !data?.success) {
+            const errorMsg = error?.message || data?.error || "Erro desconhecido";
+            addLog(`Erro: ${errorMsg}`, "error", JSON.stringify(data || error, null, 2));
+            errorCount++;
+          } else {
+            const result = data.data || data;
+            addLog(`Pagamento processado!`, "success", `Status: ${result.status || data.tipoRetorno}`);
+            
+            if (result.transactionId || data.codigoSolicitacao) {
+              addLog(`ID da Transação: ${result.transactionId || data.codigoSolicitacao}`, "info");
+            }
+            
+            lastResult = {
+              success: true,
+              transactionId: result.transactionId || data.codigoSolicitacao,
+              status: result.status || data.tipoRetorno,
+              paymentDate: result.paymentDate || data.dataPagamento,
+              message: result.message,
+            };
+            successCount++;
+          }
+        } catch (err) {
+          const errorMsg = err instanceof Error ? err.message : "Erro desconhecido";
+          addLog(`Falha no pagamento: ${errorMsg}`, "error");
           errorCount++;
-          console.error(`Erro ao aprovar ${paymentId}:`, error || data?.error);
-        } else {
-          successCount++;
         }
       }
 
       if (successCount > 0) {
-        toast.success(`${successCount} pagamento(s) aprovado(s) e enviado(s)`);
+        addLog(`✓ ${successCount} pagamento(s) processado(s) com sucesso`, "success");
       }
       if (errorCount > 0) {
-        toast.error(`${errorCount} pagamento(s) com erro`);
+        addLog(`✗ ${errorCount} pagamento(s) com erro`, "error");
       }
+
+      setPaymentResult(lastResult || {
+        success: successCount > 0,
+        message: successCount > 0 
+          ? `${successCount} pagamento(s) processado(s)` 
+          : "Todos os pagamentos falharam",
+      });
 
       setSelectedIds(new Set());
       fetchPendingPayments();
       onApproved?.();
     } catch (error) {
-      toast.error("Erro ao processar aprovações");
-      console.error(error);
+      const errorMsg = error instanceof Error ? error.message : "Erro ao processar aprovações";
+      addLog(errorMsg, "error");
+      setPaymentResult({ success: false, error: errorMsg });
     } finally {
       setProcessing(false);
-      setShowApproveDialog(false);
     }
   };
 
@@ -230,9 +316,9 @@ export function PixApprovalList({ onApproved }: PixApprovalListProps) {
                   <XCircle className="mr-2 h-4 w-4" />
                   Rejeitar ({selectedIds.size})
                 </Button>
-                <Button
+              <Button
                   size="sm"
-                  onClick={() => setShowApproveDialog(true)}
+                  onClick={handleOpenConfirmModal}
                   disabled={selectedIds.size === 0 || processing}
                 >
                   {processing ? (
@@ -335,36 +421,23 @@ export function PixApprovalList({ onApproved }: PixApprovalListProps) {
         </CardContent>
       </Card>
 
-      {/* Dialog de Aprovação */}
-      <AlertDialog open={showApproveDialog} onOpenChange={setShowApproveDialog}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Confirmar Aprovação</AlertDialogTitle>
-            <AlertDialogDescription>
-              Você está prestes a aprovar e enviar {selectedIds.size} pagamento(s) PIX 
-              no valor total de <strong>{formatCurrency(totalSelected)}</strong>.
-              <br /><br />
-              Esta ação não pode ser desfeita. O valor será debitado da conta Inter.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={processing}>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={handleApproveSelected} disabled={processing}>
-              {processing ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Processando...
-                </>
-              ) : (
-                <>
-                  <Send className="mr-2 h-4 w-4" />
-                  Aprovar e Enviar
-                </>
-              )}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {/* Modal de Confirmação PIX */}
+      <PixConfirmationModal
+        open={showConfirmModal}
+        onOpenChange={setShowConfirmModal}
+        onConfirm={handleApproveSelected}
+        loading={processing}
+        paymentData={getSelectedPaymentsData()}
+      />
+
+      {/* Modal de Resultado com Logs */}
+      <PixPaymentResultModal
+        open={showResultModal}
+        onOpenChange={setShowResultModal}
+        result={paymentResult}
+        logs={logs}
+        processing={processing}
+      />
 
       {/* Dialog de Rejeição */}
       <AlertDialog open={showRejectDialog} onOpenChange={setShowRejectDialog}>

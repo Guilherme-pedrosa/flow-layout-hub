@@ -394,11 +394,28 @@ serve(async (req) => {
 
       console.log(`[inter-pix-payment] Success - tipoRetorno: ${tipoRetorno}, codigoSolicitacao: ${codigoSolicitacao}`);
 
+      // Mensagens amigáveis por status
+      const statusMessages: Record<string, string> = {
+        APROVACAO: "Pagamento aprovado! Aguardando processamento.",
+        APROVADO: "Pagamento aprovado! Aguardando processamento.",
+        EMPROCESSAMENTO: "Pagamento em processamento.",
+        AGENDADO: "Pagamento agendado com sucesso.",
+        PENDENTE: "Pagamento pendente de aprovação no app do banco.",
+      };
+
+      const friendlyMessage = statusMessages[tipoRetorno] || `Status: ${tipoRetorno}`;
+
       return new Response(
         JSON.stringify({
           success: true,
+          data: {
+            transactionId: codigoSolicitacao,
+            status: tipoRetorno,
+            paymentDate: pixResult.dataPagamento || pixResult.dataOperacao,
+            message: friendlyMessage,
+          },
+          // Campos legados para compatibilidade
           paymentId: pixPaymentId,
-          status: internalStatus,
           tipoRetorno,
           codigoSolicitacao,
           dataPagamento: pixResult.dataPagamento,
