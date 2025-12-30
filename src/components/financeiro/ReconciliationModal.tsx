@@ -340,6 +340,15 @@ export function ReconciliationModal({
     
     setSaving(true);
     try {
+      // Buscar situação "Conciliado Manual" para atribuição automática
+      const { data: situacaoManual } = await supabase
+        .from("financial_situations")
+        .select("id")
+        .eq("company_id", companyId)
+        .ilike("name", "%conciliado manual%")
+        .eq("is_active", true)
+        .single();
+
       // 1. Criar registro de conciliação
       const { data: reconciliation, error: recError } = await supabase
         .from("bank_reconciliations")
@@ -382,35 +391,49 @@ export function ReconciliationModal({
 
       if (txError) throw txError;
 
-      // 4. Atualizar títulos financeiros
+      // 4. Atualizar títulos financeiros com situação "Conciliado Manual"
       if (isCredit) {
         for (const entry of selectedEntries) {
+          const updateData: Record<string, unknown> = {
+            is_paid: true,
+            paid_at: transaction.transaction_date,
+            paid_amount: entry.amount,
+            bank_transaction_id: transaction.id,
+            reconciled_at: new Date().toISOString(),
+            reconciliation_id: reconciliation.id,
+            payment_method: 'transferencia'
+          };
+
+          // Adicionar situação financeira automaticamente (Conciliado Manual)
+          if (situacaoManual?.id) {
+            updateData.financial_situation_id = situacaoManual.id;
+          }
+
           const { error } = await supabase
             .from("accounts_receivable")
-            .update({
-              is_paid: true,
-              paid_at: transaction.transaction_date,
-              paid_amount: entry.amount,
-              bank_transaction_id: transaction.id,
-              reconciled_at: new Date().toISOString(),
-              reconciliation_id: reconciliation.id,
-              payment_method: 'transferencia'
-            })
+            .update(updateData)
             .eq("id", entry.id);
           
           if (error) throw error;
         }
       } else {
         for (const entry of selectedEntries) {
+          const updateData: Record<string, unknown> = {
+            is_paid: true,
+            paid_at: transaction.transaction_date,
+            paid_amount: entry.amount,
+            reconciliation_id: reconciliation.id,
+            payment_method: 'transferencia'
+          };
+
+          // Adicionar situação financeira automaticamente (Conciliado Manual)
+          if (situacaoManual?.id) {
+            updateData.financial_situation_id = situacaoManual.id;
+          }
+
           const { error } = await supabase
             .from("payables")
-            .update({
-              is_paid: true,
-              paid_at: transaction.transaction_date,
-              paid_amount: entry.amount,
-              reconciliation_id: reconciliation.id,
-              payment_method: 'transferencia'
-            })
+            .update(updateData)
             .eq("id", entry.id);
           
           if (error) throw error;
