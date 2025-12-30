@@ -200,6 +200,7 @@ Responda APENAS com o texto do insight, sem JSON.`;
       const details = await getReceiptDetails(id);
       if (details) {
         setSelectedSource(details);
+        setSearchValue(""); // Limpa o valor da busca ao selecionar um pedido
       }
     } catch (error) {
       toast.error("Erro ao carregar detalhes");
@@ -260,25 +261,28 @@ Responda APENAS com o texto do insight, sem JSON.`;
       });
 
       // Atualiza localmente
+      const updatedItems = selectedSource.items.map(i => 
+        i.id === item.id 
+          ? { ...i, quantity_received: i.quantity_received + finalQty, quantity_pending: i.quantity_pending - finalQty }
+          : i
+      );
+      
+      // Verifica se todos os itens foram conferidos para atualizar o status
+      const allComplete = updatedItems.every(i => i.quantity_received >= i.quantity_total);
+      const hasReceived = updatedItems.some(i => i.quantity_received > 0);
+      const newStatus = allComplete ? 'complete' : (hasReceived ? 'partial' : 'pending');
+      
       setSelectedSource(prev => {
         if (!prev) return null;
-        
-        const updatedItems = prev.items.map(i => 
-          i.id === item.id 
-            ? { ...i, quantity_received: i.quantity_received + finalQty, quantity_pending: i.quantity_pending - finalQty }
-            : i
-        );
-        
-        // Verifica se todos os itens foram conferidos para atualizar o status
-        const allComplete = updatedItems.every(i => i.quantity_received >= i.quantity_total);
-        const hasReceived = updatedItems.some(i => i.quantity_received > 0);
-        
         return {
           ...prev,
           items: updatedItems,
-          receipt_status: allComplete ? 'complete' : (hasReceived ? 'partial' : 'pending'),
+          receipt_status: newStatus,
         };
       });
+      
+      // Atualiza também a lista de pedidos pendentes para refletir o status correto
+      refetch();
 
       toast.success(`${item.product_description}: ${finalQty.toLocaleString('pt-BR')} unidade(s) conferida(s)!`);
     } catch (error: any) {
@@ -347,25 +351,28 @@ Responda APENAS com o texto do insight, sem JSON.`;
       });
 
       // Atualiza localmente
+      const updatedItems = selectedSource.items.map(i => 
+        i.id === item.id 
+          ? { ...i, quantity_received: newQty, quantity_pending: i.quantity_total - newQty }
+          : i
+      );
+      
+      // Verifica se todos os itens foram conferidos para atualizar o status
+      const allComplete = updatedItems.every(i => i.quantity_received >= i.quantity_total);
+      const hasReceived = updatedItems.some(i => i.quantity_received > 0);
+      const newStatus = allComplete ? 'complete' : (hasReceived ? 'partial' : 'pending');
+      
       setSelectedSource(prev => {
         if (!prev) return null;
-        
-        const updatedItems = prev.items.map(i => 
-          i.id === item.id 
-            ? { ...i, quantity_received: newQty, quantity_pending: i.quantity_total - newQty }
-            : i
-        );
-        
-        // Verifica se todos os itens foram conferidos para atualizar o status
-        const allComplete = updatedItems.every(i => i.quantity_received >= i.quantity_total);
-        const hasReceived = updatedItems.some(i => i.quantity_received > 0);
-        
         return {
           ...prev,
           items: updatedItems,
-          receipt_status: allComplete ? 'complete' : (hasReceived ? 'partial' : 'pending'),
+          receipt_status: newStatus,
         };
       });
+      
+      // Atualiza também a lista de pedidos pendentes para refletir o status correto
+      refetch();
 
       toast.success("Quantidade atualizada!");
       setEditingItemId(null);
@@ -459,11 +466,15 @@ Responda APENAS com o texto do insight, sem JSON.`;
                       >
                         <div className="flex items-center justify-between gap-2">
                           <div className="font-medium">PC #{order.order_number}</div>
-                          {order.receipt_status === 'partial' && (
+                          {order.receipt_status === 'partial' ? (
                             <Badge variant="outline" className="bg-yellow-100 text-yellow-700 border-yellow-300 text-xs">
                               Parcial
                             </Badge>
-                          )}
+                          ) : order.receipt_status === 'complete' ? (
+                            <Badge variant="outline" className="bg-green-100 text-green-700 border-green-300 text-xs">
+                              Completo
+                            </Badge>
+                          ) : null}
                         </div>
                         <div className="text-xs text-muted-foreground truncate">
                           {order.supplier?.razao_social || order.supplier?.nome_fantasia || 'Fornecedor não informado'}
