@@ -171,39 +171,24 @@ serve(async (req) => {
 
 
     // Build PIX payment payload for Inter API /banking/v2/pix
-    // Formato conforme documentação Inter para pagamento por chave PIX
-    const recipientDoc = paymentData.recipientDocument.replace(/[^\d]/g, "");
+    // Formato conforme documentação oficial Inter para pagamento por CHAVE PIX:
+    // - destinatario.tipo = "CHAVE" (não FISICA/JURIDICA)
+    // - destinatario.chave = a chave PIX
+    // - NÃO incluir nome/cpfCnpj no destinatario
+    // - NÃO incluir chave/tipoChave no nível raiz
     
-    // O valor deve ser string decimal SEM casas decimais (em centavos) para alguns endpoints
-    // OU string decimal com ponto. Vamos testar o formato que a documentação indica.
-    // Formato: valor como STRING representando o valor em REAIS (ex: "12.00" para R$12,00)
     const valorEmReais = paymentData.amount.toFixed(2);
     
     console.log("[inter-pix-payment] 5b. Valor em reais:", valorEmReais);
     
-    // Mapeamento do tipo de chave
-    const tipoChaveMap: Record<string, string> = {
-      'cpf': 'CPF',
-      'cnpj': 'CNPJ',
-      'email': 'EMAIL',
-      'telefone': 'TELEFONE',
-      'celular': 'TELEFONE',
-      'phone': 'TELEFONE',
-      'evp': 'CHAVE_ALEATORIA',
-      'aleatoria': 'CHAVE_ALEATORIA'
-    };
-    
+    // Payload correto conforme documentação Inter para pagamento por chave PIX
     const pixApiPayload = {
-      valor: valorEmReais,  // String direta, não objeto
-      chave: paymentData.pixKey,
-      tipoChave: tipoChaveMap[paymentData.pixKeyType.toLowerCase()] || 'CPF',
+      valor: valorEmReais,
+      descricao: (paymentData.description || `PIX para ${paymentData.recipientName}`).substring(0, 140),
       destinatario: {
-        tipo: recipientDoc.length === 11 ? 'FISICA' : 'JURIDICA',
-        nome: paymentData.recipientName,
-        cpfCnpj: recipientDoc
-      },
-      dataPagamento: new Date().toISOString().split('T')[0],
-      descricao: (paymentData.description || `PIX para ${paymentData.recipientName}`).substring(0, 140)
+        tipo: "CHAVE",
+        chave: paymentData.pixKey
+      }
     };
 
     console.log("[inter-pix-payment] 6. PIX API payload:", JSON.stringify(pixApiPayload));
