@@ -42,7 +42,7 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useEffect, useState } from "react";
-import logoWedo from "@/assets/logo-ponto-a-ponto.png";
+import logoWai from "@/assets/logo-wai-erp.png";
 
 interface AppSidebarProps {
   collapsed: boolean;
@@ -189,11 +189,10 @@ export function AppSidebar({ collapsed, onToggle, mobileOpen, onMobileClose }: A
         {(!collapsed || mobileOpen) ? (
           <>
             <img 
-              src={logoWedo} 
-              alt="Wedo ERP" 
-              className="h-8 w-auto brightness-0 invert"
+              src={logoWai} 
+              alt="WAI ERP" 
+              className="h-10 w-auto"
             />
-            <span className="text-lg font-bold text-white">Wedo</span>
           </>
         ) : (
           <span className="text-lg font-bold text-white mx-auto">W</span>
