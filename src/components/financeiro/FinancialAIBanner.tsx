@@ -94,38 +94,64 @@ export function FinancialAIBanner({ type, onActionClick }: FinancialAIBannerProp
       const reader = response.body?.getReader();
       const decoder = new TextDecoder();
       let fullText = "";
+      let textBuffer = "";
 
       if (reader) {
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
-          const chunk = decoder.decode(value, { stream: true });
-          const lines = chunk.split("\n");
-          for (const line of lines) {
-            if (line.startsWith("data: ") && line !== "data: [DONE]") {
-              try {
-                const json = JSON.parse(line.slice(6));
-                const content = json.choices?.[0]?.delta?.content;
-                if (content) fullText += content;
-              } catch {}
+          
+          textBuffer += decoder.decode(value, { stream: true });
+          
+          let newlineIndex: number;
+          while ((newlineIndex = textBuffer.indexOf('\n')) !== -1) {
+            let line = textBuffer.slice(0, newlineIndex);
+            textBuffer = textBuffer.slice(newlineIndex + 1);
+            
+            if (line.endsWith('\r')) line = line.slice(0, -1);
+            if (line.startsWith(':') || line.trim() === '') continue;
+            if (!line.startsWith('data: ')) continue;
+            
+            const jsonStr = line.slice(6).trim();
+            if (jsonStr === '[DONE]') continue;
+            
+            try {
+              const parsed = JSON.parse(jsonStr);
+              const content = parsed.choices?.[0]?.delta?.content;
+              if (content) fullText += content;
+            } catch {
+              // JSON incompleto, continua
             }
           }
         }
       }
 
-      try {
-        // Remove markdown code blocks if present
-        const cleanText = fullText.replace(/```json\n?/g, '').replace(/```/g, '').trim();
-        const jsonMatch = cleanText.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
+      // Remove markdown code blocks e extrai JSON
+      const cleanText = fullText
+        .replace(/```json\n?/gi, '')
+        .replace(/```\n?/g, '')
+        .replace(/\n/g, ' ')
+        .trim();
+      
+      const jsonMatch = cleanText.match(/\{[^{}]*\}/);
+      
+      if (jsonMatch) {
+        try {
           const parsed = JSON.parse(jsonMatch[0]);
-          setInsight(parsed.insight || "Analisando dados financeiros...");
+          setInsight(parsed.insight || "Análise concluída");
           setActionLabel(parsed.action || "Ver detalhes");
-        } else {
-          setInsight("Analisando dados financeiros...");
+        } catch (e) {
+          console.error("Erro parsing JSON:", e, jsonMatch[0]);
+          setInsight("Verifique as contas pendentes e vencimentos");
         }
-      } catch {
-        setInsight("Analisando dados financeiros...");
+      } else {
+        // Tenta extrair texto útil mesmo sem JSON
+        const textOnly = cleanText.replace(/[{}"]/g, '').trim();
+        if (textOnly.length > 10) {
+          setInsight(textOnly.slice(0, 100));
+        } else {
+          setInsight("Verifique as contas pendentes e vencimentos");
+        }
       }
     } catch (error) {
       console.error("Erro ao carregar insight:", error);
