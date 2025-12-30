@@ -114,7 +114,9 @@ export function FinancialAIBanner({ type, onActionClick }: FinancialAIBannerProp
       }
 
       try {
-        const jsonMatch = fullText.match(/\{[\s\S]*\}/);
+        // Remove markdown code blocks if present
+        const cleanText = fullText.replace(/```json\n?/g, '').replace(/```/g, '').trim();
+        const jsonMatch = cleanText.match(/\{[\s\S]*\}/);
         if (jsonMatch) {
           const parsed = JSON.parse(jsonMatch[0]);
           setInsight(parsed.insight || "Analisando dados financeiros...");
