@@ -23,3 +23,9 @@ verify_jwt = false
 
 [functions.inter-pix-payment]
 verify_jwt = false
+
+[functions.inter-extrato]
+verify_jwt = false
+
+[functions.inter-conciliacao]
+verify_jwt = false

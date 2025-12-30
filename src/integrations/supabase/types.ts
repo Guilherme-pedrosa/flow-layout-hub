@@ -1124,6 +1124,7 @@ export type Database = {
           recipient_document: string | null
           recipient_name: string | null
           reconciliation_id: string | null
+          reconciliation_source: string | null
           scheduled_payment_date: string | null
           source: string | null
           submitted_at: string | null
@@ -1165,6 +1166,7 @@ export type Database = {
           recipient_document?: string | null
           recipient_name?: string | null
           reconciliation_id?: string | null
+          reconciliation_source?: string | null
           scheduled_payment_date?: string | null
           source?: string | null
           submitted_at?: string | null
@@ -1206,6 +1208,7 @@ export type Database = {
           recipient_document?: string | null
           recipient_name?: string | null
           reconciliation_id?: string | null
+          reconciliation_source?: string | null
           scheduled_payment_date?: string | null
           source?: string | null
           submitted_at?: string | null
@@ -2400,6 +2403,75 @@ export type Database = {
             columns: ["default_cost_center_id"]
             isOneToOne: false
             referencedRelation: "cost_centers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      reconciliation_suggestions: {
+        Row: {
+          company_id: string | null
+          confidence_score: number | null
+          created_at: string | null
+          extrato_chave_pix: string | null
+          extrato_cpf_cnpj: string | null
+          extrato_data: string | null
+          extrato_descricao: string | null
+          extrato_nome: string | null
+          extrato_valor: number | null
+          id: string
+          match_reason: string | null
+          payable_id: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: string | null
+        }
+        Insert: {
+          company_id?: string | null
+          confidence_score?: number | null
+          created_at?: string | null
+          extrato_chave_pix?: string | null
+          extrato_cpf_cnpj?: string | null
+          extrato_data?: string | null
+          extrato_descricao?: string | null
+          extrato_nome?: string | null
+          extrato_valor?: number | null
+          id?: string
+          match_reason?: string | null
+          payable_id?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string | null
+        }
+        Update: {
+          company_id?: string | null
+          confidence_score?: number | null
+          created_at?: string | null
+          extrato_chave_pix?: string | null
+          extrato_cpf_cnpj?: string | null
+          extrato_data?: string | null
+          extrato_descricao?: string | null
+          extrato_nome?: string | null
+          extrato_valor?: number | null
+          id?: string
+          match_reason?: string | null
+          payable_id?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reconciliation_suggestions_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reconciliation_suggestions_payable_id_fkey"
+            columns: ["payable_id"]
+            isOneToOne: false
+            referencedRelation: "payables"
             referencedColumns: ["id"]
           },
         ]
