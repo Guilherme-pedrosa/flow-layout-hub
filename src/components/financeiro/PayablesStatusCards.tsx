@@ -1,4 +1,3 @@
-import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { Clock, AlertTriangle, CheckCircle, Calendar, LayoutGrid } from "lucide-react";
 
@@ -10,11 +9,6 @@ interface StatusCardData {
   count: number;
   amount: number;
   icon: React.ElementType;
-  iconColor: string;
-  textColor: string;
-  bgColor: string;
-  borderColor: string;
-  activeBg: string;
 }
 
 interface PayablesStatusCardsProps {
@@ -40,9 +34,50 @@ const formatCurrency = (value: number) => {
   return new Intl.NumberFormat("pt-BR", {
     style: "currency",
     currency: "BRL",
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
   }).format(value);
+};
+
+const getCardStyles = (key: PayableStatusFilter, isActive: boolean) => {
+  const styles: Record<PayableStatusFilter, { bg: string; text: string; icon: string; border: string; activeBg: string }> = {
+    all: {
+      bg: "bg-slate-50 dark:bg-slate-800/30",
+      activeBg: "bg-slate-100 dark:bg-slate-800/50",
+      text: "text-slate-700 dark:text-slate-300",
+      icon: "text-slate-500",
+      border: "border-slate-200 dark:border-slate-700",
+    },
+    pending: {
+      bg: "bg-amber-50/50 dark:bg-amber-900/10",
+      activeBg: "bg-amber-50 dark:bg-amber-900/20",
+      text: "text-amber-700 dark:text-amber-400",
+      icon: "text-amber-500",
+      border: "border-amber-200 dark:border-amber-800",
+    },
+    overdue: {
+      bg: "bg-red-50/50 dark:bg-red-900/10",
+      activeBg: "bg-red-50 dark:bg-red-900/20",
+      text: "text-red-700 dark:text-red-400",
+      icon: "text-red-500",
+      border: "border-red-200 dark:border-red-800",
+    },
+    paid: {
+      bg: "bg-emerald-50/50 dark:bg-emerald-900/10",
+      activeBg: "bg-emerald-50 dark:bg-emerald-900/20",
+      text: "text-emerald-700 dark:text-emerald-400",
+      icon: "text-emerald-500",
+      border: "border-emerald-200 dark:border-emerald-800",
+    },
+    scheduled: {
+      bg: "bg-blue-50/50 dark:bg-blue-900/10",
+      activeBg: "bg-blue-50 dark:bg-blue-900/20",
+      text: "text-blue-700 dark:text-blue-400",
+      icon: "text-blue-500",
+      border: "border-blue-200 dark:border-blue-800",
+    },
+  };
+  return styles[key];
 };
 
 export function PayablesStatusCards({
@@ -52,142 +87,70 @@ export function PayablesStatusCards({
   onFilterChange,
 }: PayablesStatusCardsProps) {
   const cards: StatusCardData[] = [
-    {
-      key: "all",
-      label: "TODAS",
-      count: counts.all,
-      amount: amounts.all,
-      icon: LayoutGrid,
-      iconColor: "text-slate-500",
-      textColor: "text-slate-700 dark:text-slate-300",
-      bgColor: "bg-slate-100 dark:bg-slate-800/50",
-      borderColor: "border-slate-300 dark:border-slate-700",
-      activeBg: "bg-slate-200 dark:bg-slate-700",
-    },
-    {
-      key: "pending",
-      label: "PENDENTES",
-      count: counts.pending,
-      amount: amounts.pending,
-      icon: Clock,
-      iconColor: "text-amber-500",
-      textColor: "text-amber-700 dark:text-amber-400",
-      bgColor: "bg-amber-50 dark:bg-amber-900/20",
-      borderColor: "border-amber-300 dark:border-amber-700",
-      activeBg: "bg-amber-100 dark:bg-amber-900/40",
-    },
-    {
-      key: "overdue",
-      label: "VENCIDAS",
-      count: counts.overdue,
-      amount: amounts.overdue,
-      icon: AlertTriangle,
-      iconColor: "text-red-500",
-      textColor: "text-red-700 dark:text-red-400",
-      bgColor: "bg-red-50 dark:bg-red-900/20",
-      borderColor: "border-red-300 dark:border-red-700",
-      activeBg: "bg-red-100 dark:bg-red-900/40",
-    },
-    {
-      key: "paid",
-      label: "PAGAS",
-      count: counts.paid,
-      amount: amounts.paid,
-      icon: CheckCircle,
-      iconColor: "text-emerald-500",
-      textColor: "text-emerald-700 dark:text-emerald-400",
-      bgColor: "bg-emerald-50 dark:bg-emerald-900/20",
-      borderColor: "border-emerald-300 dark:border-emerald-700",
-      activeBg: "bg-emerald-100 dark:bg-emerald-900/40",
-    },
-    {
-      key: "scheduled",
-      label: "AGENDADAS",
-      count: counts.scheduled,
-      amount: amounts.scheduled,
-      icon: Calendar,
-      iconColor: "text-blue-500",
-      textColor: "text-blue-700 dark:text-blue-400",
-      bgColor: "bg-blue-50 dark:bg-blue-900/20",
-      borderColor: "border-blue-300 dark:border-blue-700",
-      activeBg: "bg-blue-100 dark:bg-blue-900/40",
-    },
+    { key: "all", label: "Total", count: counts.all, amount: amounts.all, icon: LayoutGrid },
+    { key: "pending", label: "Pendentes", count: counts.pending, amount: amounts.pending, icon: Clock },
+    { key: "overdue", label: "Vencidas", count: counts.overdue, amount: amounts.overdue, icon: AlertTriangle },
+    { key: "paid", label: "Pagas", count: counts.paid, amount: amounts.paid, icon: CheckCircle },
+    { key: "scheduled", label: "Agendadas", count: counts.scheduled, amount: amounts.scheduled, icon: Calendar },
   ];
 
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
       {cards.map((card) => {
         const isActive = activeFilter === card.key;
+        const styles = getCardStyles(card.key, isActive);
         const Icon = card.icon;
         
         return (
-          <Card
+          <button
             key={card.key}
             onClick={() => onFilterChange(card.key)}
             className={cn(
-              "relative cursor-pointer transition-all duration-200 overflow-hidden",
-              "border-2 hover:shadow-lg hover:-translate-y-0.5",
-              isActive
-                ? `${card.activeBg} ${card.borderColor} shadow-md ring-2 ring-offset-2 ring-offset-background`
-                : `${card.bgColor} border-transparent hover:${card.borderColor}`,
-              card.key === "all" && isActive && "ring-slate-400",
-              card.key === "pending" && isActive && "ring-amber-400",
-              card.key === "overdue" && isActive && "ring-red-400",
-              card.key === "paid" && isActive && "ring-emerald-400",
-              card.key === "scheduled" && isActive && "ring-blue-400"
+              "relative text-left p-5 rounded-xl border transition-all duration-200",
+              "hover:shadow-md focus:outline-none focus:ring-2 focus:ring-primary/20",
+              isActive ? styles.activeBg : styles.bg,
+              isActive ? styles.border : "border-transparent",
             )}
           >
-            <div className="p-4">
-              {/* Header com label e icon */}
-              <div className="flex items-center justify-between mb-3">
-                <span
-                  className={cn(
-                    "text-xs font-bold tracking-wider",
-                    card.textColor
-                  )}
-                >
-                  {card.label}
-                </span>
-                <div className={cn(
-                  "w-8 h-8 rounded-full flex items-center justify-center",
-                  isActive ? "bg-background/80" : "bg-background/50"
-                )}>
-                  <Icon className={cn("h-4 w-4", card.iconColor)} />
-                </div>
-              </div>
-              
-              {/* Count grande */}
-              <div className="space-y-1">
-                <p
-                  className={cn(
-                    "text-3xl font-extrabold tabular-nums tracking-tight",
-                    card.textColor
-                  )}
-                >
-                  {card.count}
-                </p>
-                <p className={cn(
-                  "text-sm font-semibold tabular-nums",
-                  isActive ? card.textColor : "text-muted-foreground"
-                )}>
-                  {formatCurrency(card.amount)}
-                </p>
-              </div>
+            {/* Label + Icon */}
+            <div className="flex items-center justify-between mb-3">
+              <span className={cn(
+                "text-xs font-semibold uppercase tracking-wide",
+                isActive ? styles.text : "text-muted-foreground"
+              )}>
+                {card.label}
+              </span>
+              <Icon className={cn("h-4 w-4", styles.icon)} />
             </div>
             
-            {/* Bottom indicator bar */}
-            <div
-              className={cn(
-                "absolute bottom-0 left-0 right-0 h-1 transition-all",
-                isActive && card.key === "all" && "bg-slate-500",
-                isActive && card.key === "pending" && "bg-amber-500",
-                isActive && card.key === "overdue" && "bg-red-500",
-                isActive && card.key === "paid" && "bg-emerald-500",
-                isActive && card.key === "scheduled" && "bg-blue-500",
-                !isActive && "bg-transparent"
-              )}
-            />
-          </Card>
+            {/* Count */}
+            <p className={cn(
+              "text-2xl font-bold tabular-nums mb-1",
+              styles.text
+            )}>
+              {card.count}
+              <span className="text-sm font-normal text-muted-foreground ml-1">
+                {card.count === 1 ? "título" : "títulos"}
+              </span>
+            </p>
+            
+            {/* Amount */}
+            <p className="text-sm font-semibold text-muted-foreground tabular-nums">
+              {formatCurrency(card.amount)}
+            </p>
+
+            {/* Active indicator */}
+            {isActive && (
+              <div className={cn(
+                "absolute bottom-0 left-4 right-4 h-0.5 rounded-full",
+                card.key === "all" && "bg-slate-400",
+                card.key === "pending" && "bg-amber-500",
+                card.key === "overdue" && "bg-red-500",
+                card.key === "paid" && "bg-emerald-500",
+                card.key === "scheduled" && "bg-blue-500"
+              )} />
+            )}
+          </button>
         );
       })}
     </div>

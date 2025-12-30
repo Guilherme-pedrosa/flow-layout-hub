@@ -8,14 +8,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Label } from "@/components/ui/label";
-import { Search, ChevronLeft, ChevronRight, Settings2, X, CalendarDays } from "lucide-react";
+import { Search, ChevronLeft, ChevronRight, X } from "lucide-react";
 import { format, addMonths, subMonths, startOfMonth } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { supabase } from "@/integrations/supabase/client";
@@ -52,27 +45,12 @@ const CATEGORIES = [
   { value: "outros", label: "Outros" },
 ];
 
-const PAYMENT_METHODS = [
-  { value: "pix", label: "PIX" },
-  { value: "boleto", label: "Boleto" },
-  { value: "transferencia", label: "Transferência" },
-  { value: "outro", label: "Outro" },
-];
-
 export function PayablesFilters({
   filters,
   onFiltersChange,
   showCategoryFilter = true,
 }: PayablesFiltersProps) {
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
-  const [visibleColumns, setVisibleColumns] = useState({
-    description: true,
-    supplier: true,
-    category: true,
-    dueDate: true,
-    amount: true,
-    status: true,
-  });
 
   useEffect(() => {
     const fetchSuppliers = async () => {
@@ -129,63 +107,16 @@ export function PayablesFilters({
 
   return (
     <div className="space-y-4">
-      {/* Month Navigator - Layout profissional */}
-      <div className="flex items-center justify-between bg-muted/30 rounded-lg p-2">
-        <div className="flex items-center gap-1">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={handlePreviousMonth}
-            className="h-9 w-9 hover:bg-background"
-          >
-            <ChevronLeft className="h-5 w-5" />
-          </Button>
-          
-          <Button
-            variant={isCurrentMonth ? "secondary" : "ghost"}
-            onClick={handleCurrentMonth}
-            className={cn(
-              "min-w-[180px] font-bold text-base capitalize h-9",
-              isCurrentMonth && "bg-primary text-primary-foreground hover:bg-primary/90"
-            )}
-          >
-            <CalendarDays className="mr-2 h-4 w-4" />
-            {format(filters.currentMonth, "MMMM yyyy", { locale: ptBR })}
-          </Button>
-          
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={handleNextMonth}
-            className="h-9 w-9 hover:bg-background"
-          >
-            <ChevronRight className="h-5 w-5" />
-          </Button>
-        </div>
-
-        {hasActiveFilters && (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={clearFilters}
-            className="text-muted-foreground hover:text-foreground gap-1"
-          >
-            <X className="h-4 w-4" />
-            Limpar filtros
-          </Button>
-        )}
-      </div>
-
-      {/* Filters Row - Layout profissional */}
+      {/* Filters Row */}
       <div className="flex flex-wrap items-center gap-3">
         {/* Search */}
-        <div className="relative flex-1 min-w-[280px] max-w-lg">
+        <div className="relative flex-1 min-w-[280px] max-w-md">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
-            placeholder="Buscar por descrição, fornecedor ou valor..."
+            placeholder="Buscar..."
             value={filters.search}
             onChange={(e) => onFiltersChange({ ...filters, search: e.target.value })}
-            className="pl-10 h-10 bg-background border-input"
+            className="pl-10 h-10 bg-background"
           />
         </div>
 
@@ -194,10 +125,7 @@ export function PayablesFilters({
           value={filters.supplierId}
           onValueChange={(value) => onFiltersChange({ ...filters, supplierId: value })}
         >
-          <SelectTrigger className={cn(
-            "w-[200px] h-10 bg-background",
-            filters.supplierId !== "all" && "border-primary"
-          )}>
+          <SelectTrigger className="w-[180px] h-10 bg-background">
             <SelectValue placeholder="Fornecedor" />
           </SelectTrigger>
           <SelectContent>
@@ -216,10 +144,7 @@ export function PayablesFilters({
             value={filters.category}
             onValueChange={(value) => onFiltersChange({ ...filters, category: value })}
           >
-            <SelectTrigger className={cn(
-              "w-[170px] h-10 bg-background",
-              filters.category !== "all" && "border-primary"
-            )}>
+            <SelectTrigger className="w-[160px] h-10 bg-background">
               <SelectValue placeholder="Categoria" />
             </SelectTrigger>
             <SelectContent>
@@ -233,71 +158,46 @@ export function PayablesFilters({
           </Select>
         )}
 
-        {/* Payment Method Filter */}
-        <Select
-          value={filters.paymentMethod}
-          onValueChange={(value) => onFiltersChange({ ...filters, paymentMethod: value })}
-        >
-          <SelectTrigger className={cn(
-            "w-[150px] h-10 bg-background",
-            filters.paymentMethod !== "all" && "border-primary"
-          )}>
-            <SelectValue placeholder="Método" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todos Métodos</SelectItem>
-            {PAYMENT_METHODS.map((method) => (
-              <SelectItem key={method.value} value={method.value}>
-                {method.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        {/* Month Navigator */}
+        <div className="flex items-center gap-1 ml-auto">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={handlePreviousMonth}
+            className="h-9 w-9"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          
+          <Button
+            variant={isCurrentMonth ? "secondary" : "ghost"}
+            onClick={handleCurrentMonth}
+            className="min-w-[140px] font-semibold capitalize h-9"
+          >
+            {format(filters.currentMonth, "MMMM yyyy", { locale: ptBR })}
+          </Button>
+          
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={handleNextMonth}
+            className="h-9 w-9"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        </div>
 
-        {/* Settings - Column Visibility */}
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button variant="outline" size="icon" className="h-10 w-10 bg-background">
-              <Settings2 className="h-4 w-4" />
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent align="end" className="w-64">
-            <div className="space-y-4">
-              <div>
-                <h4 className="font-semibold text-sm mb-1">Colunas Visíveis</h4>
-                <p className="text-xs text-muted-foreground">
-                  Personalize as colunas exibidas na tabela.
-                </p>
-              </div>
-              <div className="space-y-3">
-                {[
-                  { key: "description", label: "Descrição" },
-                  { key: "supplier", label: "Fornecedor" },
-                  { key: "category", label: "Categoria" },
-                  { key: "dueDate", label: "Vencimento" },
-                  { key: "amount", label: "Valor" },
-                  { key: "status", label: "Status" },
-                ].map((col) => (
-                  <div key={col.key} className="flex items-center space-x-2">
-                    <Checkbox
-                      id={col.key}
-                      checked={visibleColumns[col.key as keyof typeof visibleColumns]}
-                      onCheckedChange={(checked) =>
-                        setVisibleColumns((prev) => ({
-                          ...prev,
-                          [col.key]: !!checked,
-                        }))
-                      }
-                    />
-                    <Label htmlFor={col.key} className="text-sm cursor-pointer">
-                      {col.label}
-                    </Label>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </PopoverContent>
-        </Popover>
+        {hasActiveFilters && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={clearFilters}
+            className="text-muted-foreground h-9"
+          >
+            <X className="h-4 w-4 mr-1" />
+            Limpar
+          </Button>
+        )}
       </div>
     </div>
   );
