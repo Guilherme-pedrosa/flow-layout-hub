@@ -15,19 +15,16 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Card, CardContent } from "@/components/ui/card";
-import { Plus, Search, MoreHorizontal, Edit, Eye, Building2, User, Upload, Download, ChevronDown } from "lucide-react";
+import { Plus, Search, MoreHorizontal, Edit, Eye, Building2, User } from "lucide-react";
 import { useClientes, Cliente } from "@/hooks/useClientes";
-import { useClientesImportExport } from "@/hooks/useClientesImportExport";
 import { formatCpfCnpj, formatTelefone } from "@/lib/formatters";
 
 export function ClientesList() {
   const navigate = useNavigate();
   const { loading, fetchClientes } = useClientes();
-  const { exportClientes, loading: exporting } = useClientesImportExport();
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [search, setSearch] = useState("");
 
@@ -83,31 +80,12 @@ export function ClientesList() {
             className="pl-10"
           />
         </div>
-        <div className="flex gap-2">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline">
-                Mais ações
-                <ChevronDown className="h-4 w-4 ml-2" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => navigate('/clientes/importar')}>
-                <Upload className="h-4 w-4 mr-2" />
-                Importar Clientes
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={exportClientes} disabled={exporting}>
-                <Download className="h-4 w-4 mr-2" />
-                Exportar Clientes
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-          <Button onClick={() => navigate('/clientes/novo')}>
-            <Plus className="h-4 w-4 mr-2" />
-            Novo Cliente
-          </Button>
-        </div>
+        <Button onClick={() => navigate('/clientes/novo')}>
+          <Plus className="h-4 w-4 mr-2" />
+          Novo Cliente
+        </Button>
       </div>
+
       {/* Tabela */}
       <Card>
         <CardContent className="p-0">
