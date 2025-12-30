@@ -14,7 +14,9 @@ serve(async (req) => {
   }
 
   try {
-    const { type, messages, companyId } = await req.json();
+    const body = await req.json();
+    const { type, companyId } = body;
+    const messages = Array.isArray(body.messages) ? body.messages : [];
 
     if (!OPENAI_API_KEY) {
       throw new Error("OPENAI_API_KEY is not configured");
