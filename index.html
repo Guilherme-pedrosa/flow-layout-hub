@@ -2,7 +2,13 @@
 <html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="theme-color" content="#0f172a" />
+    <meta name="format-detection" content="telephone=no" />
+    
     <title>Wedo ERP - Sistema de Gestão Empresarial</title>
     <meta name="description" content="Sistema ERP completo para gestão financeira, compras e operações empresariais" />
     <meta name="author" content="Wedo" />
@@ -12,6 +18,10 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 
+    <!-- PWA Icons -->
+    <link rel="apple-touch-icon" sizes="180x180" href="/favicon.ico">
+    <link rel="icon" type="image/x-icon" href="/favicon.ico">
+
     <meta property="og:title" content="Wedo ERP" />
     <meta property="og:description" content="Sistema ERP completo para gestão empresarial" />
     <meta property="og:type" content="website" />
@@ -20,6 +30,21 @@
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:site" content="@Lovable" />
     <meta name="twitter:image" content="https://lovable.dev/opengraph-image-p98pqg.png" />
+    
+    <style>
+      /* Prevent pull-to-refresh on mobile */
+      html, body {
+        overscroll-behavior: none;
+        -webkit-overflow-scrolling: touch;
+      }
+      /* Safe area insets for notched devices */
+      body {
+        padding-top: env(safe-area-inset-top);
+        padding-bottom: env(safe-area-inset-bottom);
+        padding-left: env(safe-area-inset-left);
+        padding-right: env(safe-area-inset-right);
+      }
+    </style>
   </head>
 
   <body>
