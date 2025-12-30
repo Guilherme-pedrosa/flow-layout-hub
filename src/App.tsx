@@ -24,6 +24,7 @@ import OrcamentoView from "./pages/public/OrcamentoView";
 
 // Compras
 import PedidosCompra from "./pages/compras/PedidosCompra";
+import Recebimento from "./pages/compras/Recebimento";
 import Solicitacoes from "./pages/compras/Solicitacoes";
 import Aprovacoes from "./pages/compras/Aprovacoes";
 import NotasCompra from "./pages/compras/NotasCompra";
@@ -100,6 +101,7 @@ const App = () => (
             
             {/* Compras */}
             <Route path="/pedidos-compra" element={<PedidosCompra />} />
+            <Route path="/recebimento" element={<Recebimento />} />
             <Route path="/solicitacoes" element={<Solicitacoes />} />
             <Route path="/aprovacoes" element={<Aprovacoes />} />
             <Route path="/notas-compra" element={<NotasCompra />} />
