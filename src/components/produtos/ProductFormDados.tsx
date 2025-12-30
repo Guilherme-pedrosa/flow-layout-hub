@@ -1,11 +1,14 @@
+import { useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Trash2, RefreshCw, Info } from "lucide-react";
+import { Trash2, RefreshCw, Info, Plus } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { useProductGroups, ProductGroup, ProductSubgroup } from "@/hooks/useProductGroups";
 
 interface UnitConversion {
   inputQty: number;
@@ -20,13 +23,15 @@ interface ProductFormDadosProps {
     description: string;
     barcode: string;
     product_group: string;
+    group_id: string;
+    subgroup_id: string;
     controls_stock: boolean;
     has_invoice: boolean;
     has_variations: boolean;
     has_composition: boolean;
     unit: string;
     unit_conversions: UnitConversion[];
-    supplier_code: string; // Referência (código do fornecedor)
+    supplier_code: string;
   };
   onChange: (field: string, value: any) => void;
   onGenerateCode: () => void;
@@ -59,6 +64,42 @@ export function ProductFormDados({
   isCodeLoading,
   isBarcodeLoading 
 }: ProductFormDadosProps) {
+  const { groups, subgroups, fetchSubgroups, createGroup, createSubgroup } = useProductGroups();
+  const [showNewGroupDialog, setShowNewGroupDialog] = useState(false);
+  const [showNewSubgroupDialog, setShowNewSubgroupDialog] = useState(false);
+  const [newGroupName, setNewGroupName] = useState('');
+  const [newSubgroupName, setNewSubgroupName] = useState('');
+
+  const filteredSubgroups = formData.group_id 
+    ? subgroups.filter(sg => sg.group_id === formData.group_id)
+    : [];
+
+  const handleGroupChange = (groupId: string) => {
+    onChange('group_id', groupId);
+    onChange('subgroup_id', ''); // Reset subgroup when group changes
+    fetchSubgroups(groupId);
+  };
+
+  const handleCreateGroup = async () => {
+    if (!newGroupName.trim()) return;
+    const group = await createGroup(newGroupName);
+    if (group) {
+      onChange('group_id', group.id);
+      setNewGroupName('');
+      setShowNewGroupDialog(false);
+    }
+  };
+
+  const handleCreateSubgroup = async () => {
+    if (!newSubgroupName.trim() || !formData.group_id) return;
+    const subgroup = await createSubgroup(formData.group_id, newSubgroupName);
+    if (subgroup) {
+      onChange('subgroup_id', subgroup.id);
+      setNewSubgroupName('');
+      setShowNewSubgroupDialog(false);
+    }
+  };
+
   const addUnitConversion = () => {
     const newConversion: UnitConversion = {
       inputQty: 1,
@@ -149,18 +190,64 @@ export function ProductFormDados({
         </div>
       </div>
 
-      {/* Segunda linha */}
+      {/* Segunda linha - Grupo e Subgrupo */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="space-y-2">
           <LabelWithTooltip 
-            label="Grupo do produto" 
-            tooltip="Categoria ou grupo para organização dos produtos" 
+            label="Grupo" 
+            tooltip="Grupo principal para organização dos produtos" 
           />
-          <Input
-            value={formData.product_group}
-            onChange={(e) => onChange('product_group', e.target.value)}
-            placeholder="Digite para buscar"
+          <div className="flex gap-2">
+            <Select value={formData.group_id} onValueChange={handleGroupChange}>
+              <SelectTrigger className="flex-1">
+                <SelectValue placeholder="Selecione um grupo" />
+              </SelectTrigger>
+              <SelectContent>
+                {groups.map(group => (
+                  <SelectItem key={group.id} value={group.id}>
+                    {group.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button type="button" variant="outline" size="icon" onClick={() => setShowNewGroupDialog(true)}>
+              <Plus className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <LabelWithTooltip 
+            label="Subgrupo" 
+            tooltip="Subgrupo para organização mais detalhada" 
           />
+          <div className="flex gap-2">
+            <Select 
+              value={formData.subgroup_id} 
+              onValueChange={(v) => onChange('subgroup_id', v)}
+              disabled={!formData.group_id}
+            >
+              <SelectTrigger className="flex-1">
+                <SelectValue placeholder={formData.group_id ? "Selecione um subgrupo" : "Selecione um grupo primeiro"} />
+              </SelectTrigger>
+              <SelectContent>
+                {filteredSubgroups.map(subgroup => (
+                  <SelectItem key={subgroup.id} value={subgroup.id}>
+                    {subgroup.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button 
+              type="button" 
+              variant="outline" 
+              size="icon" 
+              onClick={() => setShowNewSubgroupDialog(true)}
+              disabled={!formData.group_id}
+            >
+              <Plus className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
 
         <div className="space-y-2">
@@ -322,6 +409,60 @@ export function ProductFormDados({
           </Button>
         </CardContent>
       </Card>
+
+      {/* Dialog para criar novo grupo */}
+      <Dialog open={showNewGroupDialog} onOpenChange={setShowNewGroupDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Novo Grupo</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Nome do Grupo</Label>
+              <Input
+                value={newGroupName}
+                onChange={(e) => setNewGroupName(e.target.value)}
+                placeholder="Ex: Eletrônicos, Acessórios..."
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowNewGroupDialog(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={handleCreateGroup} disabled={!newGroupName.trim()}>
+              Criar Grupo
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog para criar novo subgrupo */}
+      <Dialog open={showNewSubgroupDialog} onOpenChange={setShowNewSubgroupDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Novo Subgrupo</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Nome do Subgrupo</Label>
+              <Input
+                value={newSubgroupName}
+                onChange={(e) => setNewSubgroupName(e.target.value)}
+                placeholder="Ex: Smartphones, Cabos..."
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowNewSubgroupDialog(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={handleCreateSubgroup} disabled={!newSubgroupName.trim()}>
+              Criar Subgrupo
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

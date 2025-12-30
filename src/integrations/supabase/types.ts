@@ -2478,6 +2478,44 @@ export type Database = {
           },
         ]
       }
+      product_groups: {
+        Row: {
+          company_id: string
+          created_at: string
+          description: string | null
+          id: string
+          is_active: boolean
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_groups_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       product_images: {
         Row: {
           created_at: string
@@ -2564,6 +2602,54 @@ export type Database = {
           },
         ]
       }
+      product_subgroups: {
+        Row: {
+          company_id: string
+          created_at: string
+          description: string | null
+          group_id: string
+          id: string
+          is_active: boolean
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          description?: string | null
+          group_id: string
+          id?: string
+          is_active?: boolean
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          description?: string | null
+          group_id?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_subgroups_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_subgroups_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "product_groups"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       product_suppliers: {
         Row: {
           created_at: string
@@ -2618,6 +2704,7 @@ export type Database = {
           fci_number: string | null
           final_cost: number | null
           gross_weight: number | null
+          group_id: string | null
           has_composition: boolean | null
           has_invoice: boolean | null
           has_variations: boolean | null
@@ -2641,6 +2728,7 @@ export type Database = {
           quantity: number | null
           sale_price: number | null
           specific_product: string | null
+          subgroup_id: string | null
           unit: string | null
           unit_conversions: Json | null
           updated_at: string
@@ -2665,6 +2753,7 @@ export type Database = {
           fci_number?: string | null
           final_cost?: number | null
           gross_weight?: number | null
+          group_id?: string | null
           has_composition?: boolean | null
           has_invoice?: boolean | null
           has_variations?: boolean | null
@@ -2688,6 +2777,7 @@ export type Database = {
           quantity?: number | null
           sale_price?: number | null
           specific_product?: string | null
+          subgroup_id?: string | null
           unit?: string | null
           unit_conversions?: Json | null
           updated_at?: string
@@ -2712,6 +2802,7 @@ export type Database = {
           fci_number?: string | null
           final_cost?: number | null
           gross_weight?: number | null
+          group_id?: string | null
           has_composition?: boolean | null
           has_invoice?: boolean | null
           has_variations?: boolean | null
@@ -2735,6 +2826,7 @@ export type Database = {
           quantity?: number | null
           sale_price?: number | null
           specific_product?: string | null
+          subgroup_id?: string | null
           unit?: string | null
           unit_conversions?: Json | null
           updated_at?: string
@@ -2747,6 +2839,20 @@ export type Database = {
             columns: ["default_location_id"]
             isOneToOne: false
             referencedRelation: "stock_locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "products_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "product_groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "products_subgroup_id_fkey"
+            columns: ["subgroup_id"]
+            isOneToOne: false
+            referencedRelation: "product_subgroups"
             referencedColumns: ["id"]
           },
         ]
