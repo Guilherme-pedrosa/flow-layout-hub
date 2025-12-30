@@ -1,29 +1,36 @@
 import { KpiData } from '@/lib/types';
-import { formatCurrency, formatNumber, calculatePercentageChange, getTrendColorClass } from '@/lib/utils';
-import { ArrowUpIcon, ArrowDownIcon, MinusIcon, DollarSign, ShoppingCart, AlertTriangle, Package } from 'lucide-react';
+import { formatCurrency, formatNumber, calculatePercentageChange } from '@/lib/utils';
+import { ArrowUpIcon, ArrowDownIcon, MinusIcon, DollarSign, ShoppingCart, AlertTriangle, Package, TrendingUp, TrendingDown, Wallet, CreditCard } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Card } from '@/components/ui/card';
+import { useNavigate } from 'react-router-dom';
+import { cn } from '@/lib/utils';
 
 interface KpiCardProps {
   data?: KpiData;
   isLoading?: boolean;
+  onClick?: () => void;
 }
 
 const iconMap = {
-  dollar: DollarSign,
+  dollar: Wallet,
   cart: ShoppingCart,
   alert: AlertTriangle,
   box: Package,
 };
 
-export function KpiCard({ data, isLoading }: KpiCardProps) {
+export function KpiCard({ data, isLoading, onClick }: KpiCardProps) {
+  const navigate = useNavigate();
+
   if (isLoading || !data) {
     return (
-      <Card className="p-6">
-        <Skeleton className="h-4 w-24 mb-3" data-testid="skeleton" />
-        <Skeleton className="h-8 w-32 mb-2" />
+      <div className="kpi-card p-6">
+        <div className="flex items-center gap-2 mb-3">
+          <Skeleton className="h-4 w-4 rounded" />
+          <Skeleton className="h-4 w-24" />
+        </div>
+        <Skeleton className="h-10 w-32 mb-3" />
         <Skeleton className="h-4 w-20" />
-      </Card>
+      </div>
     );
   }
 
@@ -32,33 +39,51 @@ export function KpiCard({ data, isLoading }: KpiCardProps) {
     ? formatCurrency(data.value)
     : formatNumber(data.value);
 
-  const TrendIcon = data.trend === 'up'
-    ? ArrowUpIcon
-    : data.trend === 'down'
-    ? ArrowDownIcon
-    : MinusIcon;
-
   const Icon = iconMap[data.icon];
-  const trendClass = getTrendColorClass(data.trend);
+  const isPositive = data.trend === 'up';
+  const isNegative = data.trend === 'down';
+
+  const handleClick = () => {
+    if (onClick) {
+      onClick();
+    }
+  };
 
   return (
-    <Card className="p-6 hover:shadow-lg transition-shadow">
-      <div className="flex items-center justify-between mb-4">
-        <span className="text-sm font-medium text-muted-foreground">{data.title}</span>
-        <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
-          <Icon className="h-5 w-5 text-primary" />
-        </div>
+    <div 
+      className={cn(
+        "kpi-card p-6",
+        onClick && "cursor-pointer"
+      )}
+      onClick={onClick ? handleClick : undefined}
+    >
+      {/* Title with icon */}
+      <div className="kpi-card-title">
+        <Icon className="h-4 w-4 text-muted-foreground" />
+        <span className="uppercase tracking-wide">{data.title}</span>
       </div>
       
-      <div className="text-3xl font-bold mb-2">{formattedValue}</div>
+      {/* Main value - Display size (32px Bold) */}
+      <div className="kpi-card-value mb-3 tabular-nums">
+        {formattedValue}
+      </div>
       
-      <div className="flex items-center gap-2">
-        <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${trendClass}`}>
-          <TrendIcon className="w-3 h-3" />
+      {/* Trend indicator */}
+      <div className={cn(
+        "kpi-card-trend",
+        isPositive && "kpi-card-trend-up",
+        isNegative && "kpi-card-trend-down",
+        !isPositive && !isNegative && "text-muted-foreground"
+      )}>
+        {isPositive && <TrendingUp className="h-3.5 w-3.5" />}
+        {isNegative && <TrendingDown className="h-3.5 w-3.5" />}
+        {!isPositive && !isNegative && <MinusIcon className="h-3.5 w-3.5" />}
+        <span>
+          {isPositive && '+'}
           {Math.abs(percentageChange).toFixed(1)}%
         </span>
-        <span className="text-xs text-muted-foreground">vs mês anterior</span>
+        <span className="text-muted-foreground ml-1">vs mês anterior</span>
       </div>
-    </Card>
+    </div>
   );
 }

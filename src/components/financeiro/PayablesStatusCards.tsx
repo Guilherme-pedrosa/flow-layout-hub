@@ -5,9 +5,9 @@ export type PayableStatusFilter = "all" | "pending" | "overdue" | "paid" | "toda
 interface StatusCardData {
   key: PayableStatusFilter;
   label: string;
+  count: number;
   amount: number;
-  headerColor: string;
-  valueColor: string;
+  colorClass: string;
 }
 
 interface PayablesStatusCardsProps {
@@ -48,42 +48,42 @@ export function PayablesStatusCards({
     { 
       key: "overdue", 
       label: "Vencidos", 
+      count: counts.overdue,
       amount: amounts.overdue,
-      headerColor: "bg-red-500",
-      valueColor: "text-red-500",
+      colorClass: "status-card-overdue",
     },
     { 
       key: "today", 
-      label: "Vencem hoje", 
+      label: "Vence Hoje", 
+      count: counts.today || 0,
       amount: amounts.today || 0,
-      headerColor: "bg-orange-500",
-      valueColor: "text-orange-500",
+      colorClass: "status-card-today",
     },
     { 
       key: "pending", 
-      label: "A vencer", 
+      label: "A Vencer", 
+      count: counts.pending,
       amount: amounts.pending,
-      headerColor: "bg-gray-500",
-      valueColor: "text-gray-600",
+      colorClass: "status-card-upcoming",
     },
     { 
       key: "paid", 
       label: "Pagos", 
+      count: counts.paid,
       amount: amounts.paid,
-      headerColor: "bg-green-500",
-      valueColor: "text-green-500",
+      colorClass: "status-card-paid",
     },
     { 
       key: "all", 
       label: "Total", 
+      count: counts.all,
       amount: amounts.all,
-      headerColor: "bg-gray-800",
-      valueColor: "text-foreground",
+      colorClass: "status-card-total",
     },
   ];
 
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 md:gap-3 w-full">
+    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
       {cards.map((card) => {
         const isActive = activeFilter === card.key;
         
@@ -92,30 +92,32 @@ export function PayablesStatusCards({
             key={card.key}
             onClick={() => onFilterChange(card.key)}
             className={cn(
-              "min-w-0 text-left rounded-lg overflow-hidden border-2 transition-all",
-              isActive 
-                ? "border-primary ring-2 ring-primary/20" 
-                : "border-transparent hover:border-muted"
+              "status-card text-left",
+              isActive && "status-card-active",
+              isActive && card.colorClass
             )}
           >
-            {/* Header */}
-            <div className={cn(
-              "px-2 md:px-4 py-1.5 md:py-2",
-              card.headerColor,
-              "text-white"
+            {/* Count */}
+            <span className={cn(
+              "status-card-count",
+              card.key === "overdue" && "text-destructive",
+              card.key === "today" && "text-warning",
+              card.key === "pending" && "text-info",
+              card.key === "paid" && "text-success",
+              card.key === "all" && "text-foreground"
             )}>
-              <span className="text-[10px] md:text-xs font-medium whitespace-nowrap">{card.label}</span>
-            </div>
+              {card.count}
+            </span>
             
-            {/* Value */}
-            <div className="bg-card px-2 md:px-4 py-2 md:py-3 border border-t-0 border-border rounded-b-lg">
-              <p className={cn(
-                "text-sm md:text-lg font-semibold tabular-nums truncate",
-                card.valueColor
-              )}>
-                {formatCurrency(card.amount)}
-              </p>
-            </div>
+            {/* Amount */}
+            <span className="status-card-value">
+              R$ {formatCurrency(card.amount)}
+            </span>
+            
+            {/* Label */}
+            <span className="status-card-label">
+              {card.label}
+            </span>
           </button>
         );
       })}

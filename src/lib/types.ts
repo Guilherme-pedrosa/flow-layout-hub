@@ -7,6 +7,7 @@ export interface KpiData {
   format: 'currency' | 'number' | 'percentage';
   icon: 'dollar' | 'cart' | 'alert' | 'box';
   trend: 'up' | 'down' | 'neutral';
+  href?: string; // Link opcional para navegação ao clicar
 }
 
 // Dados para os gráficos de barras/linha
