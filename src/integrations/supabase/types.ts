@@ -434,6 +434,7 @@ export type Database = {
       }
       chart_of_accounts: {
         Row: {
+          account_nature: Database["public"]["Enums"]["account_nature"]
           code: string
           company_id: string
           created_at: string
@@ -445,6 +446,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          account_nature?: Database["public"]["Enums"]["account_nature"]
           code: string
           company_id: string
           created_at?: string
@@ -456,6 +458,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          account_nature?: Database["public"]["Enums"]["account_nature"]
           code?: string
           company_id?: string
           created_at?: string
@@ -4276,6 +4279,7 @@ export type Database = {
       }
     }
     Enums: {
+      account_nature: "sintetica" | "analitica"
       account_type:
         | "ativo"
         | "passivo"
@@ -4429,6 +4433,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      account_nature: ["sintetica", "analitica"],
       account_type: [
         "ativo",
         "passivo",

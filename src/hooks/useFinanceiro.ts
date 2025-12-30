@@ -5,6 +5,7 @@ import { useCompany } from '@/contexts/CompanyContext';
 
 // Types
 export type AccountType = 'ativo' | 'passivo' | 'patrimonio' | 'receita' | 'despesa' | 'custo';
+export type AccountNature = 'sintetica' | 'analitica';
 
 export interface ChartOfAccount {
   id: string;
@@ -12,6 +13,7 @@ export interface ChartOfAccount {
   code: string;
   name: string;
   type: AccountType;
+  account_nature: AccountNature;
   parent_id: string | null;
   is_active: boolean;
   created_at: string;
@@ -172,6 +174,73 @@ export function useChartOfAccounts() {
     return updateAccount(id, { is_active: isActive });
   }, [updateAccount]);
 
+  // Verificar se a conta tem lançamentos associados antes de excluir
+  const checkAccountHasTransactions = useCallback(async (id: string): Promise<boolean> => {
+    try {
+      // Verificar em payables
+      const { count: payablesCount } = await supabase
+        .from('payables')
+        .select('*', { count: 'exact', head: true })
+        .eq('chart_account_id', id);
+
+      if ((payablesCount || 0) > 0) return true;
+
+      // Verificar em quick_categories
+      const { count: categoriesCount } = await supabase
+        .from('quick_categories')
+        .select('*', { count: 'exact', head: true })
+        .eq('chart_account_id', id);
+
+      if ((categoriesCount || 0) > 0) return true;
+
+      return false;
+    } catch (error) {
+      console.error('Erro ao verificar lançamentos:', error);
+      return true; // Por segurança, assume que tem lançamentos
+    }
+  }, []);
+
+  const deleteAccount = useCallback(async (id: string): Promise<{ success: boolean; error?: string }> => {
+    try {
+      // Verificar se tem lançamentos associados
+      const hasTransactions = await checkAccountHasTransactions(id);
+      if (hasTransactions) {
+        return { 
+          success: false, 
+          error: 'Esta conta possui lançamentos associados e não pode ser excluída. Você pode desativá-la.' 
+        };
+      }
+
+      // Verificar se tem contas filhas
+      const { count: childrenCount } = await supabase
+        .from('chart_of_accounts')
+        .select('*', { count: 'exact', head: true })
+        .eq('parent_id', id);
+
+      if ((childrenCount || 0) > 0) {
+        return { 
+          success: false, 
+          error: 'Esta conta possui subcontas. Remova as subcontas primeiro.' 
+        };
+      }
+
+      const { error } = await supabase
+        .from('chart_of_accounts')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+
+      await logAudit('delete', 'chart_of_accounts', id, {});
+      toast.success('Conta excluída com sucesso');
+      return { success: true };
+    } catch (error) {
+      toast.error('Erro ao excluir conta');
+      console.error(error);
+      return { success: false, error: 'Erro ao excluir conta' };
+    }
+  }, [checkAccountHasTransactions]);
+
   return {
     accounts,
     loading,
@@ -180,6 +249,8 @@ export function useChartOfAccounts() {
     createAccount,
     updateAccount,
     toggleAccountStatus,
+    deleteAccount,
+    checkAccountHasTransactions,
   };
 }
 
@@ -256,6 +327,34 @@ export function useCostCenters() {
     return updateCostCenter(id, { is_active: isActive });
   }, [updateCostCenter]);
 
+  const checkCostCenterHasTransactions = useCallback(async (id: string): Promise<boolean> => {
+    try {
+      const { count } = await supabase
+        .from('payables')
+        .select('*', { count: 'exact', head: true })
+        .eq('cost_center_id', id);
+      return (count || 0) > 0;
+    } catch {
+      return true;
+    }
+  }, []);
+
+  const deleteCostCenter = useCallback(async (id: string): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const hasTransactions = await checkCostCenterHasTransactions(id);
+      if (hasTransactions) {
+        return { success: false, error: 'Este centro de custo possui lançamentos associados e não pode ser excluído.' };
+      }
+      const { error } = await supabase.from('cost_centers').delete().eq('id', id);
+      if (error) throw error;
+      await logAudit('delete', 'cost_centers', id, {});
+      toast.success('Centro de custo excluído');
+      return { success: true };
+    } catch {
+      return { success: false, error: 'Erro ao excluir' };
+    }
+  }, [checkCostCenterHasTransactions]);
+
   return {
     costCenters,
     loading,
@@ -263,6 +362,7 @@ export function useCostCenters() {
     createCostCenter,
     updateCostCenter,
     toggleCostCenterStatus,
+    deleteCostCenter,
   };
 }
 
