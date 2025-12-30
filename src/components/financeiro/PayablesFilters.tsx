@@ -8,11 +8,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Search, ChevronLeft, ChevronRight, X } from "lucide-react";
+import { 
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Search, ChevronDown, Plus, Settings, Calendar, Filter } from "lucide-react";
 import { format, addMonths, subMonths, startOfMonth } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { supabase } from "@/integrations/supabase/client";
-import { cn } from "@/lib/utils";
 
 interface Supplier {
   id: string;
@@ -31,24 +36,13 @@ export interface PayablesFiltersState {
 interface PayablesFiltersProps {
   filters: PayablesFiltersState;
   onFiltersChange: (filters: PayablesFiltersState) => void;
-  showCategoryFilter?: boolean;
+  onAddNew: () => void;
 }
-
-const CATEGORIES = [
-  { value: "aluguel", label: "Aluguel" },
-  { value: "impostos", label: "Impostos" },
-  { value: "folha", label: "Folha de Pagamento" },
-  { value: "fornecedores", label: "Fornecedores" },
-  { value: "servicos", label: "Serviços" },
-  { value: "equipamentos", label: "Equipamentos" },
-  { value: "marketing", label: "Marketing" },
-  { value: "outros", label: "Outros" },
-];
 
 export function PayablesFilters({
   filters,
   onFiltersChange,
-  showCategoryFilter = true,
+  onAddNew,
 }: PayablesFiltersProps) {
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
 
@@ -80,124 +74,60 @@ export function PayablesFilters({
     });
   };
 
-  const handleCurrentMonth = () => {
-    onFiltersChange({
-      ...filters,
-      currentMonth: startOfMonth(new Date()),
-    });
-  };
-
-  const hasActiveFilters = 
-    filters.search !== "" || 
-    filters.supplierId !== "all" || 
-    filters.category !== "all" ||
-    filters.paymentMethod !== "all";
-
-  const clearFilters = () => {
-    onFiltersChange({
-      ...filters,
-      search: "",
-      supplierId: "all",
-      category: "all",
-      paymentMethod: "all",
-    });
-  };
-
-  const isCurrentMonth = format(filters.currentMonth, "MM-yyyy") === format(new Date(), "MM-yyyy");
-
   return (
     <div className="space-y-4">
-      {/* Filters Row */}
-      <div className="flex flex-wrap items-center gap-3">
-        {/* Search */}
-        <div className="relative flex-1 min-w-[280px] max-w-md">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            placeholder="Buscar..."
-            value={filters.search}
-            onChange={(e) => onFiltersChange({ ...filters, search: e.target.value })}
-            className="pl-10 h-10 bg-background"
-          />
-        </div>
+      {/* Action Buttons Row */}
+      <div className="flex items-center gap-2">
+        {/* Add Button */}
+        <Button onClick={onAddNew} className="bg-green-600 hover:bg-green-700 text-white gap-2">
+          <Plus className="h-4 w-4" />
+          Adicionar
+        </Button>
 
-        {/* Supplier Filter */}
-        <Select
-          value={filters.supplierId}
-          onValueChange={(value) => onFiltersChange({ ...filters, supplierId: value })}
-        >
-          <SelectTrigger className="w-[180px] h-10 bg-background">
-            <SelectValue placeholder="Fornecedor" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todos Fornecedores</SelectItem>
-            {suppliers.map((supplier) => (
-              <SelectItem key={supplier.id} value={supplier.id}>
-                {supplier.nome_fantasia || supplier.razao_social}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        {/* More Actions Dropdown */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" className="bg-gray-800 text-white hover:bg-gray-700 border-gray-700 gap-2">
+              <Settings className="h-4 w-4" />
+              Mais ações
+              <ChevronDown className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent>
+            <DropdownMenuItem>Exportar Excel</DropdownMenuItem>
+            <DropdownMenuItem>Exportar PDF</DropdownMenuItem>
+            <DropdownMenuItem>Imprimir</DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
 
-        {/* Category Filter */}
-        {showCategoryFilter && (
-          <Select
-            value={filters.category}
-            onValueChange={(value) => onFiltersChange({ ...filters, category: value })}
-          >
-            <SelectTrigger className="w-[160px] h-10 bg-background">
-              <SelectValue placeholder="Categoria" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todas Categorias</SelectItem>
-              {CATEGORIES.map((cat) => (
-                <SelectItem key={cat.value} value={cat.value}>
-                  {cat.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        )}
+        <div className="flex-1" />
 
-        {/* Month Navigator */}
-        <div className="flex items-center gap-1 ml-auto">
+        {/* Month Selector */}
+        <div className="flex items-center">
           <Button
-            variant="ghost"
+            variant="outline"
+            className="bg-gray-800 text-white hover:bg-gray-700 border-gray-700 rounded-r-none border-r-0 gap-2"
+            onClick={() => {}}
+          >
+            <Calendar className="h-4 w-4" />
+            {format(filters.currentMonth, "MMMM 'de' yyyy", { locale: ptBR })}
+            <ChevronDown className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="outline"
             size="icon"
+            className="bg-gray-800 text-white hover:bg-gray-700 border-gray-700 rounded-l-none"
             onClick={handlePreviousMonth}
-            className="h-9 w-9"
           >
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-          
-          <Button
-            variant={isCurrentMonth ? "secondary" : "ghost"}
-            onClick={handleCurrentMonth}
-            className="min-w-[140px] font-semibold capitalize h-9"
-          >
-            {format(filters.currentMonth, "MMMM yyyy", { locale: ptBR })}
-          </Button>
-          
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={handleNextMonth}
-            className="h-9 w-9"
-          >
-            <ChevronRight className="h-4 w-4" />
+            <Filter className="h-4 w-4" />
           </Button>
         </div>
 
-        {hasActiveFilters && (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={clearFilters}
-            className="text-muted-foreground h-9"
-          >
-            <X className="h-4 w-4 mr-1" />
-            Limpar
-          </Button>
-        )}
+        {/* Advanced Search */}
+        <Button variant="outline" className="bg-green-600 hover:bg-green-700 text-white border-green-600 gap-2">
+          <Search className="h-4 w-4" />
+          Busca avançada
+        </Button>
       </div>
     </div>
   );
