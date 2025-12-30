@@ -32,3 +32,12 @@ verify_jwt = false
 
 [functions.financial-ai]
 verify_jwt = false
+
+[functions.inter-boleto-payment]
+verify_jwt = false
+
+[functions.inter-dda-sync]
+verify_jwt = false
+
+[functions.focusnfe]
+verify_jwt = false
