@@ -42,7 +42,8 @@ import { ProductForm, ProductFormData } from "@/components/produtos/ProductForm"
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/shared";
-import { AIBanner, AIInsight } from "@/components/shared/AIBanner";
+import { AIBannerEnhanced } from "@/components/shared/AIBannerEnhanced";
+import { useAiInsights } from "@/hooks/useAiInsights";
 
 type StatusFilter = 'all' | 'active' | 'inactive' | 'low_stock' | 'negative_stock';
 
@@ -53,7 +54,9 @@ export default function GerenciarProdutos() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [aiDismissed, setAiDismissed] = useState(false);
+  
+  // AI Insights do banco
+  const { insights, dismiss, markAsRead } = useAiInsights('stock');
 
   // Contagens para os cards
   const counts = useMemo(() => {
@@ -99,34 +102,6 @@ export default function GerenciarProdutos() {
     });
   }, [products, search, statusFilter]);
 
-  // AI Insights
-  const aiInsights: AIInsight[] = useMemo(() => {
-    const insights: AIInsight[] = [];
-    
-    if (counts.negativeStock > 0) {
-      insights.push({
-        id: 'negative-stock',
-        message: `Existem ${counts.negativeStock} produto(s) com estoque negativo. Isso pode indicar vendas não registradas ou ajustes pendentes.`,
-        type: 'warning',
-        action: {
-          label: 'Ver produtos',
-          onClick: () => setStatusFilter('negative_stock')
-        }
-      });
-    } else if (counts.lowStock > 0) {
-      insights.push({
-        id: 'low-stock',
-        message: `${counts.lowStock} produto(s) estão com estoque baixo e precisam de reposição.`,
-        type: 'info',
-        action: {
-          label: 'Ver produtos',
-          onClick: () => setStatusFilter('low_stock')
-        }
-      });
-    }
-    
-    return insights;
-  }, [counts]);
 
   const handleOpenNew = () => {
     setEditingProductId(null);
@@ -353,12 +328,12 @@ export default function GerenciarProdutos() {
       />
 
       {/* AI Banner */}
-      {!aiDismissed && aiInsights.length > 0 && (
-        <AIBanner 
-          insights={aiInsights} 
-          onDismiss={() => setAiDismissed(true)}
-        />
-      )}
+      <AIBannerEnhanced
+        insights={insights}
+        onDismiss={dismiss}
+        onMarkAsRead={markAsRead}
+        defaultMessage="IA monitorando estoque, margens e sugerindo otimizações"
+      />
 
       {/* Cards de Status */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
