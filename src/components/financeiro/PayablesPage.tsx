@@ -289,7 +289,7 @@ export function PayablesPage({ onRefresh }: PayablesPageProps) {
         description: `${payable.description} (cópia)`,
         document_number: null,
         supplier_id: payable.supplier_id,
-        payment_method_type: payable.payment_method_type,
+        payment_method_type: payable.payment_method_type as "pix" | "boleto" | "transferencia" | "outro" | null,
         pix_key: payable.pix_key,
         pix_key_type: payable.pix_key_type,
         boleto_barcode: payable.boleto_barcode,
