@@ -23,6 +23,7 @@ import { toast } from "sonner";
 import { PurchaseOrderItems, LocalItem } from "./PurchaseOrderItems";
 import { CadastrarPessoaDialog } from "@/components/shared/CadastrarPessoaDialog";
 import { XMLUploadButton } from "./XMLUploadButton";
+import { PurchaseOrderAIAudit } from "./PurchaseOrderAIAudit";
 import {
   Table,
   TableBody,
@@ -275,6 +276,16 @@ export function PurchaseOrderForm({ order, onClose }: PurchaseOrderFormProps) {
           </Button>
         </div>
       </div>
+
+      {/* AI Audit Panel */}
+      <PurchaseOrderAIAudit
+        supplierId={supplierId}
+        items={items}
+        totalValue={totalValue}
+        purpose={purpose}
+        freightValue={parseFloat(freightValue) || 0}
+        isEditing={!!order}
+      />
 
       {/* Tabs - Mobile optimized with horizontal scroll */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
