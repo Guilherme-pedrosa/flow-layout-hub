@@ -223,40 +223,58 @@ export default function ImportarXML() {
       const itensDescricao = nfeData.itens.map(i => `${i.descricao} (NCM: ${i.ncm || 'N/A'}, Qtd: ${i.quantidade})`).join('; ');
       const cfopSaida = nfeData.itens[0]?.cfopSaida || '';
       const ufFornecedor = nfeData.fornecedor.uf;
+      const naturezaOperacao = nfeData.nota.naturezaOperacao || '';
       
       // UF da empresa (destino) - fixo GO por enquanto, TODO: pegar do contexto
       const ufEmpresa = "GO";
       
-      // Determinar se é estadual, interestadual ou exterior
-      const tipoOperacao = ufFornecedor === ufEmpresa 
-        ? "ESTADUAL (mesma UF)" 
+      // Determinar primeiro dígito do CFOP de entrada baseado na UF
+      const primeiroDigitoEntrada = ufFornecedor === ufEmpresa 
+        ? "1" 
         : ufFornecedor === "EX" 
-          ? "IMPORTAÇÃO (exterior)" 
-          : "INTERESTADUAL (UFs diferentes)";
+          ? "3" 
+          : "2";
       
-      const prompt = `Analise esta NF-e de compra e sugira o CFOP de ENTRADA mais adequado.
+      // Extrair os 3 últimos dígitos do CFOP de saída (representam a operação)
+      const ultimos3Digitos = cfopSaida.slice(-3);
+      
+      const prompt = `Você é um especialista fiscal brasileiro. Analise a NF-e e sugira o CFOP de ENTRADA correto.
 
-Dados da NF-e:
-- CFOP de saída do fornecedor: ${cfopSaida}
+DADOS DA NF-e:
+- Natureza da Operação: "${naturezaOperacao}"
+- CFOP de SAÍDA do fornecedor: ${cfopSaida}
 - UF do fornecedor (origem): ${ufFornecedor}
 - UF da empresa (destino): ${ufEmpresa}
-- Tipo de operação: ${tipoOperacao}
 - Produtos: ${itensDescricao}
-- Valor total: R$ ${nfeData.nota.valorTotal.toFixed(2)}
 
-REGRAS IMPORTANTES:
-- Operação ESTADUAL (origem e destino na mesma UF): usar série 1xxx (ex: 1102, 1101, 1556)
-- Operação INTERESTADUAL (UFs diferentes): usar série 2xxx (ex: 2102, 2101, 2556)
-- Operação de IMPORTAÇÃO (exterior): usar série 3xxx
-- Compra para comercialização: x102
-- Compra para industrialização: x101
-- Compra de ativo imobilizado: x551
-- Compra de material de uso/consumo: x556
+REGRA FUNDAMENTAL DO CFOP:
+O CFOP de entrada ESPELHA o CFOP de saída, apenas trocando o primeiro dígito:
+- Saída 5xxx (estadual) → Entrada 1xxx
+- Saída 6xxx (interestadual) → Entrada 2xxx  
+- Saída 7xxx (exportação) → Entrada 3xxx
 
-ATENÇÃO: A UF do fornecedor é ${ufFornecedor} e a UF da empresa é ${ufEmpresa}.
-${ufFornecedor !== ufEmpresa ? `Como são UFs DIFERENTES, use obrigatoriamente série 2xxx!` : `Como são a MESMA UF, use série 1xxx.`}
+PORTANTO: Se o CFOP de saída é ${cfopSaida}, o de entrada é ${primeiroDigitoEntrada}${ultimos3Digitos}.
 
-Responda APENAS com o código CFOP de 4 dígitos mais adequado (ex: 1102 ou 2102). Sem explicações.`;
+INTERPRETAÇÃO DA NATUREZA DA OPERAÇÃO:
+- "REMESSA" ou "GARANTIA" ou "SUBSTITUIÇÃO" → NÃO é compra, é movimentação (ex: x915, x949)
+- "VENDA" ou "COMERCIALIZAÇÃO" → Compra para revenda (x102)
+- "INDUSTRIALIZAÇÃO" → Compra para produção (x101)
+- "CONSERTO" ou "REPARO" → Recebimento para conserto (x915)
+- "DEMONSTRAÇÃO" → Demonstração (x912)
+- "CONSIGNAÇÃO" → Consignação (x917)
+- "DEVOLUÇÃO" → Devolução (x201, x202)
+
+A NATUREZA "${naturezaOperacao}" indica que esta operação é: ${
+  naturezaOperacao.toLowerCase().includes('garantia') || naturezaOperacao.toLowerCase().includes('remessa') 
+    ? 'UMA REMESSA/GARANTIA - NÃO É COMPRA COMERCIAL! Use x949 ou CFOP específico da operação.'
+    : naturezaOperacao.toLowerCase().includes('venda') 
+      ? 'UMA COMPRA PARA COMERCIALIZAÇÃO - Use x102.'
+      : 'Analise a natureza e escolha o CFOP apropriado.'
+}
+
+CFOP SUGERIDO: ${primeiroDigitoEntrada}${ultimos3Digitos}
+
+Responda APENAS com o código CFOP de 4 dígitos. Sem explicações.`;
 
       const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/financial-ai`,
