@@ -86,15 +86,44 @@ export function PurchaseOrderForm({ order, onClose }: PurchaseOrderFormProps) {
   const { createOrder, updateOrder, getOrderItems, createOrderItems, deleteOrderItems, refetch } = usePurchaseOrders();
   const { statuses } = usePurchaseOrderStatuses();
   const { checkOrderLimits } = usePurchaseOrderLimits();
-  const { activeFornecedores, refetch: refetchPessoas } = usePessoas();
+  const { activeFornecedores, refetch: refetchPessoas, getPessoaById } = usePessoas();
   const { accounts: chartOfAccounts, fetchAccounts } = useChartOfAccounts();
   const { costCenters, fetchCostCenters } = useCostCenters();
+  
+  // Estado do fornecedor selecionado para validação de CFOP
+  const [supplierState, setSupplierState] = useState<string | null>(null);
+  
+  // UF da empresa (hardcoded por enquanto, pode vir do contexto)
+  const companyState = "SP"; // TODO: pegar do contexto da empresa
 
   // Load financial data
   useEffect(() => {
     fetchAccounts();
     fetchCostCenters();
   }, []);
+
+  // Atualizar UF do fornecedor quando mudar seleção
+  useEffect(() => {
+    const loadSupplierState = async () => {
+      if (supplierId) {
+        const supplier = activeFornecedores.find(f => f.id === supplierId);
+        if (supplier?.estado) {
+          setSupplierState(supplier.estado);
+        } else {
+          // Buscar do banco se não estiver em cache
+          try {
+            const pessoa = await getPessoaById(supplierId);
+            setSupplierState(pessoa?.estado || null);
+          } catch {
+            setSupplierState(null);
+          }
+        }
+      } else {
+        setSupplierState(null);
+      }
+    };
+    loadSupplierState();
+  }, [supplierId, activeFornecedores]);
 
   // Load existing items when editing
   useEffect(() => {
@@ -408,7 +437,14 @@ export function PurchaseOrderForm({ order, onClose }: PurchaseOrderFormProps) {
                     CFOP de Entrada *
                     <span className="text-xs text-muted-foreground">(Código Fiscal de Operações - SEFAZ)</span>
                   </Label>
-                  <CFOPSelect value={cfopGeral} onValueChange={setCfopGeral} />
+                  <CFOPSelect 
+                    value={cfopGeral} 
+                    onValueChange={setCfopGeral}
+                    supplierState={supplierState}
+                    companyState={companyState}
+                    purpose={purpose}
+                    productDescription={items.length > 0 ? items.map(i => i.description).join(", ") : undefined}
+                  />
                 </div>
               </div>
 
