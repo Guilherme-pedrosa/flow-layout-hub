@@ -808,26 +808,59 @@ export type Database = {
       }
       companies: {
         Row: {
+          cep: string | null
+          cidade: string | null
           cnpj: string | null
           created_at: string
+          email: string | null
+          endereco: string | null
+          estado: string | null
           id: string
+          inscricao_estadual: string | null
+          inscricao_municipal: string | null
+          is_active: boolean | null
+          logo_url: string | null
           name: string
+          razao_social: string | null
+          telefone: string | null
           timezone: string | null
           updated_at: string
         }
         Insert: {
+          cep?: string | null
+          cidade?: string | null
           cnpj?: string | null
           created_at?: string
+          email?: string | null
+          endereco?: string | null
+          estado?: string | null
           id?: string
+          inscricao_estadual?: string | null
+          inscricao_municipal?: string | null
+          is_active?: boolean | null
+          logo_url?: string | null
           name: string
+          razao_social?: string | null
+          telefone?: string | null
           timezone?: string | null
           updated_at?: string
         }
         Update: {
+          cep?: string | null
+          cidade?: string | null
           cnpj?: string | null
           created_at?: string
+          email?: string | null
+          endereco?: string | null
+          estado?: string | null
           id?: string
+          inscricao_estadual?: string | null
+          inscricao_municipal?: string | null
+          is_active?: boolean | null
+          logo_url?: string | null
           name?: string
+          razao_social?: string | null
+          telefone?: string | null
           timezone?: string | null
           updated_at?: string
         }
@@ -865,6 +898,70 @@ export type Database = {
           {
             foreignKeyName: "cost_centers_company_id_fkey"
             columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      inter_company_transfers: {
+        Row: {
+          amount: number
+          completed_at: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          notes: string | null
+          reference_id: string | null
+          reference_type: string
+          source_company_id: string
+          status: string
+          target_company_id: string
+        }
+        Insert: {
+          amount: number
+          completed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          notes?: string | null
+          reference_id?: string | null
+          reference_type: string
+          source_company_id: string
+          status?: string
+          target_company_id: string
+        }
+        Update: {
+          amount?: number
+          completed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          notes?: string | null
+          reference_id?: string | null
+          reference_type?: string
+          source_company_id?: string
+          status?: string
+          target_company_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inter_company_transfers_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inter_company_transfers_source_company_id_fkey"
+            columns: ["source_company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inter_company_transfers_target_company_id_fkey"
+            columns: ["target_company_id"]
             isOneToOne: false
             referencedRelation: "companies"
             referencedColumns: ["id"]
@@ -1625,6 +1722,67 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      payment_methods: {
+        Row: {
+          auto_transfer_enabled: boolean
+          bank_account_id: string | null
+          company_id: string
+          created_at: string
+          id: string
+          is_active: boolean
+          name: string
+          receives_in_company_id: string | null
+          type: string
+          updated_at: string
+        }
+        Insert: {
+          auto_transfer_enabled?: boolean
+          bank_account_id?: string | null
+          company_id: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name: string
+          receives_in_company_id?: string | null
+          type?: string
+          updated_at?: string
+        }
+        Update: {
+          auto_transfer_enabled?: boolean
+          bank_account_id?: string | null
+          company_id?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          receives_in_company_id?: string | null
+          type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payment_methods_bank_account_id_fkey"
+            columns: ["bank_account_id"]
+            isOneToOne: false
+            referencedRelation: "bank_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payment_methods_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payment_methods_receives_in_company_id_fkey"
+            columns: ["receives_in_company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
             referencedColumns: ["id"]
           },
         ]
@@ -4012,6 +4170,51 @@ export type Database = {
           },
         ]
       }
+      user_companies: {
+        Row: {
+          company_id: string
+          created_at: string
+          id: string
+          is_default: boolean
+          role: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          id?: string
+          is_default?: boolean
+          role?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          id?: string
+          is_default?: boolean
+          role?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_companies_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_companies_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       users: {
         Row: {
           auth_id: string | null
@@ -4064,8 +4267,13 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_user_companies: { Args: never; Returns: string[] }
       get_user_company_id: { Args: never; Returns: string }
       is_admin: { Args: never; Returns: boolean }
+      user_belongs_to_company: {
+        Args: { _company_id: string; _user_id: string }
+        Returns: boolean
+      }
     }
     Enums: {
       account_type:

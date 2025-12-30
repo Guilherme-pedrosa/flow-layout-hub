@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { useCompany } from '@/contexts/CompanyContext';
 
 // Types
 export type AccountType = 'ativo' | 'passivo' | 'patrimonio' | 'receita' | 'despesa' | 'custo';
@@ -57,14 +58,17 @@ export interface BankAccount {
 }
 
 // Helper para logar em audit_logs
-async function logAudit(action: string, entity: string, entityId: string, metadata: object) {
+async function logAudit(action: string, entity: string, entityId: string, metadata: object, companyId?: string) {
   try {
-    const { data: companies } = await supabase.from('companies').select('id').limit(1);
-    const companyId = companies?.[0]?.id;
-    if (!companyId) return;
+    let cId = companyId;
+    if (!cId) {
+      const { data: companies } = await supabase.from('companies').select('id').limit(1);
+      cId = companies?.[0]?.id;
+    }
+    if (!cId) return;
 
     await supabase.from('audit_logs').insert([{
-      company_id: companyId,
+      company_id: cId,
       action,
       entity,
       entity_id: entityId,
