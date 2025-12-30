@@ -32,6 +32,7 @@ async function callInterProxy(
 
   const responseText = await response.text();
   console.log(`[inter-sync] Proxy response status: ${response.status}`);
+  console.log(`[inter-sync] Proxy response body: ${responseText.substring(0, 1000)}`);
   
   if (responseText.trim().startsWith('<!') || responseText.trim().startsWith('<html')) {
     throw new Error(`Proxy retornou HTML (status ${response.status})`);
@@ -41,11 +42,18 @@ async function callInterProxy(
   try {
     result = JSON.parse(responseText);
   } catch {
-    throw new Error(`Resposta inválida do proxy: ${responseText.substring(0, 200)}`);
+    throw new Error(`Resposta inválida do proxy: ${responseText.substring(0, 500)}`);
+  }
+
+  // Check if the proxy returned an error from Inter API
+  if (result.error || result.message || result.title) {
+    const errorDetail = result.detail || result.message || result.error || result.title;
+    console.error(`[inter-sync] Inter API error: ${JSON.stringify(result)}`);
+    throw new Error(`Inter API: ${errorDetail}`);
   }
 
   if (!response.ok) {
-    throw new Error(result.error || result.message || `Erro HTTP ${response.status}`);
+    throw new Error(`Erro HTTP ${response.status}: ${JSON.stringify(result)}`);
   }
 
   return result;
