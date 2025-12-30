@@ -1,4 +1,7 @@
 import { useState } from "react";
+import { PageHeader } from "@/components/shared";
+import { AIBannerEnhanced } from "@/components/shared/AIBannerEnhanced";
+import { useAiInsights } from "@/hooks/useAiInsights";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Receipt, FileText, CheckCircle, Wallet } from "lucide-react";
 import { DDABoletosList, ExtratoList, ReconciliationReview, PayablesPage, FinancialAIChat } from "@/components/financeiro";
@@ -6,20 +9,25 @@ import { useCompany } from "@/contexts/CompanyContext";
 
 export default function ContasPagar() {
   const { currentCompany } = useCompany();
+  const { insights, dismiss, markAsRead } = useAiInsights('financial');
   const [refreshKey, setRefreshKey] = useState(0);
 
   const handleRefresh = () => setRefreshKey((k) => k + 1);
 
   return (
     <div className="space-y-6">
-      {/* Breadcrumbs */}
-      <nav className="flex items-center gap-1.5 text-xs text-muted-foreground">
-        <span>Início</span>
-        <span>›</span>
-        <span>Financeiro</span>
-        <span>›</span>
-        <span className="text-foreground">Contas a Pagar</span>
-      </nav>
+      <PageHeader
+        title="Contas a Pagar"
+        description="Gerencie lançamentos, conciliações e DDA"
+        breadcrumbs={[{ label: "Financeiro" }, { label: "Contas a Pagar" }]}
+      />
+
+      <AIBannerEnhanced
+        insights={insights}
+        onDismiss={dismiss}
+        onMarkAsRead={markAsRead}
+        defaultMessage="IA monitorando vencimentos e sugerindo priorizações de pagamento"
+      />
 
       {/* Tabs */}
       <Tabs defaultValue="lancamentos" className="space-y-4">

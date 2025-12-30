@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { PageHeader } from "@/components/shared";
+import { AIBannerEnhanced } from "@/components/shared/AIBannerEnhanced";
+import { useAiInsights } from "@/hooks/useAiInsights";
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
 import { SalesList, SaleForm } from "@/components/vendas";
@@ -23,6 +25,8 @@ const Vendas = () => {
     setEditingSale(null);
   };
 
+  const { insights, dismiss, markAsRead } = useAiInsights('sales');
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -37,6 +41,13 @@ const Vendas = () => {
             </Button>
           )
         }
+      />
+
+      <AIBannerEnhanced
+        insights={insights}
+        onDismiss={dismiss}
+        onMarkAsRead={markAsRead}
+        defaultMessage="IA monitorando vendas, margens e oportunidades"
       />
 
       {showForm ? (

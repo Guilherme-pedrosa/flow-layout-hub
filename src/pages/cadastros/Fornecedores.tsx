@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { PageHeader } from "@/components/shared";
+import { AIBannerEnhanced } from "@/components/shared/AIBannerEnhanced";
+import { useAiInsights } from "@/hooks/useAiInsights";
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
 import { usePessoas, Pessoa, PessoaInsert } from "@/hooks/usePessoas";
@@ -43,6 +45,8 @@ export default function Fornecedores() {
     toggleStatus.mutate({ id, is_active: isActive });
   };
 
+  const { insights, dismiss, markAsRead } = useAiInsights('purchases');
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -60,6 +64,13 @@ export default function Fornecedores() {
             </Button>
           )
         }
+      />
+
+      <AIBannerEnhanced
+        insights={insights}
+        onDismiss={dismiss}
+        onMarkAsRead={markAsRead}
+        defaultMessage="IA monitorando fornecedores e oportunidades de compra"
       />
 
       {showForm ? (
