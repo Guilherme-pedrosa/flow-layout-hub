@@ -13,7 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2, Save, X, FileUp, AlertTriangle, Package, FileText, Truck, DollarSign, Plus, Trash2, CheckCircle } from "lucide-react";
+import { Loader2, Save, X, FileUp, AlertTriangle, Package, FileText, Truck, DollarSign, Plus, Trash2, CheckCircle, Sparkles, Bot } from "lucide-react";
 import { usePurchaseOrders, PurchaseOrder, PurchaseOrderInsert, PurchaseOrderItemInsert } from "@/hooks/usePurchaseOrders";
 import { usePurchaseOrderStatuses } from "@/hooks/usePurchaseOrderStatuses";
 import { usePurchaseOrderLimits } from "@/hooks/usePurchaseOrderLimits";
@@ -24,6 +24,7 @@ import { PurchaseOrderItems, LocalItem } from "./PurchaseOrderItems";
 import { CadastrarPessoaDialog } from "@/components/shared/CadastrarPessoaDialog";
 import { XMLUploadButton } from "./XMLUploadButton";
 import { PurchaseOrderAIAudit } from "./PurchaseOrderAIAudit";
+import { CFOPS_ENTRADA_ESTADUAL, CFOPS_ENTRADA_INTERESTADUAL, CFOPS_ENTRADA_EXTERIOR } from "@/lib/cfops";
 import {
   Table,
   TableBody,
@@ -71,6 +72,7 @@ export function PurchaseOrderForm({ order, onClose }: PurchaseOrderFormProps) {
   const [statusId, setStatusId] = useState(order?.status_id || "");
   const [chartAccountId, setChartAccountId] = useState(order?.chart_account_id || "");
   const [costCenterId, setCostCenterId] = useState(order?.cost_center_id || "");
+  const [cfopGeral, setCfopGeral] = useState("");
 
   // Items state (managed here, passed to child)
   const [items, setItems] = useState<LocalItem[]>([]);
@@ -178,6 +180,11 @@ export function PurchaseOrderForm({ order, onClose }: PurchaseOrderFormProps) {
   const handleSave = async () => {
     if (!supplierId) {
       toast.error("Selecione um fornecedor");
+      return;
+    }
+
+    if (!cfopGeral) {
+      toast.error("Selecione o CFOP de entrada");
       return;
     }
 
@@ -381,9 +388,9 @@ export function PurchaseOrderForm({ order, onClose }: PurchaseOrderFormProps) {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>Finalidade</Label>
+                  <Label>Finalidade *</Label>
                   <Select value={purpose} onValueChange={(v) => setPurpose(v as any)}>
                     <SelectTrigger>
                       <SelectValue />
@@ -396,6 +403,51 @@ export function PurchaseOrderForm({ order, onClose }: PurchaseOrderFormProps) {
                   </Select>
                 </div>
 
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-2">
+                    CFOP de Entrada *
+                    <span className="text-xs text-muted-foreground">(Código Fiscal de Operações)</span>
+                  </Label>
+                  <Select value={cfopGeral} onValueChange={setCfopGeral}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione o CFOP..." />
+                    </SelectTrigger>
+                    <SelectContent className="max-h-[300px]">
+                      {/* Operações Estaduais */}
+                      <div className="px-2 py-1.5 text-sm font-semibold text-primary">
+                        Estadual (1xxx)
+                      </div>
+                      {CFOPS_ENTRADA_ESTADUAL.slice(0, 15).map(cfop => (
+                        <SelectItem key={cfop.codigo} value={cfop.codigo}>
+                          {cfop.codigo} - {cfop.descricao.slice(0, 45)}...
+                        </SelectItem>
+                      ))}
+                      
+                      {/* Operações Interestaduais */}
+                      <div className="px-2 py-1.5 text-sm font-semibold text-primary border-t mt-1 pt-1">
+                        Interestadual (2xxx)
+                      </div>
+                      {CFOPS_ENTRADA_INTERESTADUAL.slice(0, 15).map(cfop => (
+                        <SelectItem key={cfop.codigo} value={cfop.codigo}>
+                          {cfop.codigo} - {cfop.descricao.slice(0, 45)}...
+                        </SelectItem>
+                      ))}
+                      
+                      {/* Importação */}
+                      <div className="px-2 py-1.5 text-sm font-semibold text-primary border-t mt-1 pt-1">
+                        Importação (3xxx)
+                      </div>
+                      {CFOPS_ENTRADA_EXTERIOR.slice(0, 10).map(cfop => (
+                        <SelectItem key={cfop.codigo} value={cfop.codigo}>
+                          {cfop.codigo} - {cfop.descricao.slice(0, 45)}...
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Frete Informado (R$)</Label>
                   <Input
