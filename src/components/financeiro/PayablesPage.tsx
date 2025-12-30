@@ -16,6 +16,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { format, parseISO, startOfMonth, endOfMonth, isBefore, startOfDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { toast } from "sonner";
+import { useCompany } from "@/contexts/CompanyContext";
 
 import { PayablesStatusCards, PayableStatusFilter } from "./PayablesStatusCards";
 import { PayablesFilters, PayablesFiltersState } from "./PayablesFilters";
@@ -31,6 +32,7 @@ interface PayablesPageProps {
 }
 
 export function PayablesPage({ onRefresh }: PayablesPageProps) {
+  const { currentCompany } = useCompany();
   const [payables, setPayables] = useState<PayableRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
@@ -58,10 +60,14 @@ export function PayablesPage({ onRefresh }: PayablesPageProps) {
   const [payingPayable, setPayingPayable] = useState<PayableRow | null>(null);
 
   useEffect(() => {
-    fetchPayables();
-  }, [filters.currentMonth]);
+    if (currentCompany?.id) {
+      fetchPayables();
+    }
+  }, [filters.currentMonth, currentCompany?.id]);
 
   const fetchPayables = async () => {
+    if (!currentCompany?.id) return;
+    
     setLoading(true);
     try {
       const monthStart = startOfMonth(filters.currentMonth);
@@ -74,6 +80,7 @@ export function PayablesPage({ onRefresh }: PayablesPageProps) {
           supplier:pessoas!payables_supplier_id_fkey(razao_social, nome_fantasia, cpf_cnpj),
           purchase_order:purchase_orders!payables_purchase_order_id_fkey(order_number)
         `)
+        .eq("company_id", currentCompany.id)
         .gte("due_date", monthStart.toISOString())
         .lte("due_date", monthEnd.toISOString())
         .order("due_date", { ascending: true });
@@ -273,11 +280,9 @@ export function PayablesPage({ onRefresh }: PayablesPageProps) {
   };
 
   const handleConfirmPixPayment = async () => {
-    if (!payingPayable) return;
+    if (!payingPayable || !currentCompany?.id) return;
     
-    const { data: companies } = await supabase.from("companies").select("id").limit(1);
-    const companyId = companies?.[0]?.id;
-    if (!companyId) throw new Error("Empresa não configurada");
+    const companyId = currentCompany.id;
 
     await supabase
       .from("payables")
@@ -361,14 +366,13 @@ export function PayablesPage({ onRefresh }: PayablesPageProps) {
   };
 
   const confirmBulkSubmit = async () => {
+    if (!currentCompany?.id) return;
+    
     setProcessing(true);
     let successCount = 0;
+    const companyId = currentCompany.id;
 
     try {
-      const { data: companies } = await supabase.from("companies").select("id").limit(1);
-      const companyId = companies?.[0]?.id;
-      if (!companyId) throw new Error("Empresa não configurada");
-
       for (const id of selectedIds) {
         const payable = payables.find((p) => p.id === id);
         if (!payable) continue;

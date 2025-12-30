@@ -21,6 +21,7 @@ import {
 import { Loader2, Send, CheckCircle, AlertCircle, Clock } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { useCompany } from "@/contexts/CompanyContext";
 
 interface PixPaymentFormProps {
   open: boolean;
@@ -37,6 +38,9 @@ interface PixPaymentFormProps {
 type PixKeyType = "cpf" | "cnpj" | "email" | "telefone" | "aleatorio";
 
 export function PixPaymentForm({ open, onOpenChange, payable, onSuccess }: PixPaymentFormProps) {
+  const { currentCompany } = useCompany();
+  const companyId = currentCompany?.id;
+  
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<{ success: boolean; message: string } | null>(null);
   
@@ -96,10 +100,6 @@ export function PixPaymentForm({ open, onOpenChange, payable, onSuccess }: PixPa
     setResult(null);
 
     try {
-      // Buscar company_id
-      const { data: companies } = await supabase.from("companies").select("id").limit(1);
-      const companyId = companies?.[0]?.id;
-      
       if (!companyId) {
         throw new Error("Empresa não configurada");
       }

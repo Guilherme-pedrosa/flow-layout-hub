@@ -29,6 +29,7 @@ import { toast } from "sonner";
 import { PixConfirmationModal } from "./PixConfirmationModal";
 import { PixPaymentResultModal } from "./PixPaymentResultModal";
 import { usePaymentLogs, PaymentLogEntry } from "./PaymentLogs";
+import { useCompany } from "@/contexts/CompanyContext";
 
 interface PixPayment {
   id: string;
@@ -47,6 +48,9 @@ interface PixApprovalListProps {
 }
 
 export function PixApprovalList({ onApproved }: PixApprovalListProps) {
+  const { currentCompany } = useCompany();
+  const companyId = currentCompany?.id;
+  
   const [payments, setPayments] = useState<PixPayment[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -168,9 +172,6 @@ export function PixApprovalList({ onApproved }: PixApprovalListProps) {
 
     try {
       addLog("Iniciando processamento de pagamentos PIX...", "loading");
-
-      const { data: companies } = await supabase.from("companies").select("id").limit(1);
-      const companyId = companies?.[0]?.id;
 
       if (!companyId) {
         throw new Error("Empresa não configurada");
