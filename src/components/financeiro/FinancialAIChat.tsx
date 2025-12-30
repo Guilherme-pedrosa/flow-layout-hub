@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { Bot, Send, X, Sparkles, AlertTriangle, TrendingUp, FileSearch, Lightbulb, Loader2 } from "lucide-react";
+import { Bot, Send, X, AlertTriangle, TrendingDown, TrendingUp, DollarSign, Clock, FileText, Users, PieChart, Loader2, ArrowLeft, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -12,8 +12,11 @@ interface Message {
 }
 
 interface Insight {
-  type: "info" | "warning" | "suggestion" | "success";
-  message: string;
+  icon: "alert" | "down" | "up" | "dollar" | "clock" | "file" | "users" | "chart";
+  title: string;
+  value?: string;
+  description: string;
+  color: "red" | "orange" | "green" | "blue" | "purple" | "yellow";
 }
 
 const COMPANY_ID = "e7b9c8a5-6d4f-4e3b-8c2a-1b5d9f7e6a3c";
@@ -51,7 +54,22 @@ export function FinancialAIChat() {
             Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
           },
           body: JSON.stringify({
-            messages: [{ role: "user", content: "Faça uma análise rápida e me dê 3-4 insights curtos sobre a situação financeira atual. Responda APENAS com um JSON array no formato: [{\"type\": \"info|warning|suggestion|success\", \"message\": \"texto curto de até 60 caracteres\"}]. Sem markdown, sem explicações, apenas o JSON." }],
+            messages: [{ role: "user", content: `Analise os dados financeiros e retorne EXATAMENTE 6 insights no formato JSON. Cada insight deve ter:
+- icon: "alert" | "down" | "up" | "dollar" | "clock" | "file" | "users" | "chart"
+- title: título curto (max 25 chars)
+- value: valor ou número relevante (opcional, ex: "R$ 15.000" ou "3 itens" ou "12%")
+- description: descrição breve (max 50 chars)
+- color: "red" | "orange" | "green" | "blue" | "purple" | "yellow"
+
+Foque em:
+1. Contas vencidas ou próximas do vencimento
+2. Pagamentos suspeitos ou duplicados
+3. Fluxo de caixa (positivo ou negativo)
+4. Concentração de fornecedores
+5. Tendências de gastos
+6. Oportunidades de economia
+
+Responda APENAS com o JSON array, sem markdown ou explicações.` }],
             companyId: COMPANY_ID
           }),
         }
@@ -85,23 +103,27 @@ export function FinancialAIChat() {
         const jsonMatch = fullText.match(/\[[\s\S]*\]/);
         if (jsonMatch) {
           const parsed = JSON.parse(jsonMatch[0]);
-          setInsights(parsed.slice(0, 4));
+          setInsights(parsed.slice(0, 6));
         }
       } catch {
-        setInsights([
-          { type: "info", message: "Analisando dados financeiros..." },
-          { type: "suggestion", message: "Clique em 'Analisar' para insights detalhados" }
-        ]);
+        setInsights(getDefaultInsights());
       }
     } catch (error) {
       console.error("Erro ao carregar insights:", error);
-      setInsights([
-        { type: "warning", message: "Não foi possível carregar insights automáticos" }
-      ]);
+      setInsights(getDefaultInsights());
     } finally {
       setIsLoadingInsights(false);
     }
   };
+
+  const getDefaultInsights = (): Insight[] => [
+    { icon: "alert", title: "Contas Vencidas", value: "Verificando...", description: "Analisando contas em atraso", color: "red" },
+    { icon: "dollar", title: "Fluxo de Caixa", value: "Calculando...", description: "Projeção para 30 dias", color: "blue" },
+    { icon: "users", title: "Fornecedores", value: "Analisando...", description: "Concentração de gastos", color: "purple" },
+    { icon: "file", title: "Auditoria", value: "Pendente", description: "Clique para analisar", color: "orange" },
+    { icon: "up", title: "Tendências", value: "Carregando...", description: "Análise de gastos", color: "green" },
+    { icon: "chart", title: "DRE", value: "Disponível", description: "Demonstrativo de resultados", color: "yellow" }
+  ];
 
   const streamChat = async (userMessages: Message[]) => {
     const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/financial-ai`;
@@ -217,37 +239,63 @@ export function FinancialAIChat() {
     }
   };
 
-  const getInsightIcon = (type: Insight["type"]) => {
-    switch (type) {
-      case "warning":
-        return <AlertTriangle className="h-5 w-5 text-amber-500 shrink-0" />;
-      case "suggestion":
-        return <Lightbulb className="h-5 w-5 text-blue-500 shrink-0" />;
-      case "success":
-        return <TrendingUp className="h-5 w-5 text-emerald-500 shrink-0" />;
-      default:
-        return <Sparkles className="h-5 w-5 text-primary shrink-0" />;
+  const getIconComponent = (icon: Insight["icon"], color: Insight["color"]) => {
+    const colorClasses = {
+      red: "text-red-500",
+      orange: "text-orange-500",
+      green: "text-emerald-500",
+      blue: "text-blue-500",
+      purple: "text-purple-500",
+      yellow: "text-yellow-500"
+    };
+
+    const iconClass = cn("h-6 w-6", colorClasses[color]);
+
+    switch (icon) {
+      case "alert": return <AlertTriangle className={iconClass} />;
+      case "down": return <TrendingDown className={iconClass} />;
+      case "up": return <TrendingUp className={iconClass} />;
+      case "dollar": return <DollarSign className={iconClass} />;
+      case "clock": return <Clock className={iconClass} />;
+      case "file": return <FileText className={iconClass} />;
+      case "users": return <Users className={iconClass} />;
+      case "chart": return <PieChart className={iconClass} />;
+      default: return <Bot className={iconClass} />;
     }
   };
 
-  const getInsightBg = (type: Insight["type"]) => {
-    switch (type) {
-      case "warning":
-        return "bg-amber-500/10 border-amber-500/20";
-      case "suggestion":
-        return "bg-blue-500/10 border-blue-500/20";
-      case "success":
-        return "bg-emerald-500/10 border-emerald-500/20";
-      default:
-        return "bg-primary/10 border-primary/20";
-    }
+  const getBgColor = (color: Insight["color"]) => {
+    const bgClasses = {
+      red: "bg-red-500/10",
+      orange: "bg-orange-500/10",
+      green: "bg-emerald-500/10",
+      blue: "bg-blue-500/10",
+      purple: "bg-purple-500/10",
+      yellow: "bg-yellow-500/10"
+    };
+    return bgClasses[color];
+  };
+
+  const handleInsightClick = (insight: Insight) => {
+    const prompts: Record<string, string> = {
+      "alert": "Liste todas as contas vencidas e em atraso, com valores e dias de atraso",
+      "down": "Analise as despesas que estão em queda e explique as causas",
+      "up": "Analise as tendências de gastos dos últimos meses",
+      "dollar": "Faça uma projeção detalhada do fluxo de caixa para os próximos 30 dias",
+      "clock": "Liste os pagamentos programados e próximos vencimentos",
+      "file": "Audite os lançamentos recentes e identifique inconsistências ou erros",
+      "users": "Analise a concentração de fornecedores e dependência de cada um",
+      "chart": "Gere uma análise DRE simplificada com receitas, custos e despesas"
+    };
+    
+    sendMessage(prompts[insight.icon] || `Detalhe sobre: ${insight.title}`);
   };
 
   if (!isOpen) {
     return (
       <Button
         onClick={() => setIsOpen(true)}
-        className="fixed bottom-6 right-6 h-14 w-14 rounded-full shadow-lg z-50"
+        className="fixed bottom-6 right-6 h-14 w-14 rounded-full shadow-lg z-50 bg-gradient-to-br from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
         size="icon"
       >
         <Bot className="h-6 w-6" />
@@ -256,103 +304,96 @@ export function FinancialAIChat() {
   }
 
   return (
-    <div className="fixed top-0 right-0 h-full w-80 bg-card border-l border-border shadow-xl z-50 flex flex-col">
+    <div className="fixed top-0 right-0 h-full w-96 bg-background border-l border-border shadow-2xl z-50 flex flex-col">
       {/* Header */}
-      <div className="bg-gradient-to-br from-primary to-primary/80 p-6 text-primary-foreground">
+      <div className="bg-gradient-to-br from-blue-600 to-purple-600 p-6">
         <div className="flex items-center justify-between mb-4">
-          <span className="text-xs font-medium uppercase tracking-wider opacity-80">AI Assistant Panel</span>
+          <span className="text-xs font-medium text-white/80 uppercase tracking-wider">Assistente Financeiro IA</span>
           <Button
             variant="ghost"
             size="icon"
             onClick={() => setIsOpen(false)}
-            className="h-8 w-8 text-primary-foreground hover:bg-primary-foreground/20"
+            className="h-8 w-8 text-white hover:bg-white/20"
           >
             <X className="h-4 w-4" />
           </Button>
         </div>
-        <div className="flex flex-col items-center">
-          <div className="h-20 w-20 rounded-2xl bg-primary-foreground/20 flex items-center justify-center mb-3">
-            <Bot className="h-10 w-10" />
+        <div className="flex items-center gap-4">
+          <div className="h-16 w-16 rounded-2xl bg-white/20 backdrop-blur flex items-center justify-center">
+            <Bot className="h-8 w-8 text-white" />
           </div>
-          <h2 className="text-xl font-bold">Assistente IA</h2>
+          <div>
+            <h2 className="text-xl font-bold text-white">Assistente IA</h2>
+            <p className="text-sm text-white/70">Análise financeira inteligente</p>
+          </div>
         </div>
       </div>
 
       {/* Content */}
-      <ScrollArea className="flex-1 p-4" ref={scrollRef}>
-        {/* Insights Section */}
-        {messages.length === 0 && (
-          <div className="space-y-3">
+      <ScrollArea className="flex-1" ref={scrollRef}>
+        {messages.length === 0 ? (
+          <div className="p-4">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-sm font-semibold text-foreground">Insights em Tempo Real</h3>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setInsights([]);
+                  loadInitialInsights();
+                }}
+                disabled={isLoadingInsights}
+                className="h-8 w-8 p-0"
+              >
+                <RefreshCw className={cn("h-4 w-4", isLoadingInsights && "animate-spin")} />
+              </Button>
+            </div>
+            
             {isLoadingInsights ? (
-              <div className="flex items-center justify-center py-8">
-                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              <div className="flex flex-col items-center justify-center py-12 gap-3">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                <p className="text-sm text-muted-foreground">Analisando dados financeiros...</p>
               </div>
             ) : (
-              insights.map((insight, index) => (
-                <div
-                  key={index}
-                  className={cn(
-                    "flex items-start gap-3 p-3 rounded-lg border",
-                    getInsightBg(insight.type)
-                  )}
-                >
-                  <div className="mt-0.5">{getInsightIcon(insight.type)}</div>
-                  <p className="text-sm text-foreground leading-relaxed">{insight.message}</p>
-                </div>
-              ))
+              <div className="grid grid-cols-2 gap-3">
+                {insights.map((insight, index) => (
+                  <button
+                    key={index}
+                    onClick={() => handleInsightClick(insight)}
+                    className={cn(
+                      "flex flex-col items-start p-4 rounded-xl border border-border/50 transition-all hover:scale-[1.02] hover:shadow-md text-left",
+                      getBgColor(insight.color)
+                    )}
+                  >
+                    <div className="mb-2">
+                      {getIconComponent(insight.icon, insight.color)}
+                    </div>
+                    <h4 className="text-sm font-semibold text-foreground mb-0.5">{insight.title}</h4>
+                    {insight.value && (
+                      <p className="text-lg font-bold text-foreground">{insight.value}</p>
+                    )}
+                    <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{insight.description}</p>
+                  </button>
+                ))}
+              </div>
             )}
 
-            <div className="pt-4 space-y-2">
-              <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Ações Rápidas</p>
-              <div className="grid grid-cols-2 gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="text-xs h-9 justify-start"
-                  onClick={() => sendMessage("Detecte possíveis fraudes ou movimentações suspeitas")}
-                  disabled={isLoading}
-                >
-                  <AlertTriangle className="h-3 w-3 mr-1 text-red-500" />
-                  Fraudes
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="text-xs h-9 justify-start"
-                  onClick={() => sendMessage("Audite os lançamentos recentes e verifique inconsistências")}
-                  disabled={isLoading}
-                >
-                  <FileSearch className="h-3 w-3 mr-1 text-amber-500" />
-                  Auditar
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="text-xs h-9 justify-start"
-                  onClick={() => sendMessage("Analise os fornecedores e concentração de gastos")}
-                  disabled={isLoading}
-                >
-                  <TrendingUp className="h-3 w-3 mr-1 text-blue-500" />
-                  Fornecedores
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="text-xs h-9 justify-start"
-                  onClick={() => sendMessage("Faça uma projeção do fluxo de caixa para os próximos 30 dias")}
-                  disabled={isLoading}
-                >
-                  <Sparkles className="h-3 w-3 mr-1 text-green-500" />
-                  Fluxo Caixa
-                </Button>
-              </div>
+            <div className="mt-6 pt-4 border-t border-border">
+              <p className="text-xs text-muted-foreground mb-3">Ou faça uma pergunta personalizada:</p>
             </div>
           </div>
-        )}
-
-        {/* Messages */}
-        {messages.length > 0 && (
-          <div className="space-y-4">
+        ) : (
+          <div className="p-4 space-y-4">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setMessages([])}
+              className="mb-2 text-xs"
+            >
+              <ArrowLeft className="h-3 w-3 mr-1" />
+              Voltar aos insights
+            </Button>
+            
             {messages.map((msg, i) => (
               <div
                 key={i}
@@ -363,9 +404,9 @@ export function FinancialAIChat() {
               >
                 <div
                   className={cn(
-                    "max-w-[90%] rounded-lg px-3 py-2 text-sm",
+                    "max-w-[90%] rounded-2xl px-4 py-3 text-sm",
                     msg.role === "user"
-                      ? "bg-primary text-primary-foreground"
+                      ? "bg-gradient-to-br from-blue-600 to-purple-600 text-white"
                       : "bg-muted"
                   )}
                 >
@@ -376,8 +417,8 @@ export function FinancialAIChat() {
                         __html: msg.content
                           .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
                           .replace(/\*(.*?)\*/g, '<em>$1</em>')
-                          .replace(/^### (.*$)/gm, '<h4 class="font-semibold mt-3 mb-1">$1</h4>')
-                          .replace(/^## (.*$)/gm, '<h3 class="font-semibold mt-4 mb-2">$1</h3>')
+                          .replace(/^### (.*$)/gm, '<h4 class="font-semibold mt-3 mb-1 text-base">$1</h4>')
+                          .replace(/^## (.*$)/gm, '<h3 class="font-semibold mt-4 mb-2 text-lg">$1</h3>')
                           .replace(/^- (.*$)/gm, '<li class="ml-4">$1</li>')
                           .replace(/\n/g, '<br/>')
                       }} 
@@ -390,11 +431,11 @@ export function FinancialAIChat() {
             ))}
             {isLoading && messages[messages.length - 1]?.role === "user" && (
               <div className="flex justify-start">
-                <div className="bg-muted rounded-lg px-3 py-2">
+                <div className="bg-muted rounded-2xl px-4 py-3">
                   <div className="flex items-center gap-1">
-                    <div className="h-2 w-2 bg-primary/60 rounded-full animate-bounce" />
-                    <div className="h-2 w-2 bg-primary/60 rounded-full animate-bounce [animation-delay:0.1s]" />
-                    <div className="h-2 w-2 bg-primary/60 rounded-full animate-bounce [animation-delay:0.2s]" />
+                    <div className="h-2 w-2 bg-blue-500 rounded-full animate-bounce" />
+                    <div className="h-2 w-2 bg-purple-500 rounded-full animate-bounce [animation-delay:0.1s]" />
+                    <div className="h-2 w-2 bg-blue-500 rounded-full animate-bounce [animation-delay:0.2s]" />
                   </div>
                 </div>
               </div>
@@ -404,21 +445,7 @@ export function FinancialAIChat() {
       </ScrollArea>
 
       {/* Input */}
-      <div className="p-4 border-t border-border">
-        {messages.length > 0 && (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="w-full mb-2 text-xs"
-            onClick={() => {
-              setMessages([]);
-              setInsights([]);
-              loadInitialInsights();
-            }}
-          >
-            ← Voltar aos insights
-          </Button>
-        )}
+      <div className="p-4 border-t border-border bg-background">
         <form
           onSubmit={(e) => {
             e.preventDefault();
@@ -429,11 +456,16 @@ export function FinancialAIChat() {
           <Input
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Pergunte algo..."
+            placeholder="Pergunte sobre suas finanças..."
             disabled={isLoading}
-            className="flex-1"
+            className="flex-1 rounded-full"
           />
-          <Button type="submit" size="icon" disabled={isLoading || !input.trim()}>
+          <Button 
+            type="submit" 
+            size="icon" 
+            disabled={isLoading || !input.trim()}
+            className="rounded-full bg-gradient-to-br from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
+          >
             {isLoading ? (
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
