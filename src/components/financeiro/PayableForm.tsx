@@ -34,6 +34,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { CadastrarPessoaDialog } from "@/components/shared/CadastrarPessoaDialog";
+import { useCompany } from "@/contexts/CompanyContext";
 
 interface PayableFormProps {
   open: boolean;
@@ -70,6 +71,9 @@ interface PixValidation {
 }
 
 export function PayableForm({ open, onOpenChange, payable, onSuccess }: PayableFormProps) {
+  const { currentCompany } = useCompany();
+  const companyId = currentCompany?.id;
+  
   const [loading, setLoading] = useState(false);
   const [showCadastrarFornecedor, setShowCadastrarFornecedor] = useState(false);
   const [suppliers, setSuppliers] = useState<{ id: string; nome_fantasia: string | null; razao_social: string | null }[]>([]);
@@ -191,9 +195,7 @@ export function PayableForm({ open, onOpenChange, payable, onSuccess }: PayableF
     console.log("[PIX Validation] Chave:", formData.pixKey, "Tipo:", formData.pixKeyType);
 
     try {
-      console.log("[PIX Validation] 2. Buscando empresa...");
-      const { data: companies } = await supabase.from("companies").select("id").limit(1);
-      const companyId = companies?.[0]?.id;
+      console.log("[PIX Validation] 2. Verificando empresa...");
       
       if (!companyId) {
         console.error("[PIX Validation] Empresa não encontrada");
@@ -271,9 +273,6 @@ export function PayableForm({ open, onOpenChange, payable, onSuccess }: PayableF
     setLoading(true);
 
     try {
-      const { data: companies } = await supabase.from("companies").select("id").limit(1);
-      const companyId = companies?.[0]?.id;
-      
       if (!companyId) {
         throw new Error("Empresa não configurada");
       }

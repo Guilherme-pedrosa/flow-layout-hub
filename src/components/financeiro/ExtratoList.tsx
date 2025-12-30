@@ -23,8 +23,7 @@ import { toast } from "sonner";
 import { formatCurrency, formatDate } from "@/lib/formatters";
 import { ReconciliationModal } from "./ReconciliationModal";
 import { ReconciliationReverseModal } from "./ReconciliationReverseModal";
-
-const TEMP_COMPANY_ID = "7875af52-18d0-434e-8ae9-97981bd668e7";
+import { useCompany } from "@/contexts/CompanyContext";
 
 interface BankTransaction {
   id: string;
@@ -40,6 +39,9 @@ interface BankTransaction {
 }
 
 export const ExtratoList = () => {
+  const { currentCompany } = useCompany();
+  const companyId = currentCompany?.id;
+  
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [transactions, setTransactions] = useState<BankTransaction[]>([]);
@@ -62,27 +64,31 @@ export const ExtratoList = () => {
   const [dateTo, setDateTo] = useState(today.toISOString().split("T")[0]);
 
   useEffect(() => {
-    checkCredentials();
-    loadTransactions();
-  }, [dateFrom, dateTo]);
+    if (companyId) {
+      checkCredentials();
+      loadTransactions();
+    }
+  }, [dateFrom, dateTo, companyId]);
 
   const checkCredentials = async () => {
+    if (!companyId) return;
     const { data } = await supabase
       .from("inter_credentials")
       .select("id")
-      .eq("company_id", TEMP_COMPANY_ID)
+      .eq("company_id", companyId)
       .maybeSingle();
     
     setHasCredentials(!!data);
   };
 
   const loadTransactions = async () => {
+    if (!companyId) return;
     setLoading(true);
     try {
       const { data, error } = await supabase
         .from("bank_transactions")
         .select("*")
-        .eq("company_id", TEMP_COMPANY_ID)
+        .eq("company_id", companyId)
         .gte("transaction_date", dateFrom)
         .lte("transaction_date", dateTo)
         .order("transaction_date", { ascending: false });
@@ -98,7 +104,7 @@ export const ExtratoList = () => {
   };
 
   const handleSync = async () => {
-    if (!hasCredentials) {
+    if (!hasCredentials || !companyId) {
       toast.error("Configure as credenciais do Banco Inter primeiro");
       return;
     }
@@ -107,7 +113,7 @@ export const ExtratoList = () => {
     try {
       const { data, error } = await supabase.functions.invoke("inter-sync", {
         body: {
-          company_id: TEMP_COMPANY_ID,
+          company_id: companyId,
           date_from: dateFrom,
           date_to: dateTo,
         },
@@ -352,7 +358,7 @@ export const ExtratoList = () => {
         open={reconciliationModalOpen}
         onOpenChange={setReconciliationModalOpen}
         transaction={selectedTransaction}
-        companyId={TEMP_COMPANY_ID}
+        companyId={companyId || ""}
         onSuccess={handleReconciliationSuccess}
       />
 

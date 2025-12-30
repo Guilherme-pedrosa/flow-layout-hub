@@ -43,6 +43,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { toast } from "sonner";
+import { useCompany } from "@/contexts/CompanyContext";
 
 interface DDABoleto {
   id: string;
@@ -68,6 +69,9 @@ interface Supplier {
 }
 
 export function DDABoletosList() {
+  const { currentCompany } = useCompany();
+  const companyId = currentCompany?.id;
+  
   const [boletos, setBoletos] = useState<DDABoleto[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
@@ -79,16 +83,20 @@ export function DDABoletosList() {
   const [selectedSupplierId, setSelectedSupplierId] = useState<string>("");
 
   useEffect(() => {
-    fetchBoletos();
-    fetchSuppliers();
-  }, []);
+    if (companyId) {
+      fetchBoletos();
+      fetchSuppliers();
+    }
+  }, [companyId]);
 
   const fetchBoletos = async () => {
+    if (!companyId) return;
     setLoading(true);
     try {
       const { data, error } = await supabase
         .from("inter_dda_boletos")
         .select("*")
+        .eq("company_id", companyId)
         .order("data_vencimento", { ascending: true });
 
       if (error) throw error;
@@ -117,17 +125,13 @@ export function DDABoletosList() {
   };
 
   const handleSync = async () => {
+    if (!companyId) {
+      toast.error("Empresa não configurada");
+      return;
+    }
+
     setSyncing(true);
     try {
-      const { data: companies } = await supabase.from("companies").select("id").limit(1);
-      const companyId = companies?.[0]?.id;
-
-      if (!companyId) {
-        toast.error("Empresa não configurada");
-        return;
-      }
-
-      // Chamar edge function de sincronização (simulada por enquanto)
       const { data, error } = await supabase.functions.invoke("inter-dda-sync", {
         body: { company_id: companyId },
       });
@@ -145,16 +149,13 @@ export function DDABoletosList() {
   };
 
   const handleImportToPayable = async () => {
-    if (!selectedBoleto || !selectedSupplierId) {
+    if (!selectedBoleto || !selectedSupplierId || !companyId) {
       toast.error("Selecione um fornecedor");
       return;
     }
 
     setImporting(true);
     try {
-      const { data: companies } = await supabase.from("companies").select("id").limit(1);
-      const companyId = companies?.[0]?.id;
-
       // Criar registro no payables
       const { data: payable, error: insertError } = await supabase
         .from("payables")

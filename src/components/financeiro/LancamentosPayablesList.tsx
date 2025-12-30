@@ -55,6 +55,7 @@ import { format, isToday, isThisWeek, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { toast } from "sonner";
 import { PayableForm } from "./PayableForm";
+import { useCompany } from "@/contexts/CompanyContext";
 
 interface Payable {
   id: string;
@@ -399,9 +400,8 @@ export function LancamentosPayablesList({ onRefresh }: LancamentosPayablesListPr
     const errors: string[] = [];
 
     try {
-      // Get company_id
-      const { data: companies } = await supabase.from("companies").select("id").limit(1);
-      const companyId = companies?.[0]?.id;
+      // Get company_id from context
+      const companyId = (this as any).companyId;
       if (!companyId) throw new Error("Empresa não configurada");
 
       // Process each selected payable
