@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Outlet } from "react-router-dom";
+import { Outlet, useLocation } from "react-router-dom";
 import { AppSidebar } from "./AppSidebar";
 import { AppHeader } from "./AppHeader";
 import { cn } from "@/lib/utils";
@@ -9,6 +9,7 @@ export function AppLayout() {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const isMobile = useIsMobile();
+  const location = useLocation();
 
   // Auto-collapse on mobile
   useEffect(() => {
@@ -21,14 +22,14 @@ export function AppLayout() {
   // Close mobile menu when route changes
   useEffect(() => {
     setMobileOpen(false);
-  }, []);
+  }, [location.pathname]);
 
   return (
-    <div className="min-h-screen w-full bg-background">
+    <div className="min-h-screen w-full bg-muted">
       {/* Mobile overlay */}
       {isMobile && mobileOpen && (
         <div 
-          className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm"
+          className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm animate-fade-in"
           onClick={() => setMobileOpen(false)}
         />
       )}
@@ -42,7 +43,7 @@ export function AppLayout() {
       
       <div
         className={cn(
-          "flex min-h-screen flex-col transition-all duration-300",
+          "flex min-h-screen flex-col transition-all duration-200",
           isMobile ? "ml-0" : (collapsed ? "ml-16" : "ml-60")
         )}
       >
@@ -50,8 +51,12 @@ export function AppLayout() {
           onMenuClick={() => setMobileOpen(true)} 
           showMenuButton={isMobile}
         />
-        <main className="flex-1 p-3 md:p-6 overflow-x-hidden">
-          <Outlet />
+        
+        {/* Content area with padding and max-width */}
+        <main className="flex-1 p-4 md:p-8 overflow-x-hidden page-enter">
+          <div className="mx-auto max-w-7xl">
+            <Outlet />
+          </div>
         </main>
       </div>
     </div>
