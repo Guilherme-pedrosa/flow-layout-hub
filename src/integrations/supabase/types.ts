@@ -3013,6 +3013,53 @@ export type Database = {
           },
         ]
       }
+      purchase_order_installments: {
+        Row: {
+          amount: number
+          created_at: string
+          due_date: string
+          id: string
+          installment_number: number
+          nfe_original_amount: number | null
+          nfe_original_date: string | null
+          purchase_order_id: string
+          source: string | null
+          updated_at: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          due_date: string
+          id?: string
+          installment_number?: number
+          nfe_original_amount?: number | null
+          nfe_original_date?: string | null
+          purchase_order_id: string
+          source?: string | null
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          due_date?: string
+          id?: string
+          installment_number?: number
+          nfe_original_amount?: number | null
+          nfe_original_date?: string | null
+          purchase_order_id?: string
+          source?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "purchase_order_installments_purchase_order_id_fkey"
+            columns: ["purchase_order_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       purchase_order_items: {
         Row: {
           cfop: string | null

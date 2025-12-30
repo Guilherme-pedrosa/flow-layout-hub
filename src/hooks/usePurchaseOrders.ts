@@ -628,6 +628,60 @@ export function usePurchaseOrders() {
     },
   });
 
+  // Gerenciar parcelas do pedido
+  const getOrderInstallments = async (orderId: string) => {
+    const { data, error } = await supabase
+      .from("purchase_order_installments")
+      .select("*")
+      .eq("purchase_order_id", orderId)
+      .order("installment_number", { ascending: true });
+    
+    if (error) throw error;
+    return data || [];
+  };
+
+  const createOrderInstallments = useMutation({
+    mutationFn: async (installments: {
+      purchase_order_id: string;
+      installment_number: number;
+      due_date: string;
+      amount: number;
+      source?: string;
+      nfe_original_date?: string;
+      nfe_original_amount?: number;
+    }[]) => {
+      if (installments.length === 0) return [];
+      
+      const { data, error } = await supabase
+        .from("purchase_order_installments")
+        .insert(installments)
+        .select();
+      
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["purchase_order_installments"] });
+    },
+    onError: (error: any) => {
+      toast.error(`Erro ao criar parcelas: ${error.message}`);
+    },
+  });
+
+  const deleteOrderInstallments = useMutation({
+    mutationFn: async (orderId: string) => {
+      const { error } = await supabase
+        .from("purchase_order_installments")
+        .delete()
+        .eq("purchase_order_id", orderId);
+      
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["purchase_order_installments"] });
+    },
+  });
+
   return {
     orders: ordersQuery.data ?? [],
     isLoading: ordersQuery.isLoading,
@@ -647,6 +701,9 @@ export function usePurchaseOrders() {
     getOrderDivergences,
     createDivergences,
     resolveDivergence,
+    getOrderInstallments,
+    createOrderInstallments,
+    deleteOrderInstallments,
     refetch: ordersQuery.refetch,
   };
 }

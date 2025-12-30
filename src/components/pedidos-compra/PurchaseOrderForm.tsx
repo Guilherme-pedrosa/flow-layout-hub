@@ -98,8 +98,9 @@ export function PurchaseOrderForm({ order, onClose }: PurchaseOrderFormProps) {
   const [firstDueDate, setFirstDueDate] = useState(format(addDays(new Date(), 30), "yyyy-MM-dd"));
   const [installmentInterval, setInstallmentInterval] = useState(30);
   const [installments, setInstallments] = useState<LocalInstallment[]>([]);
+  const [installmentsFromNfe, setInstallmentsFromNfe] = useState(false); // Se as parcelas vieram da NF-e
 
-  const { createOrder, updateOrder, getOrderItems, createOrderItems, deleteOrderItems, refetch } = usePurchaseOrders();
+  const { createOrder, updateOrder, getOrderItems, createOrderItems, deleteOrderItems, getOrderInstallments, createOrderInstallments, deleteOrderInstallments, refetch } = usePurchaseOrders();
   const { statuses } = usePurchaseOrderStatuses();
   const { checkOrderLimits } = usePurchaseOrderLimits();
   const { activeFornecedores, refetch: refetchPessoas, getPessoaById } = usePessoas();
@@ -151,12 +152,33 @@ export function PurchaseOrderForm({ order, onClose }: PurchaseOrderFormProps) {
     loadSupplierState();
   }, [supplierId, activeFornecedores]);
 
-  // Load existing items when editing
+  // Load existing items and installments when editing
   useEffect(() => {
     if (order?.id) {
       loadExistingItems();
+      loadExistingInstallments();
     }
   }, [order?.id]);
+
+  const loadExistingInstallments = async () => {
+    if (!order?.id) return;
+    try {
+      const savedInstallments = await getOrderInstallments(order.id);
+      if (savedInstallments && savedInstallments.length > 0) {
+        // Se há parcelas salvas, usar elas
+        setInstallments(savedInstallments.map(inst => ({
+          installment_number: inst.installment_number,
+          due_date: inst.due_date,
+          amount: Number(inst.amount),
+        })));
+        setInstallmentsCount(savedInstallments.length);
+        setFirstDueDate(savedInstallments[0].due_date);
+        setInstallmentsFromNfe(savedInstallments[0].source === 'nfe');
+      }
+    } catch (error) {
+      console.error("Erro ao carregar parcelas:", error);
+    }
+  };
 
   const loadExistingItems = async () => {
     if (!order?.id) return;
@@ -194,10 +216,13 @@ export function PurchaseOrderForm({ order, onClose }: PurchaseOrderFormProps) {
   const totalItems = items.reduce((acc, item) => acc + item.total_value, 0);
   const totalValue = totalItems + (parseFloat(freightValue) || 0);
 
-  // Generate installments when values change
+  // Generate installments when values change (SOMENTE se não vieram da NF-e)
   useEffect(() => {
-    generateInstallments();
-  }, [installmentsCount, firstDueDate, installmentInterval, totalValue]);
+    // Não gerar novas parcelas se já existem parcelas da NF-e
+    if (!installmentsFromNfe) {
+      generateInstallments();
+    }
+  }, [installmentsCount, firstDueDate, installmentInterval, totalValue, installmentsFromNfe]);
 
   const generateInstallments = () => {
     if (totalValue <= 0 || installmentsCount <= 0) {
@@ -218,6 +243,12 @@ export function PurchaseOrderForm({ order, onClose }: PurchaseOrderFormProps) {
     }
 
     setInstallments(newInstallments);
+  };
+
+  // Função para limpar parcelas da NF-e e gerar novas manualmente
+  const handleClearNfeInstallments = () => {
+    setInstallmentsFromNfe(false);
+    generateInstallments();
   };
 
   const handleInstallmentAmountChange = (index: number, amount: number) => {
@@ -655,7 +686,33 @@ export function PurchaseOrderForm({ order, onClose }: PurchaseOrderFormProps) {
 
               {purpose !== "garantia" && (
                 <>
-              {/* Configuração das parcelas */}
+              {/* Aviso de parcelas da NF-e */}
+              {installmentsFromNfe && (
+                <div className="p-4 rounded-lg border border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950/30">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400" />
+                      <p className="text-sm font-medium text-green-800 dark:text-green-200">
+                        Parcelas importadas da NF-e
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={handleClearNfeInstallments}
+                    >
+                      Gerar novas parcelas
+                    </Button>
+                  </div>
+                  <p className="text-sm text-green-700 dark:text-green-300 mt-1">
+                    As parcelas foram importadas conforme os dados da Nota Fiscal. Você pode editá-las ou gerar novas.
+                  </p>
+                </div>
+              )}
+
+              {/* Configuração das parcelas - ocultar se veio da NF-e */}
+              {!installmentsFromNfe && (
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-2">
                   <Label>Número de Parcelas</Label>
@@ -687,6 +744,7 @@ export function PurchaseOrderForm({ order, onClose }: PurchaseOrderFormProps) {
                   />
                 </div>
               </div>
+              )}
 
               {/* Valor total */}
               <div className="flex items-center gap-3 p-4 rounded-lg bg-muted/50">
