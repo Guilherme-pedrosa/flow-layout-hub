@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
 import {
   Select,
   SelectContent,
@@ -18,7 +19,17 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Loader2, Save, Receipt, QrCode, CreditCard, Plus } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Loader2, Save, Receipt, QrCode, CreditCard, Plus, CheckCircle, AlertCircle, Search, Building2, User } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { format } from "date-fns";
@@ -48,10 +59,26 @@ interface PayableFormProps {
 type PaymentMethodType = "boleto" | "pix" | "transferencia" | "outro";
 type PixKeyType = "cpf" | "cnpj" | "email" | "telefone" | "aleatorio";
 
+interface PixValidation {
+  valid: boolean;
+  name?: string;
+  document?: string;
+  documentMasked?: string;
+  bank?: string;
+  keyType?: string;
+  error?: string;
+}
+
 export function PayableForm({ open, onOpenChange, payable, onSuccess }: PayableFormProps) {
   const [loading, setLoading] = useState(false);
   const [showCadastrarFornecedor, setShowCadastrarFornecedor] = useState(false);
   const [suppliers, setSuppliers] = useState<{ id: string; nome_fantasia: string | null; razao_social: string | null }[]>([]);
+  
+  // PIX validation state
+  const [validatingPix, setValidatingPix] = useState(false);
+  const [pixValidation, setPixValidation] = useState<PixValidation | null>(null);
+  const [showPixConfirmDialog, setShowPixConfirmDialog] = useState(false);
+  const [pixConfirmed, setPixConfirmed] = useState(false);
   
   const [formData, setFormData] = useState({
     supplierId: "",
@@ -71,6 +98,10 @@ export function PayableForm({ open, onOpenChange, payable, onSuccess }: PayableF
   useEffect(() => {
     if (open) {
       fetchSuppliers();
+      // Reset validation state
+      setPixValidation(null);
+      setPixConfirmed(false);
+      
       if (payable) {
         setFormData({
           supplierId: payable.supplier_id,
@@ -86,6 +117,10 @@ export function PayableForm({ open, onOpenChange, payable, onSuccess }: PayableF
           recipientName: payable.recipient_name || "",
           recipientDocument: payable.recipient_document || "",
         });
+        // If editing, consider PIX already confirmed if data exists
+        if (payable.pix_key && payable.recipient_name) {
+          setPixConfirmed(true);
+        }
       } else {
         setFormData({
           supplierId: "",
@@ -138,9 +173,71 @@ export function PayableForm({ open, onOpenChange, payable, onSuccess }: PayableF
       return !!formData.boletoBarcode && formData.boletoBarcode.length >= 44;
     }
     if (formData.paymentMethodType === "pix") {
-      return !!formData.pixKey && !!formData.recipientName;
+      return !!formData.pixKey && !!formData.recipientName && pixConfirmed;
     }
     return true;
+  };
+
+  const handleValidatePix = async () => {
+    if (!formData.pixKey || !formData.pixKeyType) {
+      toast.error("Informe a chave PIX e o tipo");
+      return;
+    }
+
+    setValidatingPix(true);
+    setPixValidation(null);
+
+    try {
+      const { data: companies } = await supabase.from("companies").select("id").limit(1);
+      const companyId = companies?.[0]?.id;
+      
+      if (!companyId) {
+        throw new Error("Empresa não configurada");
+      }
+
+      const { data, error } = await supabase.functions.invoke("inter-validate-pix", {
+        body: {
+          company_id: companyId,
+          pix_key: formData.pixKey,
+          pix_key_type: formData.pixKeyType,
+        },
+      });
+
+      if (error) throw error;
+
+      setPixValidation(data);
+      
+      if (data.valid) {
+        setShowPixConfirmDialog(true);
+      } else {
+        toast.error(data.error || "Chave PIX inválida");
+      }
+    } catch (error) {
+      console.error("Erro ao validar PIX:", error);
+      toast.error("Erro ao validar chave PIX. Tente novamente.");
+    } finally {
+      setValidatingPix(false);
+    }
+  };
+
+  const handleConfirmPix = () => {
+    if (pixValidation?.valid) {
+      setFormData(prev => ({
+        ...prev,
+        recipientName: pixValidation.name || prev.recipientName,
+        recipientDocument: pixValidation.document || prev.recipientDocument,
+      }));
+      setPixConfirmed(true);
+      setShowPixConfirmDialog(false);
+      toast.success("Destinatário confirmado!");
+    }
+  };
+
+  const handlePixKeyChange = (value: string) => {
+    setFormData({ ...formData, pixKey: value });
+    // Reset validation when key changes
+    setPixValidation(null);
+    setPixConfirmed(false);
   };
 
   const handleSubmit = async () => {
@@ -357,41 +454,46 @@ export function PayableForm({ open, onOpenChange, payable, onSuccess }: PayableF
           {/* Campos de PIX */}
           {formData.paymentMethodType === "pix" && (
             <div className="space-y-4 p-4 rounded-lg border bg-muted/30">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Nome do Favorecido *</Label>
-                  <Input
-                    placeholder="Nome completo"
-                    value={formData.recipientName}
-                    onChange={(e) => setFormData({ ...formData, recipientName: e.target.value })}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>CPF/CNPJ do Favorecido</Label>
-                  <Input
-                    placeholder="000.000.000-00"
-                    value={formData.recipientDocument}
-                    onChange={(e) => setFormData({ ...formData, recipientDocument: e.target.value })}
-                  />
-                </div>
-              </div>
+              {/* Chave PIX e Tipo */}
               <div className="grid grid-cols-3 gap-4">
                 <div className="col-span-2 space-y-2">
                   <Label className="flex items-center gap-2">
                     <QrCode className="h-4 w-4" />
                     Chave PIX *
                   </Label>
-                  <Input
-                    placeholder="Informe a chave PIX"
-                    value={formData.pixKey}
-                    onChange={(e) => setFormData({ ...formData, pixKey: e.target.value })}
-                  />
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="Informe a chave PIX"
+                      value={formData.pixKey}
+                      onChange={(e) => handlePixKeyChange(e.target.value)}
+                      className="flex-1"
+                    />
+                    <Button
+                      type="button"
+                      variant={pixConfirmed ? "outline" : "default"}
+                      onClick={handleValidatePix}
+                      disabled={validatingPix || !formData.pixKey}
+                      className="shrink-0"
+                    >
+                      {validatingPix ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : pixConfirmed ? (
+                        <CheckCircle className="h-4 w-4 text-green-600" />
+                      ) : (
+                        <Search className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </div>
                 </div>
                 <div className="space-y-2">
                   <Label>Tipo</Label>
                   <Select
                     value={formData.pixKeyType}
-                    onValueChange={(value: PixKeyType) => setFormData({ ...formData, pixKeyType: value })}
+                    onValueChange={(value: PixKeyType) => {
+                      setFormData({ ...formData, pixKeyType: value });
+                      setPixValidation(null);
+                      setPixConfirmed(false);
+                    }}
                   >
                     <SelectTrigger>
                       <SelectValue />
@@ -406,6 +508,73 @@ export function PayableForm({ open, onOpenChange, payable, onSuccess }: PayableF
                   </Select>
                 </div>
               </div>
+
+              {/* Status da validação */}
+              {pixConfirmed && (
+                <div className="p-3 rounded-lg bg-green-500/10 border border-green-500/20">
+                  <div className="flex items-center gap-2 text-green-700">
+                    <CheckCircle className="h-4 w-4" />
+                    <span className="font-medium">Destinatário confirmado</span>
+                  </div>
+                  <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
+                    <div>
+                      <span className="text-muted-foreground">Nome:</span>
+                      <span className="ml-2 font-medium">{formData.recipientName}</span>
+                    </div>
+                    {formData.recipientDocument && (
+                      <div>
+                        <span className="text-muted-foreground">Documento:</span>
+                        <span className="ml-2 font-medium">{formData.recipientDocument}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {!pixConfirmed && formData.pixKey && (
+                <div className="p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/20 text-yellow-700 text-sm">
+                  <div className="flex items-center gap-2">
+                    <AlertCircle className="h-4 w-4" />
+                    <span>Clique no botão de busca para validar a chave PIX antes de prosseguir.</span>
+                  </div>
+                </div>
+              )}
+
+              {/* Campos manuais (caso a validação não funcione) */}
+              {!pixConfirmed && (
+                <div className="grid grid-cols-2 gap-4 pt-2 border-t">
+                  <div className="space-y-2">
+                    <Label className="text-muted-foreground text-xs">Preenchimento manual (opcional)</Label>
+                    <Input
+                      placeholder="Nome do favorecido"
+                      value={formData.recipientName}
+                      onChange={(e) => setFormData({ ...formData, recipientName: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-muted-foreground text-xs">CPF/CNPJ</Label>
+                    <Input
+                      placeholder="000.000.000-00"
+                      value={formData.recipientDocument}
+                      onChange={(e) => setFormData({ ...formData, recipientDocument: e.target.value })}
+                    />
+                  </div>
+                  {formData.recipientName && (
+                    <div className="col-span-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setPixConfirmed(true)}
+                        className="w-full"
+                      >
+                        <CheckCircle className="mr-2 h-4 w-4" />
+                        Confirmar dados manualmente
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
@@ -414,7 +583,9 @@ export function PayableForm({ open, onOpenChange, payable, onSuccess }: PayableF
             <div className={`p-3 rounded-lg text-sm ${isPaymentDataComplete() ? 'bg-green-500/10 text-green-700 border border-green-500/20' : 'bg-yellow-500/10 text-yellow-700 border border-yellow-500/20'}`}>
               {isPaymentDataComplete() 
                 ? "✓ Dados de pagamento completos. Título pronto para pagamento."
-                : "⚠ Complete os dados de pagamento para poder submeter para aprovação."}
+                : formData.paymentMethodType === "pix" && !pixConfirmed
+                  ? "⚠ Valide a chave PIX para poder submeter para pagamento."
+                  : "⚠ Complete os dados de pagamento para poder submeter para aprovação."}
             </div>
           )}
         </div>
@@ -439,6 +610,70 @@ export function PayableForm({ open, onOpenChange, payable, onSuccess }: PayableF
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+    {/* Dialog de confirmação PIX */}
+    <AlertDialog open={showPixConfirmDialog} onOpenChange={setShowPixConfirmDialog}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle className="flex items-center gap-2">
+            <QrCode className="h-5 w-5 text-primary" />
+            Confirme os dados do destinatário
+          </AlertDialogTitle>
+          <AlertDialogDescription asChild>
+            <div className="space-y-4">
+              <p>Verifique se os dados abaixo correspondem ao destinatário correto antes de prosseguir.</p>
+              
+              {pixValidation?.valid && (
+                <div className="p-4 rounded-lg border bg-muted/50 space-y-3">
+                  <div className="flex items-center gap-3">
+                    <User className="h-5 w-5 text-muted-foreground" />
+                    <div>
+                      <p className="text-xs text-muted-foreground">Nome</p>
+                      <p className="font-semibold text-foreground">{pixValidation.name}</p>
+                    </div>
+                  </div>
+                  
+                  {pixValidation.documentMasked && (
+                    <div className="flex items-center gap-3">
+                      <CreditCard className="h-5 w-5 text-muted-foreground" />
+                      <div>
+                        <p className="text-xs text-muted-foreground">CPF/CNPJ</p>
+                        <p className="font-mono text-foreground">{pixValidation.documentMasked}</p>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {pixValidation.bank && (
+                    <div className="flex items-center gap-3">
+                      <Building2 className="h-5 w-5 text-muted-foreground" />
+                      <div>
+                        <p className="text-xs text-muted-foreground">Instituição</p>
+                        <p className="text-foreground">{pixValidation.bank}</p>
+                      </div>
+                    </div>
+                  )}
+                  
+                  <div className="flex items-center gap-3">
+                    <QrCode className="h-5 w-5 text-muted-foreground" />
+                    <div>
+                      <p className="text-xs text-muted-foreground">Chave PIX</p>
+                      <p className="font-mono text-sm text-foreground">{formData.pixKey}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancelar</AlertDialogCancel>
+          <AlertDialogAction onClick={handleConfirmPix}>
+            <CheckCircle className="mr-2 h-4 w-4" />
+            Confirmar e Usar
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
 
     <CadastrarPessoaDialog
       open={showCadastrarFornecedor}
