@@ -6,136 +6,6 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const INTER_API_URL = "https://cdpj.partners.bancointer.com.br";
-
-// Helper function to call the Inter proxy
-async function callInterProxy(
-  proxyUrl: string,
-  method: string,
-  url: string,
-  headers: Record<string, string>,
-  data?: unknown
-) {
-  console.log(`[inter-pix-payment] Calling proxy: ${method} ${url}`);
-  
-  const response = await fetch(proxyUrl, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ method, url, headers, data })
-  });
-
-  const responseText = await response.text();
-  console.log(`[inter-pix-payment] Proxy response status: ${response.status}`);
-  
-  if (responseText.trim().startsWith('<!') || responseText.trim().startsWith('<html')) {
-    throw new Error(`Proxy retornou HTML (status ${response.status}). Verifique a URL do proxy.`);
-  }
-
-  let result;
-  try {
-    result = JSON.parse(responseText);
-  } catch {
-    throw new Error(`Resposta inválida do proxy: ${responseText.substring(0, 200)}`);
-  }
-
-  if (!response.ok) {
-    console.error("[inter-pix-payment] Proxy error:", result);
-    throw new Error(result.error || result.message || `Erro HTTP ${response.status}`);
-  }
-
-  return result;
-}
-
-// Get OAuth token via proxy
-async function getOAuthToken(
-  proxyUrl: string,
-  clientId: string,
-  clientSecret: string
-): Promise<string> {
-  console.log("[inter-pix-payment] Obtendo token OAuth via proxy...");
-  
-  const tokenUrl = `${INTER_API_URL}/oauth/v2/token`;
-  const params = new URLSearchParams();
-  params.append("client_id", clientId);
-  params.append("client_secret", clientSecret);
-  params.append("grant_type", "client_credentials");
-  params.append("scope", "pagamento-pix.write pagamento-pix.read");
-
-  const result = await callInterProxy(
-    proxyUrl,
-    "POST",
-    tokenUrl,
-    { "Content-Type": "application/x-www-form-urlencoded" },
-    params.toString()
-  );
-
-  console.log("[inter-pix-payment] Token obtido com sucesso");
-  return result.access_token;
-}
-
-// Send PIX payment via proxy
-async function sendPixPayment(
-  proxyUrl: string,
-  token: string,
-  accountNumber: string,
-  paymentData: {
-    pixKey: string;
-    pixKeyType: string;
-    amount: number;
-    recipientName: string;
-    recipientDocument: string;
-    description?: string;
-  }
-): Promise<{ transactionId: string; endToEndId: string; status: string }> {
-  console.log("[inter-pix-payment] Enviando PIX via proxy...");
-  
-  const pixUrl = `${INTER_API_URL}/banking/v2/pix`;
-  
-  // Map pix key types
-  const pixKeyTypeMap: Record<string, string> = {
-    cpf: "CPF",
-    cnpj: "CNPJ",
-    email: "EMAIL",
-    telefone: "TELEFONE",
-    phone: "TELEFONE",
-    aleatoria: "CHAVE_ALEATORIA",
-    evp: "CHAVE_ALEATORIA",
-  };
-
-  const pixPayload = {
-    destinatario: {
-      tipo: pixKeyTypeMap[paymentData.pixKeyType.toLowerCase()] || "CHAVE_ALEATORIA",
-      chave: paymentData.pixKey,
-      nome: paymentData.recipientName,
-      cpfCnpj: paymentData.recipientDocument.replace(/[^\d]/g, ""),
-    },
-    valor: paymentData.amount.toFixed(2),
-    descricao: paymentData.description || `PIX para ${paymentData.recipientName}`,
-  };
-
-  console.log("[inter-pix-payment] PIX payload:", JSON.stringify(pixPayload, null, 2));
-
-  const result = await callInterProxy(
-    proxyUrl,
-    "POST",
-    pixUrl,
-    {
-      "Authorization": `Bearer ${token}`,
-      "Content-Type": "application/json",
-      "x-conta-corrente": accountNumber,
-    },
-    pixPayload
-  );
-
-  console.log("[inter-pix-payment] PIX result:", JSON.stringify(result));
-
-  return {
-    transactionId: result.codigoTransacao || result.txid || result.id,
-    endToEndId: result.endToEndId || result.e2eid,
-    status: result.status || "PROCESSANDO",
-  };
-}
-
 serve(async (req) => {
   console.log("[inter-pix-payment] ========== INICIANDO ==========");
   console.log("[inter-pix-payment] Method:", req.method);
@@ -153,8 +23,10 @@ serve(async (req) => {
     const payload = await req.json();
     console.log("[inter-pix-payment] 1. Payload recebido:", JSON.stringify(payload));
 
-    // Get proxy URL
+    // Get proxy URL and secret
     const proxyUrl = Deno.env.get("GCP_PIX_FUNCTION_URL");
+    const proxySecret = Deno.env.get("GCP_PIX_FUNCTION_SECRET");
+    
     console.log("[inter-pix-payment] 2. Proxy URL configurada:", proxyUrl ? "SIM" : "NÃO");
     
     if (!proxyUrl) {
@@ -290,31 +162,94 @@ serve(async (req) => {
     
     console.log("[inter-pix-payment] 5. Credenciais encontradas - client_id:", credentials.client_id?.substring(0, 8) + "...");
 
-    try {
-      // Get OAuth token via proxy
-      console.log("[inter-pix-payment] 6. Obtendo access token via proxy...");
-      const token = await getOAuthToken(
-        proxyUrl,
-        credentials.client_id,
-        credentials.client_secret
-      );
-      console.log("[inter-pix-payment] 7. Access token obtido:", token ? "SIM" : "NÃO");
+    // Download certificates from storage
+    console.log("[inter-pix-payment] 6. Baixando certificados...");
+    
+    const { data: certData } = await supabase.storage
+      .from("inter-certs")
+      .download(credentials.certificate_file_path);
+    
+    const { data: keyData } = await supabase.storage
+      .from("inter-certs")
+      .download(credentials.private_key_file_path);
 
-      // Send PIX payment via proxy
-      console.log("[inter-pix-payment] 8. Enviando PIX via proxy...");
-      const pixResult = await sendPixPayment(
-        proxyUrl,
-        token,
-        credentials.account_number || "",
-        paymentData
-      );
-      console.log("[inter-pix-payment] 9. Resposta PIX:", JSON.stringify(pixResult));
+    if (!certData || !keyData) {
+      throw new Error("Certificados não encontrados no storage");
+    }
+
+    const certificate = await certData.text();
+    const privateKey = await keyData.text();
+
+    // Encode to base64 for the proxy
+    const certificateBase64 = btoa(certificate);
+    const privateKeyBase64 = btoa(privateKey);
+
+    console.log("[inter-pix-payment] 7. Certificados carregados, enviando para proxy...");
+
+    try {
+      // Call the GCP proxy with all payment data
+      const proxyPayload = {
+        pixKey: paymentData.pixKey,
+        pixKeyType: paymentData.pixKeyType,
+        amount: paymentData.amount,
+        recipientName: paymentData.recipientName,
+        recipientDocument: paymentData.recipientDocument.replace(/[^\d]/g, ""),
+        description: paymentData.description || `PIX para ${paymentData.recipientName}`,
+        clientId: credentials.client_id,
+        clientSecret: credentials.client_secret,
+        accountNumber: credentials.account_number || "",
+        certificate: certificateBase64,
+        privateKey: privateKeyBase64,
+      };
+
+      console.log("[inter-pix-payment] 8. Proxy payload (sem secrets):", JSON.stringify({
+        pixKey: proxyPayload.pixKey,
+        pixKeyType: proxyPayload.pixKeyType,
+        amount: proxyPayload.amount,
+        recipientName: proxyPayload.recipientName,
+        recipientDocument: proxyPayload.recipientDocument,
+        description: proxyPayload.description,
+      }));
+
+      const proxyResponse = await fetch(proxyUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${proxySecret}`,
+        },
+        body: JSON.stringify(proxyPayload),
+      });
+
+      const responseText = await proxyResponse.text();
+      console.log("[inter-pix-payment] 9. Proxy response status:", proxyResponse.status);
+      console.log("[inter-pix-payment] 10. Proxy response:", responseText);
+
+      if (!proxyResponse.ok) {
+        let errorMsg = `Erro HTTP ${proxyResponse.status}`;
+        try {
+          const errorJson = JSON.parse(responseText);
+          errorMsg = errorJson.error || errorJson.message || errorJson.detail || errorMsg;
+          if (errorJson.violacoes) {
+            errorMsg += `: ${errorJson.violacoes.map((v: any) => v.razao).join(", ")}`;
+          }
+        } catch {}
+        throw new Error(errorMsg);
+      }
+
+      const pixResult = JSON.parse(responseText);
+      console.log("[inter-pix-payment] 11. PIX result:", JSON.stringify(pixResult));
+
+      // Check if successful
+      if (!pixResult.success && !pixResult.transactionId && !pixResult.endToEndId) {
+        throw new Error(pixResult.error || "Resposta inválida do proxy");
+      }
 
       // Check if pending approval
-      const isPendingApproval = ["AGUARDANDO_APROVACAO", "PENDENTE", "EM_PROCESSAMENTO", "AGENDADO"]
-        .includes(pixResult.status);
+      const isPendingApproval = pixResult.pendingApproval || 
+        ["AGUARDANDO_APROVACAO", "PENDENTE", "EM_PROCESSAMENTO", "AGENDADO", "PENDENTE_APROVACAO"]
+          .includes(pixResult.status);
       
-      console.log("[inter-pix-payment] 10. Status:", pixResult.status, "- Pendente aprovação:", isPendingApproval);
+      console.log("[inter-pix-payment] 12. Status:", pixResult.status, "- Pendente aprovação:", isPendingApproval);
       const internalStatus = isPendingApproval ? "pending_approval" : "completed";
       
       await supabase
