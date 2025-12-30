@@ -56,3 +56,6 @@ verify_jwt = false
 
 [functions.suggest-ncm]
 verify_jwt = false
+
+[functions.demand-analysis]
+verify_jwt = false
