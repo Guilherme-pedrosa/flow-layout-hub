@@ -18,7 +18,7 @@ import { usePurchaseOrders } from "@/hooks/usePurchaseOrders";
 import { useStockMovements } from "@/hooks/useStockMovements";
 import { usePurchaseOrderStatuses } from "@/hooks/usePurchaseOrderStatuses";
 import { toast } from "sonner";
-import { sugerirCfopEntrada, CFOPS_ENTRADA_ESTADUAL, CFOPS_ENTRADA_INTERESTADUAL, CFOPS_ENTRADA_EXTERIOR } from "@/lib/cfops";
+import { sugerirCfopEntrada, CFOPS_ENTRADA_ESTADUAL, CFOPS_ENTRADA_INTERESTADUAL, CFOPS_ENTRADA_EXTERIOR, CFOPOption } from "@/lib/cfops";
 import {
   ImportarXMLUpload,
   FornecedorCard,
@@ -214,6 +214,64 @@ export default function ImportarXML() {
     const newItens = [...nfeData.itens];
     newItens[itemIndex] = { ...newItens[itemIndex], cfopEntrada: cfop };
     setNfeData({ ...nfeData, itens: newItens });
+  };
+
+  // Filtrar CFOPs baseado na finalidade selecionada
+  const getCfopsFiltrados = (cfops: CFOPOption[]): CFOPOption[] => {
+    switch (finalidade) {
+      case "comercializacao":
+        // CFOPs x102, x117, x118, x121, x403 (comercialização)
+        return cfops.filter(c => 
+          c.codigo.endsWith("102") || 
+          c.codigo.endsWith("117") || 
+          c.codigo.endsWith("118") || 
+          c.codigo.endsWith("121") ||
+          c.codigo.endsWith("403")
+        );
+      case "industrializacao":
+        // CFOPs x101, x111, x116, x120, x122, x124, x125, x401 (industrialização)
+        return cfops.filter(c => 
+          c.codigo.endsWith("101") || 
+          c.codigo.endsWith("111") || 
+          c.codigo.endsWith("116") ||
+          c.codigo.endsWith("120") ||
+          c.codigo.endsWith("122") ||
+          c.codigo.endsWith("124") ||
+          c.codigo.endsWith("125") ||
+          c.codigo.endsWith("401")
+        );
+      case "uso_consumo":
+        // CFOPs x556, x557, x407 (material de uso/consumo)
+        return cfops.filter(c => 
+          c.codigo.endsWith("556") || 
+          c.codigo.endsWith("557") ||
+          c.codigo.endsWith("407")
+        );
+      case "ativo":
+        // CFOPs x551, x552, x553, x554, x555, x406 (ativo imobilizado)
+        return cfops.filter(c => 
+          c.codigo.endsWith("551") || 
+          c.codigo.endsWith("552") ||
+          c.codigo.endsWith("553") ||
+          c.codigo.endsWith("554") ||
+          c.codigo.endsWith("555") ||
+          c.codigo.endsWith("406")
+        );
+      case "garantia":
+      case "outros":
+        // CFOPs x915, x916, x949 (garantia, conserto, outras operações)
+        return cfops.filter(c => 
+          c.codigo.endsWith("915") || 
+          c.codigo.endsWith("916") ||
+          c.codigo.endsWith("949") ||
+          c.codigo.endsWith("910") ||
+          c.codigo.endsWith("911") ||
+          c.codigo.endsWith("912") ||
+          c.codigo.endsWith("913")
+        );
+      default:
+        return cfops;
+    }
   };
 
   // Quando a finalidade muda, sugerir CFOP correspondente
@@ -627,34 +685,46 @@ Responda APENAS com o código CFOP de 4 dígitos. Sem explicações.`;
                     </SelectTrigger>
                     <SelectContent className="max-h-[400px]">
                       {/* Operações Estaduais */}
-                      <div className="px-2 py-1.5 text-sm font-semibold text-primary bg-muted/50">
-                        Estadual (1xxx)
-                      </div>
-                      {CFOPS_ENTRADA_ESTADUAL.map(cfop => (
-                        <SelectItem key={cfop.codigo} value={cfop.codigo}>
-                          {cfop.codigo} - {cfop.descricao.length > 55 ? cfop.descricao.slice(0, 55) + '...' : cfop.descricao}
-                        </SelectItem>
-                      ))}
+                      {getCfopsFiltrados(CFOPS_ENTRADA_ESTADUAL).length > 0 && (
+                        <>
+                          <div className="px-2 py-1.5 text-sm font-semibold text-primary bg-muted/50">
+                            Estadual (1xxx)
+                          </div>
+                          {getCfopsFiltrados(CFOPS_ENTRADA_ESTADUAL).map(cfop => (
+                            <SelectItem key={cfop.codigo} value={cfop.codigo}>
+                              {cfop.codigo} - {cfop.descricao.length > 55 ? cfop.descricao.slice(0, 55) + '...' : cfop.descricao}
+                            </SelectItem>
+                          ))}
+                        </>
+                      )}
                       
                       {/* Operações Interestaduais */}
-                      <div className="px-2 py-1.5 text-sm font-semibold text-primary border-t mt-1 pt-1 bg-muted/50">
-                        Interestadual (2xxx)
-                      </div>
-                      {CFOPS_ENTRADA_INTERESTADUAL.map(cfop => (
-                        <SelectItem key={cfop.codigo} value={cfop.codigo}>
-                          {cfop.codigo} - {cfop.descricao.length > 55 ? cfop.descricao.slice(0, 55) + '...' : cfop.descricao}
-                        </SelectItem>
-                      ))}
+                      {getCfopsFiltrados(CFOPS_ENTRADA_INTERESTADUAL).length > 0 && (
+                        <>
+                          <div className="px-2 py-1.5 text-sm font-semibold text-primary border-t mt-1 pt-1 bg-muted/50">
+                            Interestadual (2xxx)
+                          </div>
+                          {getCfopsFiltrados(CFOPS_ENTRADA_INTERESTADUAL).map(cfop => (
+                            <SelectItem key={cfop.codigo} value={cfop.codigo}>
+                              {cfop.codigo} - {cfop.descricao.length > 55 ? cfop.descricao.slice(0, 55) + '...' : cfop.descricao}
+                            </SelectItem>
+                          ))}
+                        </>
+                      )}
                       
                       {/* Importação */}
-                      <div className="px-2 py-1.5 text-sm font-semibold text-primary border-t mt-1 pt-1 bg-muted/50">
-                        Importação (3xxx)
-                      </div>
-                      {CFOPS_ENTRADA_EXTERIOR.map(cfop => (
-                        <SelectItem key={cfop.codigo} value={cfop.codigo}>
-                          {cfop.codigo} - {cfop.descricao.length > 55 ? cfop.descricao.slice(0, 55) + '...' : cfop.descricao}
-                        </SelectItem>
-                      ))}
+                      {getCfopsFiltrados(CFOPS_ENTRADA_EXTERIOR).length > 0 && (
+                        <>
+                          <div className="px-2 py-1.5 text-sm font-semibold text-primary border-t mt-1 pt-1 bg-muted/50">
+                            Importação (3xxx)
+                          </div>
+                          {getCfopsFiltrados(CFOPS_ENTRADA_EXTERIOR).map(cfop => (
+                            <SelectItem key={cfop.codigo} value={cfop.codigo}>
+                              {cfop.codigo} - {cfop.descricao.length > 55 ? cfop.descricao.slice(0, 55) + '...' : cfop.descricao}
+                            </SelectItem>
+                          ))}
+                        </>
+                      )}
                     </SelectContent>
                   </Select>
                 </div>
