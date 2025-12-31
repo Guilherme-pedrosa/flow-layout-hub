@@ -168,6 +168,7 @@ serve(async (req) => {
     console.log(`[inter-sync] Token OAuth obtido com sucesso`);
 
     // Get bank statement via proxy with mTLS
+    // IMPORTANTE: A API Inter exige mTLS em TODAS as chamadas, não apenas OAuth
     const extratoUrl = `${INTER_API_URL}/banking/v2/extrato?dataInicio=${date_from}&dataFim=${date_to}`;
 
     console.log(`[inter-sync] Chamando extrato com token: ${token.substring(0, 10)}...`);
@@ -181,6 +182,7 @@ serve(async (req) => {
     
     console.log(`[inter-sync] Headers para extrato:`, JSON.stringify(extratoHeaders));
 
+    // Enviar também clientId/clientSecret para que o proxy possa refazer mTLS corretamente
     const extratoResult = await callInterProxyWithMTLS(
       proxyUrl,
       proxySecret,
@@ -189,7 +191,9 @@ serve(async (req) => {
       extratoHeaders,
       certificate,
       privateKey,
-      credentials.account_number || ""
+      credentials.account_number || "",
+      credentials.client_id,      // Adicionar para mTLS
+      credentials.client_secret   // Adicionar para mTLS
     );
 
     console.log(`[inter-sync] Estrutura da resposta:`, JSON.stringify(extratoResult).substring(0, 500));
