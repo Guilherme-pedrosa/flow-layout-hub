@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { useCompany } from "@/contexts/CompanyContext";
 
 export interface Supplier {
   id: string;
@@ -27,7 +28,7 @@ export interface Supplier {
 }
 
 export interface SupplierInsert {
-  company_id: string;
+  company_id?: string;
   tipo_pessoa?: "PF" | "PJ";
   cpf_cnpj?: string;
   razao_social: string;
@@ -51,29 +52,34 @@ export interface SupplierUpdate extends Partial<SupplierInsert> {
   id: string;
 }
 
-const COMPANY_ID = "00000000-0000-0000-0000-000000000001";
-
 export function useSuppliers() {
   const queryClient = useQueryClient();
+  const { currentCompany } = useCompany();
 
   const suppliersQuery = useQuery({
-    queryKey: ["suppliers"],
+    queryKey: ["suppliers", currentCompany?.id],
     queryFn: async () => {
+      if (!currentCompany) return [];
+      
       const { data, error } = await supabase
         .from("suppliers")
         .select("*")
+        .eq("company_id", currentCompany.id)
         .order("razao_social", { ascending: true });
 
       if (error) throw error;
       return data as Supplier[];
     },
+    enabled: !!currentCompany,
   });
 
   const createSupplier = useMutation({
     mutationFn: async (supplier: Omit<SupplierInsert, "company_id">) => {
+      if (!currentCompany) throw new Error("Nenhuma empresa selecionada");
+      
       const { data, error } = await supabase
         .from("suppliers")
-        .insert({ ...supplier, company_id: COMPANY_ID })
+        .insert({ ...supplier, company_id: currentCompany.id })
         .select()
         .single();
 
@@ -132,9 +138,12 @@ export function useSuppliers() {
   });
 
   const getSupplierByCnpj = async (cpfCnpj: string): Promise<Supplier | null> => {
+    if (!currentCompany) return null;
+    
     const { data, error } = await supabase
       .from("suppliers")
       .select("*")
+      .eq("company_id", currentCompany.id)
       .eq("cpf_cnpj", cpfCnpj)
       .maybeSingle();
 
