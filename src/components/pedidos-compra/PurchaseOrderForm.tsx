@@ -524,7 +524,7 @@ export function PurchaseOrderForm({ order: initialOrder, onClose }: PurchaseOrde
           const { error: freightPayableError } = await supabase
             .from("payables")
             .insert({
-              company_id: COMPANY_ID,
+              company_id: currentCompany?.id || COMPANY_ID,
               supplier_id: cteCarrierId,
               purchase_order_id: orderId,
               amount: cteFreightValue,
