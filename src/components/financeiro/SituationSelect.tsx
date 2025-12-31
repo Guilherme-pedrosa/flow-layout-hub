@@ -48,13 +48,22 @@ export function SituationSelect({
       try {
         const { data, error } = await supabase
           .from("financial_situations")
-          .select("id, name, color, allows_manual_change, confirms_payment, is_active")
+          .select("id, name, color, allows_manual_change, confirms_payment, is_active, is_default")
           .eq("company_id", currentCompany.id)
           .eq("is_active", true)
           .order("sort_order", { ascending: true });
 
         if (error) throw error;
-        setSituations((data as FinancialSituation[]) || []);
+        const situationsData = (data as (FinancialSituation & { is_default?: boolean })[]) || [];
+        setSituations(situationsData);
+        
+        // Se não tem valor selecionado, aplicar a situação padrão automaticamente
+        if (!value && situationsData.length > 0) {
+          const defaultSituation = situationsData.find(s => s.is_default);
+          if (defaultSituation) {
+            onValueChange(defaultSituation.id);
+          }
+        }
       } catch (error) {
         console.error("Erro ao carregar situações:", error);
       } finally {
@@ -63,7 +72,7 @@ export function SituationSelect({
     };
 
     fetchSituations();
-  }, [currentCompany?.id]);
+  }, [currentCompany?.id, value, onValueChange]);
 
   // Filtrar situações baseado em allows_manual_change
   const selectableSituations = showAllSituations
