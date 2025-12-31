@@ -110,10 +110,8 @@ export function AppHeader({ onMenuClick, showMenuButton }: AppHeaderProps) {
 
       {/* Right side: Actions */}
       <div className="flex items-center gap-2 md:gap-3 flex-shrink-0">
-        {/* Company Selector - Desktop */}
-        <div className="hidden xl:block">
-          <CompanySelector />
-        </div>
+        {/* Company Selector - Sempre visível */}
+        <CompanySelector />
 
         {/* Mobile search button */}
         <Button variant="ghost" size="icon" className="h-9 w-9 lg:hidden">
