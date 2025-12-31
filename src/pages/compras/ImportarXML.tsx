@@ -19,6 +19,7 @@ import { useStockMovements } from "@/hooks/useStockMovements";
 import { usePurchaseOrderStatuses } from "@/hooks/usePurchaseOrderStatuses";
 import { useProductCostCalculation } from "@/hooks/useProductCostCalculation";
 import { usePayablesGeneration } from "@/hooks/usePayablesGeneration";
+import { useCompany } from "@/contexts/CompanyContext";
 import { toast } from "sonner";
 import { sugerirCfopEntrada, CFOPS_ENTRADA_ESTADUAL, CFOPS_ENTRADA_INTERESTADUAL, CFOPS_ENTRADA_EXTERIOR, CFOPOption } from "@/lib/cfops";
 import {
@@ -88,6 +89,7 @@ export default function ImportarXML() {
   const { getDefaultStatus, getActiveStatuses } = usePurchaseOrderStatuses();
   const { calculateAllItemCosts, rateFreightToItems } = useProductCostCalculation();
   const { generatePayables } = usePayablesGeneration();
+  const { currentCompany } = useCompany();
 
   // Carregar fornecedores e transportadores disponíveis
   useEffect(() => {
@@ -635,6 +637,7 @@ Responda APENAS com o código CFOP de 4 dígitos. Sem explicações.`;
       // Criar itens do pedido com custo calculado
       const orderItems = nfeData.itens.map((item, index) => ({
         purchase_order_id: orderData.id,
+        company_id: currentCompany?.id,
         product_id: item.productId || produtosCriados[index] || null,
         xml_code: item.codigo,
         xml_description: item.descricao,
