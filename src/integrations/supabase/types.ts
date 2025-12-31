@@ -4115,7 +4115,7 @@ export type Database = {
             foreignKeyName: "purchase_orders_cte_carrier_id_fkey"
             columns: ["cte_carrier_id"]
             isOneToOne: false
-            referencedRelation: "suppliers"
+            referencedRelation: "pessoas"
             referencedColumns: ["id"]
           },
           {

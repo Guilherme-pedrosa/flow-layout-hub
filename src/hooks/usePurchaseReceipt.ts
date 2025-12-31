@@ -95,11 +95,23 @@ export function usePurchaseReceipt() {
         supplier_id,
         supplier_name,
         total_value,
-        receipt_status,
-        supplier:pessoas(razao_social, nome_fantasia)
+        receipt_status
       `)
       .eq("id", orderId)
       .single();
+
+    if (orderError || !order) return null;
+
+    // Buscar fornecedor separadamente devido a múltiplas FKs para 'pessoas'
+    let supplierData: { razao_social: string | null; nome_fantasia: string | null } | null = null;
+    if (order.supplier_id) {
+      const { data } = await supabase
+        .from("pessoas")
+        .select("razao_social, nome_fantasia")
+        .eq("id", order.supplier_id)
+        .maybeSingle();
+      supplierData = data;
+    }
 
     if (orderError || !order) return null;
 
@@ -159,7 +171,7 @@ export function usePurchaseReceipt() {
       id: order.id,
       type: 'purchase_order',
       order_number: order.order_number,
-      supplier_name: order.supplier?.razao_social || order.supplier?.nome_fantasia || order.supplier_name || 'Fornecedor não identificado',
+      supplier_name: supplierData?.razao_social || supplierData?.nome_fantasia || order.supplier_name || 'Fornecedor não identificado',
       supplier_id: order.supplier_id,
       receipt_id: existingReceipt?.id || null,
       receipt_status: (existingReceipt?.status as 'pending' | 'in_progress' | 'partial' | 'complete') || 'pending',
