@@ -32,3 +32,4 @@ export { ReconciliationPanel } from './ReconciliationPanel';
 export { ReceivablesPage } from './ReceivablesPage';
 export { ReceivablesStatusCards } from './ReceivablesStatusCards';
 export { ReceivablesFilters } from './ReceivablesFilters';
+export { PayableAttachments } from './PayableAttachments';

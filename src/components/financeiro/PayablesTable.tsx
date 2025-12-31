@@ -248,16 +248,19 @@ export function PayablesTable({
                       </DropdownMenuItem>
                     )}
                     <DropdownMenuSeparator />
-                    {!payable.is_paid && payable.pix_key && (
-                      <DropdownMenuItem onClick={() => onPayPix(payable)}>
-                        <QrCode className="mr-2 h-4 w-4 text-emerald-600" />
-                        Enviar para Aprovação
-                      </DropdownMenuItem>
-                    )}
-                    {!payable.is_paid && payable.boleto_barcode && (
-                      <DropdownMenuItem onClick={() => onPayBoleto(payable)}>
-                        <Receipt className="mr-2 h-4 w-4 text-blue-600" />
-                        Enviar Boleto
+                    {!payable.is_paid && (payable.pix_key || payable.boleto_barcode) && (
+                      <DropdownMenuItem onClick={() => payable.pix_key ? onPayPix(payable) : onPayBoleto(payable)}>
+                        {payable.pix_key ? (
+                          <>
+                            <QrCode className="mr-2 h-4 w-4 text-emerald-600" />
+                            Enviar para Aprovação
+                          </>
+                        ) : (
+                          <>
+                            <Receipt className="mr-2 h-4 w-4 text-blue-600" />
+                            Enviar Boleto
+                          </>
+                        )}
                       </DropdownMenuItem>
                     )}
                     <DropdownMenuSeparator />
@@ -300,14 +303,18 @@ export function PayablesTable({
                 <span className="text-lg font-bold tabular-nums">
                   {formatCurrency(payable.amount)}
                 </span>
-                {!payable.is_paid && payable.pix_key && (
+                {!payable.is_paid && (payable.pix_key || payable.boleto_barcode) && (
                   <Button
                     size="sm"
                     variant="outline"
-                    onClick={() => onPayPix(payable)}
+                    onClick={() => payable.pix_key ? onPayPix(payable) : onPayBoleto(payable)}
                     className="h-8 text-xs gap-1"
                   >
-                    <QrCode className="h-3.5 w-3.5" />
+                    {payable.pix_key ? (
+                      <QrCode className="h-3.5 w-3.5" />
+                    ) : (
+                      <Receipt className="h-3.5 w-3.5" />
+                    )}
                     Enviar
                   </Button>
                 )}
@@ -459,20 +466,23 @@ export function PayablesTable({
                         </DropdownMenuItem>
                       )}
                       
-                      <DropdownMenuSeparator />
-                      
-                      {!payable.is_paid && payable.pix_key && (
-                        <DropdownMenuItem onClick={() => onPayPix(payable)}>
-                          <QrCode className="mr-2 h-4 w-4 text-emerald-600" />
-                          Enviar para Aprovação
-                        </DropdownMenuItem>
-                      )}
-                      
-                      {!payable.is_paid && payable.boleto_barcode && (
-                        <DropdownMenuItem onClick={() => onPayBoleto(payable)}>
-                          <Receipt className="mr-2 h-4 w-4 text-blue-600" />
-                          Enviar Boleto
-                        </DropdownMenuItem>
+                      {!payable.is_paid && (payable.pix_key || payable.boleto_barcode) && (
+                        <>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem onClick={() => payable.pix_key ? onPayPix(payable) : onPayBoleto(payable)}>
+                            {payable.pix_key ? (
+                              <>
+                                <QrCode className="mr-2 h-4 w-4 text-emerald-600" />
+                                Enviar para Aprovação
+                              </>
+                            ) : (
+                              <>
+                                <Receipt className="mr-2 h-4 w-4 text-blue-600" />
+                                Enviar Boleto
+                              </>
+                            )}
+                          </DropdownMenuItem>
+                        </>
                       )}
                       
                       <DropdownMenuSeparator />

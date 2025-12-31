@@ -17,6 +17,7 @@ import { format, parseISO, startOfMonth, endOfMonth, isBefore, startOfDay } from
 import { ptBR } from "date-fns/locale";
 import { toast } from "sonner";
 import { useCompany } from "@/contexts/CompanyContext";
+import { useFinancialSituations } from "@/hooks/useFinancialSituations";
 
 import { PayablesStatusCards, PayableStatusFilter } from "./PayablesStatusCards";
 import { PayablesFilters, PayablesFiltersState } from "./PayablesFilters";
@@ -34,6 +35,7 @@ interface PayablesPageProps {
 
 export function PayablesPage({ onRefresh, purchaseOrderId }: PayablesPageProps) {
   const { currentCompany } = useCompany();
+  const { getDefaultSituation, getSentForApprovalSituation, getOverdueSituation, situations } = useFinancialSituations();
   const [payables, setPayables] = useState<PayableRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
@@ -66,7 +68,7 @@ export function PayablesPage({ onRefresh, purchaseOrderId }: PayablesPageProps) 
     if (currentCompany?.id) {
       fetchPayables();
     }
-  }, [filters.currentMonth, currentCompany?.id, purchaseOrderId]);
+  }, [filters.currentMonth, currentCompany?.id, purchaseOrderId, situations]);
 
   const fetchPayables = async () => {
     if (!currentCompany?.id) return;
@@ -239,6 +241,14 @@ export function PayablesPage({ onRefresh, purchaseOrderId }: PayablesPageProps) 
     }, 0);
   }, [selectedIds, payables]);
 
+  // Verificar se pelo menos um item selecionado tem dados de pagamento válidos (pix_key ou boleto_barcode)
+  const canSubmitToBank = useMemo(() => {
+    return Array.from(selectedIds).some((id) => {
+      const p = payables.find((x) => x.id === id);
+      return p && (p.pix_key || p.boleto_barcode);
+    });
+  }, [selectedIds, payables]);
+
   // Handlers
   const handleToggleSelect = (id: string) => {
     const newSet = new Set(selectedIds);
@@ -378,16 +388,35 @@ export function PayablesPage({ onRefresh, purchaseOrderId }: PayablesPageProps) 
     setProcessing(true);
     let successCount = 0;
     const companyId = currentCompany.id;
+    
+    // Buscar situação "Enviado para Aprovação"
+    const sentForApprovalSituation = getSentForApprovalSituation();
 
     try {
       for (const id of selectedIds) {
         const payable = payables.find((p) => p.id === id);
         if (!payable) continue;
 
+        // Só processar se tiver dados de pagamento válidos
+        if (!payable.pix_key && !payable.boleto_barcode) {
+          continue;
+        }
+
+        // Preparar dados de atualização incluindo situação financeira
+        const updateData: Record<string, any> = { 
+          payment_status: "sent_to_bank", 
+          submitted_at: new Date().toISOString(),
+        };
+        
+        // Atualizar situação financeira para "Enviado para Aprovação"
+        if (sentForApprovalSituation) {
+          updateData.financial_situation_id = sentForApprovalSituation.id;
+        }
+
         if (payable.payment_method_type === "pix" && payable.pix_key) {
           await supabase
             .from("payables")
-            .update({ payment_status: "sent_to_bank", submitted_at: new Date().toISOString() })
+            .update(updateData)
             .eq("id", id);
 
           const { data, error } = await supabase.functions.invoke("inter-pix-payment", {
@@ -415,10 +444,11 @@ export function PayablesPage({ onRefresh, purchaseOrderId }: PayablesPageProps) 
               } as any)
               .eq("id", id);
           }
-        } else {
+        } else if (payable.boleto_barcode) {
+          // Boleto - só atualizar status e situação
           await supabase
             .from("payables")
-            .update({ payment_status: "sent_to_bank", submitted_at: new Date().toISOString() })
+            .update(updateData)
             .eq("id", id);
           successCount++;
         }
@@ -530,6 +560,7 @@ export function PayablesPage({ onRefresh, purchaseOrderId }: PayablesPageProps) 
       <PayablesBulkActions
         selectedCount={selectedIds.size}
         totalAmount={selectedTotal}
+        canSubmitToBank={canSubmitToBank}
         onSubmitToBank={handleBulkSubmit}
         onDelete={handleBulkDelete}
         onClearSelection={() => setSelectedIds(new Set())}
