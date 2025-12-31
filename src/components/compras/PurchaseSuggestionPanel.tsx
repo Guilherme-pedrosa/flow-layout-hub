@@ -107,15 +107,24 @@ export function PurchaseSuggestionPanel() {
     setSelectedIds(new Set());
 
     try {
+      console.log("[PurchaseSuggestion] Calling demand-analysis for company:", companyId);
+      
       const { data, error } = await supabase.functions.invoke("demand-analysis", {
         body: { company_id: companyId }
       });
 
-      if (error) throw error;
+      console.log("[PurchaseSuggestion] Response:", { data, error });
+
+      if (error) {
+        console.error("[PurchaseSuggestion] Error from function:", error);
+        throw error;
+      }
 
       if (data?.success) {
-        const newDemands = data.data.demands || [];
-        const newSummary = data.data.summary || null;
+        const newDemands = data.data?.demands || [];
+        const newSummary = data.data?.summary || null;
+        
+        console.log("[PurchaseSuggestion] Setting demands:", newDemands.length, "Summary:", newSummary);
         
         setDemands(newDemands);
         setSummary(newSummary);
