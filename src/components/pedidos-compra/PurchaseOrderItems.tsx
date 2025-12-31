@@ -24,13 +24,6 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
   Dialog,
   DialogContent,
   DialogHeader,
@@ -39,7 +32,6 @@ import {
 import { Label } from "@/components/ui/label";
 import { Plus, Trash2, Package, ChevronsUpDown, Check, Loader2 } from "lucide-react";
 import { useProducts } from "@/hooks/useProducts";
-import { useChartOfAccounts, useCostCenters } from "@/hooks/useFinanceiro";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -72,8 +64,6 @@ const formatCurrency = (value: number) => {
 
 export function PurchaseOrderItems({ items, onItemsChange, purpose, freightTotal = 0 }: PurchaseOrderItemsProps) {
   const { products, isLoading: productsLoading, createProduct, refetch: refetchProducts } = useProducts();
-  const { accounts: chartOfAccounts, fetchAccounts } = useChartOfAccounts();
-  const { costCenters, fetchCostCenters } = useCostCenters();
   const [openProductPopover, setOpenProductPopover] = useState<number | null>(null);
   const [showCadastrarProduto, setShowCadastrarProduto] = useState(false);
   const [newProductData, setNewProductData] = useState({ code: '', description: '' });
@@ -101,11 +91,6 @@ export function PurchaseOrderItems({ items, onItemsChange, purpose, freightTotal
       setCreatingProduct(false);
     }
   };
-
-  useEffect(() => {
-    fetchAccounts();
-    fetchCostCenters();
-  }, []);
 
   const getProductDisplayName = (productId: string, maxLength: number = 20) => {
     if (!productId) return null;
@@ -345,44 +330,6 @@ export function PurchaseOrderItems({ items, onItemsChange, purpose, freightTotal
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="space-y-1">
-                      <label className="text-xs text-muted-foreground">Plano de Contas</label>
-                      <Select
-                        value={item.chart_account_id || undefined}
-                        onValueChange={(v) => handleItemChange(index, "chart_account_id", v)}
-                      >
-                        <SelectTrigger className="text-sm h-9">
-                          <SelectValue placeholder="Selecione" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {chartOfAccounts.map((account) => (
-                            <SelectItem key={account.id} value={account.id}>
-                              {account.code}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-xs text-muted-foreground">Centro de Custo</label>
-                      <Select
-                        value={item.cost_center_id || undefined}
-                        onValueChange={(v) => handleItemChange(index, "cost_center_id", v)}
-                      >
-                        <SelectTrigger className="text-sm h-9">
-                          <SelectValue placeholder="Selecione" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {costCenters.map((center) => (
-                            <SelectItem key={center.id} value={center.id}>
-                              {center.code}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
                 </div>
               ))}
             </div>
@@ -399,8 +346,6 @@ export function PurchaseOrderItems({ items, onItemsChange, purpose, freightTotal
                     <TableHead className="w-[100px]">Frete Rateado</TableHead>
                     <TableHead className="w-[120px]">Custo Unit.</TableHead>
                     <TableHead className="w-[120px]">Total</TableHead>
-                    <TableHead className="w-[180px]">Plano de Contas</TableHead>
-                    <TableHead className="w-[180px]">Centro de Custo</TableHead>
                     <TableHead className="w-[50px]"></TableHead>
                   </TableRow>
                 </TableHeader>
@@ -448,40 +393,6 @@ export function PurchaseOrderItems({ items, onItemsChange, purpose, freightTotal
                       </TableCell>
                       <TableCell className="font-medium">
                         {formatCurrency(item.total_value)}
-                      </TableCell>
-                      <TableCell>
-                        <Select
-                          value={item.chart_account_id || undefined}
-                          onValueChange={(v) => handleItemChange(index, "chart_account_id", v)}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Selecione" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {chartOfAccounts.map((account) => (
-                              <SelectItem key={account.id} value={account.id}>
-                                {account.code}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </TableCell>
-                      <TableCell>
-                        <Select
-                          value={item.cost_center_id || undefined}
-                          onValueChange={(v) => handleItemChange(index, "cost_center_id", v)}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Selecione" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {costCenters.map((center) => (
-                              <SelectItem key={center.id} value={center.id}>
-                                {center.code}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
                       </TableCell>
                       <TableCell>
                         <Button
