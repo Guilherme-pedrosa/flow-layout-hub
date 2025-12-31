@@ -53,7 +53,11 @@ interface NFeDivergenceDialogProps {
   onApplyChanges: (selectedDivergences: string[]) => void;
   onCancel: () => void;
   requiresReapproval: boolean;
+  orderTotalAmount?: number; // Valor total do pedido para lógica de alçada
 }
+
+// Constante para alçada de aprovação
+const APPROVAL_THRESHOLD = 5000; // R$ 5.000,00
 
 const formatCurrency = (value: number | null | undefined) => {
   if (value == null) return "N/A";
@@ -78,6 +82,7 @@ export function NFeDivergenceDialog({
   onApplyChanges,
   onCancel,
   requiresReapproval,
+  orderTotalAmount = 0,
 }: NFeDivergenceDialogProps) {
   const [selectedDivergences, setSelectedDivergences] = useState<Set<string>>(new Set());
 
@@ -91,6 +96,12 @@ export function NFeDivergenceDialog({
   const missingItems = divergences.filter((d) => d.type === "item_missing");
 
   const hasDivergences = divergences.length > 0;
+  
+  // Lógica de alçada: só exige reaprovação se há divergências E valor > R$ 5.000,00
+  const effectiveRequiresReapproval = requiresReapproval && hasDivergences && orderTotalAmount > APPROVAL_THRESHOLD;
+  
+  // Para pedidos <= R$ 5.000,00 com divergências, permite correção sem reaprovação
+  const allowsCorrectionWithoutReapproval = hasDivergences && orderTotalAmount <= APPROVAL_THRESHOLD;
 
   const toggleDivergence = (id: string) => {
     const newSet = new Set(selectedDivergences);
@@ -177,13 +188,24 @@ export function NFeDivergenceDialog({
           </DialogDescription>
         </DialogHeader>
 
-        {requiresReapproval && hasDivergences && (
+        {effectiveRequiresReapproval && (
           <Alert variant="destructive" className="border-amber-500 bg-amber-50 text-amber-800">
             <AlertTriangle className="h-4 w-4" />
-            <AlertTitle>Atenção: Pedido já aprovado</AlertTitle>
+            <AlertTitle>Atenção: Pedido já aprovado (acima de R$ 5.000)</AlertTitle>
             <AlertDescription>
               Qualquer alteração aplicada ao pedido irá marcá-lo para <strong>reaprovação</strong>.
               Recebimento, estoque e financeiro ficarão bloqueados até a aprovação.
+            </AlertDescription>
+          </Alert>
+        )}
+        
+        {allowsCorrectionWithoutReapproval && requiresReapproval && (
+          <Alert className="border-green-500 bg-green-50 text-green-800 dark:bg-green-950/20 dark:text-green-400">
+            <CheckCircle2 className="h-4 w-4" />
+            <AlertTitle>Correção permitida sem reaprovação</AlertTitle>
+            <AlertDescription>
+              Como o pedido é de até R$ 5.000,00, você pode corrigir os dados para corresponder ao XML 
+              sem necessidade de reaprovação. Selecione as divergências que deseja aplicar.
             </AlertDescription>
           </Alert>
         )}

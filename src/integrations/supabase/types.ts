@@ -665,6 +665,75 @@ export type Database = {
           },
         ]
       }
+      cfo_vigilant_alerts: {
+        Row: {
+          action_taken: string | null
+          alert_type: string
+          company_id: string
+          context_data: Json | null
+          created_at: string
+          dismissed_at: string | null
+          dismissed_by: string | null
+          id: string
+          is_dismissed: boolean
+          is_read: boolean
+          message: string
+          reference_id: string | null
+          reference_type: string | null
+          severity: string
+          title: string
+        }
+        Insert: {
+          action_taken?: string | null
+          alert_type: string
+          company_id: string
+          context_data?: Json | null
+          created_at?: string
+          dismissed_at?: string | null
+          dismissed_by?: string | null
+          id?: string
+          is_dismissed?: boolean
+          is_read?: boolean
+          message: string
+          reference_id?: string | null
+          reference_type?: string | null
+          severity?: string
+          title: string
+        }
+        Update: {
+          action_taken?: string | null
+          alert_type?: string
+          company_id?: string
+          context_data?: Json | null
+          created_at?: string
+          dismissed_at?: string | null
+          dismissed_by?: string | null
+          id?: string
+          is_dismissed?: boolean
+          is_read?: boolean
+          message?: string
+          reference_id?: string | null
+          reference_type?: string | null
+          severity?: string
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cfo_vigilant_alerts_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cfo_vigilant_alerts_dismissed_by_fkey"
+            columns: ["dismissed_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       chart_of_accounts: {
         Row: {
           account_nature: Database["public"]["Enums"]["account_nature"]
@@ -1505,6 +1574,104 @@ export type Database = {
             columns: ["payable_id"]
             isOneToOne: false
             referencedRelation: "payables"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      margin_impact_alerts: {
+        Row: {
+          company_id: string
+          created_at: string
+          id: string
+          new_cost: number | null
+          new_margin_percent: number | null
+          notes: string | null
+          old_cost: number | null
+          old_margin_percent: number | null
+          potential_loss: number | null
+          product_id: string | null
+          purchase_order_id: string | null
+          quantity: number | null
+          reference_id: string
+          reference_number: string | null
+          reference_type: string
+          reviewed_at: string | null
+          reviewed_by: string | null
+          sale_price: number | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          id?: string
+          new_cost?: number | null
+          new_margin_percent?: number | null
+          notes?: string | null
+          old_cost?: number | null
+          old_margin_percent?: number | null
+          potential_loss?: number | null
+          product_id?: string | null
+          purchase_order_id?: string | null
+          quantity?: number | null
+          reference_id: string
+          reference_number?: string | null
+          reference_type: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          sale_price?: number | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          id?: string
+          new_cost?: number | null
+          new_margin_percent?: number | null
+          notes?: string | null
+          old_cost?: number | null
+          old_margin_percent?: number | null
+          potential_loss?: number | null
+          product_id?: string | null
+          purchase_order_id?: string | null
+          quantity?: number | null
+          reference_id?: string
+          reference_number?: string | null
+          reference_type?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          sale_price?: number | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "margin_impact_alerts_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "margin_impact_alerts_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "margin_impact_alerts_purchase_order_id_fkey"
+            columns: ["purchase_order_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "margin_impact_alerts_reviewed_by_fkey"
+            columns: ["reviewed_by"]
+            isOneToOne: false
+            referencedRelation: "users"
             referencedColumns: ["id"]
           },
         ]
