@@ -7,7 +7,6 @@ import {
   Table,
   TableBody,
   TableCell,
-  TableHead,
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
@@ -21,6 +20,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Plus, Search, MoreHorizontal, Edit, Eye, Building2, User, Truck, Briefcase } from "lucide-react";
 import { usePessoas } from "@/hooks/usePessoas";
 import { formatCpfCnpj, formatTelefone } from "@/lib/formatters";
+import { useSortableData } from "@/hooks/useSortableData";
+import { SortableTableHeader } from "@/components/shared";
 
 export function ClientesList() {
   const navigate = useNavigate();
@@ -36,6 +37,17 @@ export function ClientesList() {
       cliente.email?.toLowerCase().includes(searchLower)
     );
   });
+
+  // Preparar dados com campo para ordenação de localização
+  const clientesWithSortKey = filteredClientes.map((c) => ({
+    ...c,
+    _location: c.cidade && c.estado ? `${c.cidade}/${c.estado}` : "",
+  }));
+
+  const { items: sortedClientes, requestSort, sortConfig } = useSortableData(
+    clientesWithSortKey,
+    "razao_social"
+  );
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -89,14 +101,64 @@ export function ClientesList() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-12"></TableHead>
-                <TableHead>Razão Social / Nome</TableHead>
-                <TableHead>CPF/CNPJ</TableHead>
-                <TableHead>Telefone</TableHead>
-                <TableHead>Cidade/UF</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Outros Papéis</TableHead>
-                <TableHead className="w-12"></TableHead>
+                <SortableTableHeader
+                  label=""
+                  sortKey="tipo_pessoa"
+                  currentSortKey={sortConfig.key}
+                  sortDirection={sortConfig.direction}
+                  onSort={requestSort}
+                  className="w-12"
+                />
+                <SortableTableHeader
+                  label="Razão Social / Nome"
+                  sortKey="razao_social"
+                  currentSortKey={sortConfig.key}
+                  sortDirection={sortConfig.direction}
+                  onSort={requestSort}
+                />
+                <SortableTableHeader
+                  label="CPF/CNPJ"
+                  sortKey="cpf_cnpj"
+                  currentSortKey={sortConfig.key}
+                  sortDirection={sortConfig.direction}
+                  onSort={requestSort}
+                />
+                <SortableTableHeader
+                  label="Telefone"
+                  sortKey="telefone"
+                  currentSortKey={sortConfig.key}
+                  sortDirection={sortConfig.direction}
+                  onSort={requestSort}
+                />
+                <SortableTableHeader
+                  label="Cidade/UF"
+                  sortKey="_location"
+                  currentSortKey={sortConfig.key}
+                  sortDirection={sortConfig.direction}
+                  onSort={requestSort}
+                />
+                <SortableTableHeader
+                  label="Status"
+                  sortKey="status"
+                  currentSortKey={sortConfig.key}
+                  sortDirection={sortConfig.direction}
+                  onSort={requestSort}
+                />
+                <SortableTableHeader
+                  label="Outros Papéis"
+                  sortKey="is_fornecedor"
+                  currentSortKey={sortConfig.key}
+                  sortDirection={sortConfig.direction}
+                  onSort={requestSort}
+                />
+                <SortableTableHeader
+                  label=""
+                  sortKey=""
+                  currentSortKey={sortConfig.key}
+                  sortDirection={sortConfig.direction}
+                  onSort={() => {}}
+                  className="w-12"
+                />
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -106,14 +168,14 @@ export function ClientesList() {
                     Carregando...
                   </TableCell>
                 </TableRow>
-              ) : filteredClientes.length === 0 ? (
+              ) : sortedClientes.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                     {search ? 'Nenhum cliente encontrado' : 'Nenhum cliente cadastrado'}
                   </TableCell>
                 </TableRow>
               ) : (
-                filteredClientes.map((cliente) => (
+                sortedClientes.map((cliente) => (
                   <TableRow key={cliente.id} className="cursor-pointer hover:bg-muted/50">
                     <TableCell>
                       {getTipoPessoaIcon(cliente.tipo_pessoa)}

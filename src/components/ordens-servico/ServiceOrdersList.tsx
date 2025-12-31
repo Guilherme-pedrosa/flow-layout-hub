@@ -1,7 +1,8 @@
-import { useState } from "react";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { useState, useCallback } from "react";
+import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSub, DropdownMenuSubTrigger, DropdownMenuSubContent } from "@/components/ui/dropdown-menu";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
@@ -9,8 +10,10 @@ import { Search, Eye, Edit, Trash2, MoreVertical, DollarSign, FileText, Printer,
 import { useServiceOrders, useServiceOrderStatuses, ServiceOrder } from "@/hooks/useServiceOrders";
 import { useDocumentPdf } from "@/hooks/useDocumentPdf";
 import { formatCurrency } from "@/lib/formatters";
-import { SaleStatusBadge } from "@/components/vendas/SaleStatusBadge";
 import { toast } from "sonner";
+import { useSortableData } from "@/hooks/useSortableData";
+import { useSelectionSum } from "@/hooks/useSelectionSum";
+import { SortableTableHeader, SelectionSummaryBar } from "@/components/shared";
 
 interface ServiceOrdersListProps {
   onEdit: (order: ServiceOrder) => void;
@@ -32,6 +35,33 @@ export function ServiceOrdersList({ onEdit, onView }: ServiceOrdersListProps) {
     o.equipment_type?.toLowerCase().includes(search.toLowerCase()) ||
     o.equipment_brand?.toLowerCase().includes(search.toLowerCase())
   );
+
+  // Preparar dados com campos para ordenação
+  const ordersWithSortKey = filteredOrders.map((o) => ({
+    ...o,
+    _clientName: o.client?.nome_fantasia || o.client?.razao_social || "",
+    _equipment: [o.equipment_type, o.equipment_brand, o.equipment_model].filter(Boolean).join(' - '),
+  }));
+
+  const { items: sortedOrders, requestSort, sortConfig } = useSortableData(
+    ordersWithSortKey,
+    "order_date"
+  );
+
+  // Selection with sum
+  const getId = useCallback((item: ServiceOrder) => item.id, []);
+  const getAmount = useCallback((item: ServiceOrder) => item.total_value, []);
+
+  const {
+    selectedCount,
+    totalSum,
+    toggleSelection,
+    clearSelection,
+    isSelected,
+    toggleSelectAll,
+    isAllSelected,
+    isSomeSelected,
+  } = useSelectionSum({ items: filteredOrders, getAmount, getId });
 
   const handleCopyLink = (order: ServiceOrder) => {
     const url = `${window.location.origin}/os/${order.tracking_token}`;
@@ -95,21 +125,82 @@ export function ServiceOrdersList({ onEdit, onView }: ServiceOrdersListProps) {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="w-[80px]">Nº</TableHead>
-              <TableHead>Cliente</TableHead>
-              <TableHead>Equipamento</TableHead>
-              <TableHead className="w-[120px]">Data</TableHead>
-              <TableHead className="w-[180px]">Situação</TableHead>
-              <TableHead className="w-[120px] text-right">Valor</TableHead>
-              <TableHead className="w-[100px]">Ações</TableHead>
+              <SortableTableHeader
+                label=""
+                sortKey=""
+                currentSortKey={sortConfig.key}
+                sortDirection={sortConfig.direction}
+                onSort={() => {}}
+                className="w-12"
+              />
+              <SortableTableHeader
+                label="Nº"
+                sortKey="order_number"
+                currentSortKey={sortConfig.key}
+                sortDirection={sortConfig.direction}
+                onSort={requestSort}
+                className="w-[80px]"
+              />
+              <SortableTableHeader
+                label="Cliente"
+                sortKey="_clientName"
+                currentSortKey={sortConfig.key}
+                sortDirection={sortConfig.direction}
+                onSort={requestSort}
+              />
+              <SortableTableHeader
+                label="Equipamento"
+                sortKey="_equipment"
+                currentSortKey={sortConfig.key}
+                sortDirection={sortConfig.direction}
+                onSort={requestSort}
+              />
+              <SortableTableHeader
+                label="Data"
+                sortKey="order_date"
+                currentSortKey={sortConfig.key}
+                sortDirection={sortConfig.direction}
+                onSort={requestSort}
+                className="w-[120px]"
+              />
+              <SortableTableHeader
+                label="Situação"
+                sortKey="status_id"
+                currentSortKey={sortConfig.key}
+                sortDirection={sortConfig.direction}
+                onSort={requestSort}
+                className="w-[180px]"
+              />
+              <SortableTableHeader
+                label="Valor"
+                sortKey="total_value"
+                currentSortKey={sortConfig.key}
+                sortDirection={sortConfig.direction}
+                onSort={requestSort}
+                className="w-[120px] text-right"
+              />
+              <SortableTableHeader
+                label="Ações"
+                sortKey=""
+                currentSortKey={sortConfig.key}
+                sortDirection={sortConfig.direction}
+                onSort={() => {}}
+                className="w-[100px]"
+              />
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredOrders.length === 0 ? (
-              <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Nenhuma OS encontrada</TableCell></TableRow>
+            {sortedOrders.length === 0 ? (
+              <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Nenhuma OS encontrada</TableCell></TableRow>
             ) : (
-              filteredOrders.map(order => (
-                <TableRow key={order.id}>
+              sortedOrders.map(order => (
+                <TableRow key={order.id} className={isSelected(order.id) ? "bg-muted/30" : ""}>
+                  <TableCell>
+                    <Checkbox 
+                      checked={isSelected(order.id)}
+                      onCheckedChange={() => toggleSelection(order.id)}
+                    />
+                  </TableCell>
                   <TableCell className="font-medium">{order.order_number}</TableCell>
                   <TableCell>
                     <div>{order.client?.razao_social || '-'}</div>
@@ -201,6 +292,13 @@ export function ServiceOrdersList({ onEdit, onView }: ServiceOrdersListProps) {
           </TableBody>
         </Table>
       </div>
+
+      {/* Selection Summary Bar */}
+      <SelectionSummaryBar
+        selectedCount={selectedCount}
+        totalSum={totalSum}
+        onClear={clearSelection}
+      />
     </div>
   );
 }
