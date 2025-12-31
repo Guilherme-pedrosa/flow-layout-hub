@@ -113,7 +113,7 @@ export const ExtratoList = () => {
 
     setSyncing(true);
     try {
-      const { data, error } = await supabase.functions.invoke("inter-sync", {
+      const { data, error } = await supabase.functions.invoke("inter-mtls", {
         body: {
           company_id: companyId,
           date_from: dateFrom,

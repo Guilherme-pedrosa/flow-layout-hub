@@ -108,7 +108,7 @@ export default function ExtratoBancario() {
 
     setSyncing(true);
     try {
-      const { data, error } = await supabase.functions.invoke("inter-sync", {
+      const { data, error } = await supabase.functions.invoke("inter-mtls", {
         body: {
           company_id: currentCompany.id,
           date_from: dateFrom,
