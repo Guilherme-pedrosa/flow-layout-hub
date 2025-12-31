@@ -9,6 +9,17 @@ const corsHeaders = {
 const INTER_HOST = "cdpj.partners.bancointer.com.br";
 const INTER_PORT = 443;
 
+function concatUint8Arrays(arrays: Uint8Array[]): Uint8Array {
+  const totalLength = arrays.reduce((acc, arr) => acc + arr.length, 0);
+  const result = new Uint8Array(totalLength);
+  let offset = 0;
+  for (const arr of arrays) {
+    result.set(arr, offset);
+    offset += arr.length;
+  }
+  return result;
+}
+
 /**
  * Faz uma requisição HTTP sobre TLS com mTLS (certificado de cliente)
  * O Deno suporta mTLS via Deno.connectTls com certChain e privateKey
@@ -56,43 +67,53 @@ async function makeHttpsRequest(
     const encoder = new TextEncoder();
     await conn.write(encoder.encode(request));
 
-    // Ler resposta
+    // Ler resposta - usar buffer maior e múltiplas leituras
     const decoder = new TextDecoder();
-    const buffer = new Uint8Array(65536);
-    let response = "";
+    const chunks: Uint8Array[] = [];
+    let totalSize = 0;
     
-    // Ler até ter a resposta completa
+    // Ler todos os dados disponíveis
     let readAttempts = 0;
-    while (readAttempts < 10) {
+    const maxAttempts = 50;
+    
+    while (readAttempts < maxAttempts) {
+      const buffer = new Uint8Array(131072); // 128KB buffer
       const n = await conn.read(buffer);
       if (n === null) break;
-      response += decoder.decode(buffer.subarray(0, n));
+      
+      chunks.push(buffer.subarray(0, n));
+      totalSize += n;
       
       // Verificar se temos a resposta completa
-      if (response.includes("\r\n\r\n")) {
-        const headerEndIndex = response.indexOf("\r\n\r\n");
-        const headersPart = response.substring(0, headerEndIndex);
+      const tempResponse = decoder.decode(concatUint8Arrays(chunks));
+      
+      if (tempResponse.includes("\r\n\r\n")) {
+        const headerEndIndex = tempResponse.indexOf("\r\n\r\n");
+        const headersPart = tempResponse.substring(0, headerEndIndex);
         
         // Verificar Content-Length
         const contentLengthMatch = headersPart.match(/Content-Length:\s*(\d+)/i);
         if (contentLengthMatch) {
           const contentLength = parseInt(contentLengthMatch[1]);
           const bodyStart = headerEndIndex + 4;
-          const currentBodyLength = new TextEncoder().encode(response.substring(bodyStart)).length;
+          const currentBodyLength = new TextEncoder().encode(tempResponse.substring(bodyStart)).length;
           if (currentBodyLength >= contentLength) break;
-        } else if (response.includes("Transfer-Encoding: chunked")) {
+        } else if (headersPart.toLowerCase().includes("transfer-encoding: chunked")) {
           // Para chunked, verificar se termina com 0\r\n\r\n
-          if (response.endsWith("0\r\n\r\n")) break;
-        } else {
-          // Se não tem Content-Length nem chunked, assumir que a resposta está completa após um pequeno delay
-          await new Promise(r => setTimeout(r, 100));
-          const n2 = await conn.read(buffer);
-          if (n2 === null || n2 === 0) break;
-          response += decoder.decode(buffer.subarray(0, n2));
+          if (tempResponse.includes("\r\n0\r\n\r\n")) break;
         }
       }
+      
       readAttempts++;
+      
+      // Pequena pausa para dar tempo de mais dados chegarem
+      if (readAttempts % 5 === 0) {
+        await new Promise(r => setTimeout(r, 50));
+      }
     }
+    
+    const response = decoder.decode(concatUint8Arrays(chunks));
+    console.log(`[inter-mtls] Total bytes lidos: ${totalSize}`);
 
     // Parsear resposta HTTP
     const headerEndIndex = response.indexOf("\r\n\r\n");
