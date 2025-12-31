@@ -388,9 +388,29 @@ Responda APENAS com um JSON array de insights, sem markdown:`;
     try {
       // Clean the response (remove markdown if present)
       let cleanJson = aiContent.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-      generatedInsights = JSON.parse(cleanJson);
+      const parsed = JSON.parse(cleanJson);
+      
+      // CORREÇÃO: Garantir que generatedInsights seja sempre um array
+      if (Array.isArray(parsed)) {
+        generatedInsights = parsed;
+      } else if (parsed && typeof parsed === 'object') {
+        // Se for um objeto, tentar extrair array de propriedades comuns
+        if (Array.isArray(parsed.insights)) {
+          generatedInsights = parsed.insights;
+        } else if (Array.isArray(parsed.data)) {
+          generatedInsights = parsed.data;
+        } else {
+          // Se for um objeto único, colocar em um array
+          generatedInsights = [parsed];
+        }
+      } else {
+        generatedInsights = [];
+      }
+      
+      console.log("[analyze-insights] Parsed insights count:", generatedInsights.length);
     } catch (parseError) {
       console.error("[analyze-insights] Failed to parse AI response:", parseError);
+      console.error("[analyze-insights] Raw content:", aiContent.substring(0, 200));
       generatedInsights = [];
     }
 
