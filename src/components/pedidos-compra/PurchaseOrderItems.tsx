@@ -69,6 +69,50 @@ export function PurchaseOrderItems({ items, onItemsChange, purpose, freightTotal
   const [newProductData, setNewProductData] = useState({ code: '', description: '' });
   const [creatingProduct, setCreatingProduct] = useState(false);
 
+  // Recalcular frete rateado e custo unitário quando freightTotal ou items mudam
+  useEffect(() => {
+    if (items.length === 0 || freightTotal <= 0) return;
+
+    // Calcular total dos itens para rateio proporcional
+    const totalItemsValue = items.reduce((sum, item) => sum + (Number(item.total_value) || 0), 0);
+    
+    // Verificar se precisa atualizar (evitar loop infinito)
+    const needsUpdate = items.some((item, index) => {
+      const itemValue = Number(item.total_value) || 0;
+      const itemQty = Number(item.quantity) || 1;
+      const expectedFreightAllocated = totalItemsValue > 0 
+        ? (itemValue / totalItemsValue) * freightTotal 
+        : freightTotal / items.length;
+      const expectedCost = (Number(item.unit_price) || 0) + (expectedFreightAllocated / itemQty);
+      
+      const currentFreight = Number(item.freight_allocated) || 0;
+      const currentCost = Number(item.calculated_unit_cost) || 0;
+      
+      return Math.abs(currentFreight - expectedFreightAllocated) > 0.01 || 
+             Math.abs(currentCost - expectedCost) > 0.01;
+    });
+
+    if (needsUpdate) {
+      const updatedItems = items.map((item) => {
+        const itemValue = Number(item.total_value) || 0;
+        const itemQty = Number(item.quantity) || 1;
+        const freightAllocated = totalItemsValue > 0 
+          ? (itemValue / totalItemsValue) * freightTotal 
+          : freightTotal / items.length;
+        const freightPerUnit = freightAllocated / itemQty;
+        const calculatedUnitCost = (Number(item.unit_price) || 0) + freightPerUnit;
+
+        return {
+          ...item,
+          freight_allocated: Math.round(freightAllocated * 100) / 100,
+          calculated_unit_cost: Math.round(calculatedUnitCost * 100) / 100,
+        };
+      });
+      
+      onItemsChange(updatedItems);
+    }
+  }, [freightTotal, items.length, items.reduce((sum, i) => sum + i.total_value, 0)]);
+
   const handleCreateProduct = async () => {
     if (!newProductData.code || !newProductData.description) {
       toast.error("Preencha código e descrição");
