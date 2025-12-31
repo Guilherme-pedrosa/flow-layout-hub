@@ -75,7 +75,7 @@ export function CadastrarFornecedorDialog({
             estado: transportador.uf,
             status: "ativo" as const,
             is_active: true,
-            is_fornecedor: false,
+            is_fornecedor: true, // Transportadoras também são fornecedores para poder gerar payables
             is_cliente: false,
             is_colaborador: false,
             is_transportadora: true,

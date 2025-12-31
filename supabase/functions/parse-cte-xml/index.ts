@@ -276,6 +276,8 @@ serve(async (req) => {
     const cteData = parseCTEXml(xmlContent);
     
     console.log('[parse-cte-xml] Parsed CTe data:', {
+      emitente: cteData.emit.razaoSocial,
+      emitenteCnpj: cteData.emit.cnpj,
       remetente: cteData.remetente.razaoSocial,
       destinatario: cteData.destinatario.razaoSocial,
       tomador: cteData.tomador.razaoSocial,
