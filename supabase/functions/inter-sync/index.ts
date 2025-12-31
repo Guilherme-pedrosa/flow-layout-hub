@@ -14,20 +14,42 @@ interface SyncRequest {
   date_to: string;
 }
 
-// Helper function to call the Inter proxy
-async function callInterProxy(
+// Helper function to call the Inter proxy with mTLS
+async function callInterProxyWithMTLS(
   proxyUrl: string,
+  proxySecret: string,
   method: string,
   url: string,
   headers: Record<string, string>,
+  certificate: string,
+  privateKey: string,
+  accountNumber: string,
+  clientId?: string,
+  clientSecret?: string,
+  scope?: string,
   data?: unknown
 ) {
-  console.log(`[inter-sync] Calling proxy: ${method} ${url}`);
+  console.log(`[inter-sync] Calling proxy with mTLS: ${method} ${url}`);
   
   const response = await fetch(proxyUrl, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ method, url, headers, data })
+    headers: { 
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${proxySecret}`
+    },
+    body: JSON.stringify({ 
+      action: "proxy",
+      method, 
+      url, 
+      headers, 
+      data,
+      certificate,
+      privateKey,
+      accountNumber,
+      clientId,
+      clientSecret,
+      scope
+    })
   });
 
   const responseText = await response.text();
@@ -45,70 +67,23 @@ async function callInterProxy(
     throw new Error(`Resposta inválida do proxy: ${responseText.substring(0, 500)}`);
   }
 
-  // Check if the proxy returned an error from Inter API
+  // Check if the proxy returned an error
+  if (result._error) {
+    const errorDetail = result.detail || result.message || result.error || result.title || `HTTP ${result._statusCode}`;
+    console.error(`[inter-sync] Inter API error: ${JSON.stringify(result)}`);
+    throw new Error(`Inter API: ${errorDetail}`);
+  }
+
   if (result.error || result.message || result.title) {
     const errorDetail = result.detail || result.message || result.error || result.title;
     console.error(`[inter-sync] Inter API error: ${JSON.stringify(result)}`);
     throw new Error(`Inter API: ${errorDetail}`);
   }
 
-  if (!response.ok) {
+  if (!response.ok && !result.access_token && !result.transacoes && !Array.isArray(result)) {
     throw new Error(`Erro HTTP ${response.status}: ${JSON.stringify(result)}`);
   }
 
-  return result;
-}
-
-// Get OAuth token via proxy
-async function getOAuthToken(
-  proxyUrl: string,
-  clientId: string,
-  clientSecret: string
-): Promise<string> {
-  console.log("[inter-sync] Obtendo token OAuth via proxy...");
-  
-  const tokenUrl = `${INTER_API_URL}/oauth/v2/token`;
-  const params = new URLSearchParams();
-  params.append("client_id", clientId);
-  params.append("client_secret", clientSecret);
-  params.append("grant_type", "client_credentials");
-  params.append("scope", "extrato.read");
-
-  const result = await callInterProxy(
-    proxyUrl,
-    "POST",
-    tokenUrl,
-    { "Content-Type": "application/x-www-form-urlencoded" },
-    params.toString()
-  );
-
-  return result.access_token;
-}
-
-// Get bank statement via proxy
-async function getExtrato(
-  proxyUrl: string,
-  token: string,
-  accountNumber: string,
-  dateFrom: string,
-  dateTo: string
-): Promise<unknown> {
-  console.log(`[inter-sync] Buscando extrato de ${dateFrom} a ${dateTo}`);
-  
-  const extratoUrl = `${INTER_API_URL}/banking/v2/extrato?dataInicio=${dateFrom}&dataFim=${dateTo}`;
-
-  const result = await callInterProxy(
-    proxyUrl,
-    "GET",
-    extratoUrl,
-    {
-      "Authorization": `Bearer ${token}`,
-      "Content-Type": "application/json",
-      "x-conta-corrente": accountNumber,
-    }
-  );
-
-  console.log(`[inter-sync] Estrutura da resposta:`, JSON.stringify(result).substring(0, 500));
   return result;
 }
 
@@ -125,10 +100,11 @@ serve(async (req) => {
     const { company_id, date_from, date_to }: SyncRequest = await req.json();
     console.log(`[inter-sync] Sincronização: ${company_id}, ${date_from} a ${date_to}`);
 
-    // Get proxy URL
+    // Get proxy URL and secret
     const proxyUrl = Deno.env.get("GCP_PIX_FUNCTION_URL");
-    if (!proxyUrl) {
-      throw new Error("GCP_PIX_FUNCTION_URL não configurada");
+    const proxySecret = Deno.env.get("GCP_PIX_FUNCTION_SECRET");
+    if (!proxyUrl || !proxySecret) {
+      throw new Error("GCP_PIX_FUNCTION_URL ou GCP_PIX_FUNCTION_SECRET não configuradas");
     }
 
     // Fetch Inter credentials
@@ -143,21 +119,73 @@ serve(async (req) => {
       throw new Error("Credenciais do Banco Inter não configuradas");
     }
 
-    // Get OAuth token via proxy
-    const token = await getOAuthToken(
+    // Fetch certificate and private key from storage
+    const { data: certData, error: certError } = await supabase.storage
+      .from("inter-certs")
+      .download(credentials.certificate_file_path);
+    
+    const { data: keyData, error: keyError } = await supabase.storage
+      .from("inter-certs")
+      .download(credentials.private_key_file_path);
+
+    if (certError || keyError || !certData || !keyData) {
+      console.error("[inter-sync] Erro ao carregar certificados:", certError?.message, keyError?.message);
+      throw new Error("Certificado ou chave privada não encontrados no storage");
+    }
+
+    // Convert to base64 for proxy
+    const certText = await certData.text();
+    const keyText = await keyData.text();
+    const certificate = btoa(certText);
+    const privateKey = btoa(keyText);
+
+    console.log(`[inter-sync] Certificados carregados com sucesso`);
+
+    // Get OAuth token via proxy with mTLS
+    const tokenUrl = `${INTER_API_URL}/oauth/v2/token`;
+    const tokenParams = new URLSearchParams();
+    tokenParams.append("client_id", credentials.client_id);
+    tokenParams.append("client_secret", credentials.client_secret);
+    tokenParams.append("grant_type", "client_credentials");
+    tokenParams.append("scope", "extrato.read");
+
+    const tokenResult = await callInterProxyWithMTLS(
       proxyUrl,
+      proxySecret,
+      "POST",
+      tokenUrl,
+      { "Content-Type": "application/x-www-form-urlencoded" },
+      certificate,
+      privateKey,
+      credentials.account_number || "",
       credentials.client_id,
-      credentials.client_secret
+      credentials.client_secret,
+      "extrato.read",
+      tokenParams.toString()
     );
 
-    // Get bank statement via proxy
-    const extratoResult = await getExtrato(
+    const token = tokenResult.access_token;
+    console.log(`[inter-sync] Token OAuth obtido com sucesso`);
+
+    // Get bank statement via proxy with mTLS
+    const extratoUrl = `${INTER_API_URL}/banking/v2/extrato?dataInicio=${date_from}&dataFim=${date_to}`;
+
+    const extratoResult = await callInterProxyWithMTLS(
       proxyUrl,
-      token,
-      credentials.account_number || "",
-      date_from,
-      date_to
+      proxySecret,
+      "GET",
+      extratoUrl,
+      {
+        "Authorization": `Bearer ${token}`,
+        "Content-Type": "application/json",
+        "x-conta-corrente": credentials.account_number || "",
+      },
+      certificate,
+      privateKey,
+      credentials.account_number || ""
     );
+
+    console.log(`[inter-sync] Estrutura da resposta:`, JSON.stringify(extratoResult).substring(0, 500));
 
     // A API do Inter retorna as transações em diferentes formatos
     // Pode ser: { transacoes: [...] } ou diretamente um array
