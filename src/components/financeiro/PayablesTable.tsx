@@ -383,11 +383,12 @@ export function PayablesTable({
               <TableRow
                 key={payable.id}
                 className={cn(
-                  "group transition-colors",
+                  "group transition-colors cursor-pointer hover:bg-muted/50",
                   isSelected && "bg-primary/5"
                 )}
+                onClick={() => onEdit(payable)}
               >
-                <TableCell>
+                <TableCell onClick={(e) => e.stopPropagation()}>
                   <Checkbox
                     checked={isSelected}
                     onCheckedChange={() => onToggleSelect(payable.id)}
@@ -436,13 +437,13 @@ export function PayablesTable({
                     {formatCurrency(payable.amount)}
                   </span>
                 </TableCell>
-                <TableCell>
+                <TableCell onClick={(e) => e.stopPropagation()}>
                   <SituationSelect
                     value={payable.financial_situation_id}
                     onValueChange={(situationId) => handleSituationChange(payable.id, situationId)}
                   />
                 </TableCell>
-                <TableCell>
+                <TableCell onClick={(e) => e.stopPropagation()}>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button
