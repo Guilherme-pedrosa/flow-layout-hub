@@ -149,11 +149,15 @@ export function PayableForm({ open, onOpenChange, payable, onSuccess }: PayableF
   }, [open, payable]);
 
   const fetchSuppliers = async () => {
+    if (!companyId) return;
+    
     // Buscar TODAS as pessoas ativas (não filtrar por is_fornecedor)
+    // Importante: buscar por company_id OU sem company_id (dados legados)
     const { data } = await supabase
       .from("pessoas")
       .select("id, nome_fantasia, razao_social, tipo_pessoa")
       .eq("is_active", true)
+      .or(`company_id.eq.${companyId},company_id.is.null`)
       .order("razao_social");
     setSuppliers(data || []);
   };

@@ -130,10 +130,11 @@ export function usePessoas() {
     queryFn: async () => {
       if (!currentCompany) return [];
       
+      // Buscar pessoas da empresa OU sem company_id (dados legados)
       const { data, error } = await supabase
         .from("pessoas")
         .select("*")
-        .eq("company_id", currentCompany.id)
+        .or(`company_id.eq.${currentCompany.id},company_id.is.null`)
         .order("razao_social", { ascending: true });
 
       if (error) throw error;
@@ -151,7 +152,7 @@ export function usePessoas() {
       const { data, error } = await supabase
         .from("pessoas")
         .select("*")
-        .eq("company_id", currentCompany.id)
+        .or(`company_id.eq.${currentCompany.id},company_id.is.null`)
         .eq("is_cliente", true)
         .order("razao_social", { ascending: true });
 
@@ -169,7 +170,7 @@ export function usePessoas() {
       const { data, error } = await supabase
         .from("pessoas")
         .select("*")
-        .eq("company_id", currentCompany.id)
+        .or(`company_id.eq.${currentCompany.id},company_id.is.null`)
         .eq("is_fornecedor", true)
         .order("razao_social", { ascending: true });
 
@@ -187,7 +188,7 @@ export function usePessoas() {
       const { data, error } = await supabase
         .from("pessoas")
         .select("*")
-        .eq("company_id", currentCompany.id)
+        .or(`company_id.eq.${currentCompany.id},company_id.is.null`)
         .eq("is_colaborador", true)
         .order("razao_social", { ascending: true });
 
@@ -205,7 +206,7 @@ export function usePessoas() {
       const { data, error } = await supabase
         .from("pessoas")
         .select("*")
-        .eq("company_id", currentCompany.id)
+        .or(`company_id.eq.${currentCompany.id},company_id.is.null`)
         .eq("is_transportadora", true)
         .order("razao_social", { ascending: true });
 
@@ -289,7 +290,7 @@ export function usePessoas() {
     const { data, error } = await supabase
       .from("pessoas")
       .select("*")
-      .eq("company_id", currentCompany.id)
+      .or(`company_id.eq.${currentCompany.id},company_id.is.null`)
       .eq("cpf_cnpj", cpf_cnpj)
       .maybeSingle();
 
