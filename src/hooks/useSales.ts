@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Json } from "@/integrations/supabase/types";
+import { useCompany } from "@/contexts/CompanyContext";
 
 export type StockBehavior = 'none' | 'reserve' | 'move';
 export type FinancialBehavior = 'none' | 'forecast' | 'effective';
@@ -108,32 +109,39 @@ export interface Sale {
 
 export function useSaleStatuses() {
   const queryClient = useQueryClient();
+  const { currentCompany } = useCompany();
 
   const statusesQuery = useQuery({
-    queryKey: ["sale_statuses"],
+    queryKey: ["sale_statuses", currentCompany?.id],
     queryFn: async () => {
+      if (!currentCompany) return [];
+      
       const { data, error } = await supabase
         .from("sale_statuses")
         .select("*")
+        .eq("company_id", currentCompany.id)
         .order("display_order", { ascending: true });
 
       if (error) throw error;
       return data as SaleStatus[];
     },
+    enabled: !!currentCompany,
   });
 
   const createStatus = useMutation({
     mutationFn: async (status: Omit<SaleStatus, 'id' | 'created_at' | 'updated_at'>) => {
+      if (!currentCompany) throw new Error("Nenhuma empresa selecionada");
+      
       if (status.is_default) {
         await supabase
           .from("sale_statuses")
           .update({ is_default: false })
-          .eq("company_id", status.company_id);
+          .eq("company_id", currentCompany.id);
       }
 
       const { data, error } = await supabase
         .from("sale_statuses")
-        .insert(status)
+        .insert({ ...status, company_id: currentCompany.id })
         .select()
         .single();
 
@@ -196,10 +204,13 @@ export function useSaleStatuses() {
 
 export function useSales() {
   const queryClient = useQueryClient();
+  const { currentCompany } = useCompany();
 
   const salesQuery = useQuery({
-    queryKey: ["sales"],
+    queryKey: ["sales", currentCompany?.id],
     queryFn: async () => {
+      if (!currentCompany) return [];
+      
       const { data, error } = await supabase
         .from("sales")
         .select(`
@@ -207,11 +218,13 @@ export function useSales() {
           client:clientes(id, razao_social, nome_fantasia, cpf_cnpj),
           status:sale_statuses(*)
         `)
+        .eq("company_id", currentCompany.id)
         .order("sale_number", { ascending: false });
 
       if (error) throw error;
       return data as unknown as Sale[];
     },
+    enabled: !!currentCompany,
   });
 
   const createSale = useMutation({
@@ -228,9 +241,11 @@ export function useSales() {
       installments?: { installment_number: number; due_date: string; amount: number; payment_method: string }[];
       attachments?: { file_name: string; file_url: string; file_size?: number }[];
     }) => {
+      if (!currentCompany) throw new Error("Nenhuma empresa selecionada");
+      
       const { data: saleData, error: saleError } = await supabase
         .from("sales")
-        .insert(sale as any)
+        .insert({ ...sale, company_id: currentCompany.id } as any)
         .select()
         .single();
 

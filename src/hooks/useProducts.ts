@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Tables, TablesInsert, TablesUpdate } from "@/integrations/supabase/types";
+import { useCompany } from "@/contexts/CompanyContext";
 
 export type Product = Tables<"products">;
 export type ProductInsert = TablesInsert<"products">;
@@ -9,25 +10,33 @@ export type ProductUpdate = TablesUpdate<"products">;
 
 export function useProducts() {
   const queryClient = useQueryClient();
+  const { currentCompany } = useCompany();
 
   const productsQuery = useQuery({
-    queryKey: ["products"],
+    queryKey: ["products", currentCompany?.id],
     queryFn: async () => {
+      if (!currentCompany) return [];
+      
       const { data, error } = await supabase
         .from("products")
         .select("*")
+        .eq("company_id", currentCompany.id)
         .order("description", { ascending: true });
 
       if (error) throw error;
       return data as Product[];
     },
+    enabled: !!currentCompany,
   });
 
   // Buscar próximo código sequencial (5 dígitos)
   const getNextCode = async (): Promise<string> => {
+    if (!currentCompany) return "00001";
+    
     const { data, error } = await supabase
       .from("products")
       .select("code")
+      .eq("company_id", currentCompany.id)
       .order("code", { ascending: false })
       .limit(100);
 
@@ -62,9 +71,11 @@ export function useProducts() {
 
   const createProduct = useMutation({
     mutationFn: async (product: ProductInsert) => {
+      if (!currentCompany) throw new Error("Nenhuma empresa selecionada");
+      
       const { data, error } = await supabase
         .from("products")
-        .insert(product)
+        .insert({ ...product, company_id: currentCompany.id })
         .select()
         .single();
 

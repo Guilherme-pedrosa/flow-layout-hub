@@ -2,6 +2,7 @@ import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Tables, TablesInsert, TablesUpdate } from "@/integrations/supabase/types";
+import { useCompany } from "@/contexts/CompanyContext";
 
 export type Cliente = Tables<"clientes">;
 export type ClienteContato = Tables<"cliente_contatos">;
@@ -12,13 +13,17 @@ export type ClienteContatoInsert = TablesInsert<"cliente_contatos">;
 export function useClientes() {
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
+  const { currentCompany } = useCompany();
 
   const fetchClientes = async () => {
+    if (!currentCompany) return [];
+    
     setLoading(true);
     try {
       const { data, error } = await supabase
         .from("clientes")
         .select("*")
+        .eq("company_id", currentCompany.id)
         .order("razao_social", { ascending: true });
 
       if (error) throw error;
@@ -79,11 +84,20 @@ export function useClientes() {
   };
 
   const saveCliente = async (cliente: ClienteInsert, contatos: ClienteContatoInsert[]) => {
+    if (!currentCompany) {
+      toast({
+        title: "Erro",
+        description: "Nenhuma empresa selecionada",
+        variant: "destructive",
+      });
+      return null;
+    }
+
     setLoading(true);
     try {
       const { data, error } = await supabase
         .from("clientes")
-        .insert(cliente)
+        .insert({ ...cliente, company_id: currentCompany.id })
         .select()
         .single();
 
@@ -94,6 +108,7 @@ export function useClientes() {
         const contatosComClienteId = contatos.map(c => ({
           ...c,
           cliente_id: data.id,
+          company_id: currentCompany.id,
         }));
 
         const { error: contatosError } = await supabase
@@ -122,6 +137,8 @@ export function useClientes() {
   };
 
   const updateCliente = async (id: string, cliente: ClienteUpdate, contatos: ClienteContatoInsert[]) => {
+    if (!currentCompany) return null;
+
     setLoading(true);
     try {
       // Buscar dados atuais para comparar
@@ -177,6 +194,7 @@ export function useClientes() {
             alteracoes.map(alt => ({
               ...alt,
               cliente_id: id,
+              company_id: currentCompany.id,
               usuario_id: null, // TODO: pegar do usuário logado quando tiver auth
             }))
           );
@@ -195,6 +213,7 @@ export function useClientes() {
         const contatosComClienteId = contatos.map(c => ({
           ...c,
           cliente_id: id,
+          company_id: currentCompany.id,
         }));
 
         const { error: contatosError } = await supabase
@@ -223,13 +242,14 @@ export function useClientes() {
   };
 
   const checkDuplicateCpfCnpj = async (cpfCnpj: string, excludeId?: string) => {
-    if (!cpfCnpj) return false;
+    if (!cpfCnpj || !currentCompany) return false;
 
     try {
       let query = supabase
         .from("clientes")
         .select("id")
-        .eq("cpf_cnpj", cpfCnpj);
+        .eq("cpf_cnpj", cpfCnpj)
+        .eq("company_id", currentCompany.id);
 
       if (excludeId) {
         query = query.neq("id", excludeId);

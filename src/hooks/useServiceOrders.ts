@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Json } from "@/integrations/supabase/types";
+import { useCompany } from "@/contexts/CompanyContext";
 
 export type StockBehavior = 'none' | 'reserve';
 export type FinancialBehavior = 'none' | 'forecast' | 'effective';
@@ -139,18 +140,23 @@ export interface ServiceOrder {
 
 export function useServiceOrderStatuses() {
   const queryClient = useQueryClient();
+  const { currentCompany } = useCompany();
 
   const statusesQuery = useQuery({
-    queryKey: ["service_order_statuses"],
+    queryKey: ["service_order_statuses", currentCompany?.id],
     queryFn: async () => {
+      if (!currentCompany) return [];
+      
       const { data, error } = await supabase
         .from("service_order_statuses")
         .select("*")
+        .eq("company_id", currentCompany.id)
         .order("display_order", { ascending: true });
 
       if (error) throw error;
       return data as ServiceOrderStatus[];
     },
+    enabled: !!currentCompany,
   });
 
   const createStatus = useMutation({

@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { useCompany } from "@/contexts/CompanyContext";
 
 export interface Service {
   id: string;
@@ -36,25 +37,32 @@ export interface PriceTableItem {
 
 export function useServices() {
   const queryClient = useQueryClient();
+  const { currentCompany } = useCompany();
 
   const servicesQuery = useQuery({
-    queryKey: ["services"],
+    queryKey: ["services", currentCompany?.id],
     queryFn: async () => {
+      if (!currentCompany) return [];
+      
       const { data, error } = await supabase
         .from("services")
         .select("*")
+        .eq("company_id", currentCompany.id)
         .order("description", { ascending: true });
 
       if (error) throw error;
       return data as Service[];
     },
+    enabled: !!currentCompany,
   });
 
   const createService = useMutation({
     mutationFn: async (service: Omit<Service, 'id' | 'created_at' | 'updated_at'>) => {
+      if (!currentCompany) throw new Error("Nenhuma empresa selecionada");
+      
       const { data, error } = await supabase
         .from("services")
-        .insert(service)
+        .insert({ ...service, company_id: currentCompany.id })
         .select()
         .single();
 
@@ -115,18 +123,23 @@ export function useServices() {
 
 export function usePriceTables() {
   const queryClient = useQueryClient();
+  const { currentCompany } = useCompany();
 
   const priceTablesQuery = useQuery({
-    queryKey: ["price_tables"],
+    queryKey: ["price_tables", currentCompany?.id],
     queryFn: async () => {
+      if (!currentCompany) return [];
+      
       const { data, error } = await supabase
         .from("price_tables")
         .select("*")
+        .eq("company_id", currentCompany.id)
         .order("name", { ascending: true });
 
       if (error) throw error;
       return data as PriceTable[];
     },
+    enabled: !!currentCompany,
   });
 
   return {

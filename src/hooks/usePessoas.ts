@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Database } from "@/integrations/supabase/types";
+import { useCompany } from "@/contexts/CompanyContext";
 
 type TipoPessoa = Database["public"]["Enums"]["tipo_pessoa"];
 type RegimeTributario = Database["public"]["Enums"]["regime_tributario"];
@@ -121,84 +122,107 @@ export interface PessoaContato {
 
 export function usePessoas() {
   const queryClient = useQueryClient();
+  const { currentCompany } = useCompany();
 
   // Query all pessoas
   const pessoasQuery = useQuery({
-    queryKey: ["pessoas"],
+    queryKey: ["pessoas", currentCompany?.id],
     queryFn: async () => {
+      if (!currentCompany) return [];
+      
       const { data, error } = await supabase
         .from("pessoas")
         .select("*")
+        .eq("company_id", currentCompany.id)
         .order("razao_social", { ascending: true });
 
       if (error) throw error;
       return data as Pessoa[];
     },
+    enabled: !!currentCompany,
   });
 
   // Filtered queries by role
   const clientesQuery = useQuery({
-    queryKey: ["pessoas", "clientes"],
+    queryKey: ["pessoas", "clientes", currentCompany?.id],
     queryFn: async () => {
+      if (!currentCompany) return [];
+      
       const { data, error } = await supabase
         .from("pessoas")
         .select("*")
+        .eq("company_id", currentCompany.id)
         .eq("is_cliente", true)
         .order("razao_social", { ascending: true });
 
       if (error) throw error;
       return data as Pessoa[];
     },
+    enabled: !!currentCompany,
   });
 
   const fornecedoresQuery = useQuery({
-    queryKey: ["pessoas", "fornecedores"],
+    queryKey: ["pessoas", "fornecedores", currentCompany?.id],
     queryFn: async () => {
+      if (!currentCompany) return [];
+      
       const { data, error } = await supabase
         .from("pessoas")
         .select("*")
+        .eq("company_id", currentCompany.id)
         .eq("is_fornecedor", true)
         .order("razao_social", { ascending: true });
 
       if (error) throw error;
       return data as Pessoa[];
     },
+    enabled: !!currentCompany,
   });
 
   const colaboradoresQuery = useQuery({
-    queryKey: ["pessoas", "colaboradores"],
+    queryKey: ["pessoas", "colaboradores", currentCompany?.id],
     queryFn: async () => {
+      if (!currentCompany) return [];
+      
       const { data, error } = await supabase
         .from("pessoas")
         .select("*")
+        .eq("company_id", currentCompany.id)
         .eq("is_colaborador", true)
         .order("razao_social", { ascending: true });
 
       if (error) throw error;
       return data as Pessoa[];
     },
+    enabled: !!currentCompany,
   });
 
   const transportadorasQuery = useQuery({
-    queryKey: ["pessoas", "transportadoras"],
+    queryKey: ["pessoas", "transportadoras", currentCompany?.id],
     queryFn: async () => {
+      if (!currentCompany) return [];
+      
       const { data, error } = await supabase
         .from("pessoas")
         .select("*")
+        .eq("company_id", currentCompany.id)
         .eq("is_transportadora", true)
         .order("razao_social", { ascending: true });
 
       if (error) throw error;
       return data as Pessoa[];
     },
+    enabled: !!currentCompany,
   });
 
   // Create pessoa
   const createPessoa = useMutation({
     mutationFn: async (pessoa: PessoaInsert) => {
+      if (!currentCompany) throw new Error("Nenhuma empresa selecionada");
+      
       const { data, error } = await supabase
         .from("pessoas")
-        .insert(pessoa)
+        .insert({ ...pessoa, company_id: currentCompany.id })
         .select()
         .single();
 
@@ -260,9 +284,12 @@ export function usePessoas() {
 
   // Get pessoa by CPF/CNPJ
   const getPessoaByCpfCnpj = async (cpf_cnpj: string) => {
+    if (!currentCompany) return null;
+    
     const { data, error } = await supabase
       .from("pessoas")
       .select("*")
+      .eq("company_id", currentCompany.id)
       .eq("cpf_cnpj", cpf_cnpj)
       .maybeSingle();
 
