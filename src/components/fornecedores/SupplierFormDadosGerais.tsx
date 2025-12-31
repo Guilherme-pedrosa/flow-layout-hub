@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Loader2, Search } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { consultarCnpj } from "@/lib/api/cnpj";
@@ -145,6 +146,48 @@ export function SupplierFormDadosGerais({ form }: SupplierFormDadosGeraisProps) 
               {errors.email && (
                 <span className="text-sm text-destructive">{String(errors.email.message)}</span>
               )}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">Tipo de Cadastro</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex flex-wrap gap-6">
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="is_cliente"
+                checked={watch("is_cliente") || false}
+                onCheckedChange={(checked) => setValue("is_cliente", checked as boolean)}
+              />
+              <Label htmlFor="is_cliente" className="cursor-pointer">É Cliente</Label>
+            </div>
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="is_fornecedor"
+                checked={watch("is_fornecedor") ?? true}
+                onCheckedChange={(checked) => setValue("is_fornecedor", checked as boolean)}
+              />
+              <Label htmlFor="is_fornecedor" className="cursor-pointer">É Fornecedor</Label>
+            </div>
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="is_transportadora"
+                checked={watch("is_transportadora") || false}
+                onCheckedChange={(checked) => setValue("is_transportadora", checked as boolean)}
+              />
+              <Label htmlFor="is_transportadora" className="cursor-pointer">É Transportadora</Label>
+            </div>
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="is_colaborador"
+                checked={watch("is_colaborador") || false}
+                onCheckedChange={(checked) => setValue("is_colaborador", checked as boolean)}
+              />
+              <Label htmlFor="is_colaborador" className="cursor-pointer">É Colaborador</Label>
             </div>
           </div>
         </CardContent>

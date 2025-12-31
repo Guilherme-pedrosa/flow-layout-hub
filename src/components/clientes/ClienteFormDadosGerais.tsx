@@ -4,11 +4,13 @@ import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Search, Loader2, AlertTriangle } from "lucide-react";
 import { formatCpfCnpj, formatTelefone } from "@/lib/formatters";
 import { consultarCnpj } from "@/lib/api/cnpj";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 interface ClienteFormDadosGeraisProps {
   formData: any;
@@ -257,6 +259,49 @@ export function ClienteFormDadosGerais({ formData, setFormData, duplicateWarning
           />
         </div>
       </div>
+
+      {/* Tipo de Cadastro */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base font-medium">Tipo de Cadastro</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-wrap gap-6">
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="is_cliente"
+                checked={formData.is_cliente ?? true}
+                onCheckedChange={(checked) => handleChange('is_cliente', checked as boolean)}
+              />
+              <Label htmlFor="is_cliente" className="cursor-pointer">É Cliente</Label>
+            </div>
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="is_fornecedor"
+                checked={formData.is_fornecedor || false}
+                onCheckedChange={(checked) => handleChange('is_fornecedor', checked as boolean)}
+              />
+              <Label htmlFor="is_fornecedor" className="cursor-pointer">É Fornecedor</Label>
+            </div>
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="is_transportadora"
+                checked={formData.is_transportadora || false}
+                onCheckedChange={(checked) => handleChange('is_transportadora', checked as boolean)}
+              />
+              <Label htmlFor="is_transportadora" className="cursor-pointer">É Transportadora</Label>
+            </div>
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="is_colaborador"
+                checked={formData.is_colaborador || false}
+                onCheckedChange={(checked) => handleChange('is_colaborador', checked as boolean)}
+              />
+              <Label htmlFor="is_colaborador" className="cursor-pointer">É Colaborador</Label>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }
