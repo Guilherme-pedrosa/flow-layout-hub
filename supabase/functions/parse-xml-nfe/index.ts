@@ -292,6 +292,44 @@ function parseNFEXml(xmlContent: string): NFEData {
     }
   }
   
+  // Fallback: Extract parcelas from infCpl (observações complementares) using regex
+  if (parcelas.length === 0) {
+    const infAdic = infNFe.infAdic || {};
+    const infCpl = safeGet(infAdic, 'infCpl');
+    
+    if (infCpl) {
+      const regex = /PARC\.?(\w+)\.?\s*VENC?T?O?\s*(\d{2}\/\d{2}\/\d{2,4})\s*R\$\s*([\d.,]+)/gi;
+      let match: RegExpExecArray | null;
+      
+      while ((match = regex.exec(infCpl)) !== null) {
+        const numeroParcela = match[1];
+        const dataRaw = match[2];
+        const valorRaw = match[3];
+        
+        // Convert date from DD/MM/YY or DD/MM/YYYY to YYYY-MM-DD
+        const dateParts = dataRaw.split('/');
+        let year = dateParts[2];
+        if (year.length === 2) {
+          year = parseInt(year) > 50 ? '19' + year : '20' + year;
+        }
+        const dataVencimento = `${year}-${dateParts[1].padStart(2, '0')}-${dateParts[0].padStart(2, '0')}`;
+        
+        // Convert value: remove dots (thousands) and replace comma with dot (decimal)
+        const valor = parseFloat(valorRaw.replace(/\./g, '').replace(',', '.')) || 0;
+        
+        parcelas.push({
+          numero: numeroParcela,
+          dataVencimento,
+          valor,
+        });
+      }
+      
+      if (parcelas.length > 0) {
+        console.log(`[parse-xml-nfe] Extracted ${parcelas.length} parcelas from infCpl using regex fallback`);
+      }
+    }
+  }
+  
   // Extract forma de pagamento
   const detPagFirst = ensureArray(pag.detPag)[0] as Record<string, unknown> | undefined;
   const tPag = safeGet(detPagFirst, 'tPag');
