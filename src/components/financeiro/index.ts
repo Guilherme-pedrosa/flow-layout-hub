@@ -29,3 +29,6 @@ export { FinancialAIChat } from './FinancialAIChat';
 export { FinancialAIBanner } from './FinancialAIBanner';
 export { AIRiskBadge, calculateRisk, calculatePayerQuality } from './AIRiskBadge';
 export { ReconciliationPanel } from './ReconciliationPanel';
+export { ReceivablesPage } from './ReceivablesPage';
+export { ReceivablesStatusCards } from './ReceivablesStatusCards';
+export { ReceivablesFilters } from './ReceivablesFilters';
