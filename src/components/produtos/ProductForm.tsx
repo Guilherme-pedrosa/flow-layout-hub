@@ -48,6 +48,9 @@ interface ExtraField {
 }
 
 export interface ProductFormData {
+  // ID para edição/auditoria
+  id?: string;
+  
   // Dados
   code: string;
   description: string;
@@ -188,6 +191,7 @@ export function ProductForm({ initialData, onSubmit, onCancel, isLoading }: Prod
       if (!formData.description) return;
       
       const result = await auditProduct({
+        product_id: formData.id, // Passar o ID para buscar histórico de compras
         code: formData.code,
         description: formData.description,
         barcode: formData.barcode || undefined,
@@ -203,7 +207,7 @@ export function ProductForm({ initialData, onSubmit, onCancel, isLoading }: Prod
     
     const timeout = setTimeout(runAudit, 500);
     return () => clearTimeout(timeout);
-  }, [formData.code, formData.description, formData.barcode, formData.ncm, formData.purchase_price, formData.min_stock, formData.max_stock]);
+  }, [formData.id, formData.code, formData.description, formData.barcode, formData.ncm, formData.purchase_price, formData.min_stock, formData.max_stock]);
 
   const handleChange = (field: string, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));

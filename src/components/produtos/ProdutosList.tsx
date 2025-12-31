@@ -58,6 +58,7 @@ export function ProdutosList() {
     if (!product) return undefined;
     
     return {
+      id: product.id, // Incluir o ID para auditoria
       code: product.code,
       description: product.description,
       barcode: product.barcode || '',

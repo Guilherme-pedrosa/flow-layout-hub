@@ -198,7 +198,7 @@ export function useAiAuditora() {
     return { valid: validations.filter(v => v.type === 'error').length === 0, validations, score, riskLevel };
   }, []);
 
-  const auditProduct = useCallback(async (data: ProductAuditData): Promise<AuditResult> => {
+  const auditProduct = useCallback(async (data: ProductAuditData & { product_id?: string }): Promise<AuditResult> => {
     setLoading(true);
     const validations: AuditValidation[] = [];
 
@@ -251,6 +251,100 @@ export function useAiAuditora() {
         });
       }
 
+      // 6. CRÍTICO: Verificar histórico de compras vs custo cadastrado
+      if (data.product_id && companyId) {
+        // Buscar últimas compras do produto
+        const { data: purchaseItems } = await supabase
+          .from('purchase_order_items')
+          .select(`
+            final_unit_cost,
+            unit_price,
+            freight_allocated,
+            created_at,
+            purchase_order:purchase_orders!inner(
+              id,
+              nfe_number,
+              invoice_date,
+              supplier_name,
+              receipt_status
+            )
+          `)
+          .eq('product_id', data.product_id)
+          .eq('company_id', companyId)
+          .order('created_at', { ascending: false })
+          .limit(5);
+
+        if (purchaseItems && purchaseItems.length > 0) {
+          // Pegar o custo mais recente da última compra
+          const lastPurchase = purchaseItems[0];
+          const lastPurchaseCost = lastPurchase.final_unit_cost || 
+            (lastPurchase.unit_price + (lastPurchase.freight_allocated || 0) / 
+              ((lastPurchase as any).quantity || 1));
+          
+          // Comparar com o custo cadastrado
+          if (lastPurchaseCost > 0 && data.purchase_price > 0) {
+            const costDifference = Math.abs(lastPurchaseCost - data.purchase_price);
+            const costDifferencePercent = (costDifference / lastPurchaseCost) * 100;
+            
+            // Se a diferença for maior que 5%, alertar
+            if (costDifferencePercent > 5) {
+              const purchaseOrder = lastPurchase.purchase_order as any;
+              const nfeInfo = purchaseOrder?.nfe_number ? ` (NF-e ${purchaseOrder.nfe_number})` : '';
+              
+              if (data.purchase_price < lastPurchaseCost) {
+                // Custo cadastrado é MENOR que a última compra - CRÍTICO
+                validations.push({
+                  field: 'purchase_price',
+                  type: 'error',
+                  message: `Custo cadastrado R$ ${data.purchase_price.toFixed(2)} está ${costDifferencePercent.toFixed(1)}% ABAIXO da última compra R$ ${lastPurchaseCost.toFixed(2)}${nfeInfo}`,
+                  suggestion: `Última compra de ${purchaseOrder?.supplier_name || 'fornecedor'} em ${new Date(lastPurchase.created_at).toLocaleDateString('pt-BR')}. Custo deveria ser atualizado para R$ ${lastPurchaseCost.toFixed(2)}`,
+                });
+              } else {
+                // Custo cadastrado é MAIOR que a última compra - warning
+                validations.push({
+                  field: 'purchase_price',
+                  type: 'warning',
+                  message: `Custo cadastrado R$ ${data.purchase_price.toFixed(2)} está ${costDifferencePercent.toFixed(1)}% ACIMA da última compra R$ ${lastPurchaseCost.toFixed(2)}${nfeInfo}`,
+                  suggestion: `Verifique se houve aumento de preço ou se o custo cadastrado está incorreto`,
+                });
+              }
+            }
+          }
+
+          // Verificar se há múltiplas compras com custos muito diferentes
+          if (purchaseItems.length >= 2) {
+            const costs = purchaseItems
+              .map(item => item.final_unit_cost || item.unit_price)
+              .filter(c => c > 0);
+            
+            if (costs.length >= 2) {
+              const maxCost = Math.max(...costs);
+              const minCost = Math.min(...costs);
+              const variance = ((maxCost - minCost) / minCost) * 100;
+              
+              if (variance > 20) {
+                validations.push({
+                  field: 'purchase_price',
+                  type: 'info',
+                  message: `Variação de ${variance.toFixed(1)}% nos custos das últimas ${purchaseItems.length} compras (R$ ${minCost.toFixed(2)} a R$ ${maxCost.toFixed(2)})`,
+                  suggestion: 'Considere negociar melhor com fornecedores ou padronizar as compras',
+                });
+              }
+            }
+          }
+        } else {
+          // Produto sem histórico de compras
+          if (data.purchase_price === 0) {
+            validations.push({
+              field: 'purchase_price',
+              type: 'warning',
+              message: 'Produto sem custo de compra definido e sem histórico de compras',
+              suggestion: 'Defina o custo de compra ou importe uma NF-e para atualizar automaticamente',
+            });
+          }
+        }
+      }
+
       const { score, riskLevel } = calculateRisk(validations);
       return { valid: validations.filter(v => v.type === 'error').length === 0, validations, score, riskLevel };
     } catch (error) {
@@ -259,7 +353,7 @@ export function useAiAuditora() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [companyId]);
 
   return {
     loading,
