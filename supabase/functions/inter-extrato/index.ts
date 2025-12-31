@@ -112,11 +112,12 @@ serve(async (req) => {
       throw new Error("Credenciais Inter não encontradas ou inativas");
     }
 
-    const PROXY_URL = Deno.env.get("INTER_PROXY_URL");
-    const PROXY_SECRET = Deno.env.get("INTER_PROXY_SECRET");
+    // Usar GCP Pix Function como proxy mTLS
+    const PROXY_URL = Deno.env.get("GCP_PIX_FUNCTION_URL");
+    const PROXY_SECRET = Deno.env.get("GCP_PIX_FUNCTION_SECRET");
 
     if (!PROXY_URL || !PROXY_SECRET) {
-      throw new Error("Configuração do proxy não encontrada");
+      throw new Error("Configuração do proxy GCP não encontrada. Verifique GCP_PIX_FUNCTION_URL e GCP_PIX_FUNCTION_SECRET");
     }
 
     // Obter token OAuth
