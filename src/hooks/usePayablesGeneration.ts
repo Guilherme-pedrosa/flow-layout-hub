@@ -71,6 +71,7 @@ export function usePayablesGeneration() {
       
       if (parcelas.length > 0) {
         // Criar uma conta a pagar para cada parcela
+        // Notas importadas via XML SEMPRE geram contas reais (não previsões)
         const payables: PayableInsert[] = parcelas.map((parcela, index) => ({
           company_id: currentCompany.id,
           supplier_id: supplierId,
@@ -82,7 +83,7 @@ export function usePayablesGeneration() {
           description: `NF-e ${nfeData.nota.numero} - Parcela ${parcela.numero || index + 1}`,
           chart_account_id: chartAccountId || undefined,
           cost_center_id: costCenterId || undefined,
-          is_forecast: skipForecasts ? false : true,
+          is_forecast: false, // Notas XML sempre geram contas reais, não previsões
           recipient_name: nfeData.fornecedor.razaoSocial,
           recipient_document: nfeData.fornecedor.cnpj,
         }));
@@ -101,6 +102,7 @@ export function usePayablesGeneration() {
         // Se não há parcelas, criar uma única conta com vencimento padrão (30 dias)
         const dueDate = format(addDays(new Date(nfeData.nota.dataEmissao || new Date()), 30), 'yyyy-MM-dd');
 
+        // Notas importadas via XML SEMPRE geram contas reais (não previsões)
         const { error } = await supabase
           .from("payables")
           .insert({
@@ -114,7 +116,7 @@ export function usePayablesGeneration() {
             description: `NF-e ${nfeData.nota.numero} - ${nfeData.fornecedor.razaoSocial}`,
             chart_account_id: chartAccountId || undefined,
             cost_center_id: costCenterId || undefined,
-            is_forecast: skipForecasts ? false : true,
+            is_forecast: false, // Notas XML sempre geram contas reais, não previsões
             recipient_name: nfeData.fornecedor.razaoSocial,
             recipient_document: nfeData.fornecedor.cnpj,
           });
@@ -140,6 +142,7 @@ export function usePayablesGeneration() {
 
         // Se temos um carrierId (transportadora cadastrada), usar
         // Senão, criar mesmo assim com os dados disponíveis
+        // Notas importadas via XML SEMPRE geram contas reais (não previsões)
         const carrierPayable: PayableInsert = {
           company_id: currentCompany.id,
           supplier_id: carrierId || supplierId, // Se não tem carrierId, vincula ao fornecedor da NF-e
@@ -151,7 +154,7 @@ export function usePayablesGeneration() {
           description: `CT-e ${cteData.numero} - Frete ${cteData.modalidade || ''}`,
           chart_account_id: chartAccountId || undefined,
           cost_center_id: costCenterId || undefined,
-          is_forecast: skipForecasts ? false : true,
+          is_forecast: false, // Notas XML sempre geram contas reais, não previsões
           recipient_name: payerName,
           recipient_document: payerDocument,
         };
