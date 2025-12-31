@@ -27,6 +27,12 @@ export function ImportarXMLUpload({ isProcessing, onFilesUpload, processedFiles 
       const file = files[i];
       const content = await file.text();
       
+      // Validar se o conteúdo não está vazio
+      if (!content || content.trim().length === 0) {
+        console.error(`Arquivo ${file.name} está vazio ou não pôde ser lido`);
+        continue;
+      }
+      
       // Identificar se é NF-e ou CT-e baseado no conteúdo
       const isNFe = content.includes('<nfeProc') || content.includes('<NFe');
       const isCTe = content.includes('<cteProc') || content.includes('<CTe');
