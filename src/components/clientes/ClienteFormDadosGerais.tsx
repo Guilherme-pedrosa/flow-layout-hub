@@ -148,7 +148,7 @@ export function ClienteFormDadosGerais({ formData, setFormData, duplicateWarning
       )}
 
       {/* Razão Social / Nome */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className={`grid grid-cols-1 ${formData.tipo_pessoa === 'PJ' ? 'md:grid-cols-2' : ''} gap-4`}>
         <div className="space-y-2">
           <Label htmlFor="razao_social">{formData.tipo_pessoa === 'PJ' ? 'Razão Social' : 'Nome Completo'}</Label>
           <Input
@@ -159,15 +159,17 @@ export function ClienteFormDadosGerais({ formData, setFormData, duplicateWarning
           />
         </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="nome_fantasia">Nome Fantasia</Label>
-          <Input
-            id="nome_fantasia"
-            value={formData.nome_fantasia || ''}
-            onChange={(e) => handleChange('nome_fantasia', e.target.value)}
-            placeholder="Nome fantasia"
-          />
-        </div>
+        {formData.tipo_pessoa === 'PJ' && (
+          <div className="space-y-2">
+            <Label htmlFor="nome_fantasia">Nome Fantasia</Label>
+            <Input
+              id="nome_fantasia"
+              value={formData.nome_fantasia || ''}
+              onChange={(e) => handleChange('nome_fantasia', e.target.value)}
+              placeholder="Nome fantasia"
+            />
+          </div>
+        )}
       </div>
 
       {/* Dados adicionais PJ */}
