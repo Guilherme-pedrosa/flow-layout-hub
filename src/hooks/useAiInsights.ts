@@ -79,49 +79,59 @@ export function useAiInsights(category?: string) {
 
   useEffect(() => {
     fetchInsights();
+  }, [fetchInsights]);
 
-    // Subscribe to realtime updates - use unique channel name per category
-    if (companyId) {
-      const channelName = `ai_insights_${companyId}${category ? `_${category}` : ''}`;
-      const channel = supabase
-        .channel(channelName)
-        .on(
-          'postgres_changes',
-          {
-            event: 'INSERT',
-            schema: 'public',
-            table: 'ai_insights',
-            filter: `company_id=eq.${companyId}`,
-          },
-          (payload) => {
-            console.log('[useAiInsights] Realtime INSERT detected:', payload);
-            // If we have a category filter, only refetch if the new insight matches
-            if (!category || (payload.new as any)?.category === category) {
-              fetchInsights();
-            }
-          }
-        )
-        .on(
-          'postgres_changes',
-          {
-            event: 'UPDATE',
-            schema: 'public',
-            table: 'ai_insights',
-            filter: `company_id=eq.${companyId}`,
-          },
-          () => {
+  // Separate effect for realtime subscription to avoid reconnection loops
+  useEffect(() => {
+    if (!companyId) return;
+
+    const channelName = `ai_insights_${companyId}${category ? `_${category}` : ''}_${Date.now()}`;
+    let isSubscribed = true;
+    
+    const channel = supabase
+      .channel(channelName)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'ai_insights',
+          filter: `company_id=eq.${companyId}`,
+        },
+        (payload) => {
+          if (!isSubscribed) return;
+          console.log('[useAiInsights] Realtime INSERT detected:', payload);
+          if (!category || (payload.new as any)?.category === category) {
             fetchInsights();
           }
-        )
-        .subscribe((status) => {
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'ai_insights',
+          filter: `company_id=eq.${companyId}`,
+        },
+        () => {
+          if (!isSubscribed) return;
+          fetchInsights();
+        }
+      )
+      .subscribe((status) => {
+        if (status === 'CHANNEL_ERROR') {
+          console.warn('[useAiInsights] Realtime channel error - will retry');
+        } else {
           console.log('[useAiInsights] Realtime subscription status:', status);
-        });
+        }
+      });
 
-      return () => {
-        supabase.removeChannel(channel);
-      };
-    }
-  }, [companyId, category, fetchInsights]);
+    return () => {
+      isSubscribed = false;
+      supabase.removeChannel(channel);
+    };
+  }, [companyId, category]);
 
   const markAsRead = useCallback(async (insightId: string) => {
     try {
