@@ -5563,7 +5563,7 @@ export type Database = {
       users: {
         Row: {
           auth_id: string | null
-          company_id: string
+          company_id: string | null
           created_at: string
           email: string
           id: string
@@ -5575,7 +5575,7 @@ export type Database = {
         }
         Insert: {
           auth_id?: string | null
-          company_id: string
+          company_id?: string | null
           created_at?: string
           email: string
           id?: string
@@ -5587,7 +5587,7 @@ export type Database = {
         }
         Update: {
           auth_id?: string | null
-          company_id?: string
+          company_id?: string | null
           created_at?: string
           email?: string
           id?: string
