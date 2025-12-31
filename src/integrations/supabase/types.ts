@@ -5612,6 +5612,40 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      ai_get_clientes_analysis: {
+        Args: { p_company_id: string }
+        Returns: Json
+      }
+      ai_get_compras_analysis: { Args: { p_company_id: string }; Returns: Json }
+      ai_get_financial_dashboard: {
+        Args: {
+          p_company_id: string
+          p_end_date?: string
+          p_start_date?: string
+        }
+        Returns: Json
+      }
+      ai_get_full_company_overview: {
+        Args: { p_company_id: string }
+        Returns: Json
+      }
+      ai_get_inadimplencia_analysis: {
+        Args: { p_company_id: string }
+        Returns: Json
+      }
+      ai_get_os_analysis: { Args: { p_company_id: string }; Returns: Json }
+      ai_get_produtos_analysis: {
+        Args: { p_company_id: string }
+        Returns: Json
+      }
+      ai_get_purchase_suggestions: {
+        Args: { p_company_id: string }
+        Returns: Json
+      }
+      ai_get_vendas_analysis: {
+        Args: { p_company_id: string; p_periodo_dias?: number }
+        Returns: Json
+      }
       get_user_companies: { Args: never; Returns: string[] }
       get_user_company_id: { Args: never; Returns: string }
       is_admin: { Args: never; Returns: boolean }
