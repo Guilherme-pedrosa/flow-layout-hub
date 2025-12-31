@@ -226,6 +226,16 @@ export default function Conciliacao() {
   const pendingDebitTransactions = transactions.filter(tx => !tx.is_reconciled && tx.type === "DEBIT");
   const allPendingTransactions = transactions.filter(tx => !tx.is_reconciled);
 
+  // Ordenação para cada tab
+  const { items: sortedPendingTransactions, requestSort: requestSortPending, sortConfig: sortConfigPending } = useSortableData(allPendingTransactions, 'transaction_date');
+  const { items: sortedFilteredTransactions, requestSort: requestSortExtrato, sortConfig: sortConfigExtrato } = useSortableData(filteredTransactions, 'transaction_date');
+  
+  const receivablesWithSortKey = filteredReceivables.map(r => ({
+    ...r,
+    _clientName: r.clientes?.nome_fantasia || r.clientes?.razao_social || ""
+  }));
+  const { items: sortedReceivables, requestSort: requestSortReceivables, sortConfig: sortConfigReceivables } = useSortableData(receivablesWithSortKey, 'due_date');
+
   // Totais
   const totalCredits = transactions.filter(t => t.type === "CREDIT").reduce((sum, t) => sum + t.amount, 0);
   const totalDebits = transactions.filter(t => t.type === "DEBIT").reduce((sum, t) => sum + Math.abs(t.amount), 0);
@@ -401,15 +411,34 @@ export default function Conciliacao() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Data</TableHead>
-                      <TableHead>Descrição</TableHead>
+                      <SortableTableHeader
+                        label="Data"
+                        sortKey="transaction_date"
+                        currentSortKey={sortConfigPending.key}
+                        sortDirection={sortConfigPending.direction}
+                        onSort={requestSortPending}
+                      />
+                      <SortableTableHeader
+                        label="Descrição"
+                        sortKey="description"
+                        currentSortKey={sortConfigPending.key}
+                        sortDirection={sortConfigPending.direction}
+                        onSort={requestSortPending}
+                      />
                       <TableHead>Tipo</TableHead>
-                      <TableHead className="text-right">Valor</TableHead>
+                      <SortableTableHeader
+                        label="Valor"
+                        sortKey="amount"
+                        currentSortKey={sortConfigPending.key}
+                        sortDirection={sortConfigPending.direction}
+                        onSort={requestSortPending}
+                        className="text-right"
+                      />
                       <TableHead className="text-right">Ação</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {allPendingTransactions.map((tx) => (
+                    {sortedPendingTransactions.map((tx) => (
                       <TableRow key={tx.id}>
                         <TableCell className="font-medium">{formatDate(tx.transaction_date)}</TableCell>
                         <TableCell className="max-w-[400px] truncate">{tx.description}</TableCell>
@@ -475,16 +504,35 @@ export default function Conciliacao() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Data</TableHead>
-                      <TableHead>Descrição</TableHead>
+                      <SortableTableHeader
+                        label="Data"
+                        sortKey="transaction_date"
+                        currentSortKey={sortConfigExtrato.key}
+                        sortDirection={sortConfigExtrato.direction}
+                        onSort={requestSortExtrato}
+                      />
+                      <SortableTableHeader
+                        label="Descrição"
+                        sortKey="description"
+                        currentSortKey={sortConfigExtrato.key}
+                        sortDirection={sortConfigExtrato.direction}
+                        onSort={requestSortExtrato}
+                      />
                       <TableHead>NSU</TableHead>
-                      <TableHead className="text-right">Valor</TableHead>
+                      <SortableTableHeader
+                        label="Valor"
+                        sortKey="amount"
+                        currentSortKey={sortConfigExtrato.key}
+                        sortDirection={sortConfigExtrato.direction}
+                        onSort={requestSortExtrato}
+                        className="text-right"
+                      />
                       <TableHead className="text-center">Status</TableHead>
                       <TableHead className="text-right">Ações</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredTransactions.map((tx) => (
+                    {sortedFilteredTransactions.map((tx) => (
                       <TableRow key={tx.id} className={tx.is_reconciled ? "opacity-60" : ""}>
                         <TableCell className="font-medium">{formatDate(tx.transaction_date)}</TableCell>
                         <TableCell className="max-w-[300px] truncate">{tx.description}</TableCell>
@@ -574,16 +622,35 @@ export default function Conciliacao() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Cliente</TableHead>
+                      <SortableTableHeader
+                        label="Cliente"
+                        sortKey="_clientName"
+                        currentSortKey={sortConfigReceivables.key}
+                        sortDirection={sortConfigReceivables.direction}
+                        onSort={requestSortReceivables}
+                      />
                       <TableHead>Documento</TableHead>
-                      <TableHead>Vencimento</TableHead>
-                      <TableHead className="text-right">Valor</TableHead>
+                      <SortableTableHeader
+                        label="Vencimento"
+                        sortKey="due_date"
+                        currentSortKey={sortConfigReceivables.key}
+                        sortDirection={sortConfigReceivables.direction}
+                        onSort={requestSortReceivables}
+                      />
+                      <SortableTableHeader
+                        label="Valor"
+                        sortKey="amount"
+                        currentSortKey={sortConfigReceivables.key}
+                        sortDirection={sortConfigReceivables.direction}
+                        onSort={requestSortReceivables}
+                        className="text-right"
+                      />
                       <TableHead className="text-center">Status</TableHead>
                       <TableHead>Conciliação</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredReceivables.map((rec) => (
+                    {sortedReceivables.map((rec) => (
                       <TableRow key={rec.id}>
                         <TableCell className="font-medium">
                           {rec.clientes?.nome_fantasia || rec.clientes?.razao_social || "-"}
