@@ -88,13 +88,13 @@ export function useChartOfAccounts() {
   const [loading, setLoading] = useState(false);
 
   const fetchAccounts = useCallback(async () => {
-    if (!currentCompany?.id) return [];
     setLoading(true);
     try {
+      // Buscar plano de contas de TODAS as empresas (compartilhado)
       const { data, error } = await supabase
         .from('chart_of_accounts')
         .select('*')
-        .eq('company_id', currentCompany.id)
+        .eq('is_active', true)
         .order('code');
 
       if (error) throw error;
@@ -264,13 +264,13 @@ export function useCostCenters() {
   const [loading, setLoading] = useState(false);
 
   const fetchCostCenters = useCallback(async () => {
-    if (!currentCompany?.id) return [];
     setLoading(true);
     try {
+      // Buscar centros de custo de TODAS as empresas (compartilhado)
       const { data, error } = await supabase
         .from('cost_centers')
         .select('*')
-        .eq('company_id', currentCompany.id)
+        .eq('is_active', true)
         .order('code');
 
       if (error) throw error;
