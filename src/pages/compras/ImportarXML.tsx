@@ -181,12 +181,12 @@ export default function ImportarXML() {
   };
 
   const checkNotaDuplicada = async (numero: string, serie: string, cnpjFornecedor: string, chaveAcesso?: string) => {
-    // Normalizar CNPJ (remover formatação)
-    const cnpjNormalizado = cnpjFornecedor.replace(/[^\d]/g, '');
+    // A CHAVE DE ACESSO é o identificador único de uma NF-e
+    // Não usar número/série pois fornecedores diferentes podem ter o mesmo número
     
-    console.log("[DEBUG] Verificando NF-e duplicada:", { numero, serie, cnpjFornecedor, cnpjNormalizado, chaveAcesso });
+    console.log("[DEBUG] Verificando NF-e duplicada por chave de acesso:", { chaveAcesso });
     
-    // Primeiro, verificar pela chave de acesso (mais preciso)
+    // APENAS verificar pela chave de acesso (identificador único nacional)
     if (chaveAcesso) {
       const { data: byKey, error: keyError } = await supabase
         .from("purchase_orders")
@@ -195,33 +195,15 @@ export default function ImportarXML() {
         .eq("company_id", currentCompany?.id)
         .maybeSingle();
       
-      console.log("[DEBUG] Busca por chave de acesso:", { byKey, keyError });
+      console.log("[DEBUG] Resultado busca por chave de acesso:", { byKey, keyError });
       
       if (byKey) {
         return { isDuplicate: true, existingOrderId: byKey.id, existingInvoice: byKey.invoice_number };
       }
     }
     
-    // Depois, verificar por número + série + CNPJ (apenas na empresa atual)
-    const { data, error } = await supabase
-      .from("purchase_orders")
-      .select("id, invoice_number, order_number")
-      .eq("invoice_number", numero)
-      .eq("invoice_series", serie)
-      .eq("company_id", currentCompany?.id);
-    
-    console.log("[DEBUG] Busca por número/série:", { data, error });
-    
-    // Filtrar por CNPJ do fornecedor
-    const matchingOrder = data?.find(order => {
-      // Verificar se o pedido ainda existe e pertence ao fornecedor
-      return true; // Por enquanto, qualquer match é duplicado
-    });
-    
-    if (matchingOrder) {
-      return { isDuplicate: true, existingOrderId: matchingOrder.id, existingInvoice: matchingOrder.invoice_number };
-    }
-    
+    // Se não tem chave de acesso, não é possível verificar duplicidade com precisão
+    // Retornar como não duplicado para permitir a importação
     return { isDuplicate: false };
   };
 
@@ -246,16 +228,19 @@ export default function ImportarXML() {
             if (error) throw error;
             if (!data.success) throw new Error(data.error);
 
-            // Verificar duplicidade
-            const isDuplicate = await checkNotaDuplicada(
+            // Verificar duplicidade (passando chave de acesso para verificação mais precisa)
+            const duplicateCheck = await checkNotaDuplicada(
               data.data.nota.numero,
               data.data.nota.serie,
-              data.data.fornecedor.cnpj
+              data.data.fornecedor.cnpj,
+              data.data.nota.chaveAcesso // Passar a chave de acesso
             );
 
-            if (isDuplicate) {
+            console.log("[DEBUG] Resultado verificação duplicidade:", duplicateCheck);
+
+            if (duplicateCheck.isDuplicate) {
               setNotaDuplicada(true);
-              toast.error(`NF-e ${data.data.nota.numero} já foi importada anteriormente!`);
+              toast.error(`NF-e ${data.data.nota.numero} já foi importada anteriormente (Pedido existente)!`);
               results.push({ fileName: file.fileName, type: "nfe", success: false });
               continue;
             }
