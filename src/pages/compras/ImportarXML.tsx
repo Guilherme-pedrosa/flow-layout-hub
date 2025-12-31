@@ -184,11 +184,11 @@ export default function ImportarXML() {
     console.log("[DEBUG] Buscando transportadora:", { cnpjOriginal, cnpjNormalizado, cnpjFormatado });
     
     // Buscar na tabela pessoas (transportadoras são pessoas com is_transportadora = true)
-    // Tentar buscar com CNPJ normalizado e formatado
+    // Tentar buscar com CNPJ normalizado e formatado - incluir registros sem company_id
     const { data, error } = await supabase
       .from("pessoas")
       .select("id, razao_social, nome_fantasia, cpf_cnpj")
-      .eq("company_id", currentCompany?.id)
+      .or(`company_id.eq.${currentCompany?.id},company_id.is.null`)
       .or(`cpf_cnpj.eq.${cnpjNormalizado},cpf_cnpj.eq.${cnpjFormatado}`);
     
     console.log("[DEBUG] Resultado busca transportadora:", { data, error });
