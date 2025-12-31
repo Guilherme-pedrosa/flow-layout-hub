@@ -333,19 +333,23 @@ export function usePessoas() {
   const activeColaboradores = colaboradores.filter((p) => p.is_active);
   const activeTransportadoras = transportadoras.filter((p) => p.is_active);
 
+  // Todas as pessoas ativas (para selects que mostram todos)
+  const activePessoas = pessoas.filter((p) => p.is_active);
+
   return {
     // All pessoas
     pessoas,
+    activePessoas, // TODOS ativos para seleção
     isLoading: pessoasQuery.isLoading,
     error: pessoasQuery.error,
     
-    // Filtered by role
+    // Filtered by role (para listagens específicas)
     clientes,
     fornecedores,
     colaboradores,
     transportadoras,
     
-    // Active only
+    // Active only (filtrado por role)
     activeClientes,
     activeFornecedores,
     activeColaboradores,
