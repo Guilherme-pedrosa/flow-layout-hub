@@ -15,13 +15,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { CreditCard, Calendar } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { CreditCard, Calendar, AlertTriangle, AlertCircle, CheckCircle } from "lucide-react";
 import { Parcela } from "./types";
 import { formatCurrency } from "@/lib/formatters";
-import { useChartOfAccounts, useCostCenters, ChartOfAccount, CostCenter } from "@/hooks/useFinanceiro";
-import { useEffect } from "react";
+import { useChartOfAccounts, useCostCenters } from "@/hooks/useFinanceiro";
+import { useEffect, useMemo } from "react";
 
 const FORMAS_PAGAMENTO = [
   { value: "boleto", label: "Boleto Bancário" },
@@ -34,6 +40,40 @@ const FORMAS_PAGAMENTO = [
   { value: "deposito", label: "Depósito" },
   { value: "outros", label: "Outros" },
 ];
+
+// Helper para calcular status de vencimento
+function getDueDateStatus(dateStr: string): { status: 'overdue' | 'warning' | 'ok'; message: string; daysUntil: number } {
+  if (!dateStr) return { status: 'ok', message: '', daysUntil: 999 };
+  
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  
+  const dueDate = new Date(dateStr);
+  dueDate.setHours(0, 0, 0, 0);
+  
+  const diffTime = dueDate.getTime() - today.getTime();
+  const daysUntil = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  
+  if (daysUntil < 0) {
+    return { 
+      status: 'overdue', 
+      message: `⚠️ VENCIDO há ${Math.abs(daysUntil)} dia(s)! Renegocie com o fornecedor.`, 
+      daysUntil 
+    };
+  } else if (daysUntil <= 30) {
+    return { 
+      status: 'warning', 
+      message: `⚡ Vence em ${daysUntil} dia(s). Considere melhorar as condições comerciais.`, 
+      daysUntil 
+    };
+  } else {
+    return { 
+      status: 'ok', 
+      message: `✓ Vencimento em ${daysUntil} dias - prazo adequado.`, 
+      daysUntil 
+    };
+  }
+}
 
 interface FinanceiroCardProps {
   formaPagamento: string;
@@ -76,8 +116,18 @@ export function FinanceiroCard({
     return `${day}/${month}/${year}`;
   };
 
+  // Verificar se há parcelas vencidas ou próximas do vencimento
+  const parcelasStatus = useMemo(() => {
+    return parcelas.map(p => ({
+      ...p,
+      dueDateStatus: getDueDateStatus(p.dataVencimento)
+    }));
+  }, [parcelas]);
+
+  const hasOverdue = parcelasStatus.some(p => p.dueDateStatus.status === 'overdue');
+  const hasWarning = parcelasStatus.some(p => p.dueDateStatus.status === 'warning');
+
   // Filtrar apenas contas de despesa analíticas para notas de compra
-  // Conta analítica = pode receber lançamentos
   const contasDespesa = accounts.filter(acc => 
     acc.type === 'despesa' && 
     acc.is_active && 
@@ -85,15 +135,69 @@ export function FinanceiroCard({
   );
   const centrosAtivos = costCenters.filter(cc => cc.is_active);
 
+  const getRowClassName = (status: 'overdue' | 'warning' | 'ok') => {
+    switch (status) {
+      case 'overdue':
+        return 'bg-red-50 dark:bg-red-950/30 border-l-4 border-l-red-500';
+      case 'warning':
+        return 'bg-amber-50 dark:bg-amber-950/30 border-l-4 border-l-amber-500';
+      case 'ok':
+        return 'bg-green-50 dark:bg-green-950/30 border-l-4 border-l-green-500';
+      default:
+        return '';
+    }
+  };
+
+  const getStatusIcon = (status: 'overdue' | 'warning' | 'ok') => {
+    switch (status) {
+      case 'overdue':
+        return <AlertCircle className="h-4 w-4 text-red-600" />;
+      case 'warning':
+        return <AlertTriangle className="h-4 w-4 text-amber-600" />;
+      case 'ok':
+        return <CheckCircle className="h-4 w-4 text-green-600" />;
+    }
+  };
+
   return (
     <Card>
       <CardHeader className="pb-3">
         <CardTitle className="text-base flex items-center gap-2">
           <CreditCard className="h-4 w-4" />
           Financeiro
+          {hasOverdue && (
+            <Badge variant="destructive" className="ml-2">
+              <AlertCircle className="h-3 w-3 mr-1" />
+              Parcelas Vencidas
+            </Badge>
+          )}
+          {!hasOverdue && hasWarning && (
+            <Badge variant="outline" className="ml-2 border-amber-500 text-amber-600 bg-amber-50">
+              <AlertTriangle className="h-3 w-3 mr-1" />
+              Prazo Curto
+            </Badge>
+          )}
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
+        {hasOverdue && (
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>
+              <strong>Atenção!</strong> Uma ou mais parcelas já estão vencidas. Renegocie as condições com o fornecedor antes de prosseguir.
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {!hasOverdue && hasWarning && (
+          <Alert className="border-amber-500 bg-amber-50 dark:bg-amber-950/30">
+            <AlertTriangle className="h-4 w-4 text-amber-600" />
+            <AlertDescription className="text-amber-800 dark:text-amber-300">
+              <strong>Condições comerciais ruins!</strong> Parcelas com vencimento em menos de 30 dias. Considere negociar prazos melhores.
+            </AlertDescription>
+          </Alert>
+        )}
+
         <div className="flex items-center gap-2">
           <span className="text-sm font-medium">Forma de Pagamento (NF):</span>
           <Badge variant="secondary">{formaPagamento || "Não informado"}</Badge>
@@ -202,14 +306,41 @@ export function FinanceiroCard({
                   <TableHead className="w-16">Nº</TableHead>
                   <TableHead>Vencimento</TableHead>
                   <TableHead className="text-right">Valor</TableHead>
+                  <TableHead className="w-12">Status</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {parcelas.map((parcela, index) => (
-                  <TableRow key={index}>
+                {parcelasStatus.map((parcela, index) => (
+                  <TableRow key={index} className={getRowClassName(parcela.dueDateStatus.status)}>
                     <TableCell className="font-medium">{parcela.numero || index + 1}</TableCell>
-                    <TableCell>{formatDate(parcela.dataVencimento)}</TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        {formatDate(parcela.dataVencimento)}
+                        {parcela.dueDateStatus.status === 'overdue' && (
+                          <Badge variant="destructive" className="text-[10px] px-1">
+                            Vencido
+                          </Badge>
+                        )}
+                        {parcela.dueDateStatus.status === 'warning' && (
+                          <Badge variant="outline" className="text-[10px] px-1 border-amber-500 text-amber-600">
+                            {parcela.dueDateStatus.daysUntil}d
+                          </Badge>
+                        )}
+                      </div>
+                    </TableCell>
                     <TableCell className="text-right">{formatCurrency(parcela.valor)}</TableCell>
+                    <TableCell>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <div className="cursor-help">
+                            {getStatusIcon(parcela.dueDateStatus.status)}
+                          </div>
+                        </TooltipTrigger>
+                        <TooltipContent side="left" className="max-w-xs">
+                          <p>{parcela.dueDateStatus.message}</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>

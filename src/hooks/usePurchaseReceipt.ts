@@ -205,6 +205,7 @@ export function usePurchaseReceipt() {
       if (orderItems && orderItems.length > 0) {
         const receiptItems = orderItems.map(item => ({
           receipt_id: receipt.id,
+          company_id: companyId,
           purchase_order_item_id: item.id,
           product_id: item.product_id,
           quantity_expected: item.quantity,
