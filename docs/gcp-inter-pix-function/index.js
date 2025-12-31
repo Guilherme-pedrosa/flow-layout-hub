@@ -63,7 +63,7 @@ async function handleGenericProxy(req, res) {
     scope
   } = req.body;
 
-  console.log('Generic proxy request:', { method, url });
+  console.log('Generic proxy request:', { method, url, headers, accountNumber });
 
   // Validate required fields
   if (!url || !certificate || !privateKey) {
@@ -76,17 +76,32 @@ async function handleGenericProxy(req, res) {
 
   // If this is an OAuth token request
   if (url.includes('/oauth/v2/token')) {
-    const token = await getOAuthToken(
-      { clientId, clientSecret }, 
-      cert, 
-      key,
-      scope || 'extrato.read'
-    );
-    return res.status(200).json({ access_token: token, token_type: 'Bearer', expires_in: 3600 });
+    try {
+      const token = await getOAuthToken(
+        { clientId, clientSecret }, 
+        cert, 
+        key,
+        scope || 'extrato.read'
+      );
+      return res.status(200).json({ access_token: token, token_type: 'Bearer', scope: scope || 'extrato.read', expires_in: 3600 });
+    } catch (error) {
+      console.error('OAuth error:', error);
+      return res.status(400).json({ _error: true, message: error.message });
+    }
   }
 
   // For other requests, make the API call with mTLS
-  const result = await makeProxyRequest(method || 'GET', url, headers || {}, data, cert, key, accountNumber);
+  // Ensure headers are properly passed, including Authorization
+  const requestHeaders = { ...headers };
+  
+  // Ensure x-conta-corrente is set
+  if (accountNumber && !requestHeaders['x-conta-corrente']) {
+    requestHeaders['x-conta-corrente'] = accountNumber;
+  }
+  
+  console.log('Final request headers:', requestHeaders);
+  
+  const result = await makeProxyRequest(method || 'GET', url, requestHeaders, data, cert, key, accountNumber);
   return res.status(200).json(result);
 }
 
