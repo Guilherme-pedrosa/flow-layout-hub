@@ -2,22 +2,25 @@ import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Tables, TablesInsert, TablesUpdate } from "@/integrations/supabase/types";
+import { useCompany as useCompanyContext } from "@/contexts/CompanyContext";
 
 export type Company = Tables<"companies">;
 export type CompanyInsert = TablesInsert<"companies">;
 export type CompanyUpdate = TablesUpdate<"companies">;
 
 export function useCompany() {
+  const { currentCompany } = useCompanyContext();
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
 
   const fetchCompany = async () => {
+    if (!currentCompany?.id) return null;
     setLoading(true);
     try {
       const { data, error } = await supabase
         .from("companies")
         .select("*")
-        .limit(1)
+        .eq("id", currentCompany.id)
         .maybeSingle();
 
       if (error) throw error;
@@ -75,15 +78,18 @@ export type SystemUserInsert = TablesInsert<"users">;
 export type SystemUserUpdate = TablesUpdate<"users">;
 
 export function useSystemUsers() {
+  const { currentCompany } = useCompanyContext();
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
 
   const fetchUsers = async () => {
+    if (!currentCompany?.id) return [];
     setLoading(true);
     try {
       const { data, error } = await supabase
         .from("users")
         .select("*, companies(name)")
+        .eq("company_id", currentCompany.id)
         .order("name");
 
       if (error) throw error;
@@ -101,17 +107,18 @@ export function useSystemUsers() {
   };
 
   const createUser = async (data: SystemUserInsert) => {
+    if (!currentCompany?.id) return null;
     setLoading(true);
     try {
       const { data: created, error } = await supabase
         .from("users")
-        .insert(data)
+        .insert({ ...data, company_id: currentCompany.id })
         .select()
         .single();
 
       if (error) throw error;
 
-      await logAudit("create", "user", created.id, { name: data.name, email: data.email, role: data.role });
+      await logAudit("create", "user", created.id, { name: data.name, email: data.email, role: data.role }, currentCompany.id);
 
       toast({
         title: "Usuário criado",
@@ -143,7 +150,7 @@ export function useSystemUsers() {
 
       if (error) throw error;
 
-      await logAudit("update", "user", id, data);
+      await logAudit("update", "user", id, data, currentCompany?.id);
 
       toast({
         title: "Usuário atualizado",
@@ -173,15 +180,18 @@ export function useSystemUsers() {
 export type AuditLog = Tables<"audit_logs">;
 
 export function useAuditLogs() {
+  const { currentCompany } = useCompanyContext();
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
 
   const fetchLogs = async (limit = 100) => {
+    if (!currentCompany?.id) return [];
     setLoading(true);
     try {
       const { data, error } = await supabase
         .from("audit_logs")
         .select("*, users(name)")
+        .eq("company_id", currentCompany.id)
         .order("created_at", { ascending: false })
         .limit(limit);
 
@@ -203,14 +213,9 @@ export function useAuditLogs() {
 }
 
 // Função auxiliar para registrar logs de auditoria
-async function logAudit(action: string, entity: string, entityId: string, metadata: any) {
+async function logAudit(action: string, entity: string, entityId: string, metadata: any, companyId?: string) {
   try {
-    // Buscar company_id e user_id atuais
-    const { data: company } = await supabase
-      .from("companies")
-      .select("id")
-      .limit(1)
-      .single();
+    if (!companyId) return;
 
     const { data: user } = await supabase
       .from("users")
@@ -218,16 +223,14 @@ async function logAudit(action: string, entity: string, entityId: string, metada
       .limit(1)
       .maybeSingle();
 
-    if (company) {
-      await supabase.from("audit_logs").insert({
-        company_id: company.id,
-        user_id: user?.id || null,
-        action,
-        entity,
-        entity_id: entityId,
-        metadata_json: metadata,
-      });
-    }
+    await supabase.from("audit_logs").insert({
+      company_id: companyId,
+      user_id: user?.id || null,
+      action,
+      entity,
+      entity_id: entityId,
+      metadata_json: metadata,
+    });
   } catch (error) {
     console.error("Erro ao registrar log de auditoria:", error);
   }

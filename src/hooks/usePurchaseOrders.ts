@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { PurchaseOrderStatus } from "./usePurchaseOrderStatuses";
 import { Supplier } from "./useSuppliers";
+import { useCompany } from "@/contexts/CompanyContext";
 
 export interface PurchaseOrder {
   id: string;
@@ -183,10 +184,12 @@ export interface PurchaseOrderItemInsert {
 
 export function usePurchaseOrders() {
   const queryClient = useQueryClient();
+  const { currentCompany } = useCompany();
 
   const ordersQuery = useQuery({
-    queryKey: ["purchase_orders"],
+    queryKey: ["purchase_orders", currentCompany?.id],
     queryFn: async () => {
+      if (!currentCompany?.id) return [];
       const { data, error } = await supabase
         .from("purchase_orders")
         .select(`
@@ -194,20 +197,23 @@ export function usePurchaseOrders() {
           purchase_order_status:purchase_order_statuses(*),
           supplier:pessoas!purchase_orders_supplier_id_fkey(*)
         `)
+        .eq("company_id", currentCompany.id)
         .order("created_at", { ascending: false });
 
       if (error) throw error;
       return data as unknown as PurchaseOrder[];
     },
+    enabled: !!currentCompany?.id,
   });
 
   const createOrder = useMutation({
     mutationFn: async (order: PurchaseOrderInsert & { generatePayable?: boolean; dueDate?: string }) => {
+      if (!currentCompany?.id) throw new Error("Empresa não selecionada");
       const { generatePayable, dueDate, ...orderData } = order;
       
       const { data, error } = await supabase
         .from("purchase_orders")
-        .insert(orderData)
+        .insert({ ...orderData, company_id: currentCompany.id })
         .select()
         .single();
 
@@ -218,7 +224,7 @@ export function usePurchaseOrders() {
         const { error: payableError } = await supabase
           .from("payables")
           .insert({
-            company_id: "00000000-0000-0000-0000-000000000001", // TODO: get from context
+            company_id: currentCompany.id,
             supplier_id: orderData.supplier_id,
             purchase_order_id: data.id,
             amount: orderData.total_value,
@@ -239,7 +245,7 @@ export function usePurchaseOrders() {
       return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["purchase_orders"] });
+      queryClient.invalidateQueries({ queryKey: ["purchase_orders", currentCompany?.id] });
       queryClient.invalidateQueries({ queryKey: ["payables"] });
       toast.success("Pedido de compra criado com sucesso!");
     },
@@ -290,12 +296,12 @@ export function usePurchaseOrders() {
               due_date: dueDate,
             })
             .eq("id", existingPayable.id);
-        } else if (data.total_value && data.total_value > 0) {
+        } else if (data.total_value && data.total_value > 0 && currentCompany?.id) {
           // Create new payable
           await supabase
             .from("payables")
             .insert({
-              company_id: "00000000-0000-0000-0000-000000000001",
+              company_id: currentCompany.id,
               supplier_id: data.supplier_id,
               purchase_order_id: id,
               amount: data.total_value,
@@ -313,7 +319,7 @@ export function usePurchaseOrders() {
       return result;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["purchase_orders"] });
+      queryClient.invalidateQueries({ queryKey: ["purchase_orders", currentCompany?.id] });
       queryClient.invalidateQueries({ queryKey: ["payables"] });
       toast.success("Pedido atualizado com sucesso!");
     },
@@ -404,7 +410,7 @@ export function usePurchaseOrders() {
       return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["purchase_orders"] });
+      queryClient.invalidateQueries({ queryKey: ["purchase_orders", currentCompany?.id] });
       queryClient.invalidateQueries({ queryKey: ["payables"] });
       toast.success("Status atualizado com sucesso!");
     },
@@ -429,7 +435,7 @@ export function usePurchaseOrders() {
       return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["purchase_orders"] });
+      queryClient.invalidateQueries({ queryKey: ["purchase_orders", currentCompany?.id] });
       toast.warning("Pedido marcado para reaprovação!");
     },
     onError: (error) => {
@@ -453,7 +459,7 @@ export function usePurchaseOrders() {
       return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["purchase_orders"] });
+      queryClient.invalidateQueries({ queryKey: ["purchase_orders", currentCompany?.id] });
       toast.success("Reaprovação concedida!");
     },
     onError: (error) => {
@@ -619,7 +625,7 @@ export function usePurchaseOrders() {
       return orderId;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["purchase_orders"] });
+      queryClient.invalidateQueries({ queryKey: ["purchase_orders", currentCompany?.id] });
       queryClient.invalidateQueries({ queryKey: ["payables"] });
       toast.success("Pedido excluído com sucesso!");
     },
