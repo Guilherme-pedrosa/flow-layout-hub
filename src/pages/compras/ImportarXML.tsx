@@ -54,6 +54,10 @@ export default function ImportarXML() {
   const [transportadorId, setTransportadorId] = useState<string | null>(null);
   const [transportadorCadastrado, setTransportadorCadastrado] = useState(false);
   
+  // Estado para validação de produtos
+  const [produtosValidos, setProdutosValidos] = useState(false);
+  const [produtosPendentes, setProdutosPendentes] = useState(0);
+  
   // Listas de fornecedores e transportadores disponíveis para vinculação
   const [fornecedoresDisponiveis, setFornecedoresDisponiveis] = useState<{ id: string; razao_social: string | null; cpf_cnpj: string | null }[]>([]);
   const [transportadoresDisponiveis, setTransportadoresDisponiveis] = useState<{ id: string; razao_social: string | null; cpf_cnpj: string | null }[]>([]);
@@ -1011,6 +1015,10 @@ Responda APENAS com o código CFOP de 4 dígitos. Sem explicações.`;
             onCriarProduto={handleCriarProduto}
             onToggleCriarProduto={handleToggleCriarProduto}
             onCfopEntradaChange={handleCfopEntradaChange}
+            onValidationChange={(allValid, pendingCount) => {
+              setProdutosValidos(allValid);
+              setProdutosPendentes(pendingCount);
+            }}
           />
 
           {/* Alerta se fornecedor não cadastrado */}
@@ -1024,6 +1032,18 @@ Responda APENAS com o código CFOP de 4 dígitos. Sem explicações.`;
               </AlertDescription>
             </Alert>
           )}
+          
+          {/* Alerta se produtos não vinculados */}
+          {!produtosValidos && produtosPendentes > 0 && (
+            <Alert variant="destructive">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertTitle>Produtos Obrigatórios</AlertTitle>
+              <AlertDescription>
+                <strong>{produtosPendentes} produto(s)</strong> precisam ser vinculados ou cadastrados antes de importar a nota.
+                Vincule cada item a um produto existente ou marque "Auto Cadastrar".
+              </AlertDescription>
+            </Alert>
+          )}
 
           {/* Botões de ação */}
           <div className="flex justify-end gap-4">
@@ -1032,8 +1052,14 @@ Responda APENAS com o código CFOP de 4 dígitos. Sem explicações.`;
             </Button>
             <Button 
               onClick={handleFinalize} 
-              disabled={isProcessing || !fornecedorCadastrado}
-              title={!fornecedorCadastrado ? "Cadastre ou vincule o fornecedor primeiro" : undefined}
+              disabled={isProcessing || !fornecedorCadastrado || !produtosValidos}
+              title={
+                !fornecedorCadastrado 
+                  ? "Cadastre ou vincule o fornecedor primeiro" 
+                  : !produtosValidos 
+                    ? `${produtosPendentes} produto(s) precisam ser vinculados ou cadastrados`
+                    : undefined
+              }
             >
               {isProcessing ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
