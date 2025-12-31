@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -17,6 +17,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { formatCurrency } from "@/lib/formatters";
 import { useCompany } from "@/contexts/CompanyContext";
+import { useNavigate } from "react-router-dom";
+import { usePurchaseOrders } from "@/hooks/usePurchaseOrders";
 
 interface DemandItem {
   id: string;
@@ -47,15 +49,51 @@ interface DemandSummary {
   estimated_purchase_value: number;
 }
 
+// Storage key for persisting analysis results
+const STORAGE_KEY = 'purchase_suggestion_data';
+
 export function PurchaseSuggestionPanel() {
   const { currentCompany } = useCompany();
   const companyId = currentCompany?.id;
+  const navigate = useNavigate();
+  const { createOrder, createOrderItems } = usePurchaseOrders();
 
   const [loading, setLoading] = useState(false);
   const [demands, setDemands] = useState<DemandItem[]>([]);
   const [summary, setSummary] = useState<DemandSummary | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [creatingOrder, setCreatingOrder] = useState(false);
+
+  // Load persisted data on mount
+  useEffect(() => {
+    if (!companyId) return;
+    
+    const savedData = localStorage.getItem(`${STORAGE_KEY}_${companyId}`);
+    if (savedData) {
+      try {
+        const parsed = JSON.parse(savedData);
+        // Check if data is not older than 4 hours
+        const fourHoursAgo = Date.now() - 4 * 60 * 60 * 1000;
+        if (parsed.timestamp && parsed.timestamp > fourHoursAgo) {
+          setDemands(parsed.demands || []);
+          setSummary(parsed.summary || null);
+        }
+      } catch (e) {
+        console.error('Error loading saved demands:', e);
+      }
+    }
+  }, [companyId]);
+
+  // Persist data when it changes
+  const persistData = (newDemands: DemandItem[], newSummary: DemandSummary | null) => {
+    if (!companyId) return;
+    
+    localStorage.setItem(`${STORAGE_KEY}_${companyId}`, JSON.stringify({
+      demands: newDemands,
+      summary: newSummary,
+      timestamp: Date.now(),
+    }));
+  };
 
   const runAnalysis = async () => {
     if (!companyId) {
@@ -76,8 +114,12 @@ export function PurchaseSuggestionPanel() {
       if (error) throw error;
 
       if (data?.success) {
-        setDemands(data.data.demands || []);
-        setSummary(data.data.summary || null);
+        const newDemands = data.data.demands || [];
+        const newSummary = data.data.summary || null;
+        
+        setDemands(newDemands);
+        setSummary(newSummary);
+        persistData(newDemands, newSummary);
         
         if (data.data.summary.total_demands === 0) {
           toast.success("Nenhuma demanda pendente! Todas as OSs e vendas têm estoque.");
@@ -119,14 +161,123 @@ export function PurchaseSuggestionPanel() {
       return;
     }
 
+    if (!companyId) {
+      toast.error("Selecione uma empresa");
+      return;
+    }
+
     setCreatingOrder(true);
     try {
-      toast.success(
-        `Pedido de compra criado com ${selectedIds.size} itens!`,
-        { description: "Acesse Compras > Pedidos para revisar" }
-      );
+      // Get selected demands
+      const selectedDemands = demands.filter(d => selectedIds.has(d.id));
+      
+      // Group by supplier to potentially create multiple orders
+      const bySupplier: Record<string, DemandItem[]> = {};
+      const noSupplier: DemandItem[] = [];
+      
+      for (const demand of selectedDemands) {
+        if (demand.last_supplier_id) {
+          if (!bySupplier[demand.last_supplier_id]) {
+            bySupplier[demand.last_supplier_id] = [];
+          }
+          bySupplier[demand.last_supplier_id].push(demand);
+        } else {
+          noSupplier.push(demand);
+        }
+      }
+
+      // Get default pending status
+      const { data: defaultStatus } = await supabase
+        .from('purchase_order_statuses')
+        .select('id')
+        .eq('company_id', companyId)
+        .eq('is_default', true)
+        .maybeSingle();
+
+      let createdOrdersCount = 0;
+
+      // Create orders grouped by supplier
+      for (const [supplierId, supplierDemands] of Object.entries(bySupplier)) {
+        const totalValue = supplierDemands.reduce((sum, d) => 
+          sum + (d.stock_shortage * (d.last_purchase_price || 0)), 0);
+
+        // Create the order
+        const orderResult = await createOrder.mutateAsync({
+          supplier_id: supplierId,
+          purpose: 'estoque',
+          observations: `Gerado automaticamente a partir de ${supplierDemands.length} demanda(s) de vendas/OSs`,
+          total_value: totalValue,
+          status_id: defaultStatus?.id,
+        });
+
+        if (orderResult) {
+          // Create items
+          const items = supplierDemands.map(d => ({
+            purchase_order_id: orderResult.id,
+            product_id: d.product_id,
+            description: d.product_description,
+            quantity: d.stock_shortage,
+            unit_price: d.last_purchase_price || 0,
+            total_value: d.stock_shortage * (d.last_purchase_price || 0),
+          }));
+
+          await createOrderItems.mutateAsync(items);
+          createdOrdersCount++;
+        }
+      }
+
+      // Create order for items without supplier
+      if (noSupplier.length > 0) {
+        const totalValue = noSupplier.reduce((sum, d) => 
+          sum + (d.stock_shortage * (d.last_purchase_price || 0)), 0);
+
+        const orderResult = await createOrder.mutateAsync({
+          purpose: 'estoque',
+          observations: `Gerado automaticamente - ${noSupplier.length} item(ns) SEM fornecedor definido`,
+          total_value: totalValue,
+          status_id: defaultStatus?.id,
+        });
+
+        if (orderResult) {
+          const items = noSupplier.map(d => ({
+            purchase_order_id: orderResult.id,
+            product_id: d.product_id,
+            description: d.product_description,
+            quantity: d.stock_shortage,
+            unit_price: d.last_purchase_price || 0,
+            total_value: d.stock_shortage * (d.last_purchase_price || 0),
+          }));
+
+          await createOrderItems.mutateAsync(items);
+          createdOrdersCount++;
+        }
+      }
+
+      // Remove selected items from the list
+      const remainingDemands = demands.filter(d => !selectedIds.has(d.id));
+      setDemands(remainingDemands);
+      setSummary(prev => prev ? {
+        ...prev,
+        total_demands: remainingDemands.length,
+        unique_products: new Set(remainingDemands.map(d => d.product_id)).size,
+        estimated_purchase_value: remainingDemands.reduce((sum, d) => 
+          sum + (d.stock_shortage * (d.last_purchase_price || 0)), 0),
+      } : null);
+      persistData(remainingDemands, summary);
       setSelectedIds(new Set());
+
+      toast.success(
+        `${createdOrdersCount} pedido(s) de compra criado(s)!`,
+        { 
+          description: "Acesse Compras > Pedidos para revisar",
+          action: {
+            label: "Ver Pedidos",
+            onClick: () => navigate('/pedidos-compra'),
+          }
+        }
+      );
     } catch (error) {
+      console.error("Erro ao criar pedido:", error);
       toast.error("Erro ao criar pedido de compra");
     } finally {
       setCreatingOrder(false);
