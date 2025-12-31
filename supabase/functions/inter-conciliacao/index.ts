@@ -6,19 +6,15 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-interface Transacao {
-  dataEntrada?: string;
-  dataMovimento?: string;
-  valor: string | number;
-  descricao?: string;
-  titulo?: string;
-  tipoTransacao?: string;
-  tipoOperacao?: string;
-  detalhes?: {
-    cpfCnpj?: string;
-    nome?: string;
-    chavePix?: string;
-  };
+interface BankTransaction {
+  id: string;
+  transaction_date: string;
+  amount: number;
+  description: string | null;
+  type: string | null;
+  category: string | null;
+  is_reconciled: boolean;
+  raw_data: any;
 }
 
 interface Payable {
@@ -31,6 +27,11 @@ interface Payable {
   payment_status: string | null;
   description: string | null;
   due_date: string;
+  supplier_id: string;
+  supplier?: {
+    razao_social: string | null;
+    cpf_cnpj: string | null;
+  };
 }
 
 // Função para normalizar CPF/CNPJ (remover pontuação)
@@ -49,68 +50,83 @@ function normalizeName(name: string | null): string {
   );
 }
 
-// Função para calcular score de match
+// Função para calcular score de match entre transação bancária e payable
 function calculateMatchScore(
-  transacao: Transacao,
+  transaction: BankTransaction,
   payable: Payable
 ): { score: number; reasons: string[] } {
   let score = 0;
   const reasons: string[] = [];
 
-  // 1. Comparar valor (peso: 30)
-  const valorExtrato = typeof transacao.valor === "string" 
-    ? parseFloat(transacao.valor) 
-    : transacao.valor;
+  // 1. Comparar valor (peso: 40) - Transações de débito são negativas
+  const valorExtrato = Math.abs(transaction.amount);
   const valorPayable = payable.amount;
 
   if (Math.abs(valorExtrato - valorPayable) < 0.01) {
-    score += 30;
+    score += 40;
     reasons.push("Valor exato");
   } else if (Math.abs(valorExtrato - valorPayable) < 1) {
-    score += 15;
-    reasons.push("Valor aproximado");
-  }
-
-  // 2. Comparar CPF/CNPJ (peso: 40)
-  const cpfExtrato = normalizeDocument(transacao.detalhes?.cpfCnpj || "");
-  const cpfPayable = normalizeDocument(payable.recipient_document);
-
-  if (cpfExtrato && cpfPayable && cpfExtrato === cpfPayable) {
-    score += 40;
-    reasons.push("CPF/CNPJ idêntico");
-  }
-
-  // 3. Comparar nome (peso: 20)
-  const nomeExtrato = normalizeName(
-    transacao.detalhes?.nome || transacao.descricao || transacao.titulo || ""
-  );
-  const nomePayable = normalizeName(payable.recipient_name);
-
-  if (nomeExtrato && nomePayable) {
-    if (nomeExtrato === nomePayable) {
-      score += 20;
-      reasons.push("Nome idêntico");
-    } else if (
-      nomeExtrato.includes(nomePayable) ||
-      nomePayable.includes(nomeExtrato)
-    ) {
+    score += 20;
+    reasons.push("Valor aproximado (diferença < R$1)");
+  } else {
+    const percentDiff = Math.abs((valorExtrato - valorPayable) / valorPayable) * 100;
+    if (percentDiff <= 5) {
       score += 10;
-      reasons.push("Nome parcial");
+      reasons.push("Valor similar (diferença < 5%)");
+    }
+  }
+
+  // 2. Comparar CPF/CNPJ do fornecedor (peso: 30)
+  const cpfPayable = normalizeDocument(payable.recipient_document || payable.supplier?.cpf_cnpj || null);
+  const descricao = normalizeName(transaction.description);
+
+  // Tentar encontrar CPF/CNPJ na descrição
+  if (cpfPayable && cpfPayable.length >= 11) {
+    if (descricao.includes(cpfPayable)) {
+      score += 30;
+      reasons.push("CPF/CNPJ encontrado na descrição");
+    }
+  }
+
+  // 3. Comparar nome do fornecedor na descrição (peso: 20)
+  const nomePayable = normalizeName(payable.recipient_name || payable.supplier?.razao_social || null);
+
+  if (nomePayable && nomePayable.length > 3) {
+    // Verificar se partes do nome estão na descrição
+    const nomePartes = nomePayable.split(" ").filter(p => p.length > 3);
+    let partesEncontradas = 0;
+    
+    for (const parte of nomePartes) {
+      if (descricao.includes(parte)) {
+        partesEncontradas++;
+      }
+    }
+
+    if (nomePartes.length > 0) {
+      const percentMatch = partesEncontradas / nomePartes.length;
+      if (percentMatch >= 0.5) {
+        score += 20;
+        reasons.push("Nome do fornecedor encontrado");
+      } else if (percentMatch >= 0.25) {
+        score += 10;
+        reasons.push("Nome parcial do fornecedor");
+      }
     }
   }
 
   // 4. Comparar chave PIX (peso: 10)
-  const chaveExtrato = transacao.detalhes?.chavePix || "";
   const chavePayable = payable.pix_key || "";
+  if (chavePayable && descricao.includes(chavePayable.toUpperCase())) {
+    score += 10;
+    reasons.push("Chave PIX encontrada");
+  }
 
-  if (chaveExtrato && chavePayable) {
-    const chaveExtratoNorm = normalizeDocument(chaveExtrato);
-    const chavePayableNorm = normalizeDocument(chavePayable);
-    
-    if (chaveExtratoNorm === chavePayableNorm || chaveExtrato === chavePayable) {
-      score += 10;
-      reasons.push("Chave PIX idêntica");
-    }
+  // 5. Verificar se é pagamento PIX (bônus)
+  if (transaction.type?.toUpperCase().includes("PIX") || 
+      transaction.category?.toUpperCase().includes("PIX") ||
+      descricao.includes("PIX")) {
+    score += 5;
+    reasons.push("Transação PIX");
   }
 
   return { score, reasons };
@@ -122,13 +138,13 @@ serve(async (req) => {
   }
 
   try {
-    const { company_id, dias_retroativos = 7 } = await req.json();
+    const { company_id, dias_retroativos = 30 } = await req.json();
 
     if (!company_id) {
       throw new Error("company_id é obrigatório");
     }
 
-    console.log(`[inter-conciliacao] Iniciando para company_id: ${company_id}`);
+    console.log(`[conciliacao-ai] Iniciando para company_id: ${company_id}`);
 
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
@@ -143,52 +159,70 @@ serve(async (req) => {
     const dataInicioStr = dataInicio.toISOString().split("T")[0];
     const dataFimStr = hoje.toISOString().split("T")[0];
 
-    console.log(`[inter-conciliacao] Período: ${dataInicioStr} a ${dataFimStr}`);
+    console.log(`[conciliacao-ai] Período: ${dataInicioStr} a ${dataFimStr}`);
 
-    // 2. Chamar edge function de extrato
-    const extratoResponse = await supabase.functions.invoke("inter-extrato", {
-      body: {
-        company_id,
-        data_inicio: dataInicioStr,
-        data_fim: dataFimStr,
-        tipo_operacao: "D", // Débito = saídas
-      },
-    });
-
-    if (!extratoResponse.data?.success) {
-      console.error("[inter-conciliacao] Erro no extrato:", extratoResponse.error);
-      throw new Error(
-        `Erro ao buscar extrato: ${extratoResponse.error?.message || "desconhecido"}`
-      );
-    }
-
-    const transacoes: Transacao[] = extratoResponse.data.data.transacoes || [];
-    console.log(`[inter-conciliacao] Transações PIX recebidas: ${transacoes.length}`);
-
-    // 3. Buscar contas a pagar pendentes (enviadas para aprovação no banco)
-    const { data: payables, error: payablesError } = await supabase
-      .from("payables")
+    // 2. Buscar transações bancárias não conciliadas (débitos = valores negativos)
+    const { data: transactions, error: transError } = await supabase
+      .from("bank_transactions")
       .select("*")
       .eq("company_id", company_id)
-      .in("payment_status", ["sent_to_bank", "processing", "pending"])
-      .eq("is_paid", false);
+      .eq("is_reconciled", false)
+      .lt("amount", 0) // Apenas débitos (saídas)
+      .gte("transaction_date", dataInicioStr)
+      .lte("transaction_date", dataFimStr)
+      .order("transaction_date", { ascending: false });
+
+    if (transError) {
+      throw new Error(`Erro ao buscar transações: ${transError.message}`);
+    }
+
+    console.log(`[conciliacao-ai] Transações bancárias não conciliadas: ${transactions?.length || 0}`);
+
+    // 3. Buscar contas a pagar pendentes
+    const { data: payables, error: payablesError } = await supabase
+      .from("payables")
+      .select(`
+        *,
+        supplier:pessoas!payables_supplier_id_fkey(razao_social, cpf_cnpj)
+      `)
+      .eq("company_id", company_id)
+      .eq("is_paid", false)
+      .gte("due_date", dataInicioStr);
 
     if (payablesError) {
       throw new Error(`Erro ao buscar payables: ${payablesError.message}`);
     }
 
-    console.log(`[inter-conciliacao] Payables pendentes: ${payables?.length || 0}`);
+    console.log(`[conciliacao-ai] Payables pendentes: ${payables?.length || 0}`);
+
+    if (!transactions || transactions.length === 0) {
+      return new Response(
+        JSON.stringify({
+          success: true,
+          message: "Nenhuma transação bancária não conciliada no período",
+          data: {
+            transacoes_processadas: 0,
+            payables_pendentes: payables?.length || 0,
+            auto_reconciled: 0,
+            suggestions_created: 0,
+            no_match: 0,
+          },
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
     if (!payables || payables.length === 0) {
       return new Response(
         JSON.stringify({
           success: true,
-          message: "Nenhuma conta a pagar pendente",
+          message: "Nenhuma conta a pagar pendente no período",
           data: {
-            transacoes_processadas: transacoes.length,
+            transacoes_processadas: transactions.length,
+            payables_pendentes: 0,
             auto_reconciled: 0,
             suggestions_created: 0,
-            no_match: 0,
+            no_match: transactions.length,
           },
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -201,14 +235,19 @@ serve(async (req) => {
       no_match: 0,
     };
 
+    const transactionsList = [...transactions] as BankTransaction[];
     const payablesList = [...payables] as Payable[];
+    const processedPayables = new Set<string>();
 
-    // 4. Para cada transação do extrato, tentar encontrar match
-    for (const transacao of transacoes) {
+    // 4. Para cada transação bancária, tentar encontrar match com payables
+    for (const transaction of transactionsList) {
       let bestMatch: { payable: Payable; score: number; reasons: string[] } | null = null;
 
       for (const payable of payablesList) {
-        const { score, reasons } = calculateMatchScore(transacao, payable);
+        // Pular se já foi processado
+        if (processedPayables.has(payable.id)) continue;
+
+        const { score, reasons } = calculateMatchScore(transaction, payable);
 
         if (score > 0 && (!bestMatch || score > bestMatch.score)) {
           bestMatch = { payable, score, reasons };
@@ -216,52 +255,61 @@ serve(async (req) => {
       }
 
       if (bestMatch) {
-        const valorExtrato = typeof transacao.valor === "string"
-          ? parseFloat(transacao.valor)
-          : transacao.valor;
-        const dataExtrato = transacao.dataEntrada || transacao.dataMovimento;
+        const valorExtrato = Math.abs(transaction.amount);
 
         console.log(
-          `[inter-conciliacao] Match encontrado: Payable ${bestMatch.payable.id}, Score: ${bestMatch.score}, Reasons: ${bestMatch.reasons.join(", ")}`
+          `[conciliacao-ai] Match encontrado: Transação ${transaction.id} -> Payable ${bestMatch.payable.id}, Score: ${bestMatch.score}, Reasons: ${bestMatch.reasons.join(", ")}`
         );
 
-        // Score >= 70 E mesmo CPF/CNPJ = conciliação automática
-        if (bestMatch.score >= 70 && bestMatch.reasons.includes("CPF/CNPJ idêntico")) {
+        // Score >= 70 = conciliação automática
+        if (bestMatch.score >= 70) {
           console.log(
-            `[inter-conciliacao] Conciliação automática para payable ${bestMatch.payable.id}`
+            `[conciliacao-ai] Conciliação automática para payable ${bestMatch.payable.id}`
           );
 
-          // Conciliação automática
-          const { error: updateError } = await supabase
+          // Marcar payable como pago
+          const { error: updatePayableError } = await supabase
             .from("payables")
             .update({
               is_paid: true,
-              paid_at: dataExtrato,
+              paid_at: transaction.transaction_date,
               paid_amount: valorExtrato,
               payment_status: "paid",
               reconciled_at: new Date().toISOString(),
-              reconciliation_source: "auto",
+              reconciliation_source: "auto_ai",
+              bank_transaction_id: transaction.id,
             })
             .eq("id", bestMatch.payable.id);
 
-          if (updateError) {
-            console.error(
-              `[inter-conciliacao] Erro ao atualizar payable:`,
-              updateError
-            );
-          } else {
-            results.auto_reconciled++;
-
-            // Remover da lista para não processar novamente
-            const index = payablesList.findIndex((p) => p.id === bestMatch!.payable.id);
-            if (index > -1) payablesList.splice(index, 1);
+          if (updatePayableError) {
+            console.error(`[conciliacao-ai] Erro ao atualizar payable:`, updatePayableError);
+            continue;
           }
-        } else if (bestMatch.score >= 40) {
+
+          // Marcar transação como conciliada
+          const { error: updateTransError } = await supabase
+            .from("bank_transactions")
+            .update({
+              is_reconciled: true,
+              reconciled_at: new Date().toISOString(),
+              reconciled_with_id: bestMatch.payable.id,
+              reconciled_with_type: "payable",
+            })
+            .eq("id", transaction.id);
+
+          if (updateTransError) {
+            console.error(`[conciliacao-ai] Erro ao atualizar transação:`, updateTransError);
+          }
+
+          results.auto_reconciled++;
+          processedPayables.add(bestMatch.payable.id);
+
+        } else if (bestMatch.score >= 30) {
           console.log(
-            `[inter-conciliacao] Criando sugestão para payable ${bestMatch.payable.id}`
+            `[conciliacao-ai] Criando sugestão para payable ${bestMatch.payable.id} (score: ${bestMatch.score})`
           );
 
-          // Verificar se já existe sugestão para este payable
+          // Verificar se já existe sugestão pendente para este payable
           const { data: existingSuggestion } = await supabase
             .from("reconciliation_suggestions")
             .select("id")
@@ -276,29 +324,24 @@ serve(async (req) => {
               .insert({
                 company_id,
                 payable_id: bestMatch.payable.id,
-                extrato_data: dataExtrato,
+                bank_transaction_id: transaction.id,
+                extrato_data: transaction.transaction_date,
                 extrato_valor: valorExtrato,
-                extrato_descricao: transacao.descricao || transacao.titulo,
-                extrato_cpf_cnpj: transacao.detalhes?.cpfCnpj,
-                extrato_nome: transacao.detalhes?.nome,
-                extrato_chave_pix: transacao.detalhes?.chavePix,
+                extrato_descricao: transaction.description,
+                extrato_cpf_cnpj: bestMatch.payable.recipient_document || bestMatch.payable.supplier?.cpf_cnpj,
+                extrato_nome: bestMatch.payable.recipient_name || bestMatch.payable.supplier?.razao_social,
                 confidence_score: bestMatch.score,
                 match_reason: bestMatch.reasons.join(", "),
                 status: "pending",
               });
 
             if (insertError) {
-              console.error(
-                `[inter-conciliacao] Erro ao criar sugestão:`,
-                insertError
-              );
+              console.error(`[conciliacao-ai] Erro ao criar sugestão:`, insertError);
             } else {
               results.suggestions_created++;
             }
           } else {
-            console.log(
-              `[inter-conciliacao] Sugestão já existe para payable ${bestMatch.payable.id}`
-            );
+            console.log(`[conciliacao-ai] Sugestão já existe para payable ${bestMatch.payable.id}`);
           }
         } else {
           results.no_match++;
@@ -308,13 +351,13 @@ serve(async (req) => {
       }
     }
 
-    console.log(`[inter-conciliacao] Resultados:`, results);
+    console.log(`[conciliacao-ai] Resultados finais:`, results);
 
     return new Response(
       JSON.stringify({
         success: true,
         data: {
-          transacoes_processadas: transacoes.length,
+          transacoes_processadas: transactions.length,
           payables_pendentes: payables.length,
           ...results,
         },
@@ -322,7 +365,7 @@ serve(async (req) => {
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
-    console.error(`[inter-conciliacao] Erro:`, error);
+    console.error(`[conciliacao-ai] Erro:`, error);
     return new Response(
       JSON.stringify({
         success: false,
