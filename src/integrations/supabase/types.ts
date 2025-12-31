@@ -5617,6 +5617,10 @@ export type Database = {
         Returns: Json
       }
       ai_get_compras_analysis: { Args: { p_company_id: string }; Returns: Json }
+      ai_get_contratos_analysis: {
+        Args: { p_company_id: string }
+        Returns: Json
+      }
       ai_get_financial_dashboard: {
         Args: {
           p_company_id: string

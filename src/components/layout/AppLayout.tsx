@@ -4,7 +4,7 @@ import { AppSidebar } from "./AppSidebar";
 import { AppHeader } from "./AppHeader";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
-
+import { AIAssistant } from "@/components/shared/AIAssistant";
 export function AppLayout() {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -59,6 +59,9 @@ export function AppLayout() {
           </div>
         </main>
       </div>
+
+      {/* AI Assistant disponível em todas as páginas */}
+      <AIAssistant />
     </div>
   );
 }
