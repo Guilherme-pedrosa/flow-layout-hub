@@ -44,12 +44,12 @@ export function useAiAnalysis(category?: string) {
   useEffect(() => {
     if (!currentCompany?.id) return;
 
-    // Check if we already analyzed recently (last 5 minutes)
+    // Check if we already analyzed recently (last 2 minutes per category)
     const storageKey = `ai_analysis_${currentCompany.id}_${category || 'all'}`;
     const lastRun = localStorage.getItem(storageKey);
-    const fiveMinutesAgo = Date.now() - 5 * 60 * 1000;
+    const twoMinutesAgo = Date.now() - 2 * 60 * 1000;
 
-    if (lastRun && parseInt(lastRun) > fiveMinutesAgo) {
+    if (lastRun && parseInt(lastRun) > twoMinutesAgo) {
       console.log('[useAiAnalysis] Skipping - analyzed recently');
       return;
     }
@@ -58,7 +58,7 @@ export function useAiAnalysis(category?: string) {
     const timer = setTimeout(() => {
       localStorage.setItem(storageKey, Date.now().toString());
       triggerAnalysis();
-    }, 2000);
+    }, 1500);
 
     return () => clearTimeout(timer);
   }, [currentCompany?.id, category, triggerAnalysis]);
