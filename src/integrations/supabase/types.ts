@@ -4252,6 +4252,7 @@ export type Database = {
       }
       reconciliation_suggestions: {
         Row: {
+          bank_transaction_id: string | null
           company_id: string | null
           confidence_score: number | null
           created_at: string | null
@@ -4269,6 +4270,7 @@ export type Database = {
           status: string | null
         }
         Insert: {
+          bank_transaction_id?: string | null
           company_id?: string | null
           confidence_score?: number | null
           created_at?: string | null
@@ -4286,6 +4288,7 @@ export type Database = {
           status?: string | null
         }
         Update: {
+          bank_transaction_id?: string | null
           company_id?: string | null
           confidence_score?: number | null
           created_at?: string | null
@@ -4303,6 +4306,13 @@ export type Database = {
           status?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "reconciliation_suggestions_bank_transaction_id_fkey"
+            columns: ["bank_transaction_id"]
+            isOneToOne: false
+            referencedRelation: "bank_transactions"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "reconciliation_suggestions_company_id_fkey"
             columns: ["company_id"]
