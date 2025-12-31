@@ -107,6 +107,7 @@ export interface CTETomador extends CTEPessoa {
 }
 
 export interface CTEData {
+  emit: CTEPessoa; // Emitente do CT-e (transportadora)
   remetente: CTEPessoa;
   destinatario: CTEPessoa;
   tomador: CTETomador;

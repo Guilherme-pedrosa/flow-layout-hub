@@ -103,6 +103,14 @@ export default function ImportarXML() {
     }
   }, [nfeData]);
 
+  // Verificar transportadora quando CT-e é carregado (usar CNPJ do emitente do CT-e)
+  useEffect(() => {
+    if (cteData?.emit?.cnpj) {
+      console.log("[DEBUG] CT-e carregado, buscando transportadora pelo CNPJ do emitente:", cteData.emit.cnpj);
+      checkTransportadorCadastrado(cteData.emit.cnpj);
+    }
+  }, [cteData]);
+
   const loadFornecedoresDisponiveis = async () => {
     const { data } = await supabase
       .from("pessoas")
@@ -160,14 +168,20 @@ export default function ImportarXML() {
     }
   };
 
-  const checkTransportadorCadastrado = async () => {
-    if (!nfeData?.transportador?.cnpj) return;
+  const checkTransportadorCadastrado = async (cnpjTransportador?: string) => {
+    // Usar CNPJ do CT-e (emit) se disponível, senão usar da NF-e (transportador)
+    const cnpjOriginal = cnpjTransportador || nfeData?.transportador?.cnpj;
+    
+    if (!cnpjOriginal) {
+      console.log("[DEBUG] Nenhum CNPJ de transportadora para buscar");
+      return;
+    }
     
     // Normalizar CNPJ (remover formatação)
-    const cnpjNormalizado = nfeData.transportador.cnpj.replace(/[^\d]/g, '');
+    const cnpjNormalizado = cnpjOriginal.replace(/[^\d]/g, '');
     const cnpjFormatado = cnpjNormalizado.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5');
     
-    console.log("[DEBUG] Buscando transportadora:", { cnpjOriginal: nfeData.transportador.cnpj, cnpjNormalizado, cnpjFormatado });
+    console.log("[DEBUG] Buscando transportadora:", { cnpjOriginal, cnpjNormalizado, cnpjFormatado });
     
     // Buscar na tabela pessoas (transportadoras são pessoas com is_transportadora = true)
     // Tentar buscar com CNPJ normalizado e formatado

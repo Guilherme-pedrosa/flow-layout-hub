@@ -7,6 +7,14 @@ const corsHeaders = {
 };
 
 interface CTEData {
+  emit: {
+    cnpj: string;
+    razaoSocial: string;
+    inscricaoEstadual: string;
+    endereco: string;
+    cidade: string;
+    uf: string;
+  };
   remetente: {
     cnpj: string;
     razaoSocial: string;
@@ -119,6 +127,10 @@ function parseCTEXml(xmlContent: string): CTEData {
     '4': 'Outro',
   };
   
+  // Emitente (transportadora)
+  const emit = infCte.emit || {};
+  const enderEmit = emit.enderEmit || {};
+  
   // Remetente
   const rem = infCte.rem || {};
   const enderRem = rem.enderReme || {};
@@ -202,6 +214,14 @@ function parseCTEXml(xmlContent: string): CTEData {
   const dataEmissao = dataEmissaoRaw ? dataEmissaoRaw.split('T')[0] : '';
 
   const cteData: CTEData = {
+    emit: {
+      cnpj: safeGet(emit, 'CNPJ') || safeGet(emit, 'CPF'),
+      razaoSocial: safeGet(emit, 'xNome'),
+      inscricaoEstadual: safeGet(emit, 'IE'),
+      endereco: [safeGet(enderEmit, 'xLgr'), safeGet(enderEmit, 'nro')].filter(Boolean).join(', '),
+      cidade: safeGet(enderEmit, 'xMun'),
+      uf: safeGet(enderEmit, 'UF'),
+    },
     remetente: {
       cnpj: safeGet(rem, 'CNPJ') || safeGet(rem, 'CPF'),
       razaoSocial: safeGet(rem, 'xNome'),
