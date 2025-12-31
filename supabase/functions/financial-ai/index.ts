@@ -29,272 +29,108 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Fetch ALL data for comprehensive AI context
+    // Fetch ALL data using optimized SQL functions
     let fullContext = "";
 
     if (companyId) {
-      console.log("[financial-ai] Fetching all data for company:", companyId);
+      console.log("[financial-ai] Fetching data using AI SQL functions for company:", companyId);
 
-      // ========== FINANCEIRO ==========
-      // Contas a Pagar (sem limite)
+      // Use optimized SQL functions that bypass RLS but filter by company_id
+      const [
+        { data: financeiro, error: finErr },
+        { data: clientes, error: cliErr },
+        { data: produtos, error: prodErr },
+        { data: os, error: osErr },
+        { data: vendas, error: venErr },
+        { data: compras, error: compErr },
+        { data: inadimplencia, error: inadErr }
+      ] = await Promise.all([
+        supabase.rpc('ai_get_financial_dashboard', { p_company_id: companyId }),
+        supabase.rpc('ai_get_clientes_analysis', { p_company_id: companyId }),
+        supabase.rpc('ai_get_produtos_analysis', { p_company_id: companyId }),
+        supabase.rpc('ai_get_os_analysis', { p_company_id: companyId }),
+        supabase.rpc('ai_get_vendas_analysis', { p_company_id: companyId, p_periodo_dias: 30 }),
+        supabase.rpc('ai_get_compras_analysis', { p_company_id: companyId }),
+        supabase.rpc('ai_get_inadimplencia_analysis', { p_company_id: companyId })
+      ]);
+
+      // Log any errors from RPC calls
+      if (finErr) console.error("[financial-ai] Error fetching financeiro:", finErr);
+      if (cliErr) console.error("[financial-ai] Error fetching clientes:", cliErr);
+      if (prodErr) console.error("[financial-ai] Error fetching produtos:", prodErr);
+      if (osErr) console.error("[financial-ai] Error fetching os:", osErr);
+      if (venErr) console.error("[financial-ai] Error fetching vendas:", venErr);
+      if (compErr) console.error("[financial-ai] Error fetching compras:", compErr);
+      if (inadErr) console.error("[financial-ai] Error fetching inadimplencia:", inadErr);
+
+      // Also fetch additional data for detailed analysis
       const { data: payables } = await supabase
         .from("payables")
         .select("*, supplier:pessoas(razao_social, nome_fantasia, cpf_cnpj)")
         .eq("company_id", companyId)
-        .order("due_date", { ascending: true });
+        .eq("is_paid", false)
+        .order("due_date", { ascending: true })
+        .limit(100);
 
-      // Contas a Receber (sem limite)
       const { data: receivables } = await supabase
         .from("accounts_receivable")
-        .select("*, client:clientes(razao_social, nome_fantasia, cpf_cnpj)")
+        .select("*, client:pessoas(razao_social, nome_fantasia, cpf_cnpj)")
         .eq("company_id", companyId)
-        .order("due_date", { ascending: true });
+        .eq("is_paid", false)
+        .order("due_date", { ascending: true })
+        .limit(100);
 
-      // Transações Bancárias (sem limite)
       const { data: transactions } = await supabase
         .from("bank_transactions")
         .select("*, bank_account:bank_accounts(name, bank_name)")
         .eq("company_id", companyId)
-        .order("transaction_date", { ascending: false });
+        .order("transaction_date", { ascending: false })
+        .limit(50);
 
-      // Contas Bancárias
-      const { data: bankAccounts } = await supabase
-        .from("bank_accounts")
-        .select("*")
-        .eq("company_id", companyId);
-
-      // Plano de Contas
-      const { data: chartAccounts } = await supabase
-        .from("chart_of_accounts")
-        .select("*")
-        .eq("company_id", companyId);
-
-      // Centros de Custo
-      const { data: costCenters } = await supabase
-        .from("cost_centers")
-        .select("*")
-        .eq("company_id", companyId);
-
-      // Situações Financeiras
-      const { data: situations } = await supabase
-        .from("financial_situations")
-        .select("*")
-        .eq("company_id", companyId);
-
-      // ========== COMPRAS ==========
-      // Pedidos de Compra
-      const { data: purchaseOrders } = await supabase
-        .from("purchase_orders")
-        .select("*, supplier:pessoas(razao_social, nome_fantasia)")
-        .eq("company_id", companyId)
-        .order("created_at", { ascending: false });
-
-      // Itens dos Pedidos de Compra
-      const { data: purchaseOrderItems } = await supabase
-        .from("purchase_order_items")
-        .select("*, product:products(code, description), purchase_order:purchase_orders!inner(company_id)")
-        .eq("purchase_order.company_id", companyId);
-
-      // ========== VENDAS ==========
-      // Vendas
-      const { data: sales } = await supabase
-        .from("sales")
-        .select("*, client:clientes(razao_social, nome_fantasia)")
-        .eq("company_id", companyId)
-        .order("created_at", { ascending: false });
-
-      // Itens das Vendas
-      const { data: saleItems } = await supabase
-        .from("sale_items")
-        .select("*, product:products(code, description)")
-        .eq("company_id", companyId);
-
-      // ========== PRODUTOS E ESTOQUE ==========
-      // Produtos
-      const { data: products } = await supabase
+      const { data: lowStockProducts } = await supabase
         .from("products")
-        .select("*")
-        .eq("company_id", companyId);
-
-      // Movimentações de Estoque
-      const { data: stockMovements } = await supabase
-        .from("stock_movements")
-        .select("*, product:products(code, description)")
+        .select("id, code, name, description, current_stock, minimum_stock, cost_price, sale_price")
         .eq("company_id", companyId)
-        .order("created_at", { ascending: false });
+        .eq("is_active", true)
+        .eq("stock_control", true)
+        .lte("current_stock", 10)
+        .limit(50);
 
-      // ========== ORDENS DE SERVIÇO ==========
-      const { data: serviceOrders } = await supabase
-        .from("service_orders")
-        .select("*, client:clientes(razao_social, nome_fantasia)")
-        .eq("company_id", companyId)
-        .order("created_at", { ascending: false });
-
-      // ========== NOTAS FISCAIS ==========
-      const { data: invoices } = await supabase
-        .from("notas_fiscais")
-        .select("*")
-        .eq("company_id", companyId)
-        .order("created_at", { ascending: false });
-
-      // ========== CLIENTES E FORNECEDORES ==========
-      const { data: clients } = await supabase
-        .from("clientes")
-        .select("*");
-
-      const { data: suppliers } = await supabase
-        .from("pessoas")
-        .select("*")
-        .eq("tipo", "fornecedor");
-
-      // ========== BUILD CONTEXT ==========
       const today = new Date().toISOString().split('T')[0];
-      
-      // Análise de Contas a Pagar
-      const overduePayables = payables?.filter(p => !p.is_paid && p.due_date < today) || [];
-      const pendingPayables = payables?.filter(p => !p.is_paid && p.due_date >= today) || [];
-      const paidPayables = payables?.filter(p => p.is_paid) || [];
-      
-      // Análise de Contas a Receber
-      const overdueReceivables = receivables?.filter(r => !r.is_paid && r.due_date < today) || [];
-      const pendingReceivables = receivables?.filter(r => !r.is_paid && r.due_date >= today) || [];
-      const paidReceivables = receivables?.filter(r => r.is_paid) || [];
+      const overduePayables = payables?.filter(p => p.due_date < today) || [];
+      const overdueReceivables = receivables?.filter(r => r.due_date < today) || [];
 
-      // Análise de Fornecedores
-      const supplierAnalysis: Record<string, { count: number; total: number; name: string; cnpj: string }> = {};
-      payables?.forEach(p => {
-        const name = p.supplier?.razao_social || p.supplier?.nome_fantasia || 'Desconhecido';
-        const cnpj = p.supplier?.cpf_cnpj || '';
-        if (!supplierAnalysis[p.supplier_id]) {
-          supplierAnalysis[p.supplier_id] = { count: 0, total: 0, name, cnpj };
-        }
-        supplierAnalysis[p.supplier_id].count++;
-        supplierAnalysis[p.supplier_id].total += Number(p.amount);
-      });
-
-      // Análise de Clientes
-      const clientAnalysis: Record<string, { count: number; total: number; name: string }> = {};
-      receivables?.forEach(r => {
-        const name = r.client?.razao_social || r.client?.nome_fantasia || 'Desconhecido';
-        const clientId = r.client_id || 'sem-cliente';
-        if (!clientAnalysis[clientId]) {
-          clientAnalysis[clientId] = { count: 0, total: 0, name };
-        }
-        clientAnalysis[clientId].count++;
-        clientAnalysis[clientId].total += Number(r.amount);
-      });
-
-      // Detecção de duplicidades
-      const duplicatePatterns = payables?.filter((p, i, arr) => 
-        arr.some((other, j) => 
-          i !== j && 
-          p.amount === other.amount && 
-          p.supplier_id === other.supplier_id &&
-          Math.abs(new Date(p.due_date).getTime() - new Date(other.due_date).getTime()) < 7 * 24 * 60 * 60 * 1000
-        )
-      ) || [];
-
-      // Análise de Estoque
-      const lowStockProducts = products?.filter(p => 
-        p.is_active && p.min_stock && p.quantity <= p.min_stock
-      ) || [];
-      
-      const negativeMarginProducts = products?.filter(p => 
-        p.purchase_price > 0 && p.sale_price > 0 && p.sale_price < p.purchase_price
-      ) || [];
-
-      // Análise de Vendas
-      const totalSalesValue = sales?.reduce((sum, s) => sum + Number(s.total_value || 0), 0) || 0;
-      const pendingSales = sales?.filter(s => s.status === 'pendente' || s.status === 'orcamento') || [];
-
-      // Análise de Pedidos de Compra
-      const pendingPurchaseOrders = purchaseOrders?.filter(po => 
-        po.status !== 'recebido' && po.status !== 'cancelado'
-      ) || [];
-
-      // Saldo Bancário Total
-      const totalBankBalance = bankAccounts?.filter(ba => ba.is_active).reduce((sum, ba) => sum + Number(ba.current_balance || 0), 0) || 0;
-
-      // ========== FULL CONTEXT STRING ==========
+      // Build comprehensive context
       fullContext = `
 ## 📊 CONTEXTO COMPLETO DO SISTEMA (${today})
 
-### 💰 RESUMO FINANCEIRO
-**Saldo Bancário Total:** R$ ${totalBankBalance.toFixed(2)}
-**Contas Bancárias Ativas:** ${bankAccounts?.filter(ba => ba.is_active).length || 0}
+### 💰 RESUMO FINANCEIRO (via ai_get_financial_dashboard)
+${JSON.stringify(financeiro, null, 2)}
 
-### 📤 CONTAS A PAGAR (${payables?.length || 0} registros)
-- **Vencidas:** ${overduePayables.length} contas = R$ ${overduePayables.reduce((s, p) => s + Number(p.amount), 0).toFixed(2)}
-- **A vencer:** ${pendingPayables.length} contas = R$ ${pendingPayables.reduce((s, p) => s + Number(p.amount), 0).toFixed(2)}
-- **Pagas:** ${paidPayables.length} contas = R$ ${paidPayables.reduce((s, p) => s + Number(p.amount), 0).toFixed(2)}
+### 👥 ANÁLISE DE CLIENTES (via ai_get_clientes_analysis)
+${JSON.stringify(clientes, null, 2)}
 
-### 📥 CONTAS A RECEBER (${receivables?.length || 0} registros)
-- **Vencidas:** ${overdueReceivables.length} contas = R$ ${overdueReceivables.reduce((s, r) => s + Number(r.amount), 0).toFixed(2)}
-- **A vencer:** ${pendingReceivables.length} contas = R$ ${pendingReceivables.reduce((s, r) => s + Number(r.amount), 0).toFixed(2)}
-- **Recebidas:** ${paidReceivables.length} contas = R$ ${paidReceivables.reduce((s, r) => s + Number(r.amount), 0).toFixed(2)}
+### 📦 ANÁLISE DE PRODUTOS E ESTOQUE (via ai_get_produtos_analysis)
+${JSON.stringify(produtos, null, 2)}
 
-### 🏦 MOVIMENTAÇÃO BANCÁRIA (${transactions?.length || 0} transações)
-- **Entradas:** R$ ${transactions?.filter(t => Number(t.amount) > 0).reduce((s, t) => s + Number(t.amount), 0).toFixed(2) || '0.00'}
-- **Saídas:** R$ ${Math.abs(transactions?.filter(t => Number(t.amount) < 0).reduce((s, t) => s + Number(t.amount), 0) || 0).toFixed(2)}
+### 🔧 ANÁLISE DE ORDENS DE SERVIÇO (via ai_get_os_analysis)
+${JSON.stringify(os, null, 2)}
 
-### 🏢 TOP 10 FORNECEDORES (por valor)
-${Object.values(supplierAnalysis)
-  .sort((a, b) => b.total - a.total)
-  .slice(0, 10)
-  .map((s, i) => `${i+1}. ${s.name} (${s.cnpj || 'sem CNPJ'}): ${s.count} pagamentos = R$ ${s.total.toFixed(2)}`)
-  .join('\n')}
+### 🛒 ANÁLISE DE VENDAS - Últimos 30 dias (via ai_get_vendas_analysis)
+${JSON.stringify(vendas, null, 2)}
 
-### 👥 TOP 10 CLIENTES (por valor a receber)
-${Object.values(clientAnalysis)
-  .sort((a, b) => b.total - a.total)
-  .slice(0, 10)
-  .map((c, i) => `${i+1}. ${c.name}: ${c.count} recebíveis = R$ ${c.total.toFixed(2)}`)
-  .join('\n')}
+### 🏭 ANÁLISE DE COMPRAS E FORNECEDORES (via ai_get_compras_analysis)
+${JSON.stringify(compras, null, 2)}
 
-### ⚠️ POSSÍVEIS DUPLICIDADES (${duplicatePatterns.length} detectadas)
-${duplicatePatterns.length > 0 
-  ? duplicatePatterns.slice(0, 10).map(p => `- ${p.description}: R$ ${Number(p.amount).toFixed(2)} venc. ${p.due_date} - ${p.supplier?.razao_social || 'Fornecedor'}`).join('\n')
-  : '- Nenhuma duplicidade óbvia detectada'}
-
-### 📦 PRODUTOS E ESTOQUE
-- **Total de produtos:** ${products?.length || 0}
-- **Produtos ativos:** ${products?.filter(p => p.is_active).length || 0}
-- **Estoque baixo (abaixo do mínimo):** ${lowStockProducts.length} produtos
-- **Margem negativa:** ${negativeMarginProducts.length} produtos
-
-### 🛒 VENDAS
-- **Total de vendas:** ${sales?.length || 0}
-- **Valor total vendido:** R$ ${totalSalesValue.toFixed(2)}
-- **Vendas pendentes/orçamentos:** ${pendingSales.length}
-
-### 📋 PEDIDOS DE COMPRA
-- **Total de pedidos:** ${purchaseOrders?.length || 0}
-- **Pedidos em aberto:** ${pendingPurchaseOrders.length}
-- **Valor em pedidos abertos:** R$ ${pendingPurchaseOrders.reduce((s, po) => s + Number(po.total_value || 0), 0).toFixed(2)}
-
-### 🔧 ORDENS DE SERVIÇO
-- **Total de OS:** ${serviceOrders?.length || 0}
-- **OS em aberto:** ${serviceOrders?.filter(os => os.status !== 'concluida' && os.status !== 'cancelada').length || 0}
-
-### 📄 NOTAS FISCAIS
-- **Total de NF-e:** ${invoices?.length || 0}
-- **Autorizadas:** ${invoices?.filter(nf => nf.status === 'autorizada').length || 0}
-- **Pendentes:** ${invoices?.filter(nf => nf.status === 'pendente' || nf.status === 'processando').length || 0}
-
-### 📊 PLANO DE CONTAS
-- **Contas cadastradas:** ${chartAccounts?.length || 0}
-- **Contas ativas:** ${chartAccounts?.filter(c => c.is_active).length || 0}
-
-### 🏷️ CENTROS DE CUSTO
-- **Total:** ${costCenters?.length || 0}
-- **Ativos:** ${costCenters?.filter(cc => cc.is_active).length || 0}
+### 🚨 INADIMPLÊNCIA (via ai_get_inadimplencia_analysis)
+${JSON.stringify(inadimplencia, null, 2)}
 
 ---
 
-## DADOS DETALHADOS PARA ANÁLISE
+## DADOS DETALHADOS PARA ANÁLISE ESPECÍFICA
 
-### Contas a Pagar Vencidas (detalhado)
-${JSON.stringify(overduePayables.map(p => ({
+### Contas a Pagar Vencidas (${overduePayables.length} registros)
+${JSON.stringify(overduePayables.slice(0, 20).map(p => ({
   descricao: p.description,
   valor: p.amount,
   vencimento: p.due_date,
@@ -303,21 +139,8 @@ ${JSON.stringify(overduePayables.map(p => ({
   dias_atraso: Math.floor((new Date().getTime() - new Date(p.due_date).getTime()) / (1000 * 60 * 60 * 24))
 })), null, 2)}
 
-### Contas a Pagar - Próximos 30 dias
-${JSON.stringify(pendingPayables.filter(p => {
-  const dueDate = new Date(p.due_date);
-  const in30Days = new Date();
-  in30Days.setDate(in30Days.getDate() + 30);
-  return dueDate <= in30Days;
-}).map(p => ({
-  descricao: p.description,
-  valor: p.amount,
-  vencimento: p.due_date,
-  fornecedor: p.supplier?.razao_social || p.supplier?.nome_fantasia
-})), null, 2)}
-
-### Contas a Receber Vencidas (detalhado)
-${JSON.stringify(overdueReceivables.map(r => ({
+### Contas a Receber Vencidas (${overdueReceivables.length} registros)
+${JSON.stringify(overdueReceivables.slice(0, 20).map(r => ({
   descricao: r.description,
   valor: r.amount,
   vencimento: r.due_date,
@@ -325,34 +148,19 @@ ${JSON.stringify(overdueReceivables.map(r => ({
   dias_atraso: Math.floor((new Date().getTime() - new Date(r.due_date).getTime()) / (1000 * 60 * 60 * 24))
 })), null, 2)}
 
-### Produtos com Estoque Baixo
-${JSON.stringify(lowStockProducts.map(p => ({
+### Produtos com Estoque Baixo (${lowStockProducts?.length || 0} produtos)
+${JSON.stringify(lowStockProducts?.map(p => ({
   codigo: p.code,
+  nome: p.name,
   descricao: p.description,
-  quantidade_atual: p.quantity,
-  estoque_minimo: p.min_stock
-})), null, 2)}
-
-### Produtos com Margem Negativa
-${JSON.stringify(negativeMarginProducts.map(p => ({
-  codigo: p.code,
-  descricao: p.description,
-  preco_compra: p.purchase_price,
-  preco_venda: p.sale_price,
-  margem_percentual: ((p.sale_price - p.purchase_price) / p.purchase_price * 100).toFixed(2) + '%'
-})), null, 2)}
-
-### Pedidos de Compra em Aberto
-${JSON.stringify(pendingPurchaseOrders.slice(0, 20).map(po => ({
-  numero: po.order_number,
-  fornecedor: po.supplier?.razao_social || po.supplier?.nome_fantasia,
-  valor_total: po.total_value,
-  status: po.status,
-  data_emissao: po.issue_date
+  estoque_atual: p.current_stock,
+  estoque_minimo: p.minimum_stock,
+  preco_custo: p.cost_price,
+  preco_venda: p.sale_price
 })), null, 2)}
 
 ### Últimas Transações Bancárias
-${JSON.stringify(transactions?.slice(0, 30).map(t => ({
+${JSON.stringify(transactions?.slice(0, 20).map(t => ({
   data: t.transaction_date,
   descricao: t.description,
   valor: t.amount,
