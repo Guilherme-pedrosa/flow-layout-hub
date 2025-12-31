@@ -89,11 +89,13 @@ export default function ImportarXML() {
   const { generatePayables } = usePayablesGeneration();
   const { currentCompany } = useCompany();
 
-  // Carregar fornecedores e transportadores disponíveis
+  // Carregar fornecedores e transportadores disponíveis quando empresa mudar
   useEffect(() => {
-    loadFornecedoresDisponiveis();
-    loadTransportadoresDisponiveis();
-  }, []);
+    if (currentCompany?.id) {
+      loadFornecedoresDisponiveis();
+      loadTransportadoresDisponiveis();
+    }
+  }, [currentCompany?.id]);
 
   // Verificar se fornecedor/transportador já estão cadastrados
   useEffect(() => {
@@ -112,9 +114,12 @@ export default function ImportarXML() {
   }, [cteData]);
 
   const loadFornecedoresDisponiveis = async () => {
+    if (!currentCompany?.id) return;
+    
     const { data } = await supabase
       .from("pessoas")
       .select("id, razao_social, cpf_cnpj")
+      .eq("company_id", currentCompany.id)
       .eq("is_fornecedor", true)
       .eq("is_active", true)
       .order("razao_social");
@@ -125,11 +130,15 @@ export default function ImportarXML() {
   };
 
   const loadTransportadoresDisponiveis = async () => {
-    // Transportadores também são fornecedores geralmente
+    if (!currentCompany?.id) return;
+    
+    // Transportadores são marcados com is_transportadora = true
+    // Mas também incluímos os que são is_fornecedor para cobrir cadastros antigos
     const { data } = await supabase
       .from("pessoas")
       .select("id, razao_social, cpf_cnpj")
-      .eq("is_fornecedor", true)
+      .eq("company_id", currentCompany.id)
+      .or("is_transportadora.eq.true,is_fornecedor.eq.true")
       .eq("is_active", true)
       .order("razao_social");
     
