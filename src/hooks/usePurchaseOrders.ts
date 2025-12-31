@@ -504,15 +504,18 @@ export function usePurchaseOrders() {
     
     // Buscar transportadora separadamente (pois a FK aponta para suppliers, mas usamos pessoas)
     let cte_carrier = null;
+    console.log("[DEBUG] cte_carrier_id:", data?.cte_carrier_id);
     if (data?.cte_carrier_id) {
-      const { data: carrierData } = await supabase
+      const { data: carrierData, error: carrierError } = await supabase
         .from("pessoas")
         .select("id, razao_social, nome_fantasia, cpf_cnpj")
         .eq("id", data.cte_carrier_id)
         .maybeSingle();
+      console.log("[DEBUG] carrierData:", carrierData, "error:", carrierError);
       cte_carrier = carrierData;
     }
     
+    console.log("[DEBUG] cte_carrier final:", cte_carrier);
     return { ...data, cte_carrier } as unknown as PurchaseOrder;
   };
 
