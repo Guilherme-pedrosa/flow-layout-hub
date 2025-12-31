@@ -473,27 +473,36 @@ export function PurchaseOrderForm({ order: initialOrder, onClose }: PurchaseOrde
 
       // CRÍTICO: Atualizar o custo de compra (purchase_price) de cada produto vinculado
       // O custo deve incluir o frete rateado para refletir o custo real de aquisição
-      const productUpdatePromises = items
-        .filter(item => item.product_id) // Apenas itens com produto vinculado
-        .map(async (item, index) => {
-          const freightAllocated = ratedFreights[index] || 0;
-          const freightPerUnit = item.quantity > 0 ? freightAllocated / item.quantity : 0;
-          const finalUnitCost = item.unit_price + freightPerUnit;
-          
-          const { error } = await supabase
-            .from("products")
-            .update({
-              purchase_price: Math.round(finalUnitCost * 100) / 100,
-              updated_at: new Date().toISOString(),
-            })
-            .eq("id", item.product_id);
-          
-          if (error) {
-            console.error(`Erro ao atualizar custo do produto ${item.product_id}:`, error);
-          }
-        });
-      
-      await Promise.all(productUpdatePromises);
+      console.log('Atualizando custo de compra dos produtos...', items.length, 'itens');
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        if (!item.product_id) {
+          console.log(`Item ${i}: sem product_id, pulando`);
+          continue;
+        }
+        
+        const freightAllocated = ratedFreights[i] || 0;
+        const freightPerUnit = item.quantity > 0 ? freightAllocated / item.quantity : 0;
+        const finalUnitCost = item.unit_price + freightPerUnit;
+        const roundedCost = Math.round(finalUnitCost * 100) / 100;
+        
+        console.log(`Produto ${item.product_id}: preço unitário=${item.unit_price}, frete rateado=${freightAllocated}, frete por unidade=${freightPerUnit}, custo final=${roundedCost}`);
+        
+        const { data, error } = await supabase
+          .from("products")
+          .update({
+            purchase_price: roundedCost,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", item.product_id)
+          .select();
+        
+        if (error) {
+          console.error(`Erro ao atualizar custo do produto ${item.product_id}:`, error);
+        } else {
+          console.log(`Produto ${item.product_id} atualizado com sucesso:`, data);
+        }
+      }
 
       await refetch();
       toast.success(order ? "Pedido atualizado com sucesso!" : "Pedido criado com sucesso!");
