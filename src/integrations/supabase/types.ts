@@ -3277,9 +3277,11 @@ export type Database = {
       }
       purchase_order_items: {
         Row: {
+          calculated_unit_cost: number | null
           cfop: string | null
           chart_account_id: string | null
           company_id: string | null
+          cost_breakdown: Json | null
           cost_center_id: string | null
           created_at: string
           description: string | null
@@ -3298,13 +3300,16 @@ export type Database = {
           quantity_received: number | null
           total_value: number | null
           unit_price: number | null
+          weight: number | null
           xml_code: string | null
           xml_description: string | null
         }
         Insert: {
+          calculated_unit_cost?: number | null
           cfop?: string | null
           chart_account_id?: string | null
           company_id?: string | null
+          cost_breakdown?: Json | null
           cost_center_id?: string | null
           created_at?: string
           description?: string | null
@@ -3323,13 +3328,16 @@ export type Database = {
           quantity_received?: number | null
           total_value?: number | null
           unit_price?: number | null
+          weight?: number | null
           xml_code?: string | null
           xml_description?: string | null
         }
         Update: {
+          calculated_unit_cost?: number | null
           cfop?: string | null
           chart_account_id?: string | null
           company_id?: string | null
+          cost_breakdown?: Json | null
           cost_center_id?: string | null
           created_at?: string
           description?: string | null
@@ -3348,6 +3356,7 @@ export type Database = {
           quantity_received?: number | null
           total_value?: number | null
           unit_price?: number | null
+          weight?: number | null
           xml_code?: string | null
           xml_description?: string | null
         }
@@ -5285,43 +5294,58 @@ export type Database = {
       }
       stock_movements: {
         Row: {
+          calculated_unit_cost: number | null
           company_id: string | null
+          cost_breakdown: Json | null
           created_at: string
           created_by: string | null
+          freight_allocated: number | null
           id: string
           product_id: string
           quantity: number
           reason: string | null
           reference_id: string | null
           reference_type: string | null
+          taxes_credited: number | null
+          taxes_included: number | null
           total_value: number | null
           type: string
           unit_price: number | null
         }
         Insert: {
+          calculated_unit_cost?: number | null
           company_id?: string | null
+          cost_breakdown?: Json | null
           created_at?: string
           created_by?: string | null
+          freight_allocated?: number | null
           id?: string
           product_id: string
           quantity: number
           reason?: string | null
           reference_id?: string | null
           reference_type?: string | null
+          taxes_credited?: number | null
+          taxes_included?: number | null
           total_value?: number | null
           type: string
           unit_price?: number | null
         }
         Update: {
+          calculated_unit_cost?: number | null
           company_id?: string | null
+          cost_breakdown?: Json | null
           created_at?: string
           created_by?: string | null
+          freight_allocated?: number | null
           id?: string
           product_id?: string
           quantity?: number
           reason?: string | null
           reference_id?: string | null
           reference_type?: string | null
+          taxes_credited?: number | null
+          taxes_included?: number | null
           total_value?: number | null
           type?: string
           unit_price?: number | null
