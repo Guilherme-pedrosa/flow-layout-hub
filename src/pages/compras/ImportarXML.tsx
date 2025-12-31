@@ -170,12 +170,22 @@ export default function ImportarXML() {
 
   const checkTransportadorCadastrado = async () => {
     if (!nfeData?.transportador?.cnpj) return;
+    
+    // Buscar na tabela pessoas (transportadoras são pessoas com is_transportador = true)
     const { data } = await supabase
-      .from("clientes")
-      .select("id")
+      .from("pessoas")
+      .select("id, razao_social")
       .eq("cpf_cnpj", nfeData.transportador.cnpj)
       .maybeSingle();
-    setTransportadorCadastrado(!!data);
+    
+    if (data) {
+      setTransportadorCadastrado(true);
+      setTransportadorId(data.id); // Já vincular automaticamente
+      console.log("[DEBUG] Transportadora encontrada:", data.razao_social);
+    } else {
+      setTransportadorCadastrado(false);
+      setTransportadorId(null);
+    }
   };
 
   const checkNotaDuplicada = async (numero: string, serie: string, cnpjFornecedor: string) => {

@@ -585,6 +585,7 @@ export function XMLUploadButton({
         cte_date: cteData.data || null,
         cte_freight_value: cteFreightValue,
         cte_imported_at: new Date().toISOString(),
+        has_external_freight: true, // Marcar automaticamente quando CT-e é importado
       };
 
       // Apply freight change if selected

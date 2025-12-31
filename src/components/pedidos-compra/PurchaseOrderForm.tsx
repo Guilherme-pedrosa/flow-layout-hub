@@ -459,6 +459,9 @@ export function PurchaseOrderForm({ order: initialOrder, onClose }: PurchaseOrde
         nfeSupplierCnpj={order?.nfe_supplier_cnpj}
         nfeSupplierName={order?.nfe_supplier_name}
         supplierCnpj={activePessoas.find(f => f.id === supplierId)?.cpf_cnpj}
+        originalFreightValue={order?.freight_value || 0}
+        originalTotalValue={order?.total_value || 0}
+        hasCte={!!order?.cte_imported_at}
       />
 
       {/* Tabs - Mobile optimized with horizontal scroll */}

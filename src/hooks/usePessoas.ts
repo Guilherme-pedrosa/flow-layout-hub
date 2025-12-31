@@ -221,6 +221,20 @@ export function usePessoas() {
     mutationFn: async (pessoa: PessoaInsert) => {
       if (!currentCompany) throw new Error("Nenhuma empresa selecionada");
       
+      // Validar CNPJ/CPF duplicado antes de inserir
+      if (pessoa.cpf_cnpj) {
+        const { data: existingPessoa } = await supabase
+          .from("pessoas")
+          .select("id, razao_social")
+          .eq("cpf_cnpj", pessoa.cpf_cnpj)
+          .or(`company_id.eq.${currentCompany.id},company_id.is.null`)
+          .maybeSingle();
+        
+        if (existingPessoa) {
+          throw new Error(`Já existe um cadastro com este CPF/CNPJ: ${existingPessoa.razao_social}`);
+        }
+      }
+      
       const { data, error } = await supabase
         .from("pessoas")
         .insert({ ...pessoa, company_id: currentCompany.id })

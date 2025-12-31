@@ -43,6 +43,10 @@ interface PurchaseOrderAIAuditProps {
   nfeSupplierName?: string | null;
   // CNPJ do fornecedor selecionado
   supplierCnpj?: string | null;
+  // Dados originais do pedido para comparação
+  originalFreightValue?: number;
+  originalTotalValue?: number;
+  hasCte?: boolean;
 }
 
 interface AuditAlert {
@@ -92,7 +96,10 @@ export function PurchaseOrderAIAudit({
   isEditing,
   nfeSupplierCnpj,
   nfeSupplierName,
-  supplierCnpj
+  supplierCnpj,
+  originalFreightValue = 0,
+  originalTotalValue = 0,
+  hasCte = false
 }: PurchaseOrderAIAuditProps) {
   const [loading, setLoading] = useState(false);
   const [isOpen, setIsOpen] = useState(true);
@@ -382,6 +389,59 @@ export function PurchaseOrderAIAudit({
         }
       }
 
+      // 6.1 NOVO: Verificar mudança de frete (pedido original vs atual)
+      if (isEditing && originalFreightValue !== freightValue) {
+        const freteAdicionado = originalFreightValue === 0 && freightValue > 0;
+        const freteRemovido = originalFreightValue > 0 && freightValue === 0;
+        const freteAlterado = originalFreightValue > 0 && freightValue > 0 && originalFreightValue !== freightValue;
+        
+        if (freteAdicionado) {
+          newAlerts.push({
+            id: 'freight_added',
+            type: 'warning',
+            category: 'Frete',
+            title: 'FRETE ADICIONADO ao pedido',
+            message: `O pedido original NÃO tinha frete. Agora tem R$ ${freightValue.toFixed(2)} de frete.`,
+            suggestion: 'Verifique se o frete foi negociado corretamente e se o CT-e foi importado.',
+            data: { originalFreight: originalFreightValue, newFreight: freightValue }
+          });
+        } else if (freteRemovido) {
+          newAlerts.push({
+            id: 'freight_removed',
+            type: 'error',
+            category: 'Frete',
+            title: 'FRETE REMOVIDO do pedido',
+            message: `O pedido original tinha R$ ${originalFreightValue.toFixed(2)} de frete. Agora não tem frete.`,
+            suggestion: 'Isso pode indicar um erro. Verifique se o frete foi realmente removido.',
+            data: { originalFreight: originalFreightValue, newFreight: freightValue }
+          });
+        } else if (freteAlterado) {
+          const diff = freightValue - originalFreightValue;
+          const diffPercent = (diff / originalFreightValue) * 100;
+          newAlerts.push({
+            id: 'freight_changed',
+            type: Math.abs(diffPercent) > 20 ? 'warning' : 'info',
+            category: 'Frete',
+            title: 'Valor do frete alterado',
+            message: `Frete mudou de R$ ${originalFreightValue.toFixed(2)} para R$ ${freightValue.toFixed(2)} (${diff > 0 ? '+' : ''}${diffPercent.toFixed(1)}%).`,
+            suggestion: diff > 0 ? 'O frete aumentou. Verifique se foi negociação ou erro.' : 'O frete diminuiu. Confirme se está correto.',
+            data: { originalFreight: originalFreightValue, newFreight: freightValue, diff, diffPercent }
+          });
+        }
+      }
+
+      // 6.2 NOVO: Verificar se tem frete mas não tem CT-e
+      if (freightValue > 0 && !hasCte) {
+        newAlerts.push({
+          id: 'freight_without_cte',
+          type: 'info',
+          category: 'Frete',
+          title: 'Frete sem CT-e vinculado',
+          message: `O pedido tem R$ ${freightValue.toFixed(2)} de frete, mas nenhum CT-e foi importado.`,
+          suggestion: 'Importe o CT-e para vincular a transportadora e gerar a conta a pagar corretamente.',
+        });
+      }
+
       // 7. Gerar sugestão da IA se houver alertas críticos ou de warning
       const criticalAlerts = newAlerts.filter(a => a.type === 'error' || a.type === 'warning');
       if (criticalAlerts.length > 0) {
@@ -436,7 +496,7 @@ Dê sua recomendação de forma direta e prática.`
     } finally {
       setLoading(false);
     }
-  }, [supplierId, items, totalValue, purpose, freightValue, isEditing, nfeSupplierCnpj, nfeSupplierName, supplierCnpj]);
+  }, [supplierId, items, totalValue, purpose, freightValue, isEditing, nfeSupplierCnpj, nfeSupplierName, supplierCnpj, originalFreightValue, originalTotalValue, hasCte]);
 
   // Debounce para não rodar toda hora
   useEffect(() => {
