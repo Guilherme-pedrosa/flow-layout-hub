@@ -104,48 +104,56 @@ serve(async (req) => {
     console.log(`[demand-analysis] ${saleStatuses?.length || 0} status de venda com reserva de estoque`);
 
     // 4. Buscar ordens de serviço aprovadas com seus itens
-    const { data: serviceOrders, error: osError } = await supabase
-      .from("service_orders")
-      .select(`
-        id,
-        order_number,
-        status_id,
-        created_at,
-        client:client_id(id, razao_social, nome_fantasia),
-        items:service_order_product_items(
+    let serviceOrders: any[] = [];
+    if (approvedOsStatusIds.size > 0) {
+      const { data: osData, error: osError } = await supabase
+        .from("service_orders")
+        .select(`
           id,
-          product_id,
-          quantity
-        )
-      `)
-      .eq("company_id", company_id)
-      .in("status_id", Array.from(approvedOsStatusIds));
+          order_number,
+          status_id,
+          created_at,
+          client:client_id(id, razao_social, nome_fantasia),
+          items:service_order_product_items(
+            id,
+            product_id,
+            quantity
+          )
+        `)
+        .eq("company_id", company_id)
+        .in("status_id", Array.from(approvedOsStatusIds));
 
-    if (osError) throw osError;
+      if (osError) throw osError;
+      serviceOrders = osData || [];
+    }
 
-    console.log(`[demand-analysis] ${serviceOrders?.length || 0} ordens de serviço aprovadas`);
+    console.log(`[demand-analysis] ${serviceOrders.length} ordens de serviço aprovadas`);
 
     // 5. Buscar vendas aprovadas com seus itens
-    const { data: sales, error: salesError } = await supabase
-      .from("sales")
-      .select(`
-        id,
-        sale_number,
-        status_id,
-        created_at,
-        client:client_id(id, razao_social, nome_fantasia),
-        items:sale_product_items(
+    let sales: any[] = [];
+    if (approvedSaleStatusIds.size > 0) {
+      const { data: salesData, error: salesError } = await supabase
+        .from("sales")
+        .select(`
           id,
-          product_id,
-          quantity
-        )
-      `)
-      .eq("company_id", company_id)
-      .in("status_id", Array.from(approvedSaleStatusIds));
+          sale_number,
+          status_id,
+          created_at,
+          client:client_id(id, razao_social, nome_fantasia),
+          items:sale_product_items(
+            id,
+            product_id,
+            quantity
+          )
+        `)
+        .eq("company_id", company_id)
+        .in("status_id", Array.from(approvedSaleStatusIds));
 
-    if (salesError) throw salesError;
+      if (salesError) throw salesError;
+      sales = salesData || [];
+    }
 
-    console.log(`[demand-analysis] ${sales?.length || 0} vendas aprovadas`);
+    console.log(`[demand-analysis] ${sales.length} vendas aprovadas`);
 
     // 6. Buscar histórico de compras para obter último fornecedor e preço
     const { data: purchaseHistory } = await supabase
@@ -193,7 +201,7 @@ serve(async (req) => {
     const demandByProduct = new Map<string, number>();
 
     // Somar demanda de OSs
-    for (const os of serviceOrders || []) {
+    for (const os of serviceOrders) {
       const items = (os.items || []) as any[];
       for (const item of items) {
         if (!item.product_id) continue;
@@ -203,7 +211,7 @@ serve(async (req) => {
     }
 
     // Somar demanda de vendas
-    for (const sale of sales || []) {
+    for (const sale of sales) {
       const items = (sale.items || []) as any[];
       for (const item of items) {
         if (!item.product_id) continue;
@@ -216,7 +224,7 @@ serve(async (req) => {
     const demands: DemandItem[] = [];
 
     // Processar OSs
-    for (const os of serviceOrders || []) {
+    for (const os of serviceOrders) {
       const items = (os.items || []) as any[];
       const client = os.client as any;
       const clientName = client?.nome_fantasia || client?.razao_social || 'Cliente não identificado';
@@ -263,7 +271,7 @@ serve(async (req) => {
     }
 
     // Processar Vendas
-    for (const sale of sales || []) {
+    for (const sale of sales) {
       const items = (sale.items || []) as any[];
       const client = sale.client as any;
       const clientName = client?.nome_fantasia || client?.razao_social || 'Cliente não identificado';
