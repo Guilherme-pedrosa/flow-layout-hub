@@ -7,6 +7,7 @@ import { NFeDivergenceDialog, NFeDivergence, NFeComparisonResult } from "./NFeDi
 import { CTeDivergenceDialog, CTeComparisonResult } from "./CTeDivergenceDialog";
 import { usePurchaseOrderAudit } from "@/hooks/usePurchaseOrderAudit";
 import { PurchaseOrderItem } from "@/hooks/usePurchaseOrders";
+import { nfeEhComercial, podeEntrarComoGarantia } from "@/lib/cfops";
 
 interface XMLUploadButtonProps {
   type: "nfe" | "cte";
@@ -19,6 +20,8 @@ interface XMLUploadButtonProps {
   orderFreightValue?: number;
   orderTotalValue?: number;
   orderItems?: PurchaseOrderItem[];
+  // Finalidade do pedido para validação de CFOP
+  orderPurpose?: string;
   // Status for reapproval check
   wasApproved?: boolean;
 }
@@ -39,6 +42,7 @@ export function XMLUploadButton({
   orderFreightValue = 0,
   orderTotalValue = 0,
   orderItems = [],
+  orderPurpose = "",
   wasApproved = false,
 }: XMLUploadButtonProps) {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -126,6 +130,29 @@ export function XMLUploadButton({
         nfeSupplier: nfeData.fornecedor.razaoSocial,
         orderCnpj,
         nfeCnpj,
+      });
+    }
+
+    // RULE NEW: Validate CFOP vs Purpose (comercial vs garantia)
+    const cfopSaidaFornecedor = nfeData.nota.cfopSaida || nfeData.itens?.[0]?.cfop || "";
+    
+    if (orderPurpose === "garantia" && nfeEhComercial(cfopSaidaFornecedor)) {
+      toast.error("NF-e de comercialização não pode entrar como garantia", {
+        description: `O CFOP ${cfopSaidaFornecedor} indica venda/comercialização. Para garantia, o fornecedor deve emitir nota com CFOP de remessa (5949/6949) ou retorno de conserto (5916/6916).`,
+        duration: 10000,
+      });
+      await audit.logXmlImportBlocked(orderId, "cfop_mismatch", {
+        purpose: orderPurpose,
+        cfop: cfopSaidaFornecedor,
+        reason: "NF-e comercial em pedido de garantia",
+      });
+      return;
+    }
+    
+    if ((orderPurpose === "estoque" || orderPurpose === "ordem_de_servico") && podeEntrarComoGarantia(cfopSaidaFornecedor)) {
+      toast.warning("Atenção: CFOP de garantia/remessa", {
+        description: `O CFOP ${cfopSaidaFornecedor} indica operação de garantia/remessa. Verifique se a finalidade "${orderPurpose}" está correta ou altere para "garantia".`,
+        duration: 10000,
       });
     }
 

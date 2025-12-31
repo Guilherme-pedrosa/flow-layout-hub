@@ -263,6 +263,162 @@ export const CFOPS_ENTRADA_COMUNS: CFOPOption[] = [
   { codigo: "2949", descricao: "Outra entrada não especificada (interestadual)", grupo: "Mais Usados" },
 ];
 
+// CFOPs que NÃO geram contas a pagar (garantia, remessa, conserto, demonstração, etc.)
+export const CFOPS_SEM_FINANCEIRO: string[] = [
+  // Retornos de remessa/conserto/demonstração - Estadual
+  "1902", "1903", "1904", "1906", "1907", "1909", "1913", "1914", "1916", "1921",
+  // Retornos de remessa/conserto/demonstração - Interestadual  
+  "2902", "2903", "2904", "2906", "2907", "2909", "2913", "2914", "2916", "2921",
+  // Entradas para industrialização por encomenda (não é compra)
+  "1901", "1924", "2901", "2924",
+  // Entrada de mercadoria em consignação
+  "1917", "2917",
+  // Entradas para depósito
+  "1905", "1934", "2905", "2934",
+  // Comodato
+  "1908", "2908",
+  // Recebido para demonstração/conserto (não é compra)
+  "1912", "1915", "2912", "2915",
+  // Bonificação/doação/brinde/amostra (não gera pagamento)
+  "1910", "1911", "2910", "2911",
+  // Vasilhame/sacaria
+  "1920", "2920",
+  // Simples faturamento (não é a mercadoria ainda)
+  "1922", "2922",
+  // Reclassificação
+  "1926",
+  // Genéricos de "outras entradas" que podem ser garantia/remessa
+  "1949", "2949", "3949",
+];
+
+// CFOPs de compra/comercialização que GERAM contas a pagar
+export const CFOPS_COMERCIAIS: string[] = [
+  // Compras - Estadual
+  "1101", "1102", "1111", "1113", "1116", "1117", "1118", "1120", "1121", "1122", "1124", "1125", "1126", "1128",
+  // Compras - Interestadual
+  "2101", "2102", "2111", "2113", "2116", "2117", "2118", "2120", "2121", "2122", "2124", "2125", "2126", "2128",
+  // Compras - Exterior
+  "3101", "3102", "3126", "3127", "3128",
+  // Compras ST
+  "1401", "1403", "1406", "1407", "2401", "2403", "2406", "2407",
+  // Ativo imobilizado (é compra)
+  "1551", "2551", "3551",
+  // Material de uso/consumo (é compra)
+  "1556", "2556", "3556",
+  // Combustíveis
+  "1651", "1652", "1653", "2651", "2652", "2653", "3651", "3652", "3653",
+  // Energia elétrica
+  "1251", "1252", "1253", "1254", "1255", "1256", "1257",
+  // Transferências (podem gerar financeiro entre filiais)
+  "1151", "1152", "1153", "1154", "2151", "2152", "2153", "2154",
+];
+
+// Mapeamento de finalidade para CFOPs permitidos
+export const CFOPS_POR_FINALIDADE: Record<string, { permitidos: string[]; bloqueados: string[] }> = {
+  // Estoque/Revenda: CFOPs de compra para comercialização
+  estoque: {
+    permitidos: ["1102", "2102", "3102", "1403", "2403", "1117", "2117", "1121", "2121"],
+    bloqueados: ["1949", "2949", "1916", "2916", "1915", "2915"], // Garantia/conserto
+  },
+  // Ordem de Serviço: CFOPs de compra para industrialização/serviço
+  ordem_de_servico: {
+    permitidos: ["1101", "2101", "3101", "1102", "2102", "1126", "2126", "1128", "2128", "1401", "2401", "1403", "2403"],
+    bloqueados: ["1949", "2949"],
+  },
+  // Garantia: CFOPs de retorno/conserto
+  garantia: {
+    permitidos: ["1916", "2916", "1949", "2949", "1915", "2915", "1913", "2913"],
+    bloqueados: ["1102", "2102", "1101", "2101", "1403", "2403"], // CFOPs de compra
+  },
+  // Despesa operacional: Uso/consumo e ativo
+  despesa_operacional: {
+    permitidos: ["1556", "2556", "3556", "1551", "2551", "3551", "1407", "2407"],
+    bloqueados: [],
+  },
+};
+
+/**
+ * Verifica se o CFOP gera contas a pagar (é uma operação comercial)
+ */
+export function cfopGeraFinanceiro(cfop: string): boolean {
+  // Se está na lista de CFOPs sem financeiro, não gera
+  if (CFOPS_SEM_FINANCEIRO.includes(cfop)) {
+    return false;
+  }
+  // Se está na lista de CFOPs comerciais, gera
+  if (CFOPS_COMERCIAIS.includes(cfop)) {
+    return true;
+  }
+  // Default: assume que gera para segurança
+  return true;
+}
+
+/**
+ * Valida se o CFOP é compatível com a finalidade selecionada
+ */
+export function validarCfopParaFinalidade(
+  cfop: string, 
+  finalidade: string
+): { valido: boolean; mensagem?: string } {
+  const regras = CFOPS_POR_FINALIDADE[finalidade];
+  
+  if (!regras) {
+    return { valido: true }; // Sem regras definidas, permite
+  }
+  
+  // Verifica se está bloqueado para esta finalidade
+  if (regras.bloqueados.includes(cfop)) {
+    const cfopInfo = ALL_CFOPS_ENTRADA.find(c => c.codigo === cfop);
+    const cfopDesc = cfopInfo ? `${cfop} - ${cfopInfo.descricao}` : cfop;
+    
+    if (finalidade === "garantia") {
+      return {
+        valido: false,
+        mensagem: `O CFOP ${cfopDesc} é de compra/comercialização e não pode ser usado para entrada de garantia. Use CFOPs de retorno como 1916/2916.`,
+      };
+    }
+    if (finalidade === "estoque" || finalidade === "ordem_de_servico") {
+      return {
+        valido: false,
+        mensagem: `O CFOP ${cfopDesc} é de garantia/remessa e não pode ser usado para entrada de mercadoria para ${finalidade === "estoque" ? "estoque" : "ordem de serviço"}. Use CFOPs de compra como 1102/2102.`,
+      };
+    }
+  }
+  
+  return { valido: true };
+}
+
+/**
+ * Verifica se a NF-e pode entrar como garantia baseado no CFOP de saída do fornecedor
+ */
+export function podeEntrarComoGarantia(cfopSaidaFornecedor: string): boolean {
+  // CFOPs de saída que indicam garantia/remessa para conserto
+  const cfopsSaidaGarantia = [
+    "5916", "6916", // Retorno de mercadoria recebida para conserto/reparo
+    "5949", "6949", // Outra saída (pode ser garantia)
+    "5915", "6915", // Remessa para conserto
+    "5913", "6913", // Retorno de demonstração
+  ];
+  
+  return cfopsSaidaGarantia.includes(cfopSaidaFornecedor);
+}
+
+/**
+ * Verifica se a NF-e é de comercialização baseado no CFOP de saída do fornecedor
+ */
+export function nfeEhComercial(cfopSaidaFornecedor: string): boolean {
+  // CFOPs de saída que indicam venda/comercialização
+  const cfopsSaidaVenda = [
+    "5101", "5102", "5103", "5104", "5105", "5106",
+    "6101", "6102", "6103", "6104", "6105", "6106", "6107", "6108", "6109",
+    "7101", "7102",
+    "5401", "5403", "6401", "6403", // ST
+    "5501", "5502", "6501", "6502", // Remessa com fim específico de exportação
+  ];
+  
+  return cfopsSaidaVenda.includes(cfopSaidaFornecedor);
+}
+
 // Função para sugerir CFOP de entrada baseado no CFOP de saída
 export function sugerirCfopEntrada(cfopSaida: string): string {
   const cfopSaidaNum = parseInt(cfopSaida);
@@ -282,6 +438,10 @@ export function sugerirCfopEntrada(cfopSaida: string): string {
     5551: "1551", 6551: "2551", 7551: "3551",
     // Consumo
     5556: "1556", 6556: "2556", 7556: "3556",
+    // Garantia/Conserto
+    5916: "1916", 6916: "2916",
+    5915: "1915", 6915: "2915",
+    5949: "1949", 6949: "2949",
   };
   
   if (mapeamento[cfopSaidaNum]) {

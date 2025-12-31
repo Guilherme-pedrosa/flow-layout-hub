@@ -26,6 +26,7 @@ import { CadastrarPessoaDialog } from "@/components/shared/CadastrarPessoaDialog
 import { XMLUploadButton } from "./XMLUploadButton";
 import { PurchaseOrderAIAudit } from "./PurchaseOrderAIAudit";
 import { CFOPSelect } from "@/components/shared/CFOPSelect";
+import { cfopGeraFinanceiro, validarCfopParaFinalidade, nfeEhComercial, podeEntrarComoGarantia } from "@/lib/cfops";
 import {
   Table,
   TableBody,
@@ -219,7 +220,7 @@ export function PurchaseOrderForm({ order, onClose }: PurchaseOrderFormProps) {
   const totalItems = items.reduce((acc, item) => acc + item.total_value, 0);
   const totalValue = totalItems + (parseFloat(freightValue) || 0);
 
-  // Verificar se está no fluxo de aprovação (baseado nos limites configurados)
+  // Verificar se está no fluxo de aprovação (baseado nos limites configurados E tipo de CFOP)
   useEffect(() => {
     const checkApprovalFlow = async () => {
       if (!currentCompany?.id || totalValue <= 0) {
@@ -227,6 +228,13 @@ export function PurchaseOrderForm({ order, onClose }: PurchaseOrderFormProps) {
         return;
       }
       
+      // Se o CFOP não gera financeiro (garantia, remessa, etc.), não precisa de aprovação
+      if (cfopGeral && !cfopGeraFinanceiro(cfopGeral)) {
+        setIsInApprovalFlow(false);
+        return;
+      }
+      
+      // Verificar limites apenas para operações comerciais
       const result = await checkOrderLimits(
         currentCompany.id,
         order?.created_by || null,
@@ -240,7 +248,7 @@ export function PurchaseOrderForm({ order, onClose }: PurchaseOrderFormProps) {
     };
     
     checkApprovalFlow();
-  }, [currentCompany?.id, totalValue, purpose, order?.created_by, order?.id, checkOrderLimits]);
+  }, [currentCompany?.id, totalValue, purpose, cfopGeral, order?.created_by, order?.id, checkOrderLimits]);
 
   // Generate installments when values change (SOMENTE se não vieram da NF-e)
   useEffect(() => {
@@ -297,6 +305,16 @@ export function PurchaseOrderForm({ order, onClose }: PurchaseOrderFormProps) {
 
     if (!cfopGeral) {
       toast.error("Selecione o CFOP de entrada");
+      return;
+    }
+
+    // Validar compatibilidade CFOP x Finalidade
+    const cfopValidation = validarCfopParaFinalidade(cfopGeral, purpose);
+    if (!cfopValidation.valido) {
+      toast.error("CFOP incompatível com a finalidade", {
+        description: cfopValidation.mensagem,
+        duration: 8000,
+      });
       return;
     }
 
@@ -881,6 +899,7 @@ export function PurchaseOrderForm({ order, onClose }: PurchaseOrderFormProps) {
                       orderSupplierName={order.supplier?.razao_social || order.nfe_supplier_name || ""}
                       orderTotalValue={totalValue}
                       orderFreightValue={parseFloat(freightValue) || 0}
+                      orderPurpose={purpose}
                       wasApproved={isInApprovalFlow}
                       onSuccess={() => {
                         refetch();
@@ -908,6 +927,7 @@ export function PurchaseOrderForm({ order, onClose }: PurchaseOrderFormProps) {
                     orderSupplierName={order.supplier?.razao_social || order.nfe_supplier_name || ""}
                     orderTotalValue={totalValue}
                     orderFreightValue={parseFloat(freightValue) || 0}
+                    orderPurpose={purpose}
                     wasApproved={isInApprovalFlow}
                     onSuccess={() => {
                       refetch();
