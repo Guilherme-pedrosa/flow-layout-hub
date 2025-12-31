@@ -305,7 +305,7 @@ serve(async (req) => {
           results.auto_reconciled++;
           processedPayables.add(bestMatch.payable.id);
 
-        } else if (bestMatch.score >= 30) {
+        } else if (bestMatch.score >= 15) {
           console.log(
             `[conciliacao-ai] Criando sugestão para payable ${bestMatch.payable.id} (score: ${bestMatch.score})`
           );
