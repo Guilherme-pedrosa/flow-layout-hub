@@ -149,14 +149,20 @@ export default function ImportarXML() {
   };
 
   const checkFornecedorCadastrado = async () => {
-    if (!nfeData?.fornecedor.cnpj) return;
+    if (!nfeData?.fornecedor.cnpj || !currentCompany?.id) return;
     
-    // Buscar na tabela unificada pessoas (fornecedores)
+    // Normalizar CNPJ
+    const cnpjOriginal = nfeData.fornecedor.cnpj;
+    const cnpjNormalizado = cnpjOriginal.replace(/[^\d]/g, '');
+    const cnpjFormatado = cnpjNormalizado.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5');
+    
+    // Buscar na tabela unificada pessoas (fornecedores) - FILTRANDO POR COMPANY_ID
     const { data: pessoaData } = await supabase
       .from("pessoas")
       .select("id")
-      .eq("cpf_cnpj", nfeData.fornecedor.cnpj)
+      .eq("company_id", currentCompany.id)
       .eq("is_fornecedor", true)
+      .or(`cpf_cnpj.eq.${cnpjNormalizado},cpf_cnpj.eq.${cnpjFormatado}`)
       .maybeSingle();
     
     if (pessoaData) {
