@@ -188,15 +188,36 @@ export default function ImportarXML() {
     }
   };
 
-  const checkNotaDuplicada = async (numero: string, serie: string, cnpjFornecedor: string) => {
+  const checkNotaDuplicada = async (numero: string, serie: string, cnpjFornecedor: string, chaveAcesso?: string) => {
+    // Normalizar CNPJ (remover formatação)
+    const cnpjNormalizado = cnpjFornecedor.replace(/[^\d]/g, '');
+    
+    // Primeiro, verificar pela chave de acesso (mais preciso)
+    if (chaveAcesso) {
+      const { data: byKey } = await supabase
+        .from("purchase_orders")
+        .select("id, invoice_number")
+        .eq("nfe_key", chaveAcesso)
+        .maybeSingle();
+      if (byKey) {
+        return { isDuplicate: true, existingOrderId: byKey.id, existingInvoice: byKey.invoice_number };
+      }
+    }
+    
+    // Depois, verificar por número + série + CNPJ
     const { data } = await supabase
       .from("purchase_orders")
-      .select("id")
+      .select("id, invoice_number")
       .eq("invoice_number", numero)
       .eq("invoice_series", serie)
-      .eq("supplier_cnpj", cnpjFornecedor)
+      .or(`supplier_cnpj.eq.${cnpjFornecedor},supplier_cnpj.eq.${cnpjNormalizado}`)
       .maybeSingle();
-    return !!data;
+    
+    if (data) {
+      return { isDuplicate: true, existingOrderId: data.id, existingInvoice: data.invoice_number };
+    }
+    
+    return { isDuplicate: false };
   };
 
   const handleFilesUpload = useCallback(async (files: XMLFileResult[]) => {
@@ -545,9 +566,9 @@ export default function ImportarXML() {
         xml_description: item.descricao,
         ncm: item.ncm,
         cfop: item.cfopEntrada,
-        quantity: item.quantidade,
-        unit_price: item.valorUnitario,
-        total_value: item.valorTotal,
+        quantity: Number(item.quantidade) || 1, // Garantir que seja número válido
+        unit_price: Number(item.valorUnitario) || 0,
+        total_value: Number(item.valorTotal) || 0,
         freight_allocated: itemCosts[index]?.freight_value || 0,
         calculated_unit_cost: itemCosts[index]?.calculated_unit_cost || item.valorUnitario,
         cost_breakdown: itemCosts[index] || {},

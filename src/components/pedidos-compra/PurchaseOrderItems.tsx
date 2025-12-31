@@ -52,6 +52,8 @@ export interface LocalItem {
   total_value: number;
   chart_account_id: string;
   cost_center_id: string;
+  freight_allocated?: number; // Frete rateado para este item
+  calculated_unit_cost?: number; // Custo unitário calculado (valor + frete)
 }
 
 interface PurchaseOrderItemsProps {
@@ -323,6 +325,22 @@ export function PurchaseOrderItems({ items, onItemsChange, purpose }: PurchaseOr
                     </div>
                   </div>
 
+                  {/* Frete e Custo Unitário */}
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <label className="text-xs text-muted-foreground">Frete Rateado</label>
+                      <div className="h-9 px-3 py-2 bg-muted rounded-md text-sm text-muted-foreground flex items-center">
+                        {item.freight_allocated ? formatCurrency(item.freight_allocated) : '-'}
+                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs text-muted-foreground">Custo Unit.</label>
+                      <div className="h-9 px-3 py-2 bg-muted rounded-md text-sm font-medium text-blue-600 flex items-center">
+                        {item.calculated_unit_cost ? formatCurrency(item.calculated_unit_cost) : formatCurrency(item.unit_price)}
+                      </div>
+                    </div>
+                  </div>
+
                   <div className="grid grid-cols-2 gap-2">
                     <div className="space-y-1">
                       <label className="text-xs text-muted-foreground">Plano de Contas</label>
@@ -374,6 +392,8 @@ export function PurchaseOrderItems({ items, onItemsChange, purpose }: PurchaseOr
                     <TableHead>Descrição</TableHead>
                     <TableHead className="w-[100px]">Qtd</TableHead>
                     <TableHead className="w-[120px]">Valor Unit.</TableHead>
+                    <TableHead className="w-[100px]">Frete Rateado</TableHead>
+                    <TableHead className="w-[120px]">Custo Unit.</TableHead>
                     <TableHead className="w-[120px]">Total</TableHead>
                     <TableHead className="w-[180px]">Plano de Contas</TableHead>
                     <TableHead className="w-[180px]">Centro de Custo</TableHead>
@@ -411,6 +431,12 @@ export function PurchaseOrderItems({ items, onItemsChange, purpose }: PurchaseOr
                           onChange={(e) => handleItemChange(index, "unit_price", parseFloat(e.target.value) || 0)}
                           min={0}
                         />
+                      </TableCell>
+                      <TableCell className="text-muted-foreground text-sm">
+                        {item.freight_allocated ? formatCurrency(item.freight_allocated) : '-'}
+                      </TableCell>
+                      <TableCell className="font-medium text-blue-600">
+                        {item.calculated_unit_cost ? formatCurrency(item.calculated_unit_cost) : formatCurrency(item.unit_price)}
                       </TableCell>
                       <TableCell className="font-medium">
                         {formatCurrency(item.total_value)}

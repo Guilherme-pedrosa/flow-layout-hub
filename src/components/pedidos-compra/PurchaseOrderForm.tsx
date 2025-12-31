@@ -36,6 +36,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { format, addDays } from "date-fns";
+import { rateFreightToItems } from "@/hooks/useProductCostCalculation";
 
 interface PurchaseOrderFormProps {
   order: PurchaseOrder | null;
@@ -191,6 +192,8 @@ export function PurchaseOrderForm({ order: initialOrder, onClose }: PurchaseOrde
                 total_value: item.total_value || 0,
                 chart_account_id: item.chart_account_id || "",
                 cost_center_id: item.cost_center_id || "",
+                freight_allocated: item.freight_allocated || 0,
+                calculated_unit_cost: item.final_unit_cost || item.unit_price || 0,
               }))
             );
 
@@ -339,6 +342,19 @@ export function PurchaseOrderForm({ order: initialOrder, onClose }: PurchaseOrde
       return;
     }
 
+    // Validar que status "Mercadoria Chegou" requer financeiro lançado
+    const selectedStatus = statuses.find(s => s.id === statusId);
+    if (selectedStatus?.requires_receipt || selectedStatus?.stock_behavior === 'entry') {
+      // Status que indica recebimento de mercadoria requer financeiro
+      if (purpose !== 'garantia' && installments.length === 0) {
+        toast.error("Lançamento financeiro obrigatório", {
+          description: "Para alterar para este status, é necessário ter pelo menos uma parcela financeira lançada na aba Financeiro.",
+          duration: 8000,
+        });
+        return;
+      }
+    }
+
     // CRÍTICO: Validar divergência de fornecedor com NF-e
     if (order?.nfe_supplier_cnpj) {
       const selectedSupplier = activePessoas.find(f => f.id === supplierId);
@@ -395,17 +411,42 @@ export function PurchaseOrderForm({ order: initialOrder, onClose }: PurchaseOrde
         await deleteOrderItems.mutateAsync(orderId);
       }
 
-      const itemsToCreate: PurchaseOrderItemInsert[] = items.map((item) => ({
-        purchase_order_id: orderId,
-        product_id: item.product_id || undefined,
-        description: item.description,
-        quantity: item.quantity,
-        unit_price: item.unit_price,
-        total_value: item.total_value,
-        chart_account_id: item.chart_account_id || undefined,
-        cost_center_id: item.cost_center_id || undefined,
-        cfop: cfopGeral,
+      // Calcular rateio de frete manual (se houver frete informado)
+      const manualFreight = parseFloat(freightValue) || 0;
+      const cteFreight = order?.cte_freight_value || 0;
+      const totalFreightToRate = cteFreight > 0 ? cteFreight : manualFreight;
+      
+      // Converter items para formato NFEItem para rateio
+      const itemsForRating = items.map(item => ({
+        valorTotal: item.total_value,
+        valorUnitario: item.unit_price,
+        quantidade: item.quantity,
       }));
+      
+      // Ratear frete pelos itens proporcionalmente ao valor
+      const ratedFreights = totalFreightToRate > 0 
+        ? rateFreightToItems(itemsForRating as any, totalFreightToRate, 'value')
+        : items.map(() => 0);
+
+      const itemsToCreate: PurchaseOrderItemInsert[] = items.map((item, index) => {
+        const freightAllocated = ratedFreights[index] || 0;
+        const freightPerUnit = item.quantity > 0 ? freightAllocated / item.quantity : 0;
+        const calculatedUnitCost = item.unit_price + freightPerUnit;
+        
+        return {
+          purchase_order_id: orderId,
+          product_id: item.product_id || undefined,
+          description: item.description,
+          quantity: item.quantity,
+          unit_price: item.unit_price,
+          total_value: item.total_value,
+          chart_account_id: item.chart_account_id || undefined,
+          cost_center_id: item.cost_center_id || undefined,
+          cfop: cfopGeral,
+          freight_allocated: freightAllocated,
+          final_unit_cost: calculatedUnitCost,
+        };
+      });
 
       await createOrderItems.mutateAsync(itemsToCreate);
 
@@ -864,22 +905,29 @@ export function PurchaseOrderForm({ order: initialOrder, onClose }: PurchaseOrde
                           </TableCell>
                         </TableRow>
                       ))}
-                      {/* Linha do Frete (CT-e) - se houver */}
-                      {order?.cte_freight_value && order.cte_freight_value > 0 && (
+                      {/* Linha do Frete (CT-e, Frete Externo ou Frete Manual) - se houver */}
+                      {((order?.cte_freight_value && order.cte_freight_value > 0) || 
+                        (parseFloat(freightValue) > 0)) && (
                         <TableRow className="bg-blue-50 dark:bg-blue-950/30">
                           <TableCell className="font-medium text-blue-700 dark:text-blue-300">
                             Frete
                           </TableCell>
                           <TableCell className="text-blue-700 dark:text-blue-300">
-                            {order?.cte_carrier_id ? "Transportadora" : "Frete CT-e"}
+                            {order?.cte_imported_at 
+                              ? (order?.cte_carrier_id ? "Transportadora (CT-e)" : "Frete CT-e")
+                              : hasExternalFreight 
+                                ? "Frete Externo (aguardando CT-e)"
+                                : "Frete Incluso na Nota"}
                           </TableCell>
                           <TableCell>
                             <span className="text-sm text-muted-foreground">
-                              {order?.cte_date ? new Date(order.cte_date).toLocaleDateString() : "A definir"}
+                              {order?.cte_date 
+                                ? new Date(order.cte_date).toLocaleDateString() 
+                                : "A definir"}
                             </span>
                           </TableCell>
                           <TableCell className="font-medium text-blue-700 dark:text-blue-300">
-                            {formatCurrency(order.cte_freight_value)}
+                            {formatCurrency(order?.cte_freight_value || parseFloat(freightValue) || 0)}
                           </TableCell>
                         </TableRow>
                       )}
