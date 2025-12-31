@@ -234,6 +234,11 @@ export default function ImportarXML() {
             setNfeData({ ...data.data, itens: itensComCfop });
             results.push({ fileName: file.fileName, type: "nfe", success: true });
             
+            // DEFINIR CFOP GERAL AUTOMATICAMENTE baseado no primeiro item
+            if (itensComCfop.length > 0 && itensComCfop[0].cfopEntrada) {
+              setCfopGeral(itensComCfop[0].cfopEntrada);
+            }
+            
             // Detectar finalidade automaticamente baseado na natureza da operação
             const natOp = (data.data.nota.naturezaOperacao || '').toLowerCase();
             if (natOp.includes('garantia') || natOp.includes('substituição') || natOp.includes('subst')) {
