@@ -112,9 +112,16 @@ export default function ConfiguracaoBancaria() {
       // Upload do certificado se fornecido
       if (certFile) {
         certPath = `${currentCompany.id}/cert.crt`;
+        
+        // Primeiro tenta deletar arquivo existente (ignora erro se não existir)
+        await supabase.storage
+          .from("inter-certs")
+          .remove([certPath]);
+        
+        // Depois faz o upload
         const { error: certError } = await supabase.storage
           .from("inter-certs")
-          .upload(certPath, certFile, { upsert: true });
+          .upload(certPath, certFile);
 
         if (certError) throw new Error(`Erro no upload do certificado: ${certError.message}`);
       }
@@ -122,9 +129,16 @@ export default function ConfiguracaoBancaria() {
       // Upload da chave privada se fornecida
       if (keyFile) {
         keyPath = `${currentCompany.id}/key.key`;
+        
+        // Primeiro tenta deletar arquivo existente (ignora erro se não existir)
+        await supabase.storage
+          .from("inter-certs")
+          .remove([keyPath]);
+        
+        // Depois faz o upload
         const { error: keyError } = await supabase.storage
           .from("inter-certs")
-          .upload(keyPath, keyFile, { upsert: true });
+          .upload(keyPath, keyFile);
 
         if (keyError) throw new Error(`Erro no upload da chave: ${keyError.message}`);
       }
