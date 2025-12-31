@@ -76,8 +76,13 @@ export function FinanceiroCard({
     return `${day}/${month}/${year}`;
   };
 
-  // Filtrar apenas contas de despesa para notas de compra
-  const contasDespesa = accounts.filter(acc => acc.type === 'despesa' && acc.is_active);
+  // Filtrar apenas contas de despesa analíticas para notas de compra
+  // Conta analítica = pode receber lançamentos
+  const contasDespesa = accounts.filter(acc => 
+    acc.type === 'despesa' && 
+    acc.is_active && 
+    acc.account_nature === 'analitica'
+  );
   const centrosAtivos = costCenters.filter(cc => cc.is_active);
 
   return (
@@ -115,16 +120,23 @@ export function FinanceiroCard({
           </div>
 
           <div className="space-y-2">
-            <Label>Plano de Contas</Label>
+            <Label>
+              Plano de Contas <span className="text-destructive">*</span>
+            </Label>
             <Select 
               value={planoContasId} 
               onValueChange={onPlanoContasChange}
               disabled={loadingAccounts}
             >
-              <SelectTrigger>
+              <SelectTrigger className={!planoContasId ? "border-destructive" : ""}>
                 <SelectValue placeholder={loadingAccounts ? "Carregando..." : "Selecione..."} />
               </SelectTrigger>
               <SelectContent>
+                {contasDespesa.length === 0 && !loadingAccounts && (
+                  <div className="p-2 text-sm text-muted-foreground text-center">
+                    Nenhuma conta de despesa cadastrada
+                  </div>
+                )}
                 {contasDespesa.map((conta) => (
                   <SelectItem key={conta.id} value={conta.id}>
                     {conta.code} - {conta.name}
@@ -132,19 +144,29 @@ export function FinanceiroCard({
                 ))}
               </SelectContent>
             </Select>
+            {!planoContasId && !loadingAccounts && (
+              <p className="text-xs text-destructive">Obrigatório para categorização</p>
+            )}
           </div>
 
           <div className="space-y-2">
-            <Label>Centro de Custo</Label>
+            <Label>
+              Centro de Custo <span className="text-destructive">*</span>
+            </Label>
             <Select 
               value={centroCustoId} 
               onValueChange={onCentroCustoChange}
               disabled={loadingCostCenters}
             >
-              <SelectTrigger>
+              <SelectTrigger className={!centroCustoId ? "border-destructive" : ""}>
                 <SelectValue placeholder={loadingCostCenters ? "Carregando..." : "Selecione..."} />
               </SelectTrigger>
               <SelectContent>
+                {centrosAtivos.length === 0 && !loadingCostCenters && (
+                  <div className="p-2 text-sm text-muted-foreground text-center">
+                    Nenhum centro de custo cadastrado
+                  </div>
+                )}
                 {centrosAtivos.map((centro) => (
                   <SelectItem key={centro.id} value={centro.id}>
                     {centro.code} - {centro.name}
@@ -152,6 +174,9 @@ export function FinanceiroCard({
                 ))}
               </SelectContent>
             </Select>
+            {!centroCustoId && !loadingCostCenters && (
+              <p className="text-xs text-destructive">Obrigatório para controle financeiro</p>
+            )}
           </div>
         </div>
 
