@@ -412,7 +412,7 @@ export function PayableForm({ open, onOpenChange, payable, onSuccess }: PayableF
               options={suppliers.map((s) => ({
                 value: s.id,
                 label: s.nome_fantasia || s.razao_social || "Sem nome",
-                sublabel: s.tipo_pessoa ? formatCpfCnpj(s.razao_social || "", s.tipo_pessoa) : undefined
+                sublabel: s.tipo_pessoa === "PJ" ? "Pessoa Jurídica" : s.tipo_pessoa === "PF" ? "Pessoa Física" : undefined
               }))}
               value={formData.supplierId}
               onChange={(value) => setFormData({ ...formData, supplierId: value })}
