@@ -4,6 +4,7 @@ import { Send, Trash2, X, Loader2 } from "lucide-react";
 interface PayablesBulkActionsProps {
   selectedCount: number;
   totalAmount: number;
+  canSubmitToBank: boolean; // Nova prop para controlar visibilidade do botão
   onSubmitToBank: () => void;
   onDelete: () => void;
   onClearSelection: () => void;
@@ -20,6 +21,7 @@ const formatCurrency = (value: number) => {
 export function PayablesBulkActions({
   selectedCount,
   totalAmount,
+  canSubmitToBank,
   onSubmitToBank,
   onDelete,
   onClearSelection,
@@ -47,19 +49,22 @@ export function PayablesBulkActions({
 
         {/* Action buttons */}
         <div className="flex items-center gap-2">
-          <Button
-            onClick={onSubmitToBank}
-            disabled={isProcessing}
-            size="sm"
-            className="gap-2"
-          >
-            {isProcessing ? (
-              <Loader2 className="h-4 w-4 animate-spinner" />
-            ) : (
-              <Send className="h-4 w-4" />
-            )}
-            Enviar para Aprovação
-          </Button>
+          {/* Só mostra botão de enviar se pelo menos um item tem dados de pagamento válidos */}
+          {canSubmitToBank && (
+            <Button
+              onClick={onSubmitToBank}
+              disabled={isProcessing}
+              size="sm"
+              className="gap-2"
+            >
+              {isProcessing ? (
+                <Loader2 className="h-4 w-4 animate-spinner" />
+              ) : (
+                <Send className="h-4 w-4" />
+              )}
+              Enviar para Aprovação
+            </Button>
+          )}
 
           <Button
             variant="outline"

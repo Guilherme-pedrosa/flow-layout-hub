@@ -32,11 +32,13 @@ import {
 import { Loader2, Save, Receipt, QrCode, CreditCard, Plus, CheckCircle, AlertCircle, Search, Building2, User } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { format } from "date-fns";
+import { format, isBefore, startOfDay, parseISO } from "date-fns";
 import { CadastrarPessoaDialog } from "@/components/shared/CadastrarPessoaDialog";
 import { AuditValidationBadge } from "@/components/shared/AuditValidationBadge";
+import { PayableAttachments } from "./PayableAttachments";
 import { useAiAuditora, AuditResult } from "@/hooks/useAiAuditora";
 import { useCompany } from "@/contexts/CompanyContext";
+import { useFinancialSituations } from "@/hooks/useFinancialSituations";
 
 interface PayableFormProps {
   open: boolean;
@@ -76,6 +78,7 @@ export function PayableForm({ open, onOpenChange, payable, onSuccess }: PayableF
   const { currentCompany } = useCompany();
   const companyId = currentCompany?.id;
   const { auditPayable, loading: auditLoading } = useAiAuditora();
+  const { getDefaultSituation, getOverdueSituation } = useFinancialSituations();
   
   const [loading, setLoading] = useState(false);
   const [showCadastrarFornecedor, setShowCadastrarFornecedor] = useState(false);
@@ -320,6 +323,21 @@ export function PayableForm({ open, onOpenChange, payable, onSuccess }: PayableF
       // Determinar status baseado nos dados de pagamento
       const paymentStatus = isPaymentDataComplete() ? "ready_to_pay" as const : "open" as const;
 
+      // Determinar situação financeira: 
+      // - Se vencido, usar situação "Vencido"
+      // - Senão, usar situação padrão "Em aberto"
+      let financialSituationId: string | null = null;
+      const today = startOfDay(new Date());
+      const dueDate = startOfDay(parseISO(formData.dueDate));
+      
+      if (isBefore(dueDate, today)) {
+        const overdueSituation = getOverdueSituation();
+        financialSituationId = overdueSituation?.id || null;
+      } else {
+        const defaultSituation = getDefaultSituation();
+        financialSituationId = defaultSituation?.id || null;
+      }
+
       const payableData = {
         company_id: companyId,
         supplier_id: formData.supplierId,
@@ -335,6 +353,7 @@ export function PayableForm({ open, onOpenChange, payable, onSuccess }: PayableF
         recipient_name: formData.paymentMethodType === "pix" ? formData.recipientName : null,
         recipient_document: formData.paymentMethodType === "pix" ? formData.recipientDocument : null,
         payment_status: paymentStatus as "open" | "ready_to_pay",
+        financial_situation_id: financialSituationId,
       };
 
       if (payable?.id) {

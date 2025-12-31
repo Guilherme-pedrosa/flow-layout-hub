@@ -197,6 +197,11 @@ export function useFinancialSituations() {
     return situations.filter(s => s.allows_manual_change && s.is_active);
   }, [situations]);
 
+  // Buscar situação de "Vencido"
+  const getOverdueSituation = useCallback(() => {
+    return situations.find(s => s.name.toLowerCase().includes("vencido") && s.is_active);
+  }, [situations]);
+
   return {
     situations,
     loading,
@@ -209,5 +214,6 @@ export function useFinancialSituations() {
     getSentForApprovalSituation,
     getPaidSituation,
     getManualChangeableSituations,
+    getOverdueSituation,
   };
 }
