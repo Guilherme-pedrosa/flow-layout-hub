@@ -4,6 +4,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
@@ -29,7 +32,10 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Loader2, Save, Receipt, QrCode, CreditCard, Plus, CheckCircle, AlertCircle, Search, Building2, User } from "lucide-react";
+import { 
+  Loader2, Save, Receipt, QrCode, CreditCard, Plus, CheckCircle, AlertCircle, 
+  Search, Building2, User, FileText, Paperclip, DollarSign, Info 
+} from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { format, isBefore, startOfDay, parseISO } from "date-fns";
@@ -57,6 +63,11 @@ interface PayableFormProps {
     scheduled_payment_date?: string | null;
     recipient_name?: string | null;
     recipient_document?: string | null;
+    chart_account_id?: string | null;
+    cost_center_id?: string | null;
+    bank_account_id?: string | null;
+    financial_situation_id?: string | null;
+    notes?: string | null;
   } | null;
   onSuccess?: () => void;
 }
@@ -74,16 +85,39 @@ interface PixValidation {
   error?: string;
 }
 
+interface ChartAccount {
+  id: string;
+  code: string;
+  name: string;
+}
+
+interface CostCenter {
+  id: string;
+  code: string;
+  name: string;
+}
+
+interface BankAccount {
+  id: string;
+  name: string;
+  bank_name: string | null;
+  account_number: string | null;
+}
+
 export function PayableForm({ open, onOpenChange, payable, onSuccess }: PayableFormProps) {
   const { currentCompany } = useCompany();
   const companyId = currentCompany?.id;
   const { auditPayable, loading: auditLoading } = useAiAuditora();
-  const { getDefaultSituation, getOverdueSituation } = useFinancialSituations();
+  const { situations, getDefaultSituation, getOverdueSituation } = useFinancialSituations();
   
   const [loading, setLoading] = useState(false);
   const [showCadastrarFornecedor, setShowCadastrarFornecedor] = useState(false);
   const [suppliers, setSuppliers] = useState<{ id: string; nome_fantasia: string | null; razao_social: string | null; tipo_pessoa?: string }[]>([]);
+  const [chartAccounts, setChartAccounts] = useState<ChartAccount[]>([]);
+  const [costCenters, setCostCenters] = useState<CostCenter[]>([]);
+  const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
   const [auditResult, setAuditResult] = useState<AuditResult | null>(null);
+  const [activeTab, setActiveTab] = useState("financeiro");
   
   // PIX validation state
   const [validatingPix, setValidatingPix] = useState(false);
@@ -94,8 +128,11 @@ export function PayableForm({ open, onOpenChange, payable, onSuccess }: PayableF
   const [formData, setFormData] = useState({
     supplierId: "",
     amount: "",
+    interestAmount: "",
+    discountAmount: "",
     dueDate: "",
     scheduledPaymentDate: "",
+    competenceDate: "",
     description: "",
     documentNumber: "",
     paymentMethodType: "" as PaymentMethodType | "",
@@ -104,21 +141,34 @@ export function PayableForm({ open, onOpenChange, payable, onSuccess }: PayableF
     pixKeyType: "cpf" as PixKeyType,
     recipientName: "",
     recipientDocument: "",
+    chartAccountId: "",
+    costCenterId: "",
+    bankAccountId: "",
+    financialSituationId: "",
+    notes: "",
+    invoiceName: "",
+    isReconciled: false,
   });
 
   useEffect(() => {
     if (open) {
       fetchSuppliers();
-      // Reset validation state
+      fetchChartAccounts();
+      fetchCostCenters();
+      fetchBankAccounts();
       setPixValidation(null);
       setPixConfirmed(false);
+      setActiveTab("financeiro");
       
       if (payable) {
         setFormData({
           supplierId: payable.supplier_id,
           amount: formatCurrencyInput(payable.amount * 100),
+          interestAmount: "",
+          discountAmount: "",
           dueDate: payable.due_date,
           scheduledPaymentDate: payable.scheduled_payment_date || "",
+          competenceDate: format(new Date(), "yyyy-MM-dd"),
           description: payable.description || "",
           documentNumber: payable.document_number || "",
           paymentMethodType: (payable.payment_method_type as PaymentMethodType) || "",
@@ -127,17 +177,27 @@ export function PayableForm({ open, onOpenChange, payable, onSuccess }: PayableF
           pixKeyType: (payable.pix_key_type as PixKeyType) || "cpf",
           recipientName: payable.recipient_name || "",
           recipientDocument: payable.recipient_document || "",
+          chartAccountId: payable.chart_account_id || "",
+          costCenterId: payable.cost_center_id || "",
+          bankAccountId: payable.bank_account_id || "",
+          financialSituationId: payable.financial_situation_id || "",
+          notes: payable.notes || "",
+          invoiceName: "",
+          isReconciled: false,
         });
-        // If editing, consider PIX already confirmed if data exists
         if (payable.pix_key && payable.recipient_name) {
           setPixConfirmed(true);
         }
       } else {
+        const defaultSituation = getDefaultSituation();
         setFormData({
           supplierId: "",
           amount: "",
+          interestAmount: "",
+          discountAmount: "",
           dueDate: format(new Date(), "yyyy-MM-dd"),
           scheduledPaymentDate: "",
+          competenceDate: format(new Date(), "yyyy-MM-dd"),
           description: "",
           documentNumber: "",
           paymentMethodType: "",
@@ -146,6 +206,13 @@ export function PayableForm({ open, onOpenChange, payable, onSuccess }: PayableF
           pixKeyType: "cpf",
           recipientName: "",
           recipientDocument: "",
+          chartAccountId: "",
+          costCenterId: "",
+          bankAccountId: "",
+          financialSituationId: defaultSituation?.id || "",
+          notes: "",
+          invoiceName: "",
+          isReconciled: false,
         });
       }
     }
@@ -153,9 +220,6 @@ export function PayableForm({ open, onOpenChange, payable, onSuccess }: PayableF
 
   const fetchSuppliers = async () => {
     if (!companyId) return;
-    
-    // Buscar TODAS as pessoas ativas (não filtrar por is_fornecedor)
-    // Importante: buscar por company_id OU sem company_id (dados legados)
     const { data } = await supabase
       .from("pessoas")
       .select("id, nome_fantasia, razao_social, tipo_pessoa")
@@ -163,6 +227,39 @@ export function PayableForm({ open, onOpenChange, payable, onSuccess }: PayableF
       .or(`company_id.eq.${companyId},company_id.is.null`)
       .order("razao_social");
     setSuppliers(data || []);
+  };
+
+  const fetchChartAccounts = async () => {
+    if (!companyId) return;
+    const { data } = await supabase
+      .from("chart_of_accounts")
+      .select("id, code, name")
+      .eq("company_id", companyId)
+      .eq("is_active", true)
+      .order("code");
+    setChartAccounts(data || []);
+  };
+
+  const fetchCostCenters = async () => {
+    if (!companyId) return;
+    const { data } = await supabase
+      .from("cost_centers")
+      .select("id, code, name")
+      .eq("company_id", companyId)
+      .eq("is_active", true)
+      .order("code");
+    setCostCenters(data || []);
+  };
+
+  const fetchBankAccounts = async () => {
+    if (!companyId) return;
+    const { data } = await supabase
+      .from("bank_accounts")
+      .select("id, name, bank_name, account_number")
+      .eq("company_id", companyId)
+      .eq("is_active", true)
+      .order("name");
+    setBankAccounts(data || []);
   };
 
   const formatCurrencyInput = (cents: number) => {
@@ -181,9 +278,15 @@ export function PayableForm({ open, onOpenChange, payable, onSuccess }: PayableF
     return parseInt(numbers || "0") / 100;
   };
 
+  const calculateTotal = (): number => {
+    const amount = parseCurrency(formData.amount);
+    const interest = parseCurrency(formData.interestAmount);
+    const discount = parseCurrency(formData.discountAmount);
+    return amount + interest - discount;
+  };
+
   const isPaymentDataComplete = (): boolean => {
     if (!formData.paymentMethodType) return false;
-    
     if (formData.paymentMethodType === "boleto") {
       return !!formData.boletoBarcode && formData.boletoBarcode.length >= 44;
     }
@@ -202,19 +305,9 @@ export function PayableForm({ open, onOpenChange, payable, onSuccess }: PayableF
     setValidatingPix(true);
     setPixValidation(null);
 
-    console.log("[PIX Validation] 1. Iniciando validação...");
-    console.log("[PIX Validation] Chave:", formData.pixKey, "Tipo:", formData.pixKeyType);
-
     try {
-      console.log("[PIX Validation] 2. Verificando empresa...");
-      
-      if (!companyId) {
-        console.error("[PIX Validation] Empresa não encontrada");
-        throw new Error("Empresa não configurada");
-      }
-      console.log("[PIX Validation] 3. Empresa encontrada:", companyId);
+      if (!companyId) throw new Error("Empresa não configurada");
 
-      console.log("[PIX Validation] 4. Chamando edge function inter-validate-pix...");
       const { data, error } = await supabase.functions.invoke("inter-validate-pix", {
         body: {
           company_id: companyId,
@@ -223,29 +316,20 @@ export function PayableForm({ open, onOpenChange, payable, onSuccess }: PayableF
         },
       });
 
-      console.log("[PIX Validation] 5. Resposta recebida:", JSON.stringify(data));
-      
-      if (error) {
-        console.error("[PIX Validation] Erro na edge function:", error);
-        throw error;
-      }
+      if (error) throw error;
 
       setPixValidation(data);
       
       if (data.valid) {
-        console.log("[PIX Validation] 6. Chave válida - mostrando confirmação");
         setShowPixConfirmDialog(true);
       } else {
-        console.log("[PIX Validation] 6. Chave inválida:", data.error);
         toast.error(data.error || "Chave PIX inválida");
       }
     } catch (error) {
-      console.error("[PIX Validation] ERRO:", error);
       const errorMessage = error instanceof Error ? error.message : "Erro desconhecido";
       toast.error(`Erro ao validar chave PIX: ${errorMessage}`);
     } finally {
       setValidatingPix(false);
-      console.log("[PIX Validation] Finalizado");
     }
   };
 
@@ -264,7 +348,6 @@ export function PayableForm({ open, onOpenChange, payable, onSuccess }: PayableF
 
   const handlePixKeyChange = (value: string) => {
     setFormData({ ...formData, pixKey: value });
-    // Reset validation when key changes
     setPixValidation(null);
     setPixConfirmed(false);
   };
@@ -289,13 +372,17 @@ export function PayableForm({ open, onOpenChange, payable, onSuccess }: PayableF
       return;
     }
 
-    const amount = parseCurrency(formData.amount);
-    if (amount <= 0) {
-      toast.error("O valor deve ser maior que zero");
+    if (!formData.chartAccountId) {
+      toast.error("Selecione o Plano de Contas");
       return;
     }
 
-    // Executar auditoria antes de salvar
+    const amount = calculateTotal();
+    if (amount <= 0) {
+      toast.error("O valor total deve ser maior que zero");
+      return;
+    }
+
     const auditRes = await auditPayable({
       supplier_id: formData.supplierId,
       amount,
@@ -307,7 +394,6 @@ export function PayableForm({ open, onOpenChange, payable, onSuccess }: PayableF
     });
     setAuditResult(auditRes);
 
-    // Se houver erros críticos, não salvar
     if (!auditRes.valid) {
       toast.error("Corrija os erros antes de salvar");
       return;
@@ -316,26 +402,22 @@ export function PayableForm({ open, onOpenChange, payable, onSuccess }: PayableF
     setLoading(true);
 
     try {
-      if (!companyId) {
-        throw new Error("Empresa não configurada");
-      }
+      if (!companyId) throw new Error("Empresa não configurada");
 
-      // Determinar status baseado nos dados de pagamento
       const paymentStatus = isPaymentDataComplete() ? "ready_to_pay" as const : "open" as const;
 
-      // Determinar situação financeira: 
-      // - Se vencido, usar situação "Vencido"
-      // - Senão, usar situação padrão "Em aberto"
-      let financialSituationId: string | null = null;
-      const today = startOfDay(new Date());
-      const dueDate = startOfDay(parseISO(formData.dueDate));
-      
-      if (isBefore(dueDate, today)) {
-        const overdueSituation = getOverdueSituation();
-        financialSituationId = overdueSituation?.id || null;
-      } else {
-        const defaultSituation = getDefaultSituation();
-        financialSituationId = defaultSituation?.id || null;
+      let financialSituationId: string | null = formData.financialSituationId || null;
+      if (!financialSituationId) {
+        const today = startOfDay(new Date());
+        const dueDate = startOfDay(parseISO(formData.dueDate));
+        
+        if (isBefore(dueDate, today)) {
+          const overdueSituation = getOverdueSituation();
+          financialSituationId = overdueSituation?.id || null;
+        } else {
+          const defaultSituation = getDefaultSituation();
+          financialSituationId = defaultSituation?.id || null;
+        }
       }
 
       const payableData = {
@@ -354,6 +436,10 @@ export function PayableForm({ open, onOpenChange, payable, onSuccess }: PayableF
         recipient_document: formData.paymentMethodType === "pix" ? formData.recipientDocument : null,
         payment_status: paymentStatus as "open" | "ready_to_pay",
         financial_situation_id: financialSituationId,
+        chart_account_id: formData.chartAccountId || null,
+        cost_center_id: formData.costCenterId || null,
+        bank_account_id: formData.bankAccountId || null,
+        notes: formData.notes || null,
       };
 
       if (payable?.id) {
@@ -384,314 +470,564 @@ export function PayableForm({ open, onOpenChange, payable, onSuccess }: PayableF
   return (
     <>
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-[900px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Receipt className="h-5 w-5 text-primary" />
             {payable ? "Editar Conta a Pagar" : "Nova Conta a Pagar"}
           </DialogTitle>
           <DialogDescription>
-            Informe os dados da conta e o método de pagamento para agendar.
+            Preencha os dados do lançamento financeiro.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="grid gap-4 py-4">
-          {/* Validação IA Auditora */}
-          <AuditValidationBadge
-            result={auditResult}
-            loading={auditLoading}
-            onAudit={handleAudit}
-          />
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <TabsList className="grid w-full grid-cols-3">
+            <TabsTrigger value="financeiro" className="gap-2">
+              <FileText className="h-4 w-4" />
+              Lançamento financeiro
+            </TabsTrigger>
+            <TabsTrigger value="outras" className="gap-2">
+              <Info className="h-4 w-4" />
+              Outras informações
+            </TabsTrigger>
+            <TabsTrigger value="anexos" className="gap-2">
+              <Paperclip className="h-4 w-4" />
+              Anexos
+            </TabsTrigger>
+          </TabsList>
 
-          {/* Fornecedor */}
-          <div className="space-y-2">
-            <Label>Fornecedor *</Label>
-            <div className="flex gap-2">
-              <Select
-                value={formData.supplierId}
-                onValueChange={(value) => setFormData({ ...formData, supplierId: value })}
-              >
-                <SelectTrigger className="flex-1">
-                  <SelectValue placeholder="Selecione o fornecedor" />
-                </SelectTrigger>
-                <SelectContent>
-                  <div className="p-2 border-b">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="w-full justify-start gap-2 text-primary hover:text-primary"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        setShowCadastrarFornecedor(true);
-                      }}
-                    >
-                      <Plus className="h-4 w-4" />
-                      Cadastrar novo fornecedor
-                    </Button>
-                  </div>
-                  {suppliers.map((s) => (
-                    <SelectItem key={s.id} value={s.id}>
-                      {s.nome_fantasia || s.razao_social || "Sem nome"}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Button 
-                type="button" 
-                variant="outline" 
-                size="icon"
-                onClick={() => setShowCadastrarFornecedor(true)}
-                title="Cadastrar novo fornecedor"
-              >
-                <Plus className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
-
-          {/* Valor e Vencimento */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label>Valor *</Label>
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">R$</span>
-                <Input
-                  className="pl-10"
-                  placeholder="0,00"
-                  value={formData.amount}
-                  onChange={(e) => setFormData({ ...formData, amount: formatCurrency(e.target.value) })}
-                />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label>Vencimento *</Label>
-              <Input
-                type="date"
-                value={formData.dueDate}
-                onChange={(e) => setFormData({ ...formData, dueDate: e.target.value })}
-              />
-            </div>
-          </div>
-
-          {/* Documento e Data Programada */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label>Nº Documento</Label>
-              <Input
-                placeholder="NF-e, boleto, etc."
-                value={formData.documentNumber}
-                onChange={(e) => setFormData({ ...formData, documentNumber: e.target.value })}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Data Programada Pagto</Label>
-              <Input
-                type="date"
-                value={formData.scheduledPaymentDate}
-                onChange={(e) => setFormData({ ...formData, scheduledPaymentDate: e.target.value })}
-              />
-            </div>
-          </div>
-
-          {/* Descrição */}
-          <div className="space-y-2">
-            <Label>Descrição</Label>
-            <Textarea
-              placeholder="Descrição do pagamento"
-              value={formData.description}
-              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              rows={2}
-            />
-          </div>
-
-          {/* Anexos */}
-          {payable?.id && (
-            <PayableAttachments payableId={payable.id} />
-          )}
-
-          {/* Método de Pagamento */}
-          <div className="space-y-2">
-            <Label className="flex items-center gap-2">
-              <CreditCard className="h-4 w-4" />
-              Método de Pagamento
-            </Label>
-            <Select
-              value={formData.paymentMethodType}
-              onValueChange={(value: PaymentMethodType) => setFormData({ ...formData, paymentMethodType: value })}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Selecione como será pago" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="boleto">Boleto Bancário</SelectItem>
-                <SelectItem value="pix">PIX</SelectItem>
-                <SelectItem value="transferencia">Transferência</SelectItem>
-                <SelectItem value="outro">Outro</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Campos de Boleto */}
-          {formData.paymentMethodType === "boleto" && (
-            <div className="space-y-2 p-4 rounded-lg border bg-muted/30">
-              <Label className="flex items-center gap-2">
-                <Receipt className="h-4 w-4" />
-                Código de Barras / Linha Digitável *
-              </Label>
-              <Input
-                placeholder="Cole a linha digitável do boleto (47 ou 48 dígitos)"
-                value={formData.boletoBarcode}
-                onChange={(e) => setFormData({ ...formData, boletoBarcode: e.target.value.replace(/\D/g, "") })}
-                maxLength={48}
-              />
-              {formData.boletoBarcode && formData.boletoBarcode.length < 44 && (
-                <p className="text-xs text-destructive">
-                  A linha digitável deve ter pelo menos 44 dígitos
-                </p>
-              )}
-            </div>
-          )}
-
-          {/* Campos de PIX */}
-          {formData.paymentMethodType === "pix" && (
-            <div className="space-y-4 p-4 rounded-lg border bg-muted/30">
-              {/* Chave PIX e Tipo */}
-              <div className="grid grid-cols-3 gap-4">
-                <div className="col-span-2 space-y-2">
-                  <Label className="flex items-center gap-2">
-                    <QrCode className="h-4 w-4" />
-                    Chave PIX *
-                  </Label>
-                  <div className="flex gap-2">
-                    <Input
-                      placeholder="Informe a chave PIX"
-                      value={formData.pixKey}
-                      onChange={(e) => handlePixKeyChange(e.target.value)}
-                      className="flex-1"
-                    />
-                    <Button
-                      type="button"
-                      variant={pixConfirmed ? "outline" : "default"}
-                      onClick={handleValidatePix}
-                      disabled={validatingPix || !formData.pixKey}
-                      className="shrink-0"
-                    >
-                      {validatingPix ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : pixConfirmed ? (
-                        <CheckCircle className="h-4 w-4 text-green-600" />
-                      ) : (
-                        <Search className="h-4 w-4" />
-                      )}
-                    </Button>
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label>Tipo</Label>
-                  <Select
-                    value={formData.pixKeyType}
-                    onValueChange={(value: PixKeyType) => {
-                      setFormData({ ...formData, pixKeyType: value });
-                      setPixValidation(null);
-                      setPixConfirmed(false);
-                    }}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="cpf">CPF</SelectItem>
-                      <SelectItem value="cnpj">CNPJ</SelectItem>
-                      <SelectItem value="email">E-mail</SelectItem>
-                      <SelectItem value="telefone">Telefone</SelectItem>
-                      <SelectItem value="aleatorio">Aleatória</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              {/* Status da validação */}
-              {pixConfirmed && (
-                <div className="p-3 rounded-lg bg-green-500/10 border border-green-500/20">
-                  <div className="flex items-center gap-2 text-green-700">
-                    <CheckCircle className="h-4 w-4" />
-                    <span className="font-medium">Destinatário confirmado</span>
-                  </div>
-                  <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
-                    <div>
-                      <span className="text-muted-foreground">Nome:</span>
-                      <span className="ml-2 font-medium">{formData.recipientName}</span>
+          {/* Tab: Lançamento Financeiro */}
+          <TabsContent value="financeiro" className="space-y-4 mt-4">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+              {/* Dados Gerais */}
+              <Card className="lg:col-span-2">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <FileText className="h-4 w-4" />
+                    Dados gerais
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {/* Descrição e Vencimento */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Descrição do pagamento *</Label>
+                      <Input
+                        placeholder="Descrição do pagamento"
+                        value={formData.description}
+                        onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                      />
                     </div>
-                    {formData.recipientDocument && (
-                      <div>
-                        <span className="text-muted-foreground">Documento:</span>
-                        <span className="ml-2 font-medium">{formData.recipientDocument}</span>
-                      </div>
-                    )}
+                    <div className="space-y-2">
+                      <Label>Vencimento *</Label>
+                      <Input
+                        type="date"
+                        value={formData.dueDate}
+                        onChange={(e) => setFormData({ ...formData, dueDate: e.target.value })}
+                      />
+                    </div>
                   </div>
-                </div>
-              )}
 
-              {!pixConfirmed && formData.pixKey && (
-                <div className="p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/20 text-yellow-700 text-sm">
-                  <div className="flex items-center gap-2">
-                    <AlertCircle className="h-4 w-4" />
-                    <span>Clique no botão de busca para validar a chave PIX antes de prosseguir.</span>
-                  </div>
-                </div>
-              )}
-
-              {/* Campos manuais (caso a validação não funcione) */}
-              {!pixConfirmed && (
-                <div className="grid grid-cols-2 gap-4 pt-2 border-t">
-                  <div className="space-y-2">
-                    <Label className="text-muted-foreground text-xs">Preenchimento manual (opcional)</Label>
-                    <Input
-                      placeholder="Nome do favorecido"
-                      value={formData.recipientName}
-                      onChange={(e) => setFormData({ ...formData, recipientName: e.target.value })}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="text-muted-foreground text-xs">CPF/CNPJ</Label>
-                    <Input
-                      placeholder="000.000.000-00"
-                      value={formData.recipientDocument}
-                      onChange={(e) => setFormData({ ...formData, recipientDocument: e.target.value })}
-                    />
-                  </div>
-                  {formData.recipientName && (
-                    <div className="col-span-2">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setPixConfirmed(true)}
-                        className="w-full"
+                  {/* Plano de Contas e Centro de Custo */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Plano de contas *</Label>
+                      <Select
+                        value={formData.chartAccountId}
+                        onValueChange={(value) => setFormData({ ...formData, chartAccountId: value })}
                       >
-                        <CheckCircle className="mr-2 h-4 w-4" />
-                        Confirmar dados manualmente
-                      </Button>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecione..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {chartAccounts.map((acc) => (
+                            <SelectItem key={acc.id} value={acc.id}>
+                              {acc.code} - {acc.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Centro de custo</Label>
+                      <Select
+                        value={formData.costCenterId}
+                        onValueChange={(value) => setFormData({ ...formData, costCenterId: value })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecione..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {costCenters.map((cc) => (
+                            <SelectItem key={cc.id} value={cc.id}>
+                              {cc.code} - {cc.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  {/* Forma de Pagamento e Conta Bancária */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Forma de pagamento *</Label>
+                      <Select
+                        value={formData.paymentMethodType}
+                        onValueChange={(value: PaymentMethodType) => setFormData({ ...formData, paymentMethodType: value })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecione..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="boleto">Boleto Bancário</SelectItem>
+                          <SelectItem value="pix">PIX</SelectItem>
+                          <SelectItem value="transferencia">Transferência</SelectItem>
+                          <SelectItem value="outro">Outro</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Conta bancária *</Label>
+                      <Select
+                        value={formData.bankAccountId}
+                        onValueChange={(value) => setFormData({ ...formData, bankAccountId: value })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecione..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {bankAccounts.map((ba) => (
+                            <SelectItem key={ba.id} value={ba.id}>
+                              {ba.name} {ba.bank_name ? `- ${ba.bank_name}` : ""}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  {/* Situação e Data de compensação */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Situação *</Label>
+                      <Select
+                        value={formData.financialSituationId}
+                        onValueChange={(value) => setFormData({ ...formData, financialSituationId: value })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecione..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {situations.filter(s => s.allows_manual_change).map((sit) => (
+                            <SelectItem key={sit.id} value={sit.id}>
+                              <div className="flex items-center gap-2">
+                                <div 
+                                  className="w-3 h-3 rounded-full" 
+                                  style={{ backgroundColor: sit.color }}
+                                />
+                                {sit.name}
+                              </div>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Data de compensação</Label>
+                      <Input
+                        type="date"
+                        value={formData.scheduledPaymentDate}
+                        onChange={(e) => setFormData({ ...formData, scheduledPaymentDate: e.target.value })}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Campos de Boleto */}
+                  {formData.paymentMethodType === "boleto" && (
+                    <div className="space-y-2 p-4 rounded-lg border bg-muted/30">
+                      <Label className="flex items-center gap-2">
+                        <Receipt className="h-4 w-4" />
+                        Código de Barras / Linha Digitável *
+                      </Label>
+                      <Input
+                        placeholder="Cole a linha digitável do boleto (47 ou 48 dígitos)"
+                        value={formData.boletoBarcode}
+                        onChange={(e) => setFormData({ ...formData, boletoBarcode: e.target.value.replace(/\D/g, "") })}
+                        maxLength={48}
+                      />
+                      {formData.boletoBarcode && formData.boletoBarcode.length < 44 && (
+                        <p className="text-xs text-destructive">
+                          A linha digitável deve ter pelo menos 44 dígitos
+                        </p>
+                      )}
                     </div>
                   )}
+
+                  {/* Campos de PIX */}
+                  {formData.paymentMethodType === "pix" && (
+                    <div className="space-y-4 p-4 rounded-lg border bg-muted/30">
+                      <div className="grid grid-cols-3 gap-4">
+                        <div className="col-span-2 space-y-2">
+                          <Label className="flex items-center gap-2">
+                            <QrCode className="h-4 w-4" />
+                            Chave PIX *
+                          </Label>
+                          <div className="flex gap-2">
+                            <Input
+                              placeholder="Informe a chave PIX"
+                              value={formData.pixKey}
+                              onChange={(e) => handlePixKeyChange(e.target.value)}
+                              className="flex-1"
+                            />
+                            <Button
+                              type="button"
+                              variant={pixConfirmed ? "outline" : "default"}
+                              onClick={handleValidatePix}
+                              disabled={validatingPix || !formData.pixKey}
+                              className="shrink-0"
+                            >
+                              {validatingPix ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : pixConfirmed ? (
+                                <CheckCircle className="h-4 w-4 text-green-600" />
+                              ) : (
+                                <Search className="h-4 w-4" />
+                              )}
+                            </Button>
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Tipo</Label>
+                          <Select
+                            value={formData.pixKeyType}
+                            onValueChange={(value: PixKeyType) => {
+                              setFormData({ ...formData, pixKeyType: value });
+                              setPixValidation(null);
+                              setPixConfirmed(false);
+                            }}
+                          >
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="cpf">CPF</SelectItem>
+                              <SelectItem value="cnpj">CNPJ</SelectItem>
+                              <SelectItem value="email">E-mail</SelectItem>
+                              <SelectItem value="telefone">Telefone</SelectItem>
+                              <SelectItem value="aleatorio">Aleatória</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+
+                      {pixConfirmed && (
+                        <div className="p-3 rounded-lg bg-green-500/10 border border-green-500/20">
+                          <div className="flex items-center gap-2 text-green-700">
+                            <CheckCircle className="h-4 w-4" />
+                            <span className="font-medium">Destinatário confirmado</span>
+                          </div>
+                          <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
+                            <div>
+                              <span className="text-muted-foreground">Nome:</span>
+                              <span className="ml-2 font-medium">{formData.recipientName}</span>
+                            </div>
+                            {formData.recipientDocument && (
+                              <div>
+                                <span className="text-muted-foreground">Documento:</span>
+                                <span className="ml-2 font-medium">{formData.recipientDocument}</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {!pixConfirmed && formData.pixKey && (
+                        <div className="p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/20 text-yellow-700 text-sm">
+                          <div className="flex items-center gap-2">
+                            <AlertCircle className="h-4 w-4" />
+                            <span>Clique no botão de busca para validar a chave PIX.</span>
+                          </div>
+                        </div>
+                      )}
+
+                      {!pixConfirmed && (
+                        <div className="grid grid-cols-2 gap-4 pt-2 border-t">
+                          <div className="space-y-2">
+                            <Label className="text-muted-foreground text-xs">Preenchimento manual</Label>
+                            <Input
+                              placeholder="Nome do favorecido"
+                              value={formData.recipientName}
+                              onChange={(e) => setFormData({ ...formData, recipientName: e.target.value })}
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label className="text-muted-foreground text-xs">CPF/CNPJ</Label>
+                            <Input
+                              placeholder="000.000.000-00"
+                              value={formData.recipientDocument}
+                              onChange={(e) => setFormData({ ...formData, recipientDocument: e.target.value })}
+                            />
+                          </div>
+                          {formData.recipientName && (
+                            <div className="col-span-2">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setPixConfirmed(true)}
+                                className="w-full"
+                              >
+                                <CheckCircle className="mr-2 h-4 w-4" />
+                                Confirmar dados manualmente
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Card de Valores */}
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <DollarSign className="h-4 w-4" />
+                    Valores
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <Label>Valor bruto *</Label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">R$</span>
+                      <Input
+                        className="pl-10"
+                        placeholder="0,00"
+                        value={formData.amount}
+                        onChange={(e) => setFormData({ ...formData, amount: formatCurrency(e.target.value) })}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Juros</Label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">R$</span>
+                      <Input
+                        className="pl-10"
+                        placeholder="0,00"
+                        value={formData.interestAmount}
+                        onChange={(e) => setFormData({ ...formData, interestAmount: formatCurrency(e.target.value) })}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Desconto</Label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">R$</span>
+                      <Input
+                        className="pl-10"
+                        placeholder="0,00"
+                        value={formData.discountAmount}
+                        onChange={(e) => setFormData({ ...formData, discountAmount: formatCurrency(e.target.value) })}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="pt-4 border-t">
+                    <div className="flex justify-between items-center">
+                      <span className="font-medium">Total</span>
+                      <span className="text-xl font-bold text-primary">
+                        {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(calculateTotal())}
+                      </span>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Auditoria */}
+            <AuditValidationBadge
+              result={auditResult}
+              loading={auditLoading}
+              onAudit={handleAudit}
+            />
+          </TabsContent>
+
+          {/* Tab: Outras Informações */}
+          <TabsContent value="outras" className="space-y-4 mt-4">
+            <Card>
+              <CardContent className="pt-6 space-y-4">
+                {/* Fornecedor e Data de Competência */}
+                <div className="grid grid-cols-4 gap-4">
+                  <div className="space-y-2">
+                    <Label>Entidade</Label>
+                    <Select defaultValue="fornecedor">
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="fornecedor">Fornecedor</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Fornecedor</Label>
+                    <div className="flex gap-2">
+                      <Select
+                        value={formData.supplierId}
+                        onValueChange={(value) => setFormData({ ...formData, supplierId: value })}
+                      >
+                        <SelectTrigger className="flex-1">
+                          <SelectValue placeholder="Selecione o fornecedor" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <div className="p-2 border-b">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="w-full justify-start gap-2 text-primary hover:text-primary"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                setShowCadastrarFornecedor(true);
+                              }}
+                            >
+                              <Plus className="h-4 w-4" />
+                              Cadastrar novo
+                            </Button>
+                          </div>
+                          {suppliers.map((s) => (
+                            <SelectItem key={s.id} value={s.id}>
+                              {s.nome_fantasia || s.razao_social || "Sem nome"}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Button 
+                        type="button" 
+                        variant="outline" 
+                        size="icon"
+                        onClick={() => setShowCadastrarFornecedor(true)}
+                      >
+                        <Plus className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Data de competência *</Label>
+                    <Input
+                      type="date"
+                      value={formData.competenceDate}
+                      onChange={(e) => setFormData({ ...formData, competenceDate: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Nota Fiscal</Label>
+                    <Input
+                      placeholder="Nº da NF"
+                      value={formData.documentNumber}
+                      onChange={(e) => setFormData({ ...formData, documentNumber: e.target.value })}
+                    />
+                  </div>
                 </div>
-              )}
-            </div>
-          )}
 
-          {/* Status indicator */}
-          {formData.paymentMethodType && (
-            <div className={`p-3 rounded-lg text-sm ${isPaymentDataComplete() ? 'bg-green-500/10 text-green-700 border border-green-500/20' : 'bg-yellow-500/10 text-yellow-700 border border-yellow-500/20'}`}>
-              {isPaymentDataComplete() 
-                ? "✓ Dados de pagamento completos. Título pronto para pagamento."
-                : formData.paymentMethodType === "pix" && !pixConfirmed
-                  ? "⚠ Valide a chave PIX para poder submeter para pagamento."
-                  : "⚠ Complete os dados de pagamento para poder submeter para aprovação."}
-            </div>
-          )}
-        </div>
+                {/* Nome na Fatura e Conciliado */}
+                <div className="grid grid-cols-4 gap-4">
+                  <div className="space-y-2">
+                    <Label>OS Relacionada</Label>
+                    <Input placeholder="" disabled />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Situação financeira</Label>
+                    <Select
+                      value={formData.financialSituationId}
+                      onValueChange={(value) => setFormData({ ...formData, financialSituationId: value })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {situations.filter(s => s.allows_manual_change).map((sit) => (
+                          <SelectItem key={sit.id} value={sit.id}>
+                            {sit.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Nome na Fatura</Label>
+                    <Input
+                      placeholder=""
+                      value={formData.invoiceName}
+                      onChange={(e) => setFormData({ ...formData, invoiceName: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Conciliado?</Label>
+                    <Select
+                      value={formData.isReconciled ? "sim" : "nao"}
+                      onValueChange={(value) => setFormData({ ...formData, isReconciled: value === "sim" })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="nao">Não</SelectItem>
+                        <SelectItem value="sim">Sim</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
 
-        <DialogFooter>
+                {/* Negociação e Projeto */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Negociação / Unificado</Label>
+                    <Input placeholder="" disabled />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Projeto</Label>
+                    <Input placeholder="" disabled />
+                  </div>
+                </div>
+
+                {/* Observações */}
+                <div className="space-y-2">
+                  <Label>Informações complementares</Label>
+                  <Textarea
+                    placeholder="Observações adicionais..."
+                    value={formData.notes}
+                    onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                    rows={4}
+                  />
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Tab: Anexos */}
+          <TabsContent value="anexos" className="space-y-4 mt-4">
+            {payable?.id ? (
+              <PayableAttachments payableId={payable.id} />
+            ) : (
+              <Card>
+                <CardContent className="py-8 text-center text-muted-foreground">
+                  <Paperclip className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                  <p>Salve o registro para adicionar anexos.</p>
+                </CardContent>
+              </Card>
+            )}
+          </TabsContent>
+        </Tabs>
+
+        <DialogFooter className="flex-col sm:flex-row gap-2 pt-4 border-t">
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancelar
           </Button>
@@ -704,7 +1040,7 @@ export function PayableForm({ open, onOpenChange, payable, onSuccess }: PayableF
             ) : (
               <>
                 <Save className="mr-2 h-4 w-4" />
-                Salvar
+                Cadastrar
               </>
             )}
           </Button>
@@ -722,7 +1058,7 @@ export function PayableForm({ open, onOpenChange, payable, onSuccess }: PayableF
           </AlertDialogTitle>
           <AlertDialogDescription asChild>
             <div className="space-y-4">
-              <p>Verifique se os dados abaixo correspondem ao destinatário correto antes de prosseguir.</p>
+              <p>Verifique se os dados abaixo correspondem ao destinatário correto.</p>
               
               {pixValidation?.valid && (
                 <div className="p-4 rounded-lg border bg-muted/50 space-y-3">
