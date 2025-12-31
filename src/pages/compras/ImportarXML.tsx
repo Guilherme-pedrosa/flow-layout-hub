@@ -261,9 +261,34 @@ export default function ImportarXML() {
             if (error) throw error;
             if (!data.success) throw new Error(data.error);
 
-            setCteData(data.data);
-            results.push({ fileName: file.fileName, type: "cte", success: true });
-            toast.success(`CT-e ${data.data.numero} processado com sucesso!`);
+            const parsedCteData = data.data as CTEData;
+
+            // *** VALIDAÇÃO DO CT-e ***
+            if (nfeData) {
+              const nfeKey = nfeData.nota.chaveAcesso;
+              const nfeSupplierCnpj = nfeData.fornecedor.cnpj.replace(/[^0-9]/g, '');
+              
+              const cteReferencesNfe = parsedCteData.chaveNFe?.includes(nfeKey) || false;
+              const cteSenderIsNfeSupplier = parsedCteData.remetente?.cnpj?.replace(/[^0-9]/g, '') === nfeSupplierCnpj;
+
+              if (cteReferencesNfe || cteSenderIsNfeSupplier) {
+                // Validação OK
+                setCteData(parsedCteData);
+                results.push({ fileName: file.fileName, type: "cte", success: true });
+                toast.success(`CT-e ${parsedCteData.numero} vinculado com sucesso!`);
+              } else {
+                // Erro de validação
+                const errorMessage = `Este CT-e não pertence a esta NF-e. O remetente do CT-e (${parsedCteData.remetente?.razaoSocial || 'N/A'}) não é o fornecedor da NF-e (${nfeData.fornecedor.razaoSocial}).`;
+                toast.error("Erro de Vínculo", { description: errorMessage });
+                results.push({ fileName: file.fileName, type: "cte", success: false });
+                // Não seta o cteData para invalidar o upload
+              }
+            } else {
+              // Se não houver NF-e, apenas processa o CT-e
+              setCteData(parsedCteData);
+              results.push({ fileName: file.fileName, type: "cte", success: true });
+              toast.success(`CT-e ${parsedCteData.numero} processado. Importe uma NF-e para vincular.`);
+            }
           }
         } catch (fileError) {
           console.error(`Error processing ${file.fileName}:`, fileError);

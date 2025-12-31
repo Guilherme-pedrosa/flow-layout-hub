@@ -158,55 +158,55 @@ export function PurchaseOrderForm({ order, onClose }: PurchaseOrderFormProps) {
 
   // Load existing items and installments when editing
   useEffect(() => {
-    if (order?.id) {
-      loadExistingItems();
-      loadExistingInstallments();
-    }
-  }, [order?.id]);
+    const loadOrderData = async () => {
+      if (order?.id) {
+        setLoadingItems(true);
+        try {
+          const orderItems = await getOrderItems(order.id);
+          if (orderItems) {
+            setItems(
+              orderItems.map((item) => ({
+                id: item.id,
+                product_id: item.product_id || "",
+                description: item.description || item.product?.description || "",
+                quantity: item.quantity,
+                unit_price: item.unit_price || 0,
+                total_value: item.total_value || 0,
+                chart_account_id: item.chart_account_id || "",
+                cost_center_id: item.cost_center_id || "",
+              }))
+            );
 
-  const loadExistingInstallments = async () => {
-    if (!order?.id) return;
-    try {
-      const savedInstallments = await getOrderInstallments(order.id);
-      if (savedInstallments && savedInstallments.length > 0) {
-        // Se há parcelas salvas, usar elas
-        setInstallments(savedInstallments.map(inst => ({
-          installment_number: inst.installment_number,
-          due_date: inst.due_date,
-          amount: Number(inst.amount),
-        })));
-        setInstallmentsCount(savedInstallments.length);
-        setFirstDueDate(savedInstallments[0].due_date);
-        setInstallmentsFromNfe(savedInstallments[0].source === 'nfe');
+            // *** CORREÇÃO DO CFOP ***
+            // Se o CFOP geral ainda não foi definido e o pedido tem itens,
+            // pegue o CFOP do primeiro item como o CFOP geral do pedido.
+            if (orderItems.length > 0 && orderItems[0].cfop && !cfopGeral) {
+              setCfopGeral(orderItems[0].cfop);
+            }
+          }
+
+          const orderInstallments = await getOrderInstallments(order.id);
+          if (orderInstallments && orderInstallments.length > 0) {
+            setInstallments(orderInstallments.map(inst => ({
+              installment_number: inst.installment_number,
+              due_date: inst.due_date,
+              amount: Number(inst.amount),
+            })));
+            setInstallmentsCount(orderInstallments.length);
+            setFirstDueDate(orderInstallments[0].due_date);
+            setInstallmentsFromNfe(orderInstallments[0].source === 'nfe');
+          }
+        } catch (error) {
+          toast.error("Erro ao carregar dados do pedido.");
+          console.error(error);
+        } finally {
+          setLoadingItems(false);
+        }
       }
-    } catch (error) {
-      console.error("Erro ao carregar parcelas:", error);
-    }
-  };
+    };
 
-  const loadExistingItems = async () => {
-    if (!order?.id) return;
-    setLoadingItems(true);
-    try {
-      const orderItems = await getOrderItems(order.id);
-      setItems(
-        orderItems.map((item) => ({
-          id: item.id,
-          product_id: item.product_id || "",
-          description: item.description || item.product?.description || "",
-          quantity: item.quantity,
-          unit_price: item.unit_price || 0,
-          total_value: item.total_value || 0,
-          chart_account_id: item.chart_account_id || "",
-          cost_center_id: item.cost_center_id || "",
-        }))
-      );
-    } catch (error) {
-      console.error("Erro ao carregar itens:", error);
-    } finally {
-      setLoadingItems(false);
-    }
-  };
+    loadOrderData();
+  }, [order?.id]);
 
   // Set default status
   useEffect(() => {
@@ -806,6 +806,7 @@ export function PurchaseOrderForm({ order, onClose }: PurchaseOrderFormProps) {
                     <TableHeader>
                       <TableRow>
                         <TableHead className="w-[100px]">Parcela</TableHead>
+                        <TableHead>Fornecedor</TableHead>
                         <TableHead>Vencimento</TableHead>
                         <TableHead>Valor</TableHead>
                       </TableRow>
@@ -815,6 +816,9 @@ export function PurchaseOrderForm({ order, onClose }: PurchaseOrderFormProps) {
                         <TableRow key={index}>
                           <TableCell className="font-medium">
                             {inst.installment_number}/{installmentsCount}
+                          </TableCell>
+                          <TableCell>
+                            {order?.supplier?.nome_fantasia || order?.supplier?.razao_social || "N/A"}
                           </TableCell>
                           <TableCell>
                             <Input
@@ -903,7 +907,6 @@ export function PurchaseOrderForm({ order, onClose }: PurchaseOrderFormProps) {
                       wasApproved={isInApprovalFlow}
                       onSuccess={() => {
                         refetch();
-                        loadExistingItems();
                       }}
                     />
                     <p className="mt-2 text-xs text-muted-foreground">
@@ -931,7 +934,6 @@ export function PurchaseOrderForm({ order, onClose }: PurchaseOrderFormProps) {
                     wasApproved={isInApprovalFlow}
                     onSuccess={() => {
                       refetch();
-                      loadExistingItems();
                     }}
                   />
                 </div>
