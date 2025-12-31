@@ -1,8 +1,8 @@
 const https = require('https');
 
 /**
- * Google Cloud Function for Banco Inter PIX operations with mTLS
- * Supports: PIX payments and PIX key validation (DICT lookup)
+ * Google Cloud Function for Banco Inter operations with mTLS
+ * Supports: PIX payments, PIX key validation (DICT lookup), and generic API proxy
  */
 exports.interPixPayment = async (req, res) => {
   // CORS headers
@@ -30,6 +30,8 @@ exports.interPixPayment = async (req, res) => {
     // Route to appropriate handler
     if (action === 'validate_pix_key') {
       return await handleValidatePixKey(req, res);
+    } else if (action === 'proxy') {
+      return await handleGenericProxy(req, res);
     } else {
       // Default: PIX payment
       return await handlePixPayment(req, res);
@@ -43,6 +45,110 @@ exports.interPixPayment = async (req, res) => {
     });
   }
 };
+
+/**
+ * Handle generic API proxy with mTLS
+ */
+async function handleGenericProxy(req, res) {
+  const { 
+    method,
+    url,
+    headers,
+    data,
+    clientId,
+    clientSecret,
+    certificate,
+    privateKey,
+    accountNumber,
+    scope
+  } = req.body;
+
+  console.log('Generic proxy request:', { method, url });
+
+  // Validate required fields
+  if (!url || !certificate || !privateKey) {
+    return res.status(400).json({ error: 'URL, certificado e chave são obrigatórios' });
+  }
+
+  // Decode base64 certificates
+  const cert = Buffer.from(certificate, 'base64').toString('utf-8');
+  const key = Buffer.from(privateKey, 'base64').toString('utf-8');
+
+  // If this is an OAuth token request
+  if (url.includes('/oauth/v2/token')) {
+    const token = await getOAuthToken(
+      { clientId, clientSecret }, 
+      cert, 
+      key,
+      scope || 'extrato.read'
+    );
+    return res.status(200).json({ access_token: token, token_type: 'Bearer', expires_in: 3600 });
+  }
+
+  // For other requests, make the API call with mTLS
+  const result = await makeProxyRequest(method || 'GET', url, headers || {}, data, cert, key, accountNumber);
+  return res.status(200).json(result);
+}
+
+/**
+ * Make a generic proxy request with mTLS
+ */
+async function makeProxyRequest(method, url, reqHeaders, data, cert, key, accountNumber) {
+  return new Promise((resolve, reject) => {
+    const urlObj = new URL(url);
+    
+    const options = {
+      hostname: urlObj.hostname,
+      port: 443,
+      path: urlObj.pathname + urlObj.search,
+      method: method,
+      cert: cert,
+      key: key,
+      headers: {
+        ...reqHeaders,
+        'x-conta-corrente': accountNumber || reqHeaders['x-conta-corrente'] || ''
+      }
+    };
+
+    console.log('Proxy request options:', { hostname: options.hostname, path: options.path, method: options.method });
+
+    const request = https.request(options, (response) => {
+      let responseData = '';
+      response.on('data', chunk => responseData += chunk);
+      response.on('end', () => {
+        console.log('Proxy response:', response.statusCode, responseData.substring(0, 500));
+        try {
+          const parsed = JSON.parse(responseData);
+          if (response.statusCode >= 200 && response.statusCode < 300) {
+            resolve(parsed);
+          } else {
+            // Return the error as-is so the caller can handle it
+            resolve({ 
+              _error: true, 
+              _statusCode: response.statusCode, 
+              ...parsed 
+            });
+          }
+        } catch (e) {
+          if (response.statusCode >= 200 && response.statusCode < 300) {
+            resolve({ raw: responseData });
+          } else {
+            reject(new Error(`HTTP ${response.statusCode}: ${responseData}`));
+          }
+        }
+      });
+    });
+
+    request.on('error', (e) => reject(new Error(`Proxy request failed: ${e.message}`)));
+    
+    if (data && (method === 'POST' || method === 'PUT' || method === 'PATCH')) {
+      const postData = typeof data === 'string' ? data : JSON.stringify(data);
+      request.write(postData);
+    }
+    
+    request.end();
+  });
+}
 
 /**
  * Handle PIX key validation (DICT lookup)
