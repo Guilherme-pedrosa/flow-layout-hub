@@ -17,6 +17,8 @@ import { useProducts } from "@/hooks/useProducts";
 import { usePurchaseOrders } from "@/hooks/usePurchaseOrders";
 import { useStockMovements } from "@/hooks/useStockMovements";
 import { usePurchaseOrderStatuses } from "@/hooks/usePurchaseOrderStatuses";
+import { useProductCostCalculation } from "@/hooks/useProductCostCalculation";
+import { usePayablesGeneration } from "@/hooks/usePayablesGeneration";
 import { toast } from "sonner";
 import { sugerirCfopEntrada, CFOPS_ENTRADA_ESTADUAL, CFOPS_ENTRADA_INTERESTADUAL, CFOPS_ENTRADA_EXTERIOR, CFOPOption } from "@/lib/cfops";
 import {
@@ -49,6 +51,7 @@ export default function ImportarXML() {
   // Estados para cadastro
   const [fornecedorCadastrado, setFornecedorCadastrado] = useState(false);
   const [fornecedorId, setFornecedorId] = useState<string | null>(null);
+  const [transportadorId, setTransportadorId] = useState<string | null>(null);
   const [transportadorCadastrado, setTransportadorCadastrado] = useState(false);
   
   // Estado para CFOP geral
@@ -75,6 +78,8 @@ export default function ImportarXML() {
   const { createOrder, createOrderItems, createOrderInstallments } = usePurchaseOrders();
   const { createMovement } = useStockMovements();
   const { getDefaultStatus, getActiveStatuses } = usePurchaseOrderStatuses();
+  const { calculateAllItemCosts, rateFreightToItems } = useProductCostCalculation();
+  const { generatePayables } = usePayablesGeneration();
 
   // Verificar se fornecedor/transportador já estão cadastrados
   useEffect(() => {
@@ -534,7 +539,15 @@ Responda APENAS com o código CFOP de 4 dígitos. Sem explicações.`;
       // Buscar status padrão
       const defaultStatus = getDefaultStatus();
 
-      // Criar pedido de compra com dados financeiros
+      // Calcular frete total (NFe + CTe se houver)
+      const freightFromNFe = nfeData.nota.valorFrete || 0;
+      const freightFromCTe = cteData?.valorTotal || 0;
+      const totalFreight = freightFromNFe + freightFromCTe;
+
+      // Calcular custos de todos os itens com frete rateado
+      const itemCosts = calculateAllItemCosts(nfeData.itens, totalFreight, 'value');
+
+      // Criar pedido de compra com dados financeiros e CT-e
       const orderData = await createOrder.mutateAsync({
         supplier_id: fornecedorId || undefined,
         supplier_cnpj: nfeData.fornecedor.cnpj,
@@ -546,6 +559,15 @@ Responda APENAS com o código CFOP de 4 dígitos. Sem explicações.`;
         nfe_date: nfeData.nota.dataEmissao,
         nfe_key: nfeData.nota.chaveAcesso || null,
         nfe_imported_at: new Date().toISOString(),
+        // Campos do CT-e (se houver)
+        cte_number: cteData?.numero || null,
+        cte_key: cteData?.chaveCTe || null,
+        cte_freight_value: freightFromCTe,
+        cte_date: cteData?.dataEmissao || null,
+        cte_imported_at: cteData ? new Date().toISOString() : null,
+        cte_carrier_id: transportadorId || null,
+        freight_value: totalFreight,
+        has_external_freight: freightFromCTe > 0,
         // Campos legados (manter para compatibilidade)
         invoice_number: nfeData.nota.numero,
         invoice_series: nfeData.nota.serie,
@@ -559,7 +581,7 @@ Responda APENAS com o código CFOP de 4 dígitos. Sem explicações.`;
         financial_notes: financeiroObservacao || undefined,
       });
 
-      // Criar itens do pedido
+      // Criar itens do pedido com custo calculado
       const orderItems = nfeData.itens.map((item, index) => ({
         purchase_order_id: orderData.id,
         product_id: item.productId || produtosCriados[index] || null,
@@ -570,6 +592,9 @@ Responda APENAS com o código CFOP de 4 dígitos. Sem explicações.`;
         quantity: item.quantidade,
         unit_price: item.valorUnitario,
         total_value: item.valorTotal,
+        freight_allocated: itemCosts[index]?.freight_value || 0,
+        calculated_unit_cost: itemCosts[index]?.calculated_unit_cost || item.valorUnitario,
+        cost_breakdown: itemCosts[index] || {},
       }));
 
       await createOrderItems.mutateAsync(orderItems);
@@ -589,6 +614,32 @@ Responda APENAS com o código CFOP de 4 dígitos. Sem explicações.`;
         await createOrderInstallments.mutateAsync(installments);
       }
 
+      // GERAR CONTAS A PAGAR (Fornecedor NF-e + Transportadora CT-e)
+      // Apenas se não for garantia
+      if (finalidade !== "garantia" && fornecedorId) {
+        const { supplierPayablesCount, carrierPayableCreated, errors } = await generatePayables({
+          nfeData,
+          cteData,
+          orderId: orderData.id,
+          supplierId: fornecedorId,
+          carrierId: transportadorId,
+          chartAccountId: planoContasId || undefined,
+          costCenterId: centroCustoId || undefined,
+          skipForecasts: defaultStatus?.financial_behavior === 'payable',
+        });
+
+        if (errors.length > 0) {
+          errors.forEach(err => console.error(err));
+        }
+
+        if (supplierPayablesCount > 0) {
+          toast.success(`${supplierPayablesCount} conta(s) a pagar do fornecedor criada(s)`);
+        }
+        if (carrierPayableCreated) {
+          toast.success("Conta a pagar da transportadora criada");
+        }
+      }
+
       // IMPORTANTE: Só criar movimentação de estoque se o status tiver stock_behavior = 'entry'
       // Se for 'forecast' (em trânsito), não dá entrada no estoque - fica só como previsão
       const shouldCreateStockMovement = defaultStatus?.stock_behavior === 'entry';
@@ -597,18 +648,42 @@ Responda APENAS com o código CFOP de 4 dígitos. Sem explicações.`;
         for (let i = 0; i < nfeData.itens.length; i++) {
           const item = nfeData.itens[i];
           const productId = item.productId || produtosCriados[i];
+          const costData = itemCosts[i];
           
           if (productId) {
             await createMovement.mutateAsync({
               product_id: productId,
               type: "ENTRADA_COMPRA",
               quantity: item.quantidade,
-              unit_price: item.valorUnitario,
-              total_value: item.valorTotal,
-              reason: `NF ${nfeData.nota.numero}`,
+              unit_price: costData?.calculated_unit_cost || item.valorUnitario,
+              total_value: (costData?.calculated_unit_cost || item.valorUnitario) * item.quantidade,
+              reason: `NF ${nfeData.nota.numero}${cteData ? ` + CT-e ${cteData.numero}` : ''}`,
               reference_type: "purchase_order",
               reference_id: orderData.id,
             });
+
+            // Atualizar custo médio do produto
+            if (costData) {
+              const { data: currentProduct } = await supabase
+                .from("products")
+                .select("average_cost, quantity")
+                .eq("id", productId)
+                .single();
+
+              if (currentProduct) {
+                const currentQty = currentProduct.quantity || 0;
+                const currentAvgCost = currentProduct.average_cost || 0;
+                const newQty = currentQty + item.quantidade;
+                const newAvgCost = currentQty > 0
+                  ? ((currentAvgCost * currentQty) + (costData.calculated_unit_cost * item.quantidade)) / newQty
+                  : costData.calculated_unit_cost;
+
+                await supabase
+                  .from("products")
+                  .update({ average_cost: newAvgCost })
+                  .eq("id", productId);
+              }
+            }
           }
         }
       }
@@ -616,8 +691,11 @@ Responda APENAS com o código CFOP de 4 dígitos. Sem explicações.`;
       toast.success("Nota Fiscal importada com sucesso!");
       setStep("upload");
       setNfeData(null);
+      setCteData(null);
+      setProcessedFiles([]);
       setFornecedorCadastrado(false);
       setTransportadorCadastrado(false);
+      setTransportadorId(null);
     } catch (error) {
       console.error("Error finalizing import:", error);
       toast.error("Erro ao finalizar importação");
