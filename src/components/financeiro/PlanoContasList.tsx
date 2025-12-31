@@ -435,16 +435,16 @@ export function PlanoContasList() {
                 <SelectContent>
                   <SelectItem value="none">Nenhuma (raiz)</SelectItem>
                   {accounts
-                    .filter(a => a.id !== editingAccount?.id && a.account_nature === 'sintetica')
+                    .filter(a => a.id !== editingAccount?.id)
                     .map(account => (
                       <SelectItem key={account.id} value={account.id}>
-                        {account.code} - {account.name}
+                        {account.code} - {account.name} ({account.account_nature === 'sintetica' ? 'Sintética' : 'Analítica'})
                       </SelectItem>
                     ))}
                 </SelectContent>
               </Select>
               <p className="text-xs text-muted-foreground mt-1">
-                Apenas contas Sintéticas podem ser selecionadas como conta pai.
+                Selecione a conta pai para criar uma hierarquia.
               </p>
             </div>
 
