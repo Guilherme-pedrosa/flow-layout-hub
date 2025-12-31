@@ -29,7 +29,8 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Search, Edit, Landmark, Wallet, PiggyBank, Settings, Upload, Key, FileKey, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
+import { Plus, Search, Edit, Landmark, Wallet, PiggyBank, Settings, Upload, Key, FileKey, CheckCircle, AlertCircle, Loader2, Trash2 } from 'lucide-react';
+import { DeleteConfirmDialog } from '@/components/shared/DeleteConfirmDialog';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useCompany } from '@/contexts/CompanyContext';
@@ -58,9 +59,11 @@ const accountTypeIcons: Record<string, React.ReactNode> = {
 
 export function BancosList() {
   const { currentCompany } = useCompany();
-  const { bankAccounts, loading, fetchBankAccounts, createBankAccount, updateBankAccount, toggleBankAccountStatus } = useBankAccounts();
+  const { bankAccounts, loading, fetchBankAccounts, createBankAccount, updateBankAccount, toggleBankAccountStatus, deleteBankAccount } = useBankAccounts();
   const [search, setSearch] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [accountToDelete, setAccountToDelete] = useState<BankAccount | null>(null);
   const [interDialogOpen, setInterDialogOpen] = useState(false);
   const [editingAccount, setEditingAccount] = useState<BankAccount | null>(null);
   const [formData, setFormData] = useState({
@@ -284,6 +287,22 @@ export function BancosList() {
     }
   };
 
+  const handleOpenDeleteDialog = (account: BankAccount) => {
+    setAccountToDelete(account);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleDeleteAccount = async (): Promise<boolean> => {
+    if (!accountToDelete) return false;
+    const success = await deleteBankAccount(accountToDelete.id);
+    if (success) {
+      await fetchBankAccounts();
+      setDeleteDialogOpen(false);
+      setAccountToDelete(null);
+    }
+    return success;
+  };
+
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
       style: 'currency',
@@ -402,8 +421,18 @@ export function BancosList() {
                         variant="ghost"
                         size="icon"
                         onClick={() => handleOpenDialog(account)}
+                        title="Editar"
                       >
                         <Edit className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleOpenDeleteDialog(account)}
+                        title="Excluir"
+                        className="text-destructive hover:text-destructive"
+                      >
+                        <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
                   </TableCell>
@@ -657,6 +686,16 @@ export function BancosList() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <DeleteConfirmDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        onConfirm={handleDeleteAccount}
+        title="Excluir Conta Bancária"
+        description={`Tem certeza que deseja excluir a conta "${accountToDelete?.name}"? Esta ação não poderá ser desfeita.`}
+        itemName={accountToDelete?.name}
+      />
     </div>
   );
 }
