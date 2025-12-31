@@ -65,3 +65,15 @@ verify_jwt = false
 
 [functions.demand-analysis]
 verify_jwt = false
+
+[functions.analyze-margin-impact]
+verify_jwt = false
+
+[functions.cfo-profitability-check]
+verify_jwt = false
+
+[functions.cfo-cost-monitoring]
+verify_jwt = false
+
+[functions.cfo-efficiency-analysis]
+verify_jwt = false
