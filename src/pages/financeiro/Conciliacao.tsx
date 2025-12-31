@@ -226,6 +226,12 @@ export default function Conciliacao() {
   const pendingDebitTransactions = transactions.filter(tx => !tx.is_reconciled && tx.type === "DEBIT");
   const allPendingTransactions = transactions.filter(tx => !tx.is_reconciled);
 
+  // Totais
+  const totalCredits = transactions.filter(t => t.type === "CREDIT").reduce((sum, t) => sum + t.amount, 0);
+  const totalDebits = transactions.filter(t => t.type === "DEBIT").reduce((sum, t) => sum + Math.abs(t.amount), 0);
+  const totalReceivables = receivables.filter(r => !r.is_paid).reduce((sum, r) => sum + r.amount, 0);
+  const reconciledCount = transactions.filter(t => t.is_reconciled).length;
+
   // Ordenação para cada tab
   const { items: sortedPendingTransactions, requestSort: requestSortPending, sortConfig: sortConfigPending } = useSortableData(allPendingTransactions, 'transaction_date');
   const { items: sortedFilteredTransactions, requestSort: requestSortExtrato, sortConfig: sortConfigExtrato } = useSortableData(filteredTransactions, 'transaction_date');
@@ -236,11 +242,49 @@ export default function Conciliacao() {
   }));
   const { items: sortedReceivables, requestSort: requestSortReceivables, sortConfig: sortConfigReceivables } = useSortableData(receivablesWithSortKey, 'due_date');
 
-  // Totais
-  const totalCredits = transactions.filter(t => t.type === "CREDIT").reduce((sum, t) => sum + t.amount, 0);
-  const totalDebits = transactions.filter(t => t.type === "DEBIT").reduce((sum, t) => sum + Math.abs(t.amount), 0);
-  const totalReceivables = receivables.filter(r => !r.is_paid).reduce((sum, r) => sum + r.amount, 0);
-  const reconciledCount = transactions.filter(t => t.is_reconciled).length;
+  // Seleção com soma para cada tab
+  const getIdTx = useCallback((item: BankTransaction) => item.id, []);
+  const getAmountTx = useCallback((item: BankTransaction) => item.amount, []);
+  
+  const {
+    selectedCount: selectedCountPending,
+    totalSum: totalSumPending,
+    positiveSum: positiveSumPending,
+    negativeSum: negativeSumPending,
+    toggleSelection: toggleSelectionPending,
+    clearSelection: clearSelectionPending,
+    isSelected: isSelectedPending,
+    toggleSelectAll: toggleSelectAllPending,
+    isAllSelected: isAllSelectedPending,
+    isSomeSelected: isSomeSelectedPending
+  } = useSelectionSum({ items: allPendingTransactions, getAmount: getAmountTx, getId: getIdTx });
+
+  const {
+    selectedCount: selectedCountExtrato,
+    totalSum: totalSumExtrato,
+    positiveSum: positiveSumExtrato,
+    negativeSum: negativeSumExtrato,
+    toggleSelection: toggleSelectionExtrato,
+    clearSelection: clearSelectionExtrato,
+    isSelected: isSelectedExtrato,
+    toggleSelectAll: toggleSelectAllExtrato,
+    isAllSelected: isAllSelectedExtrato,
+    isSomeSelected: isSomeSelectedExtrato
+  } = useSelectionSum({ items: filteredTransactions, getAmount: getAmountTx, getId: getIdTx });
+
+  const getIdRec = useCallback((item: AccountReceivable) => item.id, []);
+  const getAmountRec = useCallback((item: AccountReceivable) => item.amount, []);
+  
+  const {
+    selectedCount: selectedCountReceivables,
+    totalSum: totalSumReceivables,
+    toggleSelection: toggleSelectionReceivables,
+    clearSelection: clearSelectionReceivables,
+    isSelected: isSelectedReceivables,
+    toggleSelectAll: toggleSelectAllReceivables,
+    isAllSelected: isAllSelectedReceivables,
+    isSomeSelected: isSomeSelectedReceivables
+  } = useSelectionSum({ items: filteredReceivables, getAmount: getAmountRec, getId: getIdRec });
 
   return (
     <div className="animate-fade-in space-y-6">
@@ -411,6 +455,13 @@ export default function Conciliacao() {
                 <Table>
                   <TableHeader>
                     <TableRow>
+                      <TableHead className="w-12">
+                        <Checkbox
+                          checked={isAllSelectedPending}
+                          onCheckedChange={toggleSelectAllPending}
+                          className={isSomeSelectedPending ? "data-[state=checked]:bg-primary/50" : ""}
+                        />
+                      </TableHead>
                       <SortableTableHeader
                         label="Data"
                         sortKey="transaction_date"
@@ -439,7 +490,13 @@ export default function Conciliacao() {
                   </TableHeader>
                   <TableBody>
                     {sortedPendingTransactions.map((tx) => (
-                      <TableRow key={tx.id}>
+                      <TableRow key={tx.id} className={isSelectedPending(tx.id) ? "bg-primary/5" : ""}>
+                        <TableCell>
+                          <Checkbox
+                            checked={isSelectedPending(tx.id)}
+                            onCheckedChange={() => toggleSelectionPending(tx.id)}
+                          />
+                        </TableCell>
                         <TableCell className="font-medium">{formatDate(tx.transaction_date)}</TableCell>
                         <TableCell className="max-w-[400px] truncate">{tx.description}</TableCell>
                         <TableCell>
@@ -465,6 +522,16 @@ export default function Conciliacao() {
               )}
             </CardContent>
           </Card>
+          
+          {/* Barra de soma flutuante - Pendentes */}
+          <SelectionSummaryBar
+            selectedCount={selectedCountPending}
+            totalSum={totalSumPending}
+            positiveSum={positiveSumPending}
+            negativeSum={negativeSumPending}
+            onClear={clearSelectionPending}
+            showBreakdown={true}
+          />
         </TabsContent>
 
         {/* Tab: Extrato Bancário */}
@@ -504,6 +571,13 @@ export default function Conciliacao() {
                 <Table>
                   <TableHeader>
                     <TableRow>
+                      <TableHead className="w-12">
+                        <Checkbox
+                          checked={isAllSelectedExtrato}
+                          onCheckedChange={toggleSelectAllExtrato}
+                          className={isSomeSelectedExtrato ? "data-[state=checked]:bg-primary/50" : ""}
+                        />
+                      </TableHead>
                       <SortableTableHeader
                         label="Data"
                         sortKey="transaction_date"
@@ -533,7 +607,13 @@ export default function Conciliacao() {
                   </TableHeader>
                   <TableBody>
                     {sortedFilteredTransactions.map((tx) => (
-                      <TableRow key={tx.id} className={tx.is_reconciled ? "opacity-60" : ""}>
+                      <TableRow key={tx.id} className={`${tx.is_reconciled ? "opacity-60" : ""} ${isSelectedExtrato(tx.id) ? "bg-primary/5" : ""}`}>
+                        <TableCell>
+                          <Checkbox
+                            checked={isSelectedExtrato(tx.id)}
+                            onCheckedChange={() => toggleSelectionExtrato(tx.id)}
+                          />
+                        </TableCell>
                         <TableCell className="font-medium">{formatDate(tx.transaction_date)}</TableCell>
                         <TableCell className="max-w-[300px] truncate">{tx.description}</TableCell>
                         <TableCell className="font-mono text-sm">{tx.nsu || "-"}</TableCell>
@@ -580,6 +660,16 @@ export default function Conciliacao() {
               )}
             </CardContent>
           </Card>
+          
+          {/* Barra de soma flutuante - Extrato */}
+          <SelectionSummaryBar
+            selectedCount={selectedCountExtrato}
+            totalSum={totalSumExtrato}
+            positiveSum={positiveSumExtrato}
+            negativeSum={negativeSumExtrato}
+            onClear={clearSelectionExtrato}
+            showBreakdown={true}
+          />
         </TabsContent>
 
         {/* Tab: Boletos e Títulos */}
@@ -622,6 +712,13 @@ export default function Conciliacao() {
                 <Table>
                   <TableHeader>
                     <TableRow>
+                      <TableHead className="w-12">
+                        <Checkbox
+                          checked={isAllSelectedReceivables}
+                          onCheckedChange={toggleSelectAllReceivables}
+                          className={isSomeSelectedReceivables ? "data-[state=checked]:bg-primary/50" : ""}
+                        />
+                      </TableHead>
                       <SortableTableHeader
                         label="Cliente"
                         sortKey="_clientName"
@@ -651,7 +748,13 @@ export default function Conciliacao() {
                   </TableHeader>
                   <TableBody>
                     {sortedReceivables.map((rec) => (
-                      <TableRow key={rec.id}>
+                      <TableRow key={rec.id} className={isSelectedReceivables(rec.id) ? "bg-primary/5" : ""}>
+                        <TableCell>
+                          <Checkbox
+                            checked={isSelectedReceivables(rec.id)}
+                            onCheckedChange={() => toggleSelectionReceivables(rec.id)}
+                          />
+                        </TableCell>
                         <TableCell className="font-medium">
                           {rec.clientes?.nome_fantasia || rec.clientes?.razao_social || "-"}
                         </TableCell>
@@ -684,6 +787,13 @@ export default function Conciliacao() {
               )}
             </CardContent>
           </Card>
+          
+          {/* Barra de soma flutuante - Títulos */}
+          <SelectionSummaryBar
+            selectedCount={selectedCountReceivables}
+            totalSum={totalSumReceivables}
+            onClear={clearSelectionReceivables}
+          />
         </TabsContent>
       </Tabs>
 
