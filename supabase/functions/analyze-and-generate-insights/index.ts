@@ -203,11 +203,18 @@ ${negativeMargin.slice(0, 10).map(p => `- ${p.code || 'S/C'} ${p.description}: c
       );
     }
 
+    // Determinar foco baseado na categoria solicitada
+    const categoryFocus = category ? `FOCO PRINCIPAL: Gere insights apenas sobre "${category}". ` : '';
+    const categoryRule = category 
+      ? `- OBRIGATÓRIO: Todos os insights devem ter category: "${category}"`
+      : '- Distribua entre as categorias relevantes';
+
     // Use Lovable AI for smarter analysis
     const aiPrompt = `Com base nos dados abaixo, gere de 3 a 5 insights ACIONÁVEIS para a empresa. 
+${categoryFocus}
 Cada insight deve ter:
 - type: "critical" | "warning" | "info" | "success"
-- category: "stock" | "financial" | "sales" | "purchases" | "fiscal" | "audit"
+- category: "${category || 'stock" | "financial" | "sales" | "purchases'}"
 - mode: "auditora" | "cfo_bot" | "especialista" | "executora"
 - title: título curto e direto (máx 50 caracteres)
 - message: mensagem explicativa com dados concretos (máx 200 caracteres)
@@ -216,10 +223,11 @@ Cada insight deve ter:
 - priority: 1-10 (10 = mais urgente)
 
 REGRAS:
-- Priorize problemas CRÍTICOS primeiro (estoque negativo, contas vencidas)
-- Seja ESPECÍFICO com números
+${categoryRule}
+- Priorize problemas CRÍTICOS primeiro
+- Seja ESPECÍFICO com números reais dos dados
 - Sugira AÇÕES concretas
-- Não repita insights sobre o mesmo problema
+- Se não houver problemas, gere insights de sucesso ou oportunidades
 
 ${contextSummary}
 

@@ -55,8 +55,8 @@ export default function GerenciarProdutos() {
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   
-  // AI Insights do banco - sem filtro de categoria para ver todos os insights
-  const { insights, dismiss, markAsRead } = useAiInsights();
+  // AI Insights - filtrar por categoria "stock" na tela de produtos
+  const { insights, dismiss, markAsRead } = useAiInsights('stock');
 
   // Contagens para os cards
   const counts = useMemo(() => {
@@ -327,12 +327,13 @@ export default function GerenciarProdutos() {
         ]}
       />
 
-      {/* AI Banner */}
+      {/* AI Banner - foca em estoque */}
       <AIBannerEnhanced
         insights={insights}
         onDismiss={dismiss}
         onMarkAsRead={markAsRead}
-        defaultMessage="IA monitorando estoque, finanças, vendas e mais"
+        defaultMessage="IA monitorando estoque, margens e giro de produtos"
+        category="stock"
       />
 
       {/* Cards de Status */}
