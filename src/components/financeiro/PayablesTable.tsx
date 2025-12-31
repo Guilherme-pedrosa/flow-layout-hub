@@ -403,7 +403,7 @@ export function PayablesTable({
                 <TableCell>
                   <div className="space-y-0.5">
                     <span className="text-sm font-medium">
-                      {payable.supplier?.nome_fantasia || payable.supplier?.razao_social || "—"}
+                      {payable.recipient_name || payable.supplier?.nome_fantasia || payable.supplier?.razao_social || "—"}
                     </span>
                     {payable.purchase_order && (
                       <Link
