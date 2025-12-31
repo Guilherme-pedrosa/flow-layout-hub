@@ -79,7 +79,7 @@ export function PayableForm({ open, onOpenChange, payable, onSuccess }: PayableF
   
   const [loading, setLoading] = useState(false);
   const [showCadastrarFornecedor, setShowCadastrarFornecedor] = useState(false);
-  const [suppliers, setSuppliers] = useState<{ id: string; nome_fantasia: string | null; razao_social: string | null }[]>([]);
+  const [suppliers, setSuppliers] = useState<{ id: string; nome_fantasia: string | null; razao_social: string | null; tipo_pessoa?: string }[]>([]);
   const [auditResult, setAuditResult] = useState<AuditResult | null>(null);
   
   // PIX validation state
@@ -149,10 +149,10 @@ export function PayableForm({ open, onOpenChange, payable, onSuccess }: PayableF
   }, [open, payable]);
 
   const fetchSuppliers = async () => {
+    // Buscar TODAS as pessoas ativas (não filtrar por is_fornecedor)
     const { data } = await supabase
       .from("pessoas")
-      .select("id, nome_fantasia, razao_social")
-      .eq("is_fornecedor", true)
+      .select("id, nome_fantasia, razao_social, tipo_pessoa")
       .eq("is_active", true)
       .order("razao_social");
     setSuppliers(data || []);

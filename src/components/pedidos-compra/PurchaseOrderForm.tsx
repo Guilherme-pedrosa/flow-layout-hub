@@ -103,7 +103,7 @@ export function PurchaseOrderForm({ order, onClose }: PurchaseOrderFormProps) {
   const { createOrder, updateOrder, getOrderItems, createOrderItems, deleteOrderItems, getOrderInstallments, createOrderInstallments, deleteOrderInstallments, refetch } = usePurchaseOrders();
   const { statuses } = usePurchaseOrderStatuses();
   const { checkOrderLimits } = usePurchaseOrderLimits();
-  const { activeFornecedores, refetch: refetchPessoas, getPessoaById } = usePessoas();
+  const { activePessoas, refetch: refetchPessoas, getPessoaById } = usePessoas();
   const { accounts: chartOfAccounts, fetchAccounts } = useChartOfAccounts();
   const { costCenters, fetchCostCenters } = useCostCenters();
   const { currentCompany } = useCompany();
@@ -124,10 +124,10 @@ export function PurchaseOrderForm({ order, onClose }: PurchaseOrderFormProps) {
   useEffect(() => {
     const loadSupplierState = async () => {
       console.log("[DEBUG] loadSupplierState - supplierId:", supplierId);
-      console.log("[DEBUG] activeFornecedores count:", activeFornecedores.length);
+      console.log("[DEBUG] activePessoas count:", activePessoas.length);
       
       if (supplierId) {
-        const supplier = activeFornecedores.find(f => f.id === supplierId);
+        const supplier = activePessoas.find(f => f.id === supplierId);
         console.log("[DEBUG] Found supplier in cache:", supplier?.razao_social, "estado:", supplier?.estado);
         
         if (supplier?.estado) {
@@ -150,7 +150,7 @@ export function PurchaseOrderForm({ order, onClose }: PurchaseOrderFormProps) {
       }
     };
     loadSupplierState();
-  }, [supplierId, activeFornecedores]);
+  }, [supplierId, activePessoas]);
 
   // Load existing items and installments when editing
   useEffect(() => {
@@ -281,7 +281,7 @@ export function PurchaseOrderForm({ order, onClose }: PurchaseOrderFormProps) {
 
     // CRÍTICO: Validar divergência de fornecedor com NF-e
     if (order?.nfe_supplier_cnpj) {
-      const selectedSupplier = activeFornecedores.find(f => f.id === supplierId);
+      const selectedSupplier = activePessoas.find(f => f.id === supplierId);
       if (selectedSupplier?.cpf_cnpj) {
         const normalizedNfeCnpj = order.nfe_supplier_cnpj.replace(/[^\d]/g, '');
         const normalizedSupplierCnpj = selectedSupplier.cpf_cnpj.replace(/[^\d]/g, '');
@@ -397,7 +397,7 @@ export function PurchaseOrderForm({ order, onClose }: PurchaseOrderFormProps) {
         isEditing={!!order}
         nfeSupplierCnpj={order?.nfe_supplier_cnpj}
         nfeSupplierName={order?.nfe_supplier_name}
-        supplierCnpj={activeFornecedores.find(f => f.id === supplierId)?.cpf_cnpj}
+        supplierCnpj={activePessoas.find(f => f.id === supplierId)?.cpf_cnpj}
       />
 
       {/* Tabs - Mobile optimized with horizontal scroll */}
@@ -485,7 +485,7 @@ export function PurchaseOrderForm({ order, onClose }: PurchaseOrderFormProps) {
                             Cadastrar novo fornecedor
                           </Button>
                         </div>
-                        {activeFornecedores.map((fornecedor) => (
+                        {activePessoas.map((fornecedor) => (
                           <SelectItem key={fornecedor.id} value={fornecedor.id}>
                             {fornecedor.razao_social || fornecedor.nome_fantasia}
                           </SelectItem>

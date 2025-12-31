@@ -44,7 +44,7 @@ export function ServiceOrderFormDadosGerais({ formData, onChange }: ServiceOrder
   const { statuses } = useServiceOrderStatuses();
   const { costCenters, fetchCostCenters } = useCostCenters();
   const { data: users } = useSystemUsers();
-  const { activeClientes, refetch: refetchPessoas } = usePessoas();
+  const { activePessoas, refetch: refetchPessoas } = usePessoas();
   const [clienteSearch, setClienteSearch] = useState("");
   const [showCadastrarCliente, setShowCadastrarCliente] = useState(false);
 
@@ -53,12 +53,12 @@ export function ServiceOrderFormDadosGerais({ formData, onChange }: ServiceOrder
   const activeUsers = users ?? [];
 
   const filteredClientes = useMemo(() => {
-    if (!clienteSearch) return activeClientes;
+    if (!clienteSearch) return activePessoas;
     
     const searchLower = clienteSearch.toLowerCase();
     const searchClean = clienteSearch.replace(/\D/g, '');
     
-    return activeClientes.filter(c => {
+    return activePessoas.filter(c => {
       const razao = (c.razao_social || '').toLowerCase();
       const fantasia = (c.nome_fantasia || '').toLowerCase();
       const cpfCnpj = (c.cpf_cnpj || '').replace(/\D/g, '');
@@ -67,7 +67,7 @@ export function ServiceOrderFormDadosGerais({ formData, onChange }: ServiceOrder
              fantasia.includes(searchLower) || 
              cpfCnpj.includes(searchClean);
     });
-  }, [activeClientes, clienteSearch]);
+  }, [activePessoas, clienteSearch]);
 
   return (
     <>
