@@ -284,7 +284,13 @@ serve(async (req) => {
       key
     );
 
-    console.log(`[inter-mtls] Estrutura da resposta:`, JSON.stringify(extratoResult).substring(0, 500));
+    // Log seguro da resposta
+    try {
+      const resultStr = JSON.stringify(extratoResult);
+      console.log(`[inter-mtls] Estrutura da resposta (${resultStr.length} chars):`, resultStr.slice(0, 500));
+    } catch (e) {
+      console.log(`[inter-mtls] Resposta recebida (não serializável):`, typeof extratoResult);
+    }
 
     // A API do Inter retorna as transações em diferentes formatos
     const transacoes = Array.isArray(extratoResult) 
