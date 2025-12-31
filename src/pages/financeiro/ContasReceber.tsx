@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { PageHeader } from "@/components/shared";
+import { useState, useEffect, useCallback } from "react";
+import { PageHeader, SortableTableHeader, SelectionSummaryBar } from "@/components/shared";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -13,6 +13,8 @@ import { FinancialAIBanner, FinancialAIChat, AIRiskBadge } from "@/components/fi
 import { supabase } from "@/integrations/supabase/client";
 import { format, parseISO, differenceInDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { useSortableData } from "@/hooks/useSortableData";
+import { useSelectionSum } from "@/hooks/useSelectionSum";
 
 interface Receivable {
   id: string;
@@ -33,7 +35,6 @@ interface Receivable {
 export default function ContasReceber() {
   const [receivables, setReceivables] = useState<Receivable[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [activeTab, setActiveTab] = useState("todas");
   const [searchTerm, setSearchTerm] = useState("");
 
@@ -111,6 +112,30 @@ export default function ContasReceber() {
     return true;
   });
 
+  // Ordenação com 3 estados
+  const receivablesWithSortKey = filteredReceivables.map(r => ({
+    ...r,
+    _clientName: r.client?.nome_fantasia || r.client?.razao_social || ""
+  }));
+  
+  const { items: sortedReceivables, requestSort, sortConfig } = useSortableData(receivablesWithSortKey, 'due_date');
+
+  // Seleção com soma
+  const getId = useCallback((item: Receivable) => item.id, []);
+  const getAmount = useCallback((item: Receivable) => item.amount, []);
+  
+  const {
+    selectedCount,
+    totalSum,
+    positiveSum,
+    toggleSelection,
+    clearSelection,
+    isSelected,
+    toggleSelectAll,
+    isAllSelected,
+    isSomeSelected
+  } = useSelectionSum({ items: filteredReceivables, getAmount, getId });
+
   const getStatus = (r: Receivable) => {
     if (r.is_paid) return { label: "Recebido", variant: "default" as const, days: r.paid_at ? `Em ${format(parseISO(r.paid_at), "dd/MM/yyyy")}` : "" };
     
@@ -136,13 +161,6 @@ export default function ContasReceber() {
     if (diffDays <= 0 && r.amount > 5000) return <AIRiskBadge type="good_payer" className="ml-2" />;
     
     return null;
-  };
-
-  const handleToggleSelect = (id: string) => {
-    const newSet = new Set(selectedIds);
-    if (newSet.has(id)) newSet.delete(id);
-    else newSet.add(id);
-    setSelectedIds(newSet);
   };
 
   return (
@@ -286,9 +304,9 @@ export default function ContasReceber() {
       </div>
 
       {/* Selection Actions */}
-      {selectedIds.size > 0 && (
+      {selectedCount > 0 && (
         <div className="flex items-center gap-4 py-3 px-4 bg-muted/50 rounded-lg">
-          <span className="text-sm font-medium">{selectedIds.size} itens selecionados</span>
+          <span className="text-sm font-medium">{selectedCount} itens selecionados</span>
           <Button variant="default" size="sm">
             <Send className="h-4 w-4 mr-2" />
             Enviar Cobrança
@@ -306,14 +324,49 @@ export default function ContasReceber() {
           <TableHeader>
             <TableRow>
               <TableHead className="w-12">
-                <Checkbox />
+                <Checkbox
+                  checked={isAllSelected}
+                  onCheckedChange={toggleSelectAll}
+                  className={isSomeSelected ? "data-[state=checked]:bg-primary/50" : ""}
+                />
               </TableHead>
-              <TableHead>Número</TableHead>
-              <TableHead>Cliente</TableHead>
+              <SortableTableHeader
+                label="Número"
+                sortKey="document_number"
+                currentSortKey={sortConfig.key}
+                sortDirection={sortConfig.direction}
+                onSort={requestSort}
+              />
+              <SortableTableHeader
+                label="Cliente"
+                sortKey="_clientName"
+                currentSortKey={sortConfig.key}
+                sortDirection={sortConfig.direction}
+                onSort={requestSort}
+              />
               <TableHead>Descrição</TableHead>
-              <TableHead>Emissão</TableHead>
-              <TableHead>Vencimento</TableHead>
-              <TableHead className="text-right">Valor</TableHead>
+              <SortableTableHeader
+                label="Emissão"
+                sortKey="issue_date"
+                currentSortKey={sortConfig.key}
+                sortDirection={sortConfig.direction}
+                onSort={requestSort}
+              />
+              <SortableTableHeader
+                label="Vencimento"
+                sortKey="due_date"
+                currentSortKey={sortConfig.key}
+                sortDirection={sortConfig.direction}
+                onSort={requestSort}
+              />
+              <SortableTableHeader
+                label="Valor"
+                sortKey="amount"
+                currentSortKey={sortConfig.key}
+                sortDirection={sortConfig.direction}
+                onSort={requestSort}
+                className="text-right"
+              />
               <TableHead>Status</TableHead>
               <TableHead className="w-12"></TableHead>
             </TableRow>
@@ -332,14 +385,14 @@ export default function ContasReceber() {
                 </TableCell>
               </TableRow>
             ) : (
-              filteredReceivables.map((r) => {
+              sortedReceivables.map((r) => {
                 const status = getStatus(r);
                 return (
-                  <TableRow key={r.id}>
+                  <TableRow key={r.id} className={isSelected(r.id) ? "bg-primary/5" : ""}>
                     <TableCell>
                       <Checkbox
-                        checked={selectedIds.has(r.id)}
-                        onCheckedChange={() => handleToggleSelect(r.id)}
+                        checked={isSelected(r.id)}
+                        onCheckedChange={() => toggleSelection(r.id)}
                       />
                     </TableCell>
                     <TableCell className="font-medium">{r.document_number || "-"}</TableCell>
@@ -392,6 +445,13 @@ export default function ContasReceber() {
 
       {/* AI Chat */}
       <FinancialAIChat />
+
+      {/* Barra de soma flutuante */}
+      <SelectionSummaryBar
+        selectedCount={selectedCount}
+        totalSum={totalSum}
+        onClear={clearSelection}
+      />
     </div>
   );
 }

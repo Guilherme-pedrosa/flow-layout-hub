@@ -1,7 +1,10 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
-import { PageHeader } from "@/components/shared";
+import { PageHeader, SortableTableHeader, SelectionSummaryBar } from "@/components/shared";
 import { DeleteConfirmDialog } from "@/components/shared/DeleteConfirmDialog";
+import { useSortableData } from "@/hooks/useSortableData";
+import { useSelectionSum } from "@/hooks/useSelectionSum";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { Plus, Search, FileSpreadsheet, AlertTriangle, CheckCircle2, Sparkles, RefreshCw, X, MoreHorizontal, FileText, Printer, DollarSign, Download, Trash2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -265,6 +268,30 @@ Foque no insight mais relevante: pode ser sobre produtos, fornecedores, valores,
     return matchesSearch && matchesStatus;
   });
 
+  // Ordenação com 3 estados
+  const ordersWithSortKey = filteredOrders.map(o => ({
+    ...o,
+    _supplierName: o.supplier?.razao_social || o.supplier_name || "",
+    _createdAt: o.created_at || ""
+  }));
+  
+  const { items: sortedOrders, requestSort, sortConfig } = useSortableData(ordersWithSortKey, 'order_number');
+
+  // Seleção com soma
+  const getId = useCallback((item: PurchaseOrder) => item.id, []);
+  const getAmount = useCallback((item: PurchaseOrder) => item.total_value || 0, []);
+  
+  const {
+    selectedCount,
+    totalSum,
+    toggleSelection,
+    clearSelection,
+    isSelected,
+    toggleSelectAll,
+    isAllSelected,
+    isSomeSelected
+  } = useSelectionSum({ items: filteredOrders, getAmount, getId });
+
   const handleNewOrder = () => {
     setEditingOrder(null);
     setShowForm(true);
@@ -475,24 +502,63 @@ Foque no insight mais relevante: pode ser sobre produtos, fornecedores, valores,
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-[80px]">Nº</TableHead>
-                <TableHead>Fornecedor</TableHead>
+                <TableHead className="w-12">
+                  <Checkbox
+                    checked={isAllSelected}
+                    onCheckedChange={toggleSelectAll}
+                    className={isSomeSelected ? "data-[state=checked]:bg-primary/50" : ""}
+                  />
+                </TableHead>
+                <SortableTableHeader
+                  label="Nº"
+                  sortKey="order_number"
+                  currentSortKey={sortConfig.key}
+                  sortDirection={sortConfig.direction}
+                  onSort={requestSort}
+                  className="w-[80px]"
+                />
+                <SortableTableHeader
+                  label="Fornecedor"
+                  sortKey="_supplierName"
+                  currentSortKey={sortConfig.key}
+                  sortDirection={sortConfig.direction}
+                  onSort={requestSort}
+                />
                 <TableHead>NF Entrada</TableHead>
                 <TableHead>Finalidade</TableHead>
-                <TableHead>Data</TableHead>
-                <TableHead className="text-right">Valor Total</TableHead>
+                <SortableTableHeader
+                  label="Data"
+                  sortKey="_createdAt"
+                  currentSortKey={sortConfig.key}
+                  sortDirection={sortConfig.direction}
+                  onSort={requestSort}
+                />
+                <SortableTableHeader
+                  label="Valor Total"
+                  sortKey="total_value"
+                  currentSortKey={sortConfig.key}
+                  sortDirection={sortConfig.direction}
+                  onSort={requestSort}
+                  className="text-right"
+                />
                 <TableHead className="text-center">Status</TableHead>
                 <TableHead className="text-center">Recebimento</TableHead>
                 <TableHead className="text-center w-[80px]">Ações</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredOrders.map((order) => (
+              {sortedOrders.map((order) => (
                 <TableRow
                   key={order.id}
-                  className="cursor-pointer hover:bg-muted/50"
+                  className={`cursor-pointer hover:bg-muted/50 ${isSelected(order.id) ? "bg-primary/5" : ""}`}
                   onClick={() => handleEditOrder(order)}
                 >
+                  <TableCell onClick={(e) => e.stopPropagation()}>
+                    <Checkbox
+                      checked={isSelected(order.id)}
+                      onCheckedChange={() => toggleSelection(order.id)}
+                    />
+                  </TableCell>
                   <TableCell className="font-mono font-medium">
                     {order.order_number || "-"}
                   </TableCell>
@@ -608,6 +674,13 @@ Foque no insight mais relevante: pode ser sobre produtos, fornecedores, valores,
         onConfirm={handleConfirmDelete}
         title="Excluir Pedido de Compra"
         description={`Tem certeza que deseja excluir o pedido #${orderToDelete?.order_number}? Esta ação não pode ser desfeita. Os registros financeiros associados (não pagos) também serão excluídos.`}
+      />
+
+      {/* Barra de soma flutuante */}
+      <SelectionSummaryBar
+        selectedCount={selectedCount}
+        totalSum={totalSum}
+        onClear={clearSelection}
       />
     </div>
   );
