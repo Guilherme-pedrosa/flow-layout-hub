@@ -27,6 +27,8 @@ import { CadastrarPessoaDialog } from "@/components/shared/CadastrarPessoaDialog
 import { XMLUploadButton } from "./XMLUploadButton";
 import { PurchaseOrderAIAudit } from "./PurchaseOrderAIAudit";
 import { CFOPSelect } from "@/components/shared/CFOPSelect";
+import { SearchableSelect } from "@/components/shared/SearchableSelect";
+import { formatCpfCnpj } from "@/lib/formatters";
 import { cfopGeraFinanceiro, validarCfopParaFinalidade, nfeEhComercial, podeEntrarComoGarantia } from "@/lib/cfops";
 import {
   Table,
@@ -509,7 +511,7 @@ export function PurchaseOrderForm({ order: initialOrder, onClose }: PurchaseOrde
       const cteCarrierId = order?.cte_carrier_id;
       const cteNumber = order?.cte_number;
       const cteDate = order?.cte_date;
-
+      
       if (cteFreightValue > 0 && cteCarrierId && purpose !== "garantia") {
         // Verificar se já existe payable de frete para este pedido
         const { data: existingFreightPayable } = await supabase
@@ -524,7 +526,7 @@ export function PurchaseOrderForm({ order: initialOrder, onClose }: PurchaseOrde
           const { error: freightPayableError } = await supabase
             .from("payables")
             .insert({
-              company_id: currentCompany?.id || COMPANY_ID,
+              company_id: COMPANY_ID,
               supplier_id: cteCarrierId,
               purchase_order_id: orderId,
               amount: cteFreightValue,
@@ -666,49 +668,30 @@ export function PurchaseOrderForm({ order: initialOrder, onClose }: PurchaseOrde
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Fornecedor *</Label>
-                  <div className="flex gap-2">
-                    <Select 
-                      value={supplierId} 
-                      onValueChange={(newSupplierId) => {
-                        // Bloquear alteração se tem NF-e vinculada
-                        if (order?.nfe_key && order?.supplier_id && newSupplierId !== order.supplier_id) {
-                          toast.error("Não é possível alterar o fornecedor", {
-                            description: "Este pedido possui uma NF-e vinculada. O fornecedor deve corresponder ao emitente da nota fiscal."
-                          });
-                          return;
-                        }
-                        setSupplierId(newSupplierId);
-                      }}
-                      disabled={!!order?.nfe_key}
-                    >
-                      <SelectTrigger className="flex-1">
-                        <SelectValue placeholder="Selecione o fornecedor" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <div className="p-2 border-b">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="w-full justify-start gap-2 text-primary hover:text-primary"
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              setShowCadastroFornecedor(true);
-                            }}
-                            disabled={!!order?.nfe_key}
-                          >
-                            <Plus className="h-4 w-4" />
-                            Cadastrar novo fornecedor
-                          </Button>
-                        </div>
-                        {activePessoas.map((fornecedor) => (
-                          <SelectItem key={fornecedor.id} value={fornecedor.id}>
-                            {fornecedor.razao_social || fornecedor.nome_fantasia}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                  <SearchableSelect
+                    options={activePessoas.map((fornecedor) => ({
+                      value: fornecedor.id,
+                      label: fornecedor.razao_social || fornecedor.nome_fantasia || "Sem nome",
+                      sublabel: fornecedor.cpf_cnpj ? formatCpfCnpj(fornecedor.cpf_cnpj, fornecedor.tipo_pessoa || "PJ") : undefined
+                    }))}
+                    value={supplierId}
+                    onChange={(newSupplierId) => {
+                      // Bloquear alteração se tem NF-e vinculada
+                      if (order?.nfe_key && order?.supplier_id && newSupplierId !== order.supplier_id) {
+                        toast.error("Não é possível alterar o fornecedor", {
+                          description: "Este pedido possui uma NF-e vinculada. O fornecedor deve corresponder ao emitente da nota fiscal."
+                        });
+                        return;
+                      }
+                      setSupplierId(newSupplierId);
+                    }}
+                    placeholder="Selecione o fornecedor"
+                    searchPlaceholder="Buscar por nome ou CNPJ..."
+                    emptyMessage="Nenhum fornecedor encontrado"
+                    onCreateNew={() => setShowCadastroFornecedor(true)}
+                    createNewLabel="Cadastrar novo fornecedor"
+                    disabled={!!order?.nfe_key}
+                  />
                 </div>
 
                 <div className="space-y-2">

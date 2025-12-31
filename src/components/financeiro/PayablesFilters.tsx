@@ -8,6 +8,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { SearchableSelect } from "@/components/shared/SearchableSelect";
 import { 
   DropdownMenu,
   DropdownMenuContent,
@@ -121,22 +122,21 @@ export function PayablesFilters({
         </div>
 
         {/* Supplier Filter */}
-        <Select 
-          value={filters.supplierId || "all"} 
-          onValueChange={(value) => onFiltersChange({ ...filters, supplierId: value === "all" ? "" : value })}
-        >
-          <SelectTrigger className="w-[180px] bg-card border-border h-9">
-            <SelectValue placeholder="Fornecedor" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todos os fornecedores</SelectItem>
-            {suppliers.map((supplier) => (
-              <SelectItem key={supplier.id} value={supplier.id}>
-                {supplier.nome_fantasia || supplier.razao_social}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <SearchableSelect
+          options={[
+            { value: "all", label: "Todos os fornecedores" },
+            ...suppliers.map((supplier) => ({
+              value: supplier.id,
+              label: supplier.nome_fantasia || supplier.razao_social || "Sem nome"
+            }))
+          ]}
+          value={filters.supplierId || "all"}
+          onChange={(value) => onFiltersChange({ ...filters, supplierId: value === "all" ? "" : value })}
+          placeholder="Fornecedor"
+          searchPlaceholder="Buscar fornecedor..."
+          emptyMessage="Nenhum fornecedor encontrado"
+          className="w-[180px]"
+        />
 
         {/* Payment Method Filter */}
         <Select 

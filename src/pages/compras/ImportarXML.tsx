@@ -112,7 +112,6 @@ export default function ImportarXML() {
   }, [cteData]);
 
   const loadFornecedoresDisponiveis = async () => {
-    // Tabela pessoas é compartilhada entre todas as empresas
     const { data } = await supabase
       .from("pessoas")
       .select("id, razao_social, cpf_cnpj")
@@ -126,11 +125,11 @@ export default function ImportarXML() {
   };
 
   const loadTransportadoresDisponiveis = async () => {
-    // Tabela pessoas é compartilhada entre todas as empresas
+    // Transportadores também são fornecedores geralmente
     const { data } = await supabase
       .from("pessoas")
       .select("id, razao_social, cpf_cnpj")
-      .or("is_transportadora.eq.true,is_fornecedor.eq.true")
+      .eq("is_fornecedor", true)
       .eq("is_active", true)
       .order("razao_social");
     
@@ -152,17 +151,12 @@ export default function ImportarXML() {
   const checkFornecedorCadastrado = async () => {
     if (!nfeData?.fornecedor.cnpj) return;
     
-    // Normalizar CNPJ
-    const cnpjOriginal = nfeData.fornecedor.cnpj;
-    const cnpjNormalizado = cnpjOriginal.replace(/[^\d]/g, '');
-    const cnpjFormatado = cnpjNormalizado.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5');
-    
-    // Buscar na tabela unificada pessoas (compartilhada entre empresas)
+    // Buscar na tabela unificada pessoas (fornecedores)
     const { data: pessoaData } = await supabase
       .from("pessoas")
       .select("id")
+      .eq("cpf_cnpj", nfeData.fornecedor.cnpj)
       .eq("is_fornecedor", true)
-      .or(`cpf_cnpj.eq.${cnpjNormalizado},cpf_cnpj.eq.${cnpjFormatado}`)
       .maybeSingle();
     
     if (pessoaData) {
@@ -189,19 +183,20 @@ export default function ImportarXML() {
     
     console.log("[DEBUG] Buscando transportadora:", { cnpjOriginal, cnpjNormalizado, cnpjFormatado });
     
-    // Buscar na tabela pessoas pelo CNPJ (compartilhada entre empresas)
+    // Buscar na tabela pessoas (transportadoras são pessoas com is_transportadora = true)
+    // Tentar buscar com CNPJ normalizado e formatado - incluir registros sem company_id
     const { data, error } = await supabase
       .from("pessoas")
-      .select("id, razao_social, nome_fantasia, cpf_cnpj, is_fornecedor")
-      .or(`cpf_cnpj.eq.${cnpjNormalizado},cpf_cnpj.eq.${cnpjFormatado}`)
-      .maybeSingle();
+      .select("id, razao_social, nome_fantasia, cpf_cnpj")
+      .or(`company_id.eq.${currentCompany?.id},company_id.is.null`)
+      .or(`cpf_cnpj.eq.${cnpjNormalizado},cpf_cnpj.eq.${cnpjFormatado}`);
     
     console.log("[DEBUG] Resultado busca transportadora:", { data, error });
     
-    if (data) {
+    if (data && data.length > 0) {
       setTransportadorCadastrado(true);
-      setTransportadorId(data.id);
-      console.log("[DEBUG] Transportadora encontrada:", data.razao_social || data.nome_fantasia, "is_fornecedor:", data.is_fornecedor);
+      setTransportadorId(data[0].id); // Já vincular automaticamente
+      console.log("[DEBUG] Transportadora encontrada:", data[0].razao_social || data[0].nome_fantasia);
     } else {
       setTransportadorCadastrado(false);
       setTransportadorId(null);
@@ -757,15 +752,7 @@ export default function ImportarXML() {
             />
             <NotaFiscalCard nota={nfeData.nota} />
             <TransportadorCard
-              transportador={cteData?.emit ? {
-                cnpj: cteData.emit.cnpj,
-                razaoSocial: cteData.emit.razaoSocial,
-                inscricaoEstadual: cteData.emit.inscricaoEstadual,
-                endereco: cteData.emit.endereco,
-                cidade: cteData.emit.cidade,
-                uf: cteData.emit.uf,
-                modalidadeFrete: 'CT-e',
-              } : nfeData.transportador}
+              transportador={nfeData.transportador}
               transportadorCadastrado={transportadorCadastrado}
               transportadorId={transportadorId}
               transportadoresDisponiveis={transportadoresDisponiveis}
@@ -1043,14 +1030,14 @@ export default function ImportarXML() {
       <CadastrarFornecedorDialog
         open={dialogTransportador}
         onOpenChange={setDialogTransportador}
-        dados={cteData?.emit ? {
+        dados={cteData ? {
           cnpj: cteData.emit.cnpj,
           razaoSocial: cteData.emit.razaoSocial,
           inscricaoEstadual: cteData.emit.inscricaoEstadual,
           endereco: cteData.emit.endereco,
           cidade: cteData.emit.cidade,
           uf: cteData.emit.uf,
-          modalidadeFrete: 'CTE',
+          modalidadeFrete: ""
         } : nfeData?.transportador || null}
         tipo="transportador"
         onSuccess={(pessoaId) => {

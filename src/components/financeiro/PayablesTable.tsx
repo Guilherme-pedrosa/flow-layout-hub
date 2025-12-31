@@ -235,9 +235,19 @@ export function PayablesTable({
                     <p className="font-medium text-sm line-clamp-1">
                       {payable.description || "Sem descrição"}
                     </p>
-                    <p className="text-xs text-muted-foreground truncate">
-                      {payable.supplier?.nome_fantasia || payable.supplier?.razao_social || "—"}
-                    </p>
+                    {payable.supplier_id ? (
+                      <Link
+                        to={`/cadastros/fornecedores?edit=${payable.supplier_id}`}
+                        className="text-xs text-primary hover:underline truncate block"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {payable.supplier?.nome_fantasia || payable.supplier?.razao_social || "—"}
+                      </Link>
+                    ) : (
+                      <p className="text-xs text-muted-foreground truncate">
+                        {payable.recipient_name || "—"}
+                      </p>
+                    )}
                   </div>
                 </div>
                 <DropdownMenu>
@@ -422,9 +432,19 @@ export function PayablesTable({
                 </TableCell>
                 <TableCell>
                   <div className="space-y-0.5">
-                    <span className="text-sm font-medium">
-                      {payable.recipient_name || payable.supplier?.nome_fantasia || payable.supplier?.razao_social || "—"}
-                    </span>
+                    {payable.supplier_id ? (
+                      <Link
+                        to={`/cadastros/fornecedores?edit=${payable.supplier_id}`}
+                        className="text-sm font-medium text-primary hover:underline"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {payable.supplier?.nome_fantasia || payable.supplier?.razao_social || "—"}
+                      </Link>
+                    ) : (
+                      <span className="text-sm font-medium">
+                        {payable.recipient_name || "—"}
+                      </span>
+                    )}
                     {payable.purchase_order && (
                       <Link
                         to={`/pedidos-compra?edit=${payable.purchase_order_id}`}

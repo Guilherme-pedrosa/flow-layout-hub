@@ -26,6 +26,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { SearchableSelect } from "@/components/shared/SearchableSelect";
+import { formatCpfCnpj } from "@/lib/formatters";
 import { Label } from "@/components/ui/label";
 import {
   Search,
@@ -458,18 +460,18 @@ export function DDABoletosList() {
 
               <div className="space-y-2">
                 <Label>Fornecedor *</Label>
-                <Select value={selectedSupplierId} onValueChange={setSelectedSupplierId}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione o fornecedor" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {suppliers.map((s) => (
-                      <SelectItem key={s.id} value={s.id}>
-                        {s.nome_fantasia || s.razao_social} {s.cpf_cnpj && `(${s.cpf_cnpj})`}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <SearchableSelect
+                  options={suppliers.map((s) => ({
+                    value: s.id,
+                    label: s.nome_fantasia || s.razao_social || "Sem nome",
+                    sublabel: s.cpf_cnpj ? formatCpfCnpj(s.cpf_cnpj, s.cpf_cnpj.replace(/\D/g, '').length > 11 ? "PJ" : "PF") : undefined
+                  }))}
+                  value={selectedSupplierId}
+                  onChange={setSelectedSupplierId}
+                  placeholder="Selecione o fornecedor"
+                  searchPlaceholder="Buscar por nome ou CNPJ..."
+                  emptyMessage="Nenhum fornecedor encontrado"
+                />
               </div>
             </div>
           )}

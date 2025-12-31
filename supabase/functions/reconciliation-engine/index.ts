@@ -286,14 +286,14 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // 1. Buscar transações não conciliadas (aumentado para 500 para cobrir mais histórico)
+    // 1. Buscar transações não conciliadas
     const { data: transactions, error: txError } = await supabase
       .from("bank_transactions")
       .select("*")
       .eq("company_id", company_id)
       .eq("is_reconciled", false)
       .order("transaction_date", { ascending: false })
-      .limit(500);
+      .limit(1000);
 
     if (txError) throw txError;
 
@@ -335,27 +335,23 @@ serve(async (req) => {
         inter_boleto_id: r.inter_boleto_id,
         pix_key: null
       })),
-      ...(payables || []).map(p => {
-        const entityName = (p.pessoas as Record<string, string>)?.nome_fantasia || (p.pessoas as Record<string, string>)?.razao_social || null;
-        console.log(`[reconciliation-engine] Payable mapeado: id=${p.id}, amount=${p.amount}, entity=${entityName}`);
-        return {
-          id: p.id,
-          amount: p.amount,
-          due_date: p.due_date,
-          description: p.description,
-          document_number: p.document_number,
-          is_paid: p.is_paid || false,
-          type: 'payable' as const,
-          entity_name: entityName,
-          entity_document: (p.pessoas as Record<string, string>)?.cpf_cnpj || null,
-          inter_nosso_numero: null,
-          inter_boleto_id: null,
-          pix_key: p.pix_key
-        };
-      })
+      ...(payables || []).map(p => ({
+        id: p.id,
+        amount: p.amount,
+        due_date: p.due_date,
+        description: p.description,
+        document_number: p.document_number,
+        is_paid: p.is_paid || false,
+        type: 'payable' as const,
+        entity_name: (p.pessoas as Record<string, string>)?.nome_fantasia || (p.pessoas as Record<string, string>)?.razao_social || null,
+        entity_document: (p.pessoas as Record<string, string>)?.cpf_cnpj || null,
+        inter_nosso_numero: null,
+        inter_boleto_id: null,
+        pix_key: p.pix_key
+      }))
     ];
 
-    console.log(`[reconciliation-engine] ${financialEntries.length} títulos financeiros em aberto (${payables?.length || 0} payables, ${receivables?.length || 0} receivables)`);
+    console.log(`[reconciliation-engine] ${financialEntries.length} títulos financeiros em aberto`);
 
     const suggestions: ReconciliationSuggestion[] = [];
 

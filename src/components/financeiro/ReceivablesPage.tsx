@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
+import { Link } from "react-router-dom";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -389,7 +390,18 @@ export function ReceivablesPage() {
                         />
                       </TableCell>
                       <TableCell className="font-medium">{r.document_number || "-"}</TableCell>
-                      <TableCell>{r.client?.nome_fantasia || r.client?.razao_social || "-"}</TableCell>
+                      <TableCell>
+                        {r.client_id ? (
+                          <Link
+                            to={`/cadastros/clientes?edit=${r.client_id}`}
+                            className="text-primary hover:underline"
+                          >
+                            {r.client?.nome_fantasia || r.client?.razao_social || "-"}
+                          </Link>
+                        ) : (
+                          <span>{r.client?.nome_fantasia || r.client?.razao_social || "-"}</span>
+                        )}
+                      </TableCell>
                       <TableCell className="max-w-[200px] truncate">{r.description || "-"}</TableCell>
                       <TableCell>{format(parseISO(r.due_date), "dd/MM/yyyy")}</TableCell>
                       <TableCell className="text-right font-medium">

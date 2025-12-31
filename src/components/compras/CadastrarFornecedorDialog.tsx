@@ -43,17 +43,13 @@ export function CadastrarFornecedorDialog({
   const transportador = dados as Transportador;
 
   const handleCadastrar = async () => {
-    if (!currentCompany?.id) {
-      toast.error("Selecione uma empresa primeiro");
-      return;
-    }
-    
     setLoading(true);
     try {
       // Cadastrar na tabela pessoas (unificada)
+      // IMPORTANTE: Transportadoras também precisam de is_fornecedor=true para aparecer no payables
       const pessoaData = isFornecedor
         ? {
-            company_id: currentCompany.id,
+            company_id: currentCompany?.id,
             tipo_pessoa: "PJ" as const,
             cpf_cnpj: fornecedor.cnpj,
             razao_social: fornecedor.razaoSocial,
@@ -74,7 +70,7 @@ export function CadastrarFornecedorDialog({
             is_transportadora: false,
           }
         : {
-            company_id: currentCompany.id,
+            company_id: currentCompany?.id,
             tipo_pessoa: transportador.cnpj?.length === 11 ? "PF" as const : "PJ" as const,
             cpf_cnpj: transportador.cnpj,
             razao_social: transportador.razaoSocial,
@@ -84,7 +80,7 @@ export function CadastrarFornecedorDialog({
             estado: transportador.uf,
             status: "ativo" as const,
             is_active: true,
-            is_fornecedor: true, // Transportadoras também são fornecedores para poder gerar payables
+            is_fornecedor: true, // CORRIGIDO: Transportadora também é fornecedor para poder ter payables
             is_cliente: false,
             is_colaborador: false,
             is_transportadora: true,
@@ -101,7 +97,7 @@ export function CadastrarFornecedorDialog({
       // Invalidar cache do react-query para atualizar todas as listas
       await queryClient.invalidateQueries({ queryKey: ["pessoas"] });
 
-      toast.success(`${isFornecedor ? "Fornecedor" : "Transportador"} cadastrado com sucesso!`);
+      toast.success(`${isFornecedor ? "Fornecedor" : "Transportadora"} cadastrado com sucesso!`);
       onSuccess(data?.id);
       onOpenChange(false);
     } catch (error: any) {
@@ -116,7 +112,7 @@ export function CadastrarFornecedorDialog({
       <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle>
-            Cadastrar {isFornecedor ? "Fornecedor" : "Transportador"}
+            Cadastrar {isFornecedor ? "Fornecedor" : "Transportadora"}
           </DialogTitle>
           <DialogDescription>
             Os dados abaixo serão usados para criar o cadastro no sistema.

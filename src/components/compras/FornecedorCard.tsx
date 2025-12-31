@@ -3,13 +3,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Building2, Plus, Check, Link } from "lucide-react";
 import { NFEFornecedor } from "./types";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { SearchableSelect } from "@/components/shared/SearchableSelect";
+import { formatCpfCnpj } from "@/lib/formatters";
 import { Label } from "@/components/ui/label";
 
 interface Pessoa {
@@ -87,18 +82,18 @@ export function FornecedorCard({
               <Link className="h-3 w-3" />
               Ou vincule a um fornecedor existente:
             </Label>
-            <Select onValueChange={onVincular} value={fornecedorId || undefined}>
-              <SelectTrigger className="h-9">
-                <SelectValue placeholder="Selecione um fornecedor..." />
-              </SelectTrigger>
-              <SelectContent>
-                {fornecedoresDisponiveis.map((f) => (
-                  <SelectItem key={f.id} value={f.id}>
-                    {f.razao_social || "Sem nome"} - {f.cpf_cnpj || "Sem documento"}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <SearchableSelect
+              options={fornecedoresDisponiveis.map((f) => ({
+                value: f.id,
+                label: f.razao_social || "Sem nome",
+                sublabel: f.cpf_cnpj ? formatCpfCnpj(f.cpf_cnpj, f.cpf_cnpj.replace(/\D/g, '').length > 11 ? "PJ" : "PF") : undefined
+              }))}
+              value={fornecedorId || ""}
+              onChange={onVincular}
+              placeholder="Selecione um fornecedor..."
+              searchPlaceholder="Buscar por nome ou CNPJ..."
+              emptyMessage="Nenhum fornecedor encontrado"
+            />
           </div>
         )}
       </CardContent>

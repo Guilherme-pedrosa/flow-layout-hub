@@ -99,7 +99,7 @@ export function ClienteFormDadosGerais({ formData, setFormData, duplicateWarning
       {/* CPF/CNPJ com busca */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="space-y-2">
-          <Label htmlFor="cpf_cnpj">{formData.tipo_pessoa === 'PJ' ? 'CNPJ' : 'CPF'}</Label>
+          <Label htmlFor="cpf_cnpj">{formData.tipo_pessoa === 'PJ' ? 'CNPJ' : 'CPF'} <span className="text-destructive">*</span></Label>
           <div className="flex gap-2">
             <Input
               id="cpf_cnpj"
@@ -152,7 +152,7 @@ export function ClienteFormDadosGerais({ formData, setFormData, duplicateWarning
       {/* Razão Social / Nome */}
       <div className={`grid grid-cols-1 ${formData.tipo_pessoa === 'PJ' ? 'md:grid-cols-2' : ''} gap-4`}>
         <div className="space-y-2">
-          <Label htmlFor="razao_social">{formData.tipo_pessoa === 'PJ' ? 'Razão Social' : 'Nome Completo'}</Label>
+          <Label htmlFor="razao_social">{formData.tipo_pessoa === 'PJ' ? 'Razão Social' : 'Nome Completo'} <span className="text-destructive">*</span></Label>
           <Input
             id="razao_social"
             value={formData.razao_social || ''}

@@ -8,6 +8,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { SearchableSelect } from "@/components/shared/SearchableSelect";
 import { 
   DropdownMenu,
   DropdownMenuContent,
@@ -118,22 +119,21 @@ export function ReceivablesFilters({
         </div>
 
         {/* Client Filter */}
-        <Select 
-          value={filters.clientId || "all"} 
-          onValueChange={(value) => onFiltersChange({ ...filters, clientId: value === "all" ? "" : value })}
-        >
-          <SelectTrigger className="w-[180px] bg-card border-border h-9">
-            <SelectValue placeholder="Cliente" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todos os clientes</SelectItem>
-            {clients.map((client) => (
-              <SelectItem key={client.id} value={client.id}>
-                {client.nome_fantasia || client.razao_social}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <SearchableSelect
+          options={[
+            { value: "all", label: "Todos os clientes" },
+            ...clients.map((client) => ({
+              value: client.id,
+              label: client.nome_fantasia || client.razao_social || "Sem nome"
+            }))
+          ]}
+          value={filters.clientId || "all"}
+          onChange={(value) => onFiltersChange({ ...filters, clientId: value === "all" ? "" : value })}
+          placeholder="Cliente"
+          searchPlaceholder="Buscar cliente..."
+          emptyMessage="Nenhum cliente encontrado"
+          className="w-[180px]"
+        />
 
         {/* Situation Filter */}
         <Select 

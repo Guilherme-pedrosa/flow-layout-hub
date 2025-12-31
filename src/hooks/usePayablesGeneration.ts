@@ -144,13 +144,12 @@ export function usePayablesGeneration() {
           due_date: cteDueDate,
           document_type: "cte",
           document_number: cteData.numero,
-          description: `CT-e ${cteData.numero} - Frete`,
+          description: `CT-e ${cteData.numero} - Frete - ${cteData.emit?.razaoSocial || 'Transportadora'}`,
           chart_account_id: chartAccountId || undefined,
           cost_center_id: costCenterId || undefined,
           is_forecast: false,
-          // Usar dados do emitente do CT-e (transportadora), não do remetente
-          recipient_name: cteData.emit?.razaoSocial || cteData.remetente?.razaoSocial || 'Transportadora',
-          recipient_document: cteData.emit?.cnpj || cteData.remetente?.cnpj || '',
+          recipient_name: cteData.emit?.razaoSocial || 'Transportadora',
+          recipient_document: cteData.emit?.cnpj || '',
         };
 
         const { error } = await supabase

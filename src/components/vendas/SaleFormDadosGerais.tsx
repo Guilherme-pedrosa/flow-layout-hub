@@ -4,6 +4,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { SearchableSelect } from "@/components/shared/SearchableSelect";
+import { formatCpfCnpj } from "@/lib/formatters";
 import { FileEdit, Search, Plus } from "lucide-react";
 import { useSaleStatuses } from "@/hooks/useSales";
 import { useCostCenters, CostCenter } from "@/hooks/useFinanceiro";
@@ -43,7 +45,7 @@ export function SaleFormDadosGerais({ formData, onChange }: SaleFormDadosGeraisP
   const { costCenters, fetchCostCenters } = useCostCenters();
   const { data: users } = useSystemUsers();
   const { activeClientes, refetch: refetchPessoas } = usePessoas();
-  const [clienteSearch, setClienteSearch] = useState("");
+
   const [showCadastrarCliente, setShowCadastrarCliente] = useState(false);
 
   // Converter pessoas para formato esperado
@@ -62,20 +64,7 @@ export function SaleFormDadosGerais({ formData, onChange }: SaleFormDadosGeraisP
   const activeCostCenters = costCenters?.filter(c => c.is_active) ?? [];
   const activeUsers = users ?? [];
 
-  // Filtrar clientes por nome ou CNPJ
-  const filteredClientes = clienteSearch
-    ? clientes.filter(c => {
-        const searchLower = clienteSearch.toLowerCase();
-        const razao = (c.razao_social || '').toLowerCase();
-        const fantasia = (c.nome_fantasia || '').toLowerCase();
-        const cpfCnpj = (c.cpf_cnpj || '').replace(/\D/g, '');
-        const searchClean = clienteSearch.replace(/\D/g, '');
-        
-        return razao.includes(searchLower) || 
-               fantasia.includes(searchLower) || 
-               cpfCnpj.includes(searchClean);
-      })
-    : clientes;
+
 
   return (
     <>
@@ -96,49 +85,20 @@ export function SaleFormDadosGerais({ formData, onChange }: SaleFormDadosGeraisP
 
             <div className="space-y-2">
               <Label>Cliente <span className="text-destructive">*</span></Label>
-              <div className="flex gap-2">
-                <Select value={formData.client_id} onValueChange={(v) => onChange('client_id', v)}>
-                  <SelectTrigger className="flex-1"><SelectValue placeholder="Selecione" /></SelectTrigger>
-                  <SelectContent>
-                    <div className="p-2 border-b">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="w-full justify-start gap-2 text-primary hover:text-primary"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          setShowCadastrarCliente(true);
-                        }}
-                      >
-                        <Plus className="h-4 w-4" />
-                        Cadastrar novo cliente
-                      </Button>
-                    </div>
-                    <div className="p-2">
-                      <div className="flex items-center gap-2 mb-2">
-                        <Search className="h-4 w-4 text-muted-foreground" />
-                        <Input
-                          placeholder="Buscar por nome ou CNPJ..."
-                          value={clienteSearch}
-                          onChange={(e) => setClienteSearch(e.target.value)}
-                          className="flex-1"
-                          onClick={(e) => e.stopPropagation()}
-                        />
-                      </div>
-                      <p className="text-xs text-muted-foreground">
-                        {filteredClientes.length} cliente(s) encontrado(s)
-                      </p>
-                    </div>
-                    {filteredClientes.slice(0, 30).map(c => (
-                      <SelectItem key={c.id} value={c.id}>
-                        {c.razao_social || c.nome_fantasia}
-                        {c.cpf_cnpj && <span className="text-muted-foreground ml-1">({c.cpf_cnpj})</span>}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              <SearchableSelect
+                options={clientes.map(c => ({
+                  value: c.id,
+                  label: c.razao_social || c.nome_fantasia || "Sem nome",
+                  sublabel: c.cpf_cnpj ? formatCpfCnpj(c.cpf_cnpj, c.cpf_cnpj.length > 11 ? "PJ" : "PF") : undefined
+                }))}
+                value={formData.client_id}
+                onChange={(v) => onChange('client_id', v)}
+                placeholder="Selecione o cliente"
+                searchPlaceholder="Buscar por nome ou CNPJ..."
+                emptyMessage="Nenhum cliente encontrado"
+                onCreateNew={() => setShowCadastrarCliente(true)}
+                createNewLabel="Cadastrar novo cliente"
+              />
             </div>
 
             <div className="space-y-2">

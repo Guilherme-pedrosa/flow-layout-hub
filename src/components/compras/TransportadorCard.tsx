@@ -3,13 +3,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Truck, Plus, Check, Link } from "lucide-react";
 import { Transportador } from "./types";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { SearchableSelect } from "@/components/shared/SearchableSelect";
+import { formatCpfCnpj } from "@/lib/formatters";
 import { Label } from "@/components/ui/label";
 
 interface Pessoa {
@@ -126,18 +121,18 @@ export function TransportadorCard({
               <Link className="h-3 w-3" />
               Ou vincule a um transportador existente:
             </Label>
-            <Select onValueChange={onVincular} value={transportadorId || undefined}>
-              <SelectTrigger className="h-9">
-                <SelectValue placeholder="Selecione um transportador..." />
-              </SelectTrigger>
-              <SelectContent>
-                {transportadoresDisponiveis.map((t) => (
-                  <SelectItem key={t.id} value={t.id}>
-                    {t.razao_social || "Sem nome"} - {t.cpf_cnpj || "Sem documento"}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <SearchableSelect
+              options={transportadoresDisponiveis.map((t) => ({
+                value: t.id,
+                label: t.razao_social || "Sem nome",
+                sublabel: t.cpf_cnpj ? formatCpfCnpj(t.cpf_cnpj, t.cpf_cnpj.replace(/\D/g, '').length > 11 ? "PJ" : "PF") : undefined
+              }))}
+              value={transportadorId || ""}
+              onChange={onVincular}
+              placeholder="Selecione um transportador..."
+              searchPlaceholder="Buscar por nome ou CNPJ..."
+              emptyMessage="Nenhum transportador encontrado"
+            />
           </div>
         )}
       </CardContent>

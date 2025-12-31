@@ -6,6 +6,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { SearchableSelect } from "@/components/shared/SearchableSelect";
+import { formatCpfCnpj } from "@/lib/formatters";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { 
   Sparkles, 
@@ -212,18 +214,18 @@ export function SmartQuotation() {
             <CardContent className="grid md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Cliente</Label>
-                <Select value={clientId} onValueChange={setClientId}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione o cliente" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {clientes.map(c => (
-                      <SelectItem key={c.id} value={c.id}>
-                        {c.razao_social || c.nome_fantasia}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <SearchableSelect
+                  options={clientes.map(c => ({
+                    value: c.id,
+                    label: c.razao_social || c.nome_fantasia || "Sem nome",
+                    sublabel: c.cpf_cnpj ? formatCpfCnpj(c.cpf_cnpj, c.cpf_cnpj.replace(/\D/g, '').length > 11 ? "PJ" : "PF") : undefined
+                  }))}
+                  value={clientId}
+                  onChange={setClientId}
+                  placeholder="Selecione o cliente"
+                  searchPlaceholder="Buscar por nome ou CNPJ..."
+                  emptyMessage="Nenhum cliente encontrado"
+                />
               </div>
               <div className="space-y-2">
                 <Label>Validade (dias)</Label>
