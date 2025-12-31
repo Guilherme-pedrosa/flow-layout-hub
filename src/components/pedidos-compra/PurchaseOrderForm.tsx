@@ -132,6 +132,26 @@ export function PurchaseOrderForm({ order: initialOrder, onClose }: PurchaseOrde
         setHasExternalFreight(updatedOrder.has_external_freight || false);
         setFreightValue(updatedOrder.freight_value?.toString() || "0");
       }
+      
+      // Recarregar itens com frete rateado atualizado
+      const orderItems = await getOrderItems(order.id);
+      if (orderItems) {
+        setItems(
+          orderItems.map((item) => ({
+            id: item.id,
+            product_id: item.product_id || "",
+            description: item.description || item.product?.description || "",
+            quantity: Number(item.quantity) || 0,
+            unit_price: Number(item.unit_price) || 0,
+            total_value: Number(item.total_value) || 0,
+            chart_account_id: item.chart_account_id || "",
+            cost_center_id: item.cost_center_id || "",
+            freight_allocated: Number(item.freight_allocated) || 0,
+            calculated_unit_cost: Number(item.final_unit_cost) || Number(item.unit_price) || 0,
+          }))
+        );
+      }
+      
       refetch();
     }
   };

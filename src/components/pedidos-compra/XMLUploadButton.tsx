@@ -579,6 +579,9 @@ export function XMLUploadButton({
       const { cteFreightValue, cteData, hasDivergence } = cteComparison;
       let requiresReapproval = false;
 
+      // Definir o valor do frete a aplicar
+      const freightToApply = applyFreight ? cteFreightValue : orderFreightValue;
+
       const updateData: Record<string, any> = {
         cte_number: cteData.numero,
         cte_key: cteData.chave,
@@ -614,6 +617,50 @@ export function XMLUploadButton({
 
       if (updateError) {
         throw new Error(`Erro ao atualizar pedido: ${updateError.message}`);
+      }
+
+      // Ratear o frete pelos itens do pedido e atualizar custos
+      if (orderItems.length > 0 && freightToApply > 0) {
+        // Calcular total dos itens para rateio proporcional ao valor
+        const totalItemsValue = orderItems.reduce((sum, item) => sum + (Number(item.total_value) || 0), 0);
+        
+        // Atualizar cada item com o frete rateado e custo calculado
+        const updatePromises = orderItems.map(async (item) => {
+          const itemValue = Number(item.total_value) || 0;
+          const itemQty = Number(item.quantity) || 1;
+          const itemUnitPrice = Number(item.unit_price) || 0;
+          
+          // Ratear proporcionalmente ao valor do item
+          const freightAllocated = totalItemsValue > 0 
+            ? (itemValue / totalItemsValue) * freightToApply 
+            : freightToApply / orderItems.length;
+          
+          // Calcular custo unitário final: preço unitário + frete por unidade
+          const freightPerUnit = freightAllocated / itemQty;
+          const finalUnitCost = itemUnitPrice + freightPerUnit;
+
+          // Atualizar item do pedido
+          await supabase
+            .from("purchase_order_items")
+            .update({
+              freight_allocated: Math.round(freightAllocated * 100) / 100,
+              final_unit_cost: Math.round(finalUnitCost * 100) / 100,
+            })
+            .eq("id", item.id);
+
+          // Atualizar o custo do produto se tiver product_id
+          if (item.product_id) {
+            await supabase
+              .from("products")
+              .update({
+                purchase_price: Math.round(finalUnitCost * 100) / 100,
+                updated_at: new Date().toISOString(),
+              })
+              .eq("id", item.product_id);
+          }
+        });
+
+        await Promise.all(updatePromises);
       }
 
       await audit.logXmlImportCompleted(orderId, "cte", {
