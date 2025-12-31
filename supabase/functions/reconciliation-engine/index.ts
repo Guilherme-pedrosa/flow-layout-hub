@@ -110,65 +110,103 @@ function textSimilarityScore(text1: string | null, text2: string | null): number
   return Math.round((matchCount / Math.max(tokens1.length, 1)) * 100);
 }
 
-// Motor principal de matching
+// Motor principal de matching - MAIS FLEXÍVEL
 function calculateMatchScore(
   tx: BankTransaction,
   entry: FinancialEntry
 ): { score: number; reasons: string[] } {
   const reasons: string[] = [];
-  let totalWeight = 0;
-  let weightedScore = 0;
+  let score = 0;
 
   const txAmount = Math.abs(tx.amount);
   const entryAmount = entry.amount;
   const amountDiff = Math.abs(txAmount - entryAmount);
+  const percentDiff = amountDiff / Math.max(entryAmount, 1);
 
-  // 1. Match por valor (peso 40%)
+  // 1. Match por valor (PRINCIPAL - até 50 pontos)
   if (amountDiff < 0.01) {
-    weightedScore += 40;
-    reasons.push('Valor exato');
+    score += 50;
+    reasons.push('✓ Valor exato');
   } else if (amountDiff < 1) {
-    weightedScore += 30;
-    reasons.push('Valor aproximado (centavos)');
-  } else if (amountDiff / entryAmount < 0.02) {
-    weightedScore += 20;
-    reasons.push('Valor similar (<2% diferença)');
+    score += 45;
+    reasons.push('✓ Valor muito próximo');
+  } else if (percentDiff < 0.01) {
+    score += 40;
+    reasons.push('✓ Valor <1% diferença');
+  } else if (percentDiff < 0.05) {
+    score += 30;
+    reasons.push('~ Valor <5% diferença');
+  } else if (percentDiff < 0.10) {
+    score += 20;
+    reasons.push('~ Valor <10% diferença');
+  } else if (percentDiff < 0.20) {
+    score += 10;
+    reasons.push('? Valor diferente');
   }
-  totalWeight += 40;
 
-  // 2. Match por data (peso 25%)
+  // 2. Match por data (até 25 pontos)
   const dateScore = dateProximityScore(tx.transaction_date, entry.due_date);
-  weightedScore += (dateScore / 100) * 25;
+  score += Math.round(dateScore * 0.25);
   if (dateScore >= 85) {
-    reasons.push('Data próxima');
+    reasons.push('✓ Data próxima');
+  } else if (dateScore >= 50) {
+    reasons.push('~ Data similar');
   }
-  totalWeight += 25;
 
-  // 3. Match por nosso número / NSU (peso 20%)
+  // 3. Match por nome na descrição (até 20 pontos)
+  const txDesc = normalizeText(tx.description);
+  const entityName = normalizeText(entry.entity_name);
+  const entryDesc = normalizeText(entry.description);
+  
+  if (entityName && txDesc.includes(entityName)) {
+    score += 20;
+    reasons.push('✓ Nome encontrado');
+  } else if (entityName) {
+    // Tentar tokens do nome
+    const nameTokens = entityName.split(/\s+/).filter(t => t.length > 3);
+    const matchedTokens = nameTokens.filter(t => txDesc.includes(t));
+    if (matchedTokens.length > 0) {
+      score += Math.min(15, matchedTokens.length * 5);
+      reasons.push(`~ ${matchedTokens.length} palavra(s) do nome`);
+    }
+  }
+  
+  // 4. Match por descrição similar (até 5 pontos)
+  if (entryDesc && txDesc) {
+    const descTokens = entryDesc.split(/\s+/).filter(t => t.length > 3);
+    const matchedDesc = descTokens.filter(t => txDesc.includes(t));
+    if (matchedDesc.length > 0) {
+      score += Math.min(5, matchedDesc.length * 2);
+    }
+  }
+
+  // 5. Match por NSU/nosso número (bônus de 15 pontos)
   if (tx.nsu && entry.inter_nosso_numero) {
     if (tx.nsu.includes(entry.inter_nosso_numero) || 
         entry.inter_nosso_numero.includes(tx.nsu)) {
-      weightedScore += 20;
-      reasons.push('Nosso número identificado');
+      score += 15;
+      reasons.push('✓ Nosso número');
     }
   }
   if (tx.description && entry.inter_nosso_numero) {
     if (tx.description.includes(entry.inter_nosso_numero)) {
-      weightedScore += 15;
-      reasons.push('Nosso número na descrição');
+      score += 10;
+      reasons.push('✓ Nosso número na descrição');
     }
   }
-  totalWeight += 20;
 
-  // 4. Match por nome/descrição (peso 15%)
-  const textScore = textSimilarityScore(tx.description, entry.entity_name || entry.description);
-  weightedScore += (textScore / 100) * 15;
-  if (textScore >= 50) {
-    reasons.push('Nome/descrição similar');
+  // 6. Match por documento (bônus de 10 pontos)  
+  if (entry.document_number && tx.description) {
+    if (tx.description.includes(entry.document_number)) {
+      score += 10;
+      reasons.push('✓ Documento na descrição');
+    }
   }
-  totalWeight += 15;
 
-  const finalScore = Math.round((weightedScore / totalWeight) * 100);
+  // Limitar a 100
+  const finalScore = Math.min(100, score);
+  
+  console.log(`[reconciliation-engine] Match: tx=${tx.id.slice(0,8)} entry=${entry.id.slice(0,8)} score=${finalScore} reasons=${reasons.join(', ')}`);
   
   return { score: finalScore, reasons };
 }
@@ -295,13 +333,24 @@ serve(async (req) => {
 
     // 4. Analisar cada transação
     for (const tx of transactions || []) {
-      const isCredit = tx.type === "CREDIT";
+      const isCredit = tx.type === "CREDIT" || tx.amount > 0;
       const txAmount = Math.abs(tx.amount);
 
-      // Filtrar títulos do tipo correto (crédito = receber, débito = pagar)
-      const relevantEntries = financialEntries.filter(e => 
+      // Log para debug
+      console.log(`[reconciliation-engine] Analisando tx: ${tx.id}, valor: ${tx.amount}, tipo: ${tx.type}, isCredit: ${isCredit}`);
+
+      // Para débitos (saídas), buscar payables
+      // Para créditos (entradas), buscar receivables
+      // MAS também tentar match geral se não houver específico
+      let relevantEntries = financialEntries.filter(e => 
         isCredit ? e.type === 'receivable' : e.type === 'payable'
       );
+
+      // Se não encontrar do tipo correto, tenta com todos (pode ser lançamento manual)
+      if (relevantEntries.length === 0) {
+        console.log(`[reconciliation-engine] Nenhum título do tipo esperado, tentando todos`);
+        relevantEntries = financialEntries;
+      }
 
       if (relevantEntries.length === 0) continue;
 
