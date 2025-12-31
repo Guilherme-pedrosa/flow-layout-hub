@@ -178,7 +178,8 @@ serve(async (req) => {
 
     console.log(`[conciliacao-ai] Transações bancárias não conciliadas: ${transactions?.length || 0}`);
 
-    // 3. Buscar contas a pagar pendentes
+    // 3. Buscar TODAS as contas a pagar pendentes (sem filtro de data)
+    // Importante: não filtrar por due_date pois payables vencidos ainda precisam ser conciliados
     const { data: payables, error: payablesError } = await supabase
       .from("payables")
       .select(`
@@ -187,7 +188,7 @@ serve(async (req) => {
       `)
       .eq("company_id", company_id)
       .eq("is_paid", false)
-      .gte("due_date", dataInicioStr);
+      .is("reconciliation_id", null);
 
     if (payablesError) {
       throw new Error(`Erro ao buscar payables: ${payablesError.message}`);
