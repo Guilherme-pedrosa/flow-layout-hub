@@ -99,6 +99,9 @@ export function PurchaseOrderForm({ order, onClose }: PurchaseOrderFormProps) {
   const [installmentInterval, setInstallmentInterval] = useState(30);
   const [installments, setInstallments] = useState<LocalInstallment[]>([]);
   const [installmentsFromNfe, setInstallmentsFromNfe] = useState(false); // Se as parcelas vieram da NF-e
+  
+  // Estado para verificar se está no fluxo de aprovação
+  const [isInApprovalFlow, setIsInApprovalFlow] = useState(false);
 
   const { createOrder, updateOrder, getOrderItems, createOrderItems, deleteOrderItems, getOrderInstallments, createOrderInstallments, deleteOrderInstallments, refetch } = usePurchaseOrders();
   const { statuses } = usePurchaseOrderStatuses();
@@ -215,6 +218,29 @@ export function PurchaseOrderForm({ order, onClose }: PurchaseOrderFormProps) {
   // Calculate total from items
   const totalItems = items.reduce((acc, item) => acc + item.total_value, 0);
   const totalValue = totalItems + (parseFloat(freightValue) || 0);
+
+  // Verificar se está no fluxo de aprovação (baseado nos limites configurados)
+  useEffect(() => {
+    const checkApprovalFlow = async () => {
+      if (!currentCompany?.id || totalValue <= 0) {
+        setIsInApprovalFlow(false);
+        return;
+      }
+      
+      const result = await checkOrderLimits(
+        currentCompany.id,
+        order?.created_by || null,
+        totalValue,
+        purpose,
+        order?.id
+      );
+      
+      // Se allowed = false, significa que está no fluxo de aprovação (excede limites)
+      setIsInApprovalFlow(!result.allowed);
+    };
+    
+    checkApprovalFlow();
+  }, [currentCompany?.id, totalValue, purpose, order?.created_by, order?.id, checkOrderLimits]);
 
   // Generate installments when values change (SOMENTE se não vieram da NF-e)
   useEffect(() => {
@@ -851,6 +877,11 @@ export function PurchaseOrderForm({ order, onClose }: PurchaseOrderFormProps) {
                     <XMLUploadButton
                       type="nfe"
                       orderId={order.id}
+                      orderSupplierCnpj={order.supplier?.cpf_cnpj || order.nfe_supplier_cnpj}
+                      orderSupplierName={order.supplier?.razao_social || order.nfe_supplier_name || ""}
+                      orderTotalValue={totalValue}
+                      orderFreightValue={parseFloat(freightValue) || 0}
+                      wasApproved={isInApprovalFlow}
                       onSuccess={() => {
                         refetch();
                         loadExistingItems();
@@ -873,6 +904,11 @@ export function PurchaseOrderForm({ order, onClose }: PurchaseOrderFormProps) {
                   <XMLUploadButton
                     type="nfe"
                     orderId={order.id}
+                    orderSupplierCnpj={order.supplier?.cpf_cnpj || order.nfe_supplier_cnpj}
+                    orderSupplierName={order.supplier?.razao_social || order.nfe_supplier_name || ""}
+                    orderTotalValue={totalValue}
+                    orderFreightValue={parseFloat(freightValue) || 0}
+                    wasApproved={isInApprovalFlow}
                     onSuccess={() => {
                       refetch();
                       loadExistingItems();
@@ -937,6 +973,8 @@ export function PurchaseOrderForm({ order, onClose }: PurchaseOrderFormProps) {
                     <XMLUploadButton
                       type="cte"
                       orderId={order.id}
+                      orderFreightValue={parseFloat(freightValue) || 0}
+                      wasApproved={isInApprovalFlow}
                       onSuccess={() => {
                         refetch();
                       }}
@@ -958,6 +996,8 @@ export function PurchaseOrderForm({ order, onClose }: PurchaseOrderFormProps) {
                   <XMLUploadButton
                     type="cte"
                     orderId={order.id}
+                    orderFreightValue={parseFloat(freightValue) || 0}
+                    wasApproved={isInApprovalFlow}
                     onSuccess={() => {
                       refetch();
                     }}

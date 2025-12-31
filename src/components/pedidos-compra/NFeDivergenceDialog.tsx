@@ -52,12 +52,9 @@ interface NFeDivergenceDialogProps {
   comparison: NFeComparisonResult | null;
   onApplyChanges: (selectedDivergences: string[]) => void;
   onCancel: () => void;
-  requiresReapproval: boolean;
-  orderTotalAmount?: number; // Valor total do pedido para lógica de alçada
+  /** Indica se o pedido está no fluxo de aprovação (verificado pelos limites configurados) */
+  isInApprovalFlow: boolean;
 }
-
-// Constante para alçada de aprovação
-const APPROVAL_THRESHOLD = 5000; // R$ 5.000,00
 
 const formatCurrency = (value: number | null | undefined) => {
   if (value == null) return "N/A";
@@ -81,8 +78,7 @@ export function NFeDivergenceDialog({
   comparison,
   onApplyChanges,
   onCancel,
-  requiresReapproval,
-  orderTotalAmount = 0,
+  isInApprovalFlow,
 }: NFeDivergenceDialogProps) {
   const [selectedDivergences, setSelectedDivergences] = useState<Set<string>>(new Set());
 
@@ -97,11 +93,11 @@ export function NFeDivergenceDialog({
 
   const hasDivergences = divergences.length > 0;
   
-  // Lógica de alçada: só exige reaprovação se há divergências E valor > R$ 5.000,00
-  const effectiveRequiresReapproval = requiresReapproval && hasDivergences && orderTotalAmount > APPROVAL_THRESHOLD;
+  // Lógica de alçada: só exige reaprovação se há divergências E está no fluxo de aprovação
+  const effectiveRequiresReapproval = isInApprovalFlow && hasDivergences;
   
-  // Para pedidos <= R$ 5.000,00 com divergências, permite correção sem reaprovação
-  const allowsCorrectionWithoutReapproval = hasDivergences && orderTotalAmount <= APPROVAL_THRESHOLD;
+  // Se não está no fluxo de aprovação, permite correção sem reaprovação (mas análise de margem será feita)
+  const allowsCorrectionWithoutReapproval = hasDivergences && !isInApprovalFlow;
 
   const toggleDivergence = (id: string) => {
     const newSet = new Set(selectedDivergences);
@@ -191,21 +187,23 @@ export function NFeDivergenceDialog({
         {effectiveRequiresReapproval && (
           <Alert variant="destructive" className="border-amber-500 bg-amber-50 text-amber-800">
             <AlertTriangle className="h-4 w-4" />
-            <AlertTitle>Atenção: Pedido já aprovado (acima de R$ 5.000)</AlertTitle>
+            <AlertTitle>Atenção: Pedido no fluxo de aprovação</AlertTitle>
             <AlertDescription>
-              Qualquer alteração aplicada ao pedido irá marcá-lo para <strong>reaprovação</strong>.
+              Este pedido está sujeito aos limites de aprovação configurados. 
+              Qualquer alteração irá marcá-lo para <strong>reaprovação</strong>.
               Recebimento, estoque e financeiro ficarão bloqueados até a aprovação.
             </AlertDescription>
           </Alert>
         )}
         
-        {allowsCorrectionWithoutReapproval && requiresReapproval && (
+        {allowsCorrectionWithoutReapproval && (
           <Alert className="border-green-500 bg-green-50 text-green-800 dark:bg-green-950/20 dark:text-green-400">
             <CheckCircle2 className="h-4 w-4" />
             <AlertTitle>Correção permitida sem reaprovação</AlertTitle>
             <AlertDescription>
-              Como o pedido é de até R$ 5.000,00, você pode corrigir os dados para corresponder ao XML 
-              sem necessidade de reaprovação. Selecione as divergências que deseja aplicar.
+              Este pedido não está sujeito aos limites de aprovação configurados. 
+              Você pode corrigir os dados sem necessidade de reaprovação.
+              O sistema irá reanalisar as margens de lucro após a alteração.
             </AlertDescription>
           </Alert>
         )}
