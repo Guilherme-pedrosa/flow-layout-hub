@@ -277,6 +277,7 @@ export function usePurchaseReceipt() {
           .from("purchase_order_receipt_items")
           .insert({
             receipt_id: receiptId,
+            company_id: companyId,
             purchase_order_item_id: item.purchase_order_item_id,
             product_id: item.product_id,
             quantity_expected: item.quantity_total,
@@ -364,6 +365,7 @@ export function usePurchaseReceipt() {
           .from("purchase_order_receipt_items")
           .insert({
             receipt_id: receiptId,
+            company_id: companyId,
             purchase_order_item_id: item.purchase_order_item_id,
             product_id: item.product_id,
             quantity_expected: item.quantity_total,
