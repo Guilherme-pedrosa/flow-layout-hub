@@ -293,13 +293,17 @@ function parseNFEXml(xmlContent: string): NFEData {
   }
   
   // Fallback: Extract parcelas from infCpl (observações complementares) using regex
-  if (parcelas.length === 0) {
+  // Run fallback if no parcelas OR if all parcelas have empty dataVencimento
+  const allParcelasMissingDate = parcelas.length > 0 && parcelas.every(p => !p.dataVencimento);
+  
+  if (parcelas.length === 0 || allParcelasMissingDate) {
     const infAdic = infNFe.infAdic || {};
     const infCpl = safeGet(infAdic, 'infCpl');
     
     if (infCpl) {
       const regex = /PARC\.?(\w+)\.?\s*VENC?T?O?\s*(\d{2}\/\d{2}\/\d{2,4})\s*R\$\s*([\d.,]+)/gi;
       let match: RegExpExecArray | null;
+      const regexParcelas: Parcela[] = [];
       
       while ((match = regex.exec(infCpl)) !== null) {
         const numeroParcela = match[1];
@@ -317,14 +321,17 @@ function parseNFEXml(xmlContent: string): NFEData {
         // Convert value: remove dots (thousands) and replace comma with dot (decimal)
         const valor = parseFloat(valorRaw.replace(/\./g, '').replace(',', '.')) || 0;
         
-        parcelas.push({
+        regexParcelas.push({
           numero: numeroParcela,
           dataVencimento,
           valor,
         });
       }
       
-      if (parcelas.length > 0) {
+      // If regex found parcelas with dates, replace the existing ones
+      if (regexParcelas.length > 0) {
+        parcelas.length = 0; // Clear existing parcelas without dates
+        parcelas.push(...regexParcelas);
         console.log(`[parse-xml-nfe] Extracted ${parcelas.length} parcelas from infCpl using regex fallback`);
       }
     }
