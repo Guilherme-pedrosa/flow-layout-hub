@@ -5,13 +5,14 @@ import {
   Table,
   TableBody,
   TableCell,
-  TableHead,
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
 import { Switch } from "@/components/ui/switch";
 import { Edit, Search, Building2 } from "lucide-react";
 import { Pessoa } from "@/hooks/usePessoas";
+import { useSortableData } from "@/hooks/useSortableData";
+import { SortableTableHeader } from "@/components/shared";
 
 interface SuppliersListProps {
   suppliers: Pessoa[];
@@ -32,6 +33,17 @@ export function SuppliersList({ suppliers, isLoading, onEdit, onToggleStatus }: 
       supplier.cidade?.toLowerCase().includes(searchLower)
     );
   });
+
+  // Preparar dados com campo para ordenação de localização
+  const suppliersWithSortKey = filteredSuppliers.map((s) => ({
+    ...s,
+    _location: s.cidade && s.estado ? `${s.cidade}/${s.estado}` : "",
+  }));
+
+  const { items: sortedSuppliers, requestSort, sortConfig } = useSortableData(
+    suppliersWithSortKey,
+    "razao_social"
+  );
 
   const formatCnpj = (value: string | null) => {
     if (!value) return "-";
@@ -80,17 +92,61 @@ export function SuppliersList({ suppliers, isLoading, onEdit, onToggleStatus }: 
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>CNPJ/CPF</TableHead>
-                <TableHead>Razão Social</TableHead>
-                <TableHead>Nome Fantasia</TableHead>
-                <TableHead>Cidade/UF</TableHead>
-                <TableHead>Telefone</TableHead>
-                <TableHead className="text-center">Status</TableHead>
-                <TableHead className="w-[100px]">Ações</TableHead>
+                <SortableTableHeader
+                  label="CNPJ/CPF"
+                  sortKey="cpf_cnpj"
+                  currentSortKey={sortConfig.key}
+                  sortDirection={sortConfig.direction}
+                  onSort={requestSort}
+                />
+                <SortableTableHeader
+                  label="Razão Social"
+                  sortKey="razao_social"
+                  currentSortKey={sortConfig.key}
+                  sortDirection={sortConfig.direction}
+                  onSort={requestSort}
+                />
+                <SortableTableHeader
+                  label="Nome Fantasia"
+                  sortKey="nome_fantasia"
+                  currentSortKey={sortConfig.key}
+                  sortDirection={sortConfig.direction}
+                  onSort={requestSort}
+                />
+                <SortableTableHeader
+                  label="Cidade/UF"
+                  sortKey="_location"
+                  currentSortKey={sortConfig.key}
+                  sortDirection={sortConfig.direction}
+                  onSort={requestSort}
+                />
+                <SortableTableHeader
+                  label="Telefone"
+                  sortKey="telefone"
+                  currentSortKey={sortConfig.key}
+                  sortDirection={sortConfig.direction}
+                  onSort={requestSort}
+                />
+                <SortableTableHeader
+                  label="Status"
+                  sortKey="is_active"
+                  currentSortKey={sortConfig.key}
+                  sortDirection={sortConfig.direction}
+                  onSort={requestSort}
+                  className="text-center"
+                />
+                <SortableTableHeader
+                  label="Ações"
+                  sortKey=""
+                  currentSortKey={sortConfig.key}
+                  sortDirection={sortConfig.direction}
+                  onSort={() => {}}
+                  className="w-[100px]"
+                />
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredSuppliers.map((supplier) => (
+              {sortedSuppliers.map((supplier) => (
                 <TableRow key={supplier.id}>
                   <TableCell className="font-mono text-sm">
                     {formatCnpj(supplier.cpf_cnpj)}

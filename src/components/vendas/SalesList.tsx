@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { useState, useCallback } from "react";
+import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -24,6 +24,9 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { useSortableData } from "@/hooks/useSortableData";
+import { useSelectionSum } from "@/hooks/useSelectionSum";
+import { SortableTableHeader, SelectionSummaryBar } from "@/components/shared";
 
 interface SalesListProps {
   onEdit: (sale: Sale) => void;
@@ -36,7 +39,6 @@ export function SalesList({ onEdit, onView }: SalesListProps) {
   const { printDocument, printSummary, isGenerating } = useDocumentPdf();
   const { emitirNFe, isEmitting, getNFeBySale, nfes } = useNFe();
   const [search, setSearch] = useState("");
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isDownloadingBatch, setIsDownloadingBatch] = useState(false);
   const [emitindoNFeId, setEmitindoNFeId] = useState<string | null>(null);
   const [showNFeDialog, setShowNFeDialog] = useState(false);
@@ -49,6 +51,33 @@ export function SalesList({ onEdit, onView }: SalesListProps) {
     s.client?.nome_fantasia?.toLowerCase().includes(search.toLowerCase()) ||
     s.sale_number?.toString().includes(search)
   );
+
+  // Preparar dados com campo para ordenação
+  const salesWithSortKey = filteredSales.map((s) => ({
+    ...s,
+    _clientName: s.client?.nome_fantasia || s.client?.razao_social || "",
+  }));
+
+  const { items: sortedSales, requestSort, sortConfig } = useSortableData(
+    salesWithSortKey,
+    "sale_date"
+  );
+
+  // Selection with sum
+  const getId = useCallback((item: Sale) => item.id, []);
+  const getAmount = useCallback((item: Sale) => item.total_value, []);
+
+  const {
+    selectedCount,
+    totalSum,
+    selectedIds,
+    toggleSelection,
+    clearSelection,
+    isSelected,
+    toggleSelectAll,
+    isAllSelected,
+    isSomeSelected,
+  } = useSelectionSum({ items: filteredSales, getAmount, getId });
 
   const handleCopyLink = (sale: Sale) => {
     const url = `${window.location.origin}/orcamento/${sale.tracking_token}`;
@@ -105,26 +134,8 @@ export function SalesList({ onEdit, onView }: SalesListProps) {
     }
   };
 
-  const handleSelectAll = (checked: boolean) => {
-    if (checked) {
-      setSelectedIds(new Set(filteredSales.map(s => s.id)));
-    } else {
-      setSelectedIds(new Set());
-    }
-  };
-
-  const handleSelectOne = (id: string, checked: boolean) => {
-    const newSet = new Set(selectedIds);
-    if (checked) {
-      newSet.add(id);
-    } else {
-      newSet.delete(id);
-    }
-    setSelectedIds(newSet);
-  };
-
   const handleDownloadBatch = async (pdfType: 'complete' | 'summary') => {
-    if (selectedIds.size === 0) {
+    if (selectedCount === 0) {
       toast.error("Selecione ao menos uma venda");
       return;
     }
@@ -170,12 +181,12 @@ export function SalesList({ onEdit, onView }: SalesListProps) {
       URL.revokeObjectURL(url);
 
       if (errors.length > 0) {
-        toast.warning(`ZIP gerado com ${selectedIds.size - errors.length} arquivos. Erros: ${errors.join(', ')}`);
+        toast.warning(`ZIP gerado com ${selectedCount - errors.length} arquivos. Erros: ${errors.join(', ')}`);
       } else {
-        toast.success(`ZIP gerado com ${selectedIds.size} arquivos!`);
+        toast.success(`ZIP gerado com ${selectedCount} arquivos!`);
       }
 
-      setSelectedIds(new Set());
+      clearSelection();
     } catch (error) {
       console.error("Erro ao gerar ZIP:", error);
       toast.error("Erro ao gerar ZIP");
@@ -197,9 +208,6 @@ export function SalesList({ onEdit, onView }: SalesListProps) {
     }
     return <Badge variant="secondary">Sem status</Badge>;
   };
-
-  const allSelected = filteredSales.length > 0 && filteredSales.every(s => selectedIds.has(s.id));
-  const someSelected = selectedIds.size > 0;
 
   if (isLoading) {
     return (
@@ -223,9 +231,9 @@ export function SalesList({ onEdit, onView }: SalesListProps) {
           />
         </div>
         
-        {someSelected && (
+        {selectedCount > 0 && (
           <div className="flex items-center gap-2">
-            <span className="text-sm text-muted-foreground">{selectedIds.size} selecionado(s)</span>
+            <span className="text-sm text-muted-foreground">{selectedCount} selecionado(s)</span>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="sm" disabled={isDownloadingBatch}>
@@ -251,34 +259,77 @@ export function SalesList({ onEdit, onView }: SalesListProps) {
         <Table>
           <TableHeader>
             <TableRow className="border-b border-border hover:bg-transparent">
-              <TableHead className="w-12">
-                <Checkbox 
-                  checked={allSelected} 
-                  onCheckedChange={handleSelectAll}
-                />
-              </TableHead>
-              <TableHead className="w-20">Nº</TableHead>
-              <TableHead>Cliente</TableHead>
-              <TableHead className="w-28">Data</TableHead>
-              <TableHead className="w-40">Situação</TableHead>
-              <TableHead className="w-28 text-right">Valor</TableHead>
-              <TableHead className="w-24"></TableHead>
+              <SortableTableHeader
+                label=""
+                sortKey=""
+                currentSortKey={sortConfig.key}
+                sortDirection={sortConfig.direction}
+                onSort={() => {}}
+                className="w-12"
+              />
+              <SortableTableHeader
+                label="Nº"
+                sortKey="sale_number"
+                currentSortKey={sortConfig.key}
+                sortDirection={sortConfig.direction}
+                onSort={requestSort}
+                className="w-20"
+              />
+              <SortableTableHeader
+                label="Cliente"
+                sortKey="_clientName"
+                currentSortKey={sortConfig.key}
+                sortDirection={sortConfig.direction}
+                onSort={requestSort}
+              />
+              <SortableTableHeader
+                label="Data"
+                sortKey="sale_date"
+                currentSortKey={sortConfig.key}
+                sortDirection={sortConfig.direction}
+                onSort={requestSort}
+                className="w-28"
+              />
+              <SortableTableHeader
+                label="Situação"
+                sortKey="status_id"
+                currentSortKey={sortConfig.key}
+                sortDirection={sortConfig.direction}
+                onSort={requestSort}
+                className="w-40"
+              />
+              <SortableTableHeader
+                label="Valor"
+                sortKey="total_value"
+                currentSortKey={sortConfig.key}
+                sortDirection={sortConfig.direction}
+                onSort={requestSort}
+                className="w-28 text-right"
+              />
+              <SortableTableHeader
+                label=""
+                sortKey=""
+                currentSortKey={sortConfig.key}
+                sortDirection={sortConfig.direction}
+                onSort={() => {}}
+                className="w-24"
+              />
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredSales.length === 0 ? (
+            {sortedSales.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
                   Nenhuma venda encontrada
                 </TableCell>
               </TableRow>
             ) : (
-              filteredSales.map(sale => (
-                <TableRow key={sale.id} className={selectedIds.has(sale.id) ? "bg-muted/30" : ""}>
+              sortedSales.map(sale => (
+                <TableRow key={sale.id} className={isSelected(sale.id) ? "bg-muted/30" : ""}>
                   <TableCell>
                     <Checkbox 
-                      checked={selectedIds.has(sale.id)}
-                      onCheckedChange={(checked) => handleSelectOne(sale.id, !!checked)}
+                      checked={isSelected(sale.id)}
+                      onCheckedChange={() => toggleSelection(sale.id)}
                     />
                   </TableCell>
                   <TableCell className="font-medium">{sale.sale_number}</TableCell>
@@ -399,6 +450,13 @@ export function SalesList({ onEdit, onView }: SalesListProps) {
         </Table>
       </div>
 
+      {/* Selection Summary Bar */}
+      <SelectionSummaryBar
+        selectedCount={selectedCount}
+        totalSum={totalSum}
+        onClear={clearSelection}
+      />
+
       {/* Dialog de confirmação para emissão de NFe */}
       <AlertDialog open={showNFeDialog} onOpenChange={setShowNFeDialog}>
         <AlertDialogContent>
@@ -419,7 +477,7 @@ export function SalesList({ onEdit, onView }: SalesListProps) {
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction onClick={confirmEmitirNFe}>
-              Emitir NF-e
+              Confirmar Emissão
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

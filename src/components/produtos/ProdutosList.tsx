@@ -7,7 +7,6 @@ import {
   Table,
   TableBody,
   TableCell,
-  TableHead,
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
@@ -22,6 +21,8 @@ import { formatCurrency } from "@/lib/formatters";
 import { ProductForm, ProductFormData } from "./ProductForm";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { useSortableData } from "@/hooks/useSortableData";
+import { SortableTableHeader } from "@/components/shared";
 
 export function ProdutosList() {
   const { products, isLoading, createProduct, updateProduct, toggleProductStatus } = useProducts();
@@ -34,6 +35,11 @@ export function ProdutosList() {
     (p) =>
       p.code.toLowerCase().includes(search.toLowerCase()) ||
       p.description.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const { items: sortedProducts, requestSort, sortConfig } = useSortableData(
+    filteredProducts,
+    "description"
   );
 
   const handleOpenNew = () => {
@@ -222,25 +228,76 @@ export function ProdutosList() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Código</TableHead>
-              <TableHead>Descrição</TableHead>
-              <TableHead>NCM</TableHead>
-              <TableHead>Unidade</TableHead>
-              <TableHead className="text-right">Custo Final</TableHead>
-              <TableHead className="text-right">Estoque</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead className="w-[100px]">Ações</TableHead>
+              <SortableTableHeader
+                label="Código"
+                sortKey="code"
+                currentSortKey={sortConfig.key}
+                sortDirection={sortConfig.direction}
+                onSort={requestSort}
+              />
+              <SortableTableHeader
+                label="Descrição"
+                sortKey="description"
+                currentSortKey={sortConfig.key}
+                sortDirection={sortConfig.direction}
+                onSort={requestSort}
+              />
+              <SortableTableHeader
+                label="NCM"
+                sortKey="ncm"
+                currentSortKey={sortConfig.key}
+                sortDirection={sortConfig.direction}
+                onSort={requestSort}
+              />
+              <SortableTableHeader
+                label="Unidade"
+                sortKey="unit"
+                currentSortKey={sortConfig.key}
+                sortDirection={sortConfig.direction}
+                onSort={requestSort}
+              />
+              <SortableTableHeader
+                label="Custo Final"
+                sortKey="final_cost"
+                currentSortKey={sortConfig.key}
+                sortDirection={sortConfig.direction}
+                onSort={requestSort}
+                className="text-right"
+              />
+              <SortableTableHeader
+                label="Estoque"
+                sortKey="quantity"
+                currentSortKey={sortConfig.key}
+                sortDirection={sortConfig.direction}
+                onSort={requestSort}
+                className="text-right"
+              />
+              <SortableTableHeader
+                label="Status"
+                sortKey="is_active"
+                currentSortKey={sortConfig.key}
+                sortDirection={sortConfig.direction}
+                onSort={requestSort}
+              />
+              <SortableTableHeader
+                label="Ações"
+                sortKey=""
+                currentSortKey={sortConfig.key}
+                sortDirection={sortConfig.direction}
+                onSort={() => {}}
+                className="w-[100px]"
+              />
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredProducts.length === 0 ? (
+            {sortedProducts.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={8} className="text-center text-muted-foreground">
                   Nenhum produto encontrado
                 </TableCell>
               </TableRow>
             ) : (
-              filteredProducts.map((product) => (
+              sortedProducts.map((product) => (
                 <TableRow key={product.id}>
                   <TableCell className="font-mono">{product.code}</TableCell>
                   <TableCell>{product.description}</TableCell>
