@@ -110,38 +110,62 @@ function textSimilarityScore(text1: string | null, text2: string | null): number
   return Math.round((matchCount / Math.max(tokens1.length, 1)) * 100);
 }
 
-// Motor principal de matching - MAIS FLEXÍVEL
+// Motor principal de matching - CORRIGIDO
+// CORREÇÕES APLICADAS:
+// 1. Filtro de proporção de valor - rejeita matches com diferença > 20% ou > R$ 100
+// 2. Peso do valor aumentado para 60%
+// 3. Verificação de destinatário/entidade
 function calculateMatchScore(
   tx: BankTransaction,
   entry: FinancialEntry
-): { score: number; reasons: string[] } {
+): { score: number; reasons: string[]; valueScore: number } {
   const reasons: string[] = [];
   let score = 0;
+  let valueScore = 0;
 
   const txAmount = Math.abs(tx.amount);
   const entryAmount = entry.amount;
   const amountDiff = Math.abs(txAmount - entryAmount);
   const percentDiff = amountDiff / Math.max(entryAmount, 1);
 
-  // 1. Match por valor (PRINCIPAL - até 50 pontos)
+  // CORREÇÃO 1: Filtro de proporção de valor
+  // Rejeitar se diferença > 20% OU diferença absoluta > R$ 100
+  if (percentDiff > 0.20 || amountDiff > 100) {
+    console.log(`[reconciliation-engine] REJEITADO: tx=${txAmount.toFixed(2)}, entry=${entryAmount.toFixed(2)}, diff=${amountDiff.toFixed(2)} (${(percentDiff*100).toFixed(1)}%)`);
+    return { score: 0, reasons: ['Valores muito diferentes - rejeitado'], valueScore: 0 };
+  }
+
+  // 1. Match por valor (PRINCIPAL - até 60 pontos) - PESO AUMENTADO
   if (amountDiff < 0.01) {
-    score += 50;
+    score += 60;
+    valueScore = 60;
     reasons.push('✓ Valor exato');
   } else if (amountDiff < 1) {
-    score += 45;
-    reasons.push('✓ Valor muito próximo');
+    score += 55;
+    valueScore = 55;
+    reasons.push('✓ Valor muito próximo (centavos)');
   } else if (percentDiff < 0.01) {
-    score += 40;
+    score += 50;
+    valueScore = 50;
     reasons.push('✓ Valor <1% diferença');
   } else if (percentDiff < 0.05) {
-    score += 30;
+    score += 40;
+    valueScore = 40;
     reasons.push('~ Valor <5% diferença');
   } else if (percentDiff < 0.10) {
-    score += 20;
+    score += 30;
+    valueScore = 30;
     reasons.push('~ Valor <10% diferença');
   } else if (percentDiff < 0.20) {
-    score += 10;
-    reasons.push('? Valor diferente');
+    score += 20;
+    valueScore = 20;
+    reasons.push('? Valor com diferença moderada');
+  }
+
+  // CORREÇÃO: Exigir match de valor mínimo
+  if (valueScore === 0) {
+    console.log(`[reconciliation-engine] REJEITADO por falta de match de valor: tx=${txAmount.toFixed(2)}, entry=${entryAmount.toFixed(2)}`);
+    return { score: 0, reasons: ['Sem correspondência de valor'], valueScore: 0 };
   }
 
   // 2. Match por data (até 25 pontos)
@@ -206,9 +230,9 @@ function calculateMatchScore(
   // Limitar a 100
   const finalScore = Math.min(100, score);
   
-  console.log(`[reconciliation-engine] Match: tx=${tx.id.slice(0,8)} entry=${entry.id.slice(0,8)} score=${finalScore} reasons=${reasons.join(', ')}`);
+  console.log(`[reconciliation-engine] Match: tx=${tx.id.slice(0,8)} entry=${entry.id.slice(0,8)} valor_tx=${txAmount.toFixed(2)} valor_entry=${entryAmount.toFixed(2)} score=${finalScore} valueScore=${valueScore} reasons=${reasons.join(', ')}`);
   
-  return { score: finalScore, reasons };
+  return { score: finalScore, reasons, valueScore };
 }
 
 // Encontrar combinações de títulos que somam o valor
@@ -358,8 +382,11 @@ serve(async (req) => {
       const exactMatches: { entry: FinancialEntry; score: number; reasons: string[] }[] = [];
       
       for (const entry of relevantEntries) {
-        const { score, reasons } = calculateMatchScore(tx, entry);
-        if (score >= (include_low_confidence ? 30 : 70)) {
+        const { score, reasons, valueScore } = calculateMatchScore(tx, entry);
+        // CORREÇÃO: Score mínimo aumentado de 30 para 50
+        // E exige que valueScore seja > 0 (match de valor obrigatório)
+        const minScore = include_low_confidence ? 50 : 70;
+        if (score >= minScore && valueScore > 0) {
           exactMatches.push({ entry, score, reasons });
         }
       }
@@ -415,7 +442,9 @@ serve(async (req) => {
             ? Math.min(avgScore + 10, 100) 
             : avgScore;
 
-          if (finalScore >= (include_low_confidence ? 30 : 70)) {
+          // CORREÇÃO: Score mínimo aumentado de 30 para 50
+          const minScore = include_low_confidence ? 50 : 70;
+          if (finalScore >= minScore) {
             suggestions.push({
               transaction_id: tx.id,
               entries: combo.map(e => ({
