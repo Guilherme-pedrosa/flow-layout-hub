@@ -44,13 +44,18 @@ interface BankTransaction {
   reconciled_with_id: string | null;
 }
 
-export const ExtratoList = () => {
+interface ExtratoListProps {
+  /** Filter by transaction type: 'DEBIT' for payables, 'CREDIT' for receivables, undefined for all */
+  transactionTypeFilter?: 'DEBIT' | 'CREDIT';
+}
+
+export const ExtratoList = ({ transactionTypeFilter }: ExtratoListProps = {}) => {
   const { currentCompany } = useCompany();
   const companyId = currentCompany?.id;
   
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
-  const [transactions, setTransactions] = useState<BankTransaction[]>([]);
+  const [allTransactions, setAllTransactions] = useState<BankTransaction[]>([]);
   const [hasCredentials, setHasCredentials] = useState(false);
   
   // Modal de conciliação
@@ -68,6 +73,12 @@ export const ExtratoList = () => {
   
   const [dateFrom, setDateFrom] = useState(thirtyDaysAgo.toISOString().split("T")[0]);
   const [dateTo, setDateTo] = useState(today.toISOString().split("T")[0]);
+
+  // Filter transactions by type if specified
+  const transactions = useMemo(() => {
+    if (!transactionTypeFilter) return allTransactions;
+    return allTransactions.filter(t => t.type === transactionTypeFilter);
+  }, [allTransactions, transactionTypeFilter]);
 
   useEffect(() => {
     if (companyId) {
@@ -100,7 +111,7 @@ export const ExtratoList = () => {
         .order("transaction_date", { ascending: false });
 
       if (error) throw error;
-      setTransactions(data || []);
+      setAllTransactions(data || []);
     } catch (error) {
       console.error("Erro ao carregar transações:", error);
       toast.error("Erro ao carregar extrato");

@@ -2,19 +2,20 @@ import { useState, useEffect, useCallback } from "react";
 import { PageHeader, SortableTableHeader, SelectionSummaryBar } from "@/components/shared";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Search, Download, Send, MoreHorizontal, TrendingUp, TrendingDown, Bot } from "lucide-react";
-import { FinancialAIBanner, FinancialAIChat, AIRiskBadge } from "@/components/financeiro";
+import { Plus, Search, Download, Send, MoreHorizontal, TrendingUp, TrendingDown, Bot, FileText } from "lucide-react";
+import { FinancialAIBanner, FinancialAIChat, AIRiskBadge, ExtratoList } from "@/components/financeiro";
 import { supabase } from "@/integrations/supabase/client";
 import { format, parseISO, differenceInDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useSortableData } from "@/hooks/useSortableData";
 import { useSelectionSum } from "@/hooks/useSelectionSum";
+import { useFinancialSituations } from "@/hooks/useFinancialSituations";
 
 interface Receivable {
   id: string;
@@ -26,6 +27,7 @@ interface Receivable {
   is_paid: boolean;
   paid_at: string | null;
   client_id: string | null;
+  situation_id: string | null;
   client?: {
     razao_social: string | null;
     nome_fantasia: string | null;
@@ -37,6 +39,8 @@ export default function ContasReceber() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("todas");
   const [searchTerm, setSearchTerm] = useState("");
+  const [situationFilter, setSituationFilter] = useState("all");
+  const { situations } = useFinancialSituations();
 
   useEffect(() => {
     fetchReceivables();
@@ -98,6 +102,9 @@ export default function ContasReceber() {
     if (activeTab === "a_vencer" && (r.is_paid || isOverdue)) return false;
     if (activeTab === "vencidas" && (!isOverdue || r.is_paid)) return false;
     if (activeTab === "recebidas" && !r.is_paid) return false;
+
+    // Situation filter
+    if (situationFilter !== "all" && r.situation_id !== situationFilter) return false;
 
     if (searchTerm) {
       const search = searchTerm.toLowerCase();
@@ -209,8 +216,23 @@ export default function ContasReceber() {
           >
             Recebidas
           </TabsTrigger>
+          <TabsTrigger 
+            value="extrato" 
+            className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent pb-3 px-0 gap-2"
+          >
+            <FileText className="h-4 w-4" />
+            Extrato
+          </TabsTrigger>
         </TabsList>
+
+        {/* Extrato Tab Content */}
+        <TabsContent value="extrato" className="mt-4">
+          <ExtratoList transactionTypeFilter="CREDIT" />
+        </TabsContent>
       </Tabs>
+
+      {activeTab !== "extrato" && (
+        <>
 
       {/* Summary Cards */}
       <div className="grid grid-cols-4 gap-4">
@@ -293,6 +315,25 @@ export default function ContasReceber() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="este_mes">Vencimento: Este mês</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={situationFilter} onValueChange={setSituationFilter}>
+            <SelectTrigger className="w-[160px]">
+              <SelectValue placeholder="Situação" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todas situações</SelectItem>
+              {situations.filter(s => s.is_active).map((situation) => (
+                <SelectItem key={situation.id} value={situation.id}>
+                  <div className="flex items-center gap-2">
+                    <div 
+                      className="w-2 h-2 rounded-full" 
+                      style={{ backgroundColor: situation.color }}
+                    />
+                    {situation.name}
+                  </div>
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
           <Button variant="outline">Aplicar</Button>
@@ -452,6 +493,8 @@ export default function ContasReceber() {
         totalSum={totalSum}
         onClear={clearSelection}
       />
+      </>
+      )}
     </div>
   );
 }

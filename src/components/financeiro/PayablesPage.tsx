@@ -44,6 +44,7 @@ export function PayablesPage({ onRefresh }: PayablesPageProps) {
     supplierId: "all",
     category: "all",
     paymentMethod: "all",
+    situationId: "all",
     currentMonth: startOfMonth(new Date()),
   });
   
@@ -184,6 +185,11 @@ export function PayablesPage({ onRefresh }: PayablesPageProps) {
     // Payment method filter
     if (filters.paymentMethod !== "all") {
       filtered = filtered.filter((p) => p.payment_method_type === filters.paymentMethod);
+    }
+
+    // Situation filter
+    if (filters.situationId !== "all") {
+      filtered = filtered.filter((p) => p.financial_situation_id === filters.situationId);
     }
 
     return {
