@@ -205,14 +205,28 @@ async function getInterExtrato(
 
   const response = await makeHttpsRequest("GET", path, headers, null, cert, key);
   
-  console.log(`[inter-mtls] Extrato response: ${response.status}`);
+  console.log(`[inter-mtls] Extrato response status: ${response.status}`);
+  console.log(`[inter-mtls] Extrato response body: ${response.body.slice(0, 500)}`);
   
   if (response.status !== 200) {
     console.error(`[inter-mtls] Extrato error: ${response.body}`);
     throw new Error(`Extrato failed (${response.status}): ${response.body}`);
   }
 
-  return JSON.parse(response.body);
+  // Verificar se a resposta está vazia ou inválida
+  if (!response.body || response.body.trim().length === 0) {
+    console.log(`[inter-mtls] Extrato retornou vazio, retornando array vazio`);
+    return { transacoes: [] };
+  }
+
+  try {
+    return JSON.parse(response.body);
+  } catch (parseError) {
+    console.error(`[inter-mtls] Erro ao parsear JSON: ${parseError}`);
+    console.error(`[inter-mtls] Body recebido: "${response.body}"`);
+    // Se não conseguir parsear, retorna vazio
+    return { transacoes: [] };
+  }
 }
 
 interface SyncRequest {
