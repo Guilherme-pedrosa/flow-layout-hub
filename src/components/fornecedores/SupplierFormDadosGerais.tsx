@@ -104,38 +104,42 @@ export function SupplierFormDadosGerais({ form }: SupplierFormDadosGeraisProps) 
             </div>
 
             <div className="space-y-2 md:col-span-2">
-              <Label>Razão Social *</Label>
-              <Input {...register("razao_social")} />
+              <Label>{tipoPessoa === "PJ" ? "Razão Social *" : "Nome Completo *"}</Label>
+              <Input {...register("razao_social")} placeholder={tipoPessoa === "PJ" ? "" : "Nome completo"} />
               {errors.razao_social && (
                 <span className="text-sm text-destructive">{String(errors.razao_social.message)}</span>
               )}
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="space-y-2 md:col-span-2">
-              <Label>Nome Fantasia</Label>
-              <Input {...register("nome_fantasia")} />
-            </div>
+          {tipoPessoa === "PJ" && (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="space-y-2 md:col-span-2">
+                <Label>Nome Fantasia</Label>
+                <Input {...register("nome_fantasia")} />
+              </div>
 
-            <div className="space-y-2">
-              <Label>Inscrição Estadual</Label>
-              <Input {...register("inscricao_estadual")} />
+              <div className="space-y-2">
+                <Label>Inscrição Estadual</Label>
+                <Input {...register("inscricao_estadual")} />
+              </div>
             </div>
-          </div>
+          )}
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="space-y-2">
-              <Label>Inscrição Municipal</Label>
-              <Input {...register("inscricao_municipal")} />
-            </div>
+            {tipoPessoa === "PJ" && (
+              <div className="space-y-2">
+                <Label>Inscrição Municipal</Label>
+                <Input {...register("inscricao_municipal")} />
+              </div>
+            )}
 
             <div className="space-y-2">
               <Label>Telefone</Label>
               <Input {...register("telefone")} />
             </div>
 
-            <div className="space-y-2">
+            <div className={`space-y-2 ${tipoPessoa === "PF" ? "md:col-span-2" : ""}`}>
               <Label>E-mail</Label>
               <Input type="email" {...register("email")} />
               {errors.email && (
