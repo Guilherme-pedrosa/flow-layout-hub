@@ -129,34 +129,27 @@ export function usePayablesGeneration() {
       }
 
       // 2. CONTA DA TRANSPORTADORA (CT-e)
-      // Apenas se houver CT-e importado com valor > 0
-      if (cteData && cteData.valorTotal > 0) {
+      // Apenas se houver CT-e importado com valor > 0 E a transportadora estiver cadastrada
+      if (cteData && cteData.valorTotal > 0 && carrierId) {
         // Vencimento padrão: 30 dias da emissão do CT-e
         const cteDueDate = cteData.dataEmissao 
           ? format(addDays(new Date(cteData.dataEmissao), 30), 'yyyy-MM-dd')
           : format(addDays(new Date(), 30), 'yyyy-MM-dd');
 
-        // O tomador é quem paga o frete - usar dados do tomador
-        const payerName = cteData.tomador?.razaoSocial || 'Transportadora';
-        const payerDocument = cteData.tomador?.cnpj || '';
-
-        // Se temos um carrierId (transportadora cadastrada), usar
-        // Senão, criar mesmo assim com os dados disponíveis
-        // Notas importadas via XML SEMPRE geram contas reais (não previsões)
         const carrierPayable: PayableInsert = {
           company_id: currentCompany.id,
-          supplier_id: carrierId || supplierId, // Se não tem carrierId, vincula ao fornecedor da NF-e
+          supplier_id: carrierId,
           purchase_order_id: orderId,
           amount: cteData.valorTotal,
           due_date: cteDueDate,
           document_type: "cte",
           document_number: cteData.numero,
-          description: `CT-e ${cteData.numero} - Frete ${cteData.modalidade || ''}`,
+          description: `CT-e ${cteData.numero} - Frete`,
           chart_account_id: chartAccountId || undefined,
           cost_center_id: costCenterId || undefined,
-          is_forecast: false, // Notas XML sempre geram contas reais, não previsões
-          recipient_name: payerName,
-          recipient_document: payerDocument,
+          is_forecast: false,
+          recipient_name: cteData.remetente?.razaoSocial || 'Transportadora',
+          recipient_document: cteData.remetente?.cnpj || '',
         };
 
         const { error } = await supabase
@@ -168,6 +161,10 @@ export function usePayablesGeneration() {
         } else {
           carrierPayableCreated = true;
         }
+      } else if (cteData && cteData.valorTotal > 0 && !carrierId) {
+        // Se tem CT-e mas a transportadora não foi vinculada, adiciona um erro informativo
+        errors.push("A conta a pagar do frete (CT-e) não foi gerada porque a transportadora não foi cadastrada ou vinculada.");
+        toast.warning("Conta do frete não gerada: vincule a transportadora primeiro.");
       }
 
       return { supplierPayablesCount, carrierPayableCreated, errors };

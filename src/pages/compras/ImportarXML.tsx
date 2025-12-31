@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
-import { Check, Loader2, AlertTriangle, Sparkles, Truck } from "lucide-react";
+import { Check, Loader2, AlertTriangle, Truck } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -65,8 +65,6 @@ export default function ImportarXML() {
   
   // Estado para CFOP geral
   const [cfopGeral, setCfopGeral] = useState<string>("");
-  const [sugestaoAiCfop, setSugestaoAiCfop] = useState<string>("");
-  const [loadingAiCfop, setLoadingAiCfop] = useState(false);
   
   // Estado para finalidade da nota
   const [finalidade, setFinalidade] = useState<"comercializacao" | "industrializacao" | "uso_consumo" | "ativo" | "garantia" | "outros">("comercializacao");
@@ -409,142 +407,6 @@ export default function ImportarXML() {
     await checkFornecedorCadastrado();
   };
 
-  const sugerirCfopComIA = async () => {
-    if (!nfeData) return;
-    
-    setLoadingAiCfop(true);
-    try {
-      const itensDescricao = nfeData.itens.map(i => `${i.descricao} (NCM: ${i.ncm || 'N/A'}, Qtd: ${i.quantidade})`).join('; ');
-      const cfopSaida = nfeData.itens[0]?.cfopSaida || '';
-      const ufFornecedor = nfeData.fornecedor.uf;
-      const naturezaOperacao = nfeData.nota.naturezaOperacao || '';
-      
-      // UF da empresa (destino) - fixo GO por enquanto, TODO: pegar do contexto
-      const ufEmpresa = "GO";
-      
-      // Determinar primeiro dígito do CFOP de entrada baseado na UF
-      const primeiroDigitoEntrada = ufFornecedor === ufEmpresa 
-        ? "1" 
-        : ufFornecedor === "EX" 
-          ? "3" 
-          : "2";
-      
-      // Extrair os 3 últimos dígitos do CFOP de saída (representam a operação)
-      const ultimos3Digitos = cfopSaida.slice(-3);
-      
-      const prompt = `Você é um especialista fiscal brasileiro. Analise a NF-e e sugira o CFOP de ENTRADA correto.
-
-DADOS DA NF-e:
-- Natureza da Operação: "${naturezaOperacao}"
-- CFOP de SAÍDA do fornecedor: ${cfopSaida}
-- UF do fornecedor (origem): ${ufFornecedor}
-- UF da empresa (destino): ${ufEmpresa}
-- Produtos: ${itensDescricao}
-
-REGRA FUNDAMENTAL DO CFOP:
-O CFOP de entrada ESPELHA o CFOP de saída, apenas trocando o primeiro dígito:
-- Saída 5xxx (estadual) → Entrada 1xxx
-- Saída 6xxx (interestadual) → Entrada 2xxx  
-- Saída 7xxx (exportação) → Entrada 3xxx
-
-PORTANTO: Se o CFOP de saída é ${cfopSaida}, o de entrada é ${primeiroDigitoEntrada}${ultimos3Digitos}.
-
-INTERPRETAÇÃO DA NATUREZA DA OPERAÇÃO:
-- "REMESSA" ou "GARANTIA" ou "SUBSTITUIÇÃO" → NÃO é compra, é movimentação (ex: x915, x949)
-- "VENDA" ou "COMERCIALIZAÇÃO" → Compra para revenda (x102)
-- "INDUSTRIALIZAÇÃO" → Compra para produção (x101)
-- "CONSERTO" ou "REPARO" → Recebimento para conserto (x915)
-- "DEMONSTRAÇÃO" → Demonstração (x912)
-- "CONSIGNAÇÃO" → Consignação (x917)
-- "DEVOLUÇÃO" → Devolução (x201, x202)
-
-A NATUREZA "${naturezaOperacao}" indica que esta operação é: ${
-  naturezaOperacao.toLowerCase().includes('garantia') || naturezaOperacao.toLowerCase().includes('remessa') 
-    ? 'UMA REMESSA/GARANTIA - NÃO É COMPRA COMERCIAL! Use x949 ou CFOP específico da operação.'
-    : naturezaOperacao.toLowerCase().includes('venda') 
-      ? 'UMA COMPRA PARA COMERCIALIZAÇÃO - Use x102.'
-      : 'Analise a natureza e escolha o CFOP apropriado.'
-}
-
-CFOP SUGERIDO: ${primeiroDigitoEntrada}${ultimos3Digitos}
-
-Responda APENAS com o código CFOP de 4 dígitos. Sem explicações.`;
-
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/financial-ai`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-          },
-          body: JSON.stringify({
-            messages: [{ role: 'user', content: prompt }],
-          }),
-        }
-      );
-
-      if (!response.ok) throw new Error('Erro ao consultar IA');
-
-      const reader = response.body?.getReader();
-      const decoder = new TextDecoder();
-      let fullText = '';
-      let textBuffer = '';
-
-      if (reader) {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          
-          textBuffer += decoder.decode(value, { stream: true });
-          
-          let newlineIndex: number;
-          while ((newlineIndex = textBuffer.indexOf('\n')) !== -1) {
-            let line = textBuffer.slice(0, newlineIndex);
-            textBuffer = textBuffer.slice(newlineIndex + 1);
-            
-            if (line.endsWith('\r')) line = line.slice(0, -1);
-            if (line.startsWith(':') || line.trim() === '') continue;
-            if (!line.startsWith('data: ')) continue;
-            
-            const jsonStr = line.slice(6).trim();
-            if (jsonStr === '[DONE]') continue;
-            
-            try {
-              const parsed = JSON.parse(jsonStr);
-              const content = parsed.choices?.[0]?.delta?.content;
-              if (content) fullText += content;
-            } catch {
-              // Incomplete JSON
-            }
-          }
-        }
-      }
-
-      // Extrair apenas o código CFOP (4 dígitos)
-      const cfopMatch = fullText.match(/\d{4}/);
-      if (cfopMatch) {
-        const sugeridoCfop = cfopMatch[0];
-        setSugestaoAiCfop(sugeridoCfop);
-        setCfopGeral(sugeridoCfop);
-        
-        // Aplicar a todos os itens
-        const newItens = nfeData.itens.map(item => ({
-          ...item,
-          cfopEntrada: sugeridoCfop
-        }));
-        setNfeData({ ...nfeData, itens: newItens });
-        
-        toast.success(`CFOP sugerido: ${sugeridoCfop}`);
-      }
-    } catch (error) {
-      console.error('Erro ao sugerir CFOP:', error);
-      toast.error('Não foi possível sugerir o CFOP');
-    } finally {
-      setLoadingAiCfop(false);
-    }
-  };
-
   const handleCfopGeralChange = (cfop: string) => {
     setCfopGeral(cfop);
     if (!nfeData) return;
@@ -773,7 +635,6 @@ Responda APENAS com o código CFOP de 4 dígitos. Sem explicações.`;
     setCentroCustoId("");
     setFormaPagamentoSelecionada("");
     setCfopGeral("");
-    setSugestaoAiCfop("");
   };
 
   return (
@@ -946,25 +807,7 @@ Responda APENAS com o código CFOP de 4 dígitos. Sem explicações.`;
                     </SelectContent>
                   </Select>
                 </div>
-                <Button 
-                  variant="outline" 
-                  onClick={sugerirCfopComIA}
-                  disabled={loadingAiCfop}
-                  className="gap-2"
-                >
-                  {loadingAiCfop ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Sparkles className="h-4 w-4" />
-                  )}
-                  Sugerir com IA
-                </Button>
               </div>
-              {sugestaoAiCfop && (
-                <p className="text-sm text-muted-foreground">
-                  IA sugeriu: <span className="font-medium text-primary">{sugestaoAiCfop}</span> com base nos produtos da nota
-                </p>
-              )}
               {!cfopGeral && (
                 <p className="text-sm text-destructive">
                   O CFOP de entrada é obrigatório para cumprir a legislação fiscal brasileira.
