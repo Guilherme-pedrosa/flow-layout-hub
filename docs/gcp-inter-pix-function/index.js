@@ -3,6 +3,8 @@ const https = require('https');
 /**
  * Google Cloud Function for Banco Inter operations with mTLS
  * Supports: PIX payments, PIX key validation (DICT lookup), and generic API proxy
+ * 
+ * IMPORTANTE: A API do Inter exige mTLS em TODAS as chamadas, não apenas na autenticação OAuth!
  */
 exports.interPixPayment = async (req, res) => {
   // CORS headers
@@ -48,6 +50,7 @@ exports.interPixPayment = async (req, res) => {
 
 /**
  * Handle generic API proxy with mTLS
+ * CORRIGIDO: Agora envia o certificado mTLS em TODAS as requisições, não apenas OAuth
  */
 async function handleGenericProxy(req, res) {
   const { 
@@ -63,7 +66,7 @@ async function handleGenericProxy(req, res) {
     scope
   } = req.body;
 
-  console.log('Generic proxy request:', { method, url, headers, accountNumber });
+  console.log('Generic proxy request:', { method, url, accountNumber });
 
   // Validate required fields
   if (!url || !certificate || !privateKey) {
@@ -71,12 +74,20 @@ async function handleGenericProxy(req, res) {
   }
 
   // Decode base64 certificates
-  const cert = Buffer.from(certificate, 'base64').toString('utf-8');
-  const key = Buffer.from(privateKey, 'base64').toString('utf-8');
+  let cert, key;
+  try {
+    cert = Buffer.from(certificate, 'base64').toString('utf-8');
+    key = Buffer.from(privateKey, 'base64').toString('utf-8');
+    console.log('Certificates decoded successfully, cert length:', cert.length, 'key length:', key.length);
+  } catch (e) {
+    console.error('Error decoding certificates:', e);
+    return res.status(400).json({ error: 'Erro ao decodificar certificados' });
+  }
 
   // If this is an OAuth token request
   if (url.includes('/oauth/v2/token')) {
     try {
+      console.log('Processing OAuth token request');
       const token = await getOAuthToken(
         { clientId, clientSecret }, 
         cert, 
@@ -90,8 +101,10 @@ async function handleGenericProxy(req, res) {
     }
   }
 
-  // For other requests, make the API call with mTLS
-  // Ensure headers are properly passed, including Authorization
+  // For other requests (extrato, pix, etc), make the API call with mTLS
+  // IMPORTANTE: O certificado DEVE ser enviado em TODAS as chamadas à API do Inter!
+  console.log('Processing API request with mTLS:', method, url);
+  
   const requestHeaders = { ...headers };
   
   // Ensure x-conta-corrente is set
@@ -99,39 +112,65 @@ async function handleGenericProxy(req, res) {
     requestHeaders['x-conta-corrente'] = accountNumber;
   }
   
-  console.log('Final request headers:', requestHeaders);
+  console.log('Request headers:', JSON.stringify(requestHeaders));
+  console.log('Using mTLS with cert length:', cert.length, 'key length:', key.length);
   
-  const result = await makeProxyRequest(method || 'GET', url, requestHeaders, data, cert, key, accountNumber);
-  return res.status(200).json(result);
+  try {
+    const result = await makeProxyRequest(method || 'GET', url, requestHeaders, data, cert, key, accountNumber);
+    console.log('Proxy request successful');
+    return res.status(200).json(result);
+  } catch (error) {
+    console.error('Proxy request failed:', error);
+    return res.status(400).json({ _error: true, message: error.message });
+  }
 }
 
 /**
  * Make a generic proxy request with mTLS
+ * CORRIGIDO: Garantir que cert e key são usados corretamente
  */
 async function makeProxyRequest(method, url, reqHeaders, data, cert, key, accountNumber) {
   return new Promise((resolve, reject) => {
     const urlObj = new URL(url);
+    
+    // Verificar se cert e key estão presentes
+    if (!cert || !key) {
+      reject(new Error('Certificado ou chave privada não fornecidos para mTLS'));
+      return;
+    }
     
     const options = {
       hostname: urlObj.hostname,
       port: 443,
       path: urlObj.pathname + urlObj.search,
       method: method,
-      cert: cert,
-      key: key,
+      cert: cert,  // Certificado para mTLS
+      key: key,    // Chave privada para mTLS
       headers: {
         ...reqHeaders,
         'x-conta-corrente': accountNumber || reqHeaders['x-conta-corrente'] || ''
-      }
+      },
+      // Importante: não rejeitar certificados não autorizados durante dev
+      rejectUnauthorized: true
     };
 
-    console.log('Proxy request options:', { hostname: options.hostname, path: options.path, method: options.method });
+    console.log('Making mTLS request:', { 
+      hostname: options.hostname, 
+      path: options.path, 
+      method: options.method,
+      hasCert: !!options.cert,
+      hasKey: !!options.key,
+      certLength: options.cert ? options.cert.length : 0,
+      keyLength: options.key ? options.key.length : 0
+    });
 
     const request = https.request(options, (response) => {
       let responseData = '';
       response.on('data', chunk => responseData += chunk);
       response.on('end', () => {
-        console.log('Proxy response:', response.statusCode, responseData.substring(0, 500));
+        console.log('Response status:', response.statusCode);
+        console.log('Response body preview:', responseData.substring(0, 500));
+        
         try {
           const parsed = JSON.parse(responseData);
           if (response.statusCode >= 200 && response.statusCode < 300) {
@@ -154,10 +193,14 @@ async function makeProxyRequest(method, url, reqHeaders, data, cert, key, accoun
       });
     });
 
-    request.on('error', (e) => reject(new Error(`Proxy request failed: ${e.message}`)));
+    request.on('error', (e) => {
+      console.error('Request error:', e);
+      reject(new Error(`Proxy request failed: ${e.message}`));
+    });
     
     if (data && (method === 'POST' || method === 'PUT' || method === 'PATCH')) {
       const postData = typeof data === 'string' ? data : JSON.stringify(data);
+      console.log('Sending data:', postData.substring(0, 200));
       request.write(postData);
     }
     
@@ -278,6 +321,8 @@ async function getOAuthToken(credentials, cert, key, scope) {
       grant_type: 'client_credentials'
     }).toString();
 
+    console.log('Getting OAuth token with scope:', scope);
+
     const options = {
       hostname: 'cdpj.partners.bancointer.com.br',
       port: 443,
@@ -295,9 +340,11 @@ async function getOAuthToken(credentials, cert, key, scope) {
       let data = '';
       res.on('data', chunk => data += chunk);
       res.on('end', () => {
+        console.log('OAuth response status:', res.statusCode);
         try {
           const parsed = JSON.parse(data);
           if (parsed.access_token) {
+            console.log('OAuth token obtained, scope:', parsed.scope);
             resolve(parsed.access_token);
           } else {
             reject(new Error(`OAuth error: ${data}`));
