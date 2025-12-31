@@ -57,11 +57,14 @@ const formatCurrency = (value: number) => {
   }).format(value);
 };
 
-export function PurchaseOrderForm({ order, onClose }: PurchaseOrderFormProps) {
+export function PurchaseOrderForm({ order: initialOrder, onClose }: PurchaseOrderFormProps) {
   const [activeTab, setActiveTab] = useState("dados");
   const [showCadastroFornecedor, setShowCadastroFornecedor] = useState(false);
   const [saving, setSaving] = useState(false);
   const [loadingItems, setLoadingItems] = useState(false);
+  
+  // Estado local do pedido (para atualizar após importação de CT-e/NF-e)
+  const [order, setOrder] = useState(initialOrder);
 
   // Form state
   const [supplierId, setSupplierId] = useState(order?.supplier_id || "");
@@ -104,7 +107,7 @@ export function PurchaseOrderForm({ order, onClose }: PurchaseOrderFormProps) {
   // Estado para verificar se está no fluxo de aprovação
   const [isInApprovalFlow, setIsInApprovalFlow] = useState(false);
 
-  const { createOrder, updateOrder, getOrderItems, createOrderItems, deleteOrderItems, getOrderInstallments, createOrderInstallments, deleteOrderInstallments, refetch } = usePurchaseOrders();
+  const { createOrder, updateOrder, getOrderItems, createOrderItems, deleteOrderItems, getOrderInstallments, createOrderInstallments, deleteOrderInstallments, refetch, getOrderById } = usePurchaseOrders();
   const { statuses } = usePurchaseOrderStatuses();
   const { checkOrderLimits } = usePurchaseOrderLimits();
   const { activePessoas, refetch: refetchPessoas, getPessoaById } = usePessoas();
@@ -117,6 +120,20 @@ export function PurchaseOrderForm({ order, onClose }: PurchaseOrderFormProps) {
   
   // UF da empresa vem do contexto
   const companyState = currentCompany?.estado || "GO";
+
+  // Função para recarregar o pedido após importação de CT-e/NF-e
+  const reloadOrder = async () => {
+    if (order?.id) {
+      const updatedOrder = await getOrderById(order.id);
+      if (updatedOrder) {
+        setOrder(updatedOrder);
+        // Atualizar estado de frete
+        setHasExternalFreight(updatedOrder.has_external_freight || false);
+        setFreightValue(updatedOrder.freight_value?.toString() || "0");
+      }
+      refetch();
+    }
+  };
 
   // Load financial data
   useEffect(() => {
@@ -178,9 +195,8 @@ export function PurchaseOrderForm({ order, onClose }: PurchaseOrderFormProps) {
             );
 
             // *** CORREÇÃO DO CFOP ***
-            // Se o CFOP geral ainda não foi definido e o pedido tem itens,
-            // pegue o CFOP do primeiro item como o CFOP geral do pedido.
-            if (orderItems.length > 0 && orderItems[0].cfop && !cfopGeral) {
+            // Se o pedido tem itens com CFOP salvo, pegue o CFOP do primeiro item
+            if (orderItems.length > 0 && orderItems[0].cfop) {
               setCfopGeral(orderItems[0].cfop);
             }
           }
@@ -906,7 +922,7 @@ export function PurchaseOrderForm({ order, onClose }: PurchaseOrderFormProps) {
                       orderPurpose={purpose}
                       wasApproved={isInApprovalFlow}
                       onSuccess={() => {
-                        refetch();
+                        reloadOrder();
                       }}
                     />
                     <p className="mt-2 text-xs text-muted-foreground">
@@ -933,7 +949,7 @@ export function PurchaseOrderForm({ order, onClose }: PurchaseOrderFormProps) {
                     orderPurpose={purpose}
                     wasApproved={isInApprovalFlow}
                     onSuccess={() => {
-                      refetch();
+                      reloadOrder();
                     }}
                   />
                 </div>
@@ -957,15 +973,8 @@ export function PurchaseOrderForm({ order, onClose }: PurchaseOrderFormProps) {
               <CardTitle className="text-lg">Importar XML CT-e (Frete)</CardTitle>
             </CardHeader>
             <CardContent>
-              {!hasExternalFreight ? (
-                <div className="text-center py-8">
-                  <Truck className="mx-auto h-12 w-12 text-muted-foreground" />
-                  <h3 className="mt-4 text-lg font-medium">Frete externo não informado</h3>
-                  <p className="mt-2 text-sm text-muted-foreground">
-                    Marque "Frete Externo (CT-e)" nos dados gerais para habilitar
-                  </p>
-                </div>
-              ) : order?.cte_imported_at ? (
+              {/* Mostrar CT-e importado independente de hasExternalFreight */}
+              {order?.cte_imported_at ? (
                 <div className="space-y-4">
                   <div className="flex items-center gap-2 text-blue-600">
                     <CheckCircle className="h-5 w-5" />
@@ -998,7 +1007,7 @@ export function PurchaseOrderForm({ order, onClose }: PurchaseOrderFormProps) {
                       orderFreightValue={parseFloat(freightValue) || 0}
                       wasApproved={isInApprovalFlow}
                       onSuccess={() => {
-                        refetch();
+                        reloadOrder();
                       }}
                     />
                     <p className="mt-2 text-xs text-muted-foreground">
@@ -1006,7 +1015,7 @@ export function PurchaseOrderForm({ order, onClose }: PurchaseOrderFormProps) {
                     </p>
                   </div>
                 </div>
-              ) : order ? (
+              ) : order && hasExternalFreight ? (
                 <div className="text-center py-8 space-y-4">
                   <Truck className="mx-auto h-12 w-12 text-muted-foreground" />
                   <div>
@@ -1021,9 +1030,17 @@ export function PurchaseOrderForm({ order, onClose }: PurchaseOrderFormProps) {
                     orderFreightValue={parseFloat(freightValue) || 0}
                     wasApproved={isInApprovalFlow}
                     onSuccess={() => {
-                      refetch();
+                      reloadOrder();
                     }}
                   />
+                </div>
+              ) : order && !hasExternalFreight ? (
+                <div className="text-center py-8">
+                  <Truck className="mx-auto h-12 w-12 text-muted-foreground" />
+                  <h3 className="mt-4 text-lg font-medium">Frete externo não informado</h3>
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    Marque "Frete Externo (CT-e)" nos dados gerais para habilitar a importação
+                  </p>
                 </div>
               ) : (
                 <div className="text-center py-8">
