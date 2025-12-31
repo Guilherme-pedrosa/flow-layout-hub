@@ -54,29 +54,58 @@ function normalizeName(name: string | null): string {
 function calculateMatchScore(
   transaction: BankTransaction,
   payable: Payable
-): { score: number; reasons: string[] } {
+): { score: number; reasons: string[]; isValid: boolean } {
   let score = 0;
   const reasons: string[] = [];
 
   // 1. Comparar valor (peso: 40) - Transações de débito são negativas
   const valorExtrato = Math.abs(transaction.amount);
   const valorPayable = payable.amount;
+  const percentDiff = Math.abs((valorExtrato - valorPayable) / valorPayable) * 100;
+
+  // REGRA CRÍTICA: Se a diferença de valor for > 20%, o match é INVÁLIDO
+  if (percentDiff > 20) {
+    return { score: 0, reasons: ["Valor incompatível"], isValid: false };
+  }
 
   if (Math.abs(valorExtrato - valorPayable) < 0.01) {
     score += 40;
     reasons.push("Valor exato");
   } else if (Math.abs(valorExtrato - valorPayable) < 1) {
-    score += 20;
+    score += 30;
     reasons.push("Valor aproximado (diferença < R$1)");
+  } else if (percentDiff <= 5) {
+    score += 20;
+    reasons.push("Valor similar (diferença < 5%)");
+  } else if (percentDiff <= 10) {
+    score += 10;
+    reasons.push("Valor próximo (diferença < 10%)");
   } else {
-    const percentDiff = Math.abs((valorExtrato - valorPayable) / valorPayable) * 100;
-    if (percentDiff <= 5) {
-      score += 10;
-      reasons.push("Valor similar (diferença < 5%)");
-    }
+    score += 5;
+    reasons.push("Valor com diferença tolerável (< 20%)");
   }
 
-  // 2. Comparar CPF/CNPJ do fornecedor (peso: 30)
+  // 2. Comparar data da transação com vencimento (peso: 20)
+  const transactionDate = new Date(transaction.transaction_date);
+  const dueDate = new Date(payable.due_date);
+  const daysDiff = Math.abs((transactionDate.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24));
+
+  if (daysDiff <= 3) {
+    score += 20;
+    reasons.push("Data muito próxima ao vencimento");
+  } else if (daysDiff <= 7) {
+    score += 15;
+    reasons.push("Data próxima ao vencimento");
+  } else if (daysDiff <= 15) {
+    score += 10;
+    reasons.push("Data razoavelmente próxima");
+  } else if (daysDiff <= 30) {
+    score += 5;
+    reasons.push("Data dentro de 30 dias");
+  }
+  // Se mais de 30 dias de diferença, não adiciona pontos de data
+
+  // 3. Comparar CPF/CNPJ do fornecedor (peso: 30)
   const cpfPayable = normalizeDocument(payable.recipient_document || payable.supplier?.cpf_cnpj || null);
   const descricao = normalizeName(transaction.description);
 
@@ -88,7 +117,7 @@ function calculateMatchScore(
     }
   }
 
-  // 3. Comparar nome do fornecedor na descrição (peso: 20)
+  // 4. Comparar nome do fornecedor na descrição (peso: 20)
   const nomePayable = normalizeName(payable.recipient_name || payable.supplier?.razao_social || null);
 
   if (nomePayable && nomePayable.length > 3) {
@@ -114,22 +143,22 @@ function calculateMatchScore(
     }
   }
 
-  // 4. Comparar chave PIX (peso: 10)
+  // 5. Comparar chave PIX (peso: 10)
   const chavePayable = payable.pix_key || "";
   if (chavePayable && descricao.includes(chavePayable.toUpperCase())) {
     score += 10;
     reasons.push("Chave PIX encontrada");
   }
 
-  // 5. Verificar se é pagamento PIX (bônus)
+  // 6. Verificar se é pagamento PIX (bônus pequeno)
   if (transaction.type?.toUpperCase().includes("PIX") || 
       transaction.category?.toUpperCase().includes("PIX") ||
       descricao.includes("PIX")) {
-    score += 5;
+    score += 3;
     reasons.push("Transação PIX");
   }
 
-  return { score, reasons };
+  return { score, reasons, isValid: true };
 }
 
 serve(async (req) => {
@@ -248,9 +277,10 @@ serve(async (req) => {
         // Pular se já foi processado
         if (processedPayables.has(payable.id)) continue;
 
-        const { score, reasons } = calculateMatchScore(transaction, payable);
+        const { score, reasons, isValid } = calculateMatchScore(transaction, payable);
 
-        if (score > 0 && (!bestMatch || score > bestMatch.score)) {
+        // Só considerar matches válidos (valores compatíveis)
+        if (isValid && score > 0 && (!bestMatch || score > bestMatch.score)) {
           bestMatch = { payable, score, reasons };
         }
       }
