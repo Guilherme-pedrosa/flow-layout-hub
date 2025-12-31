@@ -9,6 +9,9 @@ verify_jwt = false
 [functions.parse-xml-nfe]
 verify_jwt = false
 
+[functions.parse-cte-xml]
+verify_jwt = false
+
 [functions.validate-ncm]
 verify_jwt = false
 
