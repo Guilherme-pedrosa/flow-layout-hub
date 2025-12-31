@@ -82,7 +82,9 @@ export function PayablesPage({ onRefresh, purchaseOrderId }: PayablesPageProps) 
           .select(`
             *,
             supplier:pessoas!payables_supplier_id_fkey(razao_social, nome_fantasia, cpf_cnpj),
-            purchase_order:purchase_orders!payables_purchase_order_id_fkey(order_number)
+            purchase_order:purchase_orders!payables_purchase_order_id_fkey(order_number),
+            chart_account:chart_of_accounts!payables_chart_account_id_fkey(code, name),
+            cost_center:cost_centers!payables_cost_center_id_fkey(code, name)
           `)
           .eq("company_id", currentCompany.id)
           .eq("purchase_order_id", purchaseOrderId)
@@ -100,7 +102,9 @@ export function PayablesPage({ onRefresh, purchaseOrderId }: PayablesPageProps) 
           .select(`
             *,
             supplier:pessoas!payables_supplier_id_fkey(razao_social, nome_fantasia, cpf_cnpj),
-            purchase_order:purchase_orders!payables_purchase_order_id_fkey(order_number)
+            purchase_order:purchase_orders!payables_purchase_order_id_fkey(order_number),
+            chart_account:chart_of_accounts!payables_chart_account_id_fkey(code, name),
+            cost_center:cost_centers!payables_cost_center_id_fkey(code, name)
           `)
           .eq("company_id", currentCompany.id)
           .gte("due_date", monthStart.toISOString())

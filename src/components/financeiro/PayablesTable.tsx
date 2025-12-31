@@ -67,6 +67,8 @@ export interface PayableRow {
   paid_at: string | null;
   reconciliation_id: string | null;
   financial_situation_id: string | null;
+  chart_account_id: string | null;
+  cost_center_id: string | null;
   supplier?: {
     razao_social: string | null;
     nome_fantasia: string | null;
@@ -76,6 +78,14 @@ export interface PayableRow {
     order_number: number;
   } | null;
   financial_situation?: FinancialSituation | null;
+  chart_account?: {
+    code: string;
+    name: string;
+  } | null;
+  cost_center?: {
+    code: string;
+    name: string;
+  } | null;
 }
 
 interface PayablesTableProps {
@@ -362,6 +372,8 @@ export function PayablesTable({
               onSort={requestSort}
             />
             <TableHead>Método</TableHead>
+            <TableHead>Plano de Contas</TableHead>
+            <TableHead>Centro de Custo</TableHead>
             <SortableTableHeader
               label="Valor"
               sortKey="amount"
@@ -431,6 +443,24 @@ export function PayablesTable({
                 </TableCell>
                 <TableCell>
                   {getPaymentMethodBadge(payable.payment_method_type)}
+                </TableCell>
+                <TableCell>
+                  {payable.chart_account ? (
+                    <span className="text-xs text-muted-foreground">
+                      {payable.chart_account.code} - {payable.chart_account.name}
+                    </span>
+                  ) : (
+                    <span className="text-xs text-muted-foreground">—</span>
+                  )}
+                </TableCell>
+                <TableCell>
+                  {payable.cost_center ? (
+                    <span className="text-xs text-muted-foreground">
+                      {payable.cost_center.code} - {payable.cost_center.name}
+                    </span>
+                  ) : (
+                    <span className="text-xs text-muted-foreground">—</span>
+                  )}
                 </TableCell>
                 <TableCell className="text-right">
                   <span className="font-semibold tabular-nums">
