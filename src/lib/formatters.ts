@@ -57,6 +57,15 @@ export function formatCurrency(value: number): string {
 }
 
 export function formatDate(date: string | Date): string {
-  const d = typeof date === 'string' ? new Date(date) : date;
-  return new Intl.DateTimeFormat('pt-BR').format(d);
+  if (typeof date === 'string') {
+    // Se for uma data no formato YYYY-MM-DD (sem horário), parse manualmente para evitar problemas de timezone
+    if (/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      const [year, month, day] = date.split('-').map(Number);
+      return `${String(day).padStart(2, '0')}/${String(month).padStart(2, '0')}/${year}`;
+    }
+    // Se tiver horário, usar o parsing normal
+    const d = new Date(date);
+    return new Intl.DateTimeFormat('pt-BR').format(d);
+  }
+  return new Intl.DateTimeFormat('pt-BR').format(date);
 }
