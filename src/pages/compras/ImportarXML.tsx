@@ -1044,6 +1044,22 @@ Responda APENAS com o código CFOP de 4 dígitos. Sem explicações.`;
               </AlertDescription>
             </Alert>
           )}
+          
+          {/* Alerta se plano de contas ou centro de custo não preenchidos (exceto garantia) */}
+          {finalidade !== "garantia" && (!planoContasId || !centroCustoId) && (
+            <Alert variant="destructive">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertTitle>Campos Financeiros Obrigatórios</AlertTitle>
+              <AlertDescription>
+                {!planoContasId && !centroCustoId 
+                  ? "Selecione o Plano de Contas e o Centro de Custo antes de finalizar."
+                  : !planoContasId 
+                    ? "Selecione o Plano de Contas antes de finalizar."
+                    : "Selecione o Centro de Custo antes de finalizar."
+                }
+              </AlertDescription>
+            </Alert>
+          )}
 
           {/* Botões de ação */}
           <div className="flex justify-end gap-4">
@@ -1052,13 +1068,22 @@ Responda APENAS com o código CFOP de 4 dígitos. Sem explicações.`;
             </Button>
             <Button 
               onClick={handleFinalize} 
-              disabled={isProcessing || !fornecedorCadastrado || !produtosValidos}
+              disabled={
+                isProcessing || 
+                !fornecedorCadastrado || 
+                !produtosValidos || 
+                (finalidade !== "garantia" && (!planoContasId || !centroCustoId))
+              }
               title={
                 !fornecedorCadastrado 
                   ? "Cadastre ou vincule o fornecedor primeiro" 
                   : !produtosValidos 
                     ? `${produtosPendentes} produto(s) precisam ser vinculados ou cadastrados`
-                    : undefined
+                    : finalidade !== "garantia" && !planoContasId
+                      ? "Selecione o Plano de Contas"
+                      : finalidade !== "garantia" && !centroCustoId
+                        ? "Selecione o Centro de Custo"
+                        : undefined
               }
             >
               {isProcessing ? (

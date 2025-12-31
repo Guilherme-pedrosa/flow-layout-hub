@@ -17,10 +17,11 @@ export function useProducts() {
     queryFn: async () => {
       if (!currentCompany) return [];
       
+      // Buscar produtos da empresa atual OU produtos sem company_id (legado)
       const { data, error } = await supabase
         .from("products")
         .select("*")
-        .eq("company_id", currentCompany.id)
+        .or(`company_id.eq.${currentCompany.id},company_id.is.null`)
         .order("description", { ascending: true });
 
       if (error) throw error;
