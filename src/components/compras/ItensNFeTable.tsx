@@ -36,7 +36,8 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Check, ChevronsUpDown, Plus, Package, Info, Lightbulb, Loader2, X } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Check, ChevronsUpDown, Plus, Package, Info, Lightbulb, Loader2, X, AlertTriangle, Link } from "lucide-react";
 import { NFEItem } from "./types";
 import { formatCurrency } from "@/lib/formatters";
 import { cn } from "@/lib/utils";
@@ -62,6 +63,7 @@ interface ItemSuggestion {
   matches: ProductMatch[];
   loading: boolean;
   searched: boolean;
+  autoLinked?: boolean;
 }
 
 interface ItensNFeTableProps {
@@ -71,6 +73,7 @@ interface ItensNFeTableProps {
   onCriarProduto: (itemIndex: number) => void;
   onToggleCriarProduto: (itemIndex: number, criar: boolean) => void;
   onCfopEntradaChange: (itemIndex: number, cfop: string) => void;
+  onValidationChange?: (allValid: boolean, pendingCount: number) => void;
 }
 
 export function ItensNFeTable({
@@ -80,6 +83,7 @@ export function ItensNFeTable({
   onCriarProduto,
   onToggleCriarProduto,
   onCfopEntradaChange,
+  onValidationChange,
 }: ItensNFeTableProps) {
   const [openPopover, setOpenPopover] = useState<number | null>(null);
   const [suggestions, setSuggestions] = useState<Record<number, ItemSuggestion>>({});
@@ -105,22 +109,40 @@ export function ItensNFeTable({
 
       if (error) throw error;
 
-      setSuggestions(prev => ({
-        ...prev,
-        [itemIndex]: { 
-          matches: data?.matches || [], 
-          loading: false, 
-          searched: true 
-        }
-      }));
+      const matches = data?.matches || [];
+      const bestMatch = matches[0];
+      
+      // Auto-link if score is 100%
+      if (bestMatch && bestMatch.score === 100) {
+        onMapProduct(itemIndex, bestMatch.id);
+        setSuggestions(prev => ({
+          ...prev,
+          [itemIndex]: { 
+            matches, 
+            loading: false, 
+            searched: true,
+            autoLinked: true
+          }
+        }));
+      } else {
+        setSuggestions(prev => ({
+          ...prev,
+          [itemIndex]: { 
+            matches, 
+            loading: false, 
+            searched: true,
+            autoLinked: false
+          }
+        }));
+      }
     } catch (error) {
       console.error('Error searching product matches:', error);
       setSuggestions(prev => ({
         ...prev,
-        [itemIndex]: { matches: [], loading: false, searched: true }
+        [itemIndex]: { matches: [], loading: false, searched: true, autoLinked: false }
       }));
     }
-  }, []);
+  }, [onMapProduct]);
 
   // Search for all items when component mounts or items change
   useEffect(() => {
@@ -131,6 +153,20 @@ export function ItensNFeTable({
       }
     });
   }, [itens, searchProductMatches]);
+
+  // Calculate validation status and notify parent
+  useEffect(() => {
+    if (!onValidationChange) return;
+
+    const pendingItems = itens.filter((item, index) => {
+      const hasProduct = !!item.productId;
+      const willCreate = !!item.criarProduto;
+      return !hasProduct && !willCreate;
+    });
+
+    const allValid = pendingItems.length === 0;
+    onValidationChange(allValid, pendingItems.length);
+  }, [itens, onValidationChange]);
 
   const validateNCM = (ncm: string) => {
     if (!ncm) return { valid: false, message: "NCM não informado" };
@@ -147,14 +183,8 @@ export function ItensNFeTable({
     // Clear suggestions for this item
     setSuggestions(prev => ({
       ...prev,
-      [itemIndex]: { matches: [], loading: false, searched: true }
+      [itemIndex]: { matches: [], loading: false, searched: true, autoLinked: false }
     }));
-  };
-
-  const getScoreBadgeVariant = (score: number): "default" | "secondary" | "outline" => {
-    if (score >= 90) return "default";
-    if (score >= 70) return "secondary";
-    return "outline";
   };
 
   const getMatchTypeLabel = (matchType: string): string => {
@@ -166,6 +196,47 @@ export function ItensNFeTable({
     }
   };
 
+  // Determine row status for each item
+  const getRowStatus = (item: NFEItem, index: number): 'green' | 'yellow' | 'red' | 'loading' => {
+    const suggestion = suggestions[index];
+    
+    // Still loading
+    if (suggestion?.loading) return 'loading';
+    
+    // Already mapped or marked to create
+    if (item.productId) return 'green';
+    if (item.criarProduto) return 'green';
+    
+    // Has suggestion with score >= 70
+    const bestMatch = suggestion?.matches?.[0];
+    if (bestMatch && bestMatch.score >= 70 && bestMatch.score < 100) return 'yellow';
+    
+    // No product linked
+    return 'red';
+  };
+
+  const getRowClassName = (status: 'green' | 'yellow' | 'red' | 'loading') => {
+    switch (status) {
+      case 'green':
+        return 'bg-green-50 dark:bg-green-950/30 border-l-4 border-l-green-500';
+      case 'yellow':
+        return 'bg-amber-50 dark:bg-amber-950/30 border-l-4 border-l-amber-500';
+      case 'red':
+        return 'bg-red-50 dark:bg-red-950/30 border-l-4 border-l-red-500';
+      case 'loading':
+        return 'opacity-70';
+      default:
+        return '';
+    }
+  };
+
+  // Count items by status
+  const statusCounts = itens.reduce((acc, item, index) => {
+    const status = getRowStatus(item, index);
+    acc[status] = (acc[status] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
+
   return (
     <Card>
       <CardHeader>
@@ -173,7 +244,48 @@ export function ItensNFeTable({
           <Package className="h-4 w-4" />
           Itens da Nota ({itens.length})
         </CardTitle>
+        
+        {/* Status summary */}
+        <div className="flex flex-wrap gap-2 mt-2">
+          {statusCounts.green > 0 && (
+            <Badge variant="outline" className="bg-green-100 text-green-700 border-green-300 dark:bg-green-950/50 dark:text-green-400">
+              <Check className="h-3 w-3 mr-1" />
+              {statusCounts.green} vinculado(s)
+            </Badge>
+          )}
+          {statusCounts.yellow > 0 && (
+            <Badge variant="outline" className="bg-amber-100 text-amber-700 border-amber-300 dark:bg-amber-950/50 dark:text-amber-400">
+              <Lightbulb className="h-3 w-3 mr-1" />
+              {statusCounts.yellow} com sugestão
+            </Badge>
+          )}
+          {statusCounts.red > 0 && (
+            <Badge variant="destructive">
+              <AlertTriangle className="h-3 w-3 mr-1" />
+              {statusCounts.red} sem vínculo
+            </Badge>
+          )}
+          {statusCounts.loading > 0 && (
+            <Badge variant="outline">
+              <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+              {statusCounts.loading} buscando...
+            </Badge>
+          )}
+        </div>
       </CardHeader>
+      
+      {/* Alert for items without product */}
+      {statusCounts.red > 0 && (
+        <div className="px-6 pb-3">
+          <Alert variant="destructive">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertDescription>
+              <strong>{statusCounts.red} produto(s) não cadastrado(s).</strong> Vincule a um produto existente ou marque "Auto Cadastrar" para cada item em vermelho antes de finalizar.
+            </AlertDescription>
+          </Alert>
+        </div>
+      )}
+      
       <CardContent className="p-0">
         <div className="overflow-x-auto">
           <Table>
@@ -187,8 +299,8 @@ export function ItensNFeTable({
                 <TableHead className="w-16 text-right">Qtd</TableHead>
                 <TableHead className="w-24 text-right">Valor Unit.</TableHead>
                 <TableHead className="w-24 text-right">Valor Total</TableHead>
-                <TableHead className="w-64">Produto</TableHead>
-                <TableHead className="w-24 text-center">Auto Cadastrar</TableHead>
+                <TableHead className="w-72">Produto</TableHead>
+                <TableHead className="w-28 text-center">Auto Cadastrar</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -197,10 +309,11 @@ export function ItensNFeTable({
                 const mappedProduct = products.find((p) => p.id === item.productId);
                 const suggestion = suggestions[index];
                 const bestMatch = suggestion?.matches?.[0];
-                const hasSuggestion = bestMatch && bestMatch.score >= 70 && !item.productId && !item.criarProduto;
+                const rowStatus = getRowStatus(item, index);
+                const wasAutoLinked = suggestion?.autoLinked && item.productId;
 
                 return (
-                  <TableRow key={index}>
+                  <TableRow key={index} className={getRowClassName(rowStatus)}>
                     <TableCell className="font-mono text-xs">{item.codigo}</TableCell>
                     <TableCell className="max-w-[200px]">
                       <Tooltip>
@@ -264,39 +377,65 @@ export function ItensNFeTable({
                       {suggestion?.loading && (
                         <div className="flex items-center gap-2 text-xs text-muted-foreground">
                           <Loader2 className="h-3 w-3 animate-spin" />
-                          Buscando...
+                          Buscando produtos...
                         </div>
                       )}
 
-                      {/* Already marked to create */}
+                      {/* Already marked to create - GREEN */}
                       {item.criarProduto && !suggestion?.loading && (
-                        <Badge variant="outline" className="bg-primary/10 text-primary">
-                          Será cadastrado
-                        </Badge>
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline" className="bg-green-100 text-green-700 border-green-300 dark:bg-green-950/50 dark:text-green-400">
+                            <Plus className="h-3 w-3 mr-1" />
+                            Será cadastrado
+                          </Badge>
+                        </div>
                       )}
 
-                      {/* Already mapped */}
+                      {/* Already mapped - GREEN (with auto-link info if applicable) */}
                       {mappedProduct && !item.criarProduto && !suggestion?.loading && (
-                        <Badge variant="outline" className="bg-success/10 text-success border-success/30">
-                          <Check className="h-3 w-3 mr-1" />
-                          {mappedProduct.code}
-                        </Badge>
+                        <div className="space-y-1">
+                          <Badge variant="outline" className="bg-green-100 text-green-700 border-green-300 dark:bg-green-950/50 dark:text-green-400">
+                            <Link className="h-3 w-3 mr-1" />
+                            {mappedProduct.code}
+                          </Badge>
+                          {wasAutoLinked && (
+                            <p className="text-[10px] text-green-600 dark:text-green-400">
+                              ✓ Vinculado automaticamente (100% match)
+                            </p>
+                          )}
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <p className="text-[10px] text-muted-foreground truncate max-w-[180px] cursor-help">
+                                {mappedProduct.description}
+                              </p>
+                            </TooltipTrigger>
+                            <TooltipContent>{mappedProduct.description}</TooltipContent>
+                          </Tooltip>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-5 text-[10px] text-muted-foreground p-0"
+                            onClick={() => onMapProduct(index, '')}
+                          >
+                            Alterar vinculação
+                          </Button>
+                        </div>
                       )}
 
-                      {/* Suggestion available */}
-                      {hasSuggestion && !suggestion?.loading && (
+                      {/* Suggestion available (score >= 70 but < 100) - YELLOW */}
+                      {rowStatus === 'yellow' && bestMatch && !item.criarProduto && !mappedProduct && !suggestion?.loading && (
                         <div className="space-y-1">
                           <div className="flex items-center gap-1">
                             <Tooltip>
                               <TooltipTrigger asChild>
-                                <div className="flex items-center gap-1 p-1.5 rounded-md bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 cursor-pointer flex-1 min-w-0">
-                                  <Lightbulb className="h-3 w-3 text-amber-500 flex-shrink-0" />
-                                  <span className="text-xs truncate">
+                                <div className="flex items-center gap-1 p-1.5 rounded-md bg-amber-100 dark:bg-amber-900/50 border border-amber-300 dark:border-amber-700 cursor-pointer flex-1 min-w-0">
+                                  <Lightbulb className="h-3 w-3 text-amber-600 flex-shrink-0" />
+                                  <span className="text-xs truncate font-medium">
                                     {bestMatch.code}
                                   </span>
                                   <Badge 
-                                    variant={getScoreBadgeVariant(bestMatch.score)} 
-                                    className="text-[10px] h-4 px-1 flex-shrink-0"
+                                    variant="secondary"
+                                    className="text-[10px] h-4 px-1 flex-shrink-0 bg-amber-200 text-amber-800"
                                   >
                                     {bestMatch.score}%
                                   </Badge>
@@ -317,20 +456,25 @@ export function ItensNFeTable({
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="h-7 w-7 text-success hover:text-success hover:bg-success/10"
+                              className="h-7 w-7 text-green-600 hover:text-green-700 hover:bg-green-100"
                               onClick={() => handleAcceptSuggestion(index, bestMatch.id)}
+                              title="Aceitar sugestão"
                             >
                               <Check className="h-3 w-3" />
                             </Button>
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10"
+                              className="h-7 w-7 text-red-600 hover:text-red-700 hover:bg-red-100"
                               onClick={() => handleRejectSuggestion(index)}
+                              title="Recusar sugestão"
                             >
                               <X className="h-3 w-3" />
                             </Button>
                           </div>
+                          <p className="text-[10px] text-amber-600 dark:text-amber-400 font-medium">
+                            ⚠️ Confirme ou recuse a sugestão
+                          </p>
                           {/* Show dropdown to see other options */}
                           <Popover
                             open={openPopover === index}
@@ -418,70 +562,81 @@ export function ItensNFeTable({
                         </div>
                       )}
 
-                      {/* No suggestion - show normal dropdown */}
-                      {!hasSuggestion && !item.criarProduto && !mappedProduct && !suggestion?.loading && (
-                        <Popover
-                          open={openPopover === index}
-                          onOpenChange={(open) => setOpenPopover(open ? index : null)}
-                        >
-                          <PopoverTrigger asChild>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="w-full justify-between text-xs"
-                            >
-                              Vincular...
-                              <ChevronsUpDown className="ml-1 h-3 w-3" />
-                            </Button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-80 p-0">
-                            <Command>
-                              <CommandInput placeholder="Buscar produto..." />
-                              <CommandList>
-                                <CommandEmpty>
-                                  <div className="p-2 text-center">
-                                    <p className="text-sm text-muted-foreground mb-2">
-                                      Nenhum produto encontrado
-                                    </p>
-                                    <Button
-                                      size="sm"
-                                      onClick={() => {
-                                        setOpenPopover(null);
-                                        onCriarProduto(index);
-                                      }}
-                                    >
-                                      <Plus className="h-3 w-3 mr-1" />
-                                      Cadastrar novo
-                                    </Button>
-                                  </div>
-                                </CommandEmpty>
-                                <CommandGroup>
-                                  {products
-                                    .filter((p) => p.is_active)
-                                    .map((product) => (
-                                      <CommandItem
-                                        key={product.id}
-                                        onSelect={() => {
-                                          onMapProduct(index, product.id);
+                      {/* No product - RED */}
+                      {rowStatus === 'red' && !item.criarProduto && !mappedProduct && !suggestion?.loading && (
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-1 p-1.5 rounded-md bg-red-100 dark:bg-red-900/50 border border-red-300 dark:border-red-700">
+                            <AlertTriangle className="h-3 w-3 text-red-600 flex-shrink-0" />
+                            <span className="text-xs text-red-700 dark:text-red-400 font-medium">
+                              Produto não cadastrado
+                            </span>
+                          </div>
+                          <Popover
+                            open={openPopover === index}
+                            onOpenChange={(open) => setOpenPopover(open ? index : null)}
+                          >
+                            <PopoverTrigger asChild>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="w-full justify-between text-xs border-red-300 text-red-700 hover:bg-red-50"
+                              >
+                                Vincular produto...
+                                <ChevronsUpDown className="ml-1 h-3 w-3" />
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-80 p-0">
+                              <Command>
+                                <CommandInput placeholder="Buscar produto..." />
+                                <CommandList>
+                                  <CommandEmpty>
+                                    <div className="p-2 text-center">
+                                      <p className="text-sm text-muted-foreground mb-2">
+                                        Nenhum produto encontrado
+                                      </p>
+                                      <Button
+                                        size="sm"
+                                        onClick={() => {
                                           setOpenPopover(null);
+                                          onCriarProduto(index);
                                         }}
                                       >
-                                        <Check
-                                          className={cn(
-                                            "mr-2 h-4 w-4",
-                                            item.productId === product.id
-                                              ? "opacity-100"
-                                              : "opacity-0"
-                                          )}
-                                        />
-                                        {product.code} - {product.description}
-                                      </CommandItem>
-                                    ))}
-                                </CommandGroup>
-                              </CommandList>
-                            </Command>
-                          </PopoverContent>
-                        </Popover>
+                                        <Plus className="h-3 w-3 mr-1" />
+                                        Cadastrar novo
+                                      </Button>
+                                    </div>
+                                  </CommandEmpty>
+                                  <CommandGroup>
+                                    {products
+                                      .filter((p) => p.is_active)
+                                      .map((product) => (
+                                        <CommandItem
+                                          key={product.id}
+                                          onSelect={() => {
+                                            onMapProduct(index, product.id);
+                                            setOpenPopover(null);
+                                          }}
+                                        >
+                                          <Check
+                                            className={cn(
+                                              "mr-2 h-4 w-4",
+                                              item.productId === product.id
+                                                ? "opacity-100"
+                                                : "opacity-0"
+                                            )}
+                                          />
+                                          {product.code} - {product.description}
+                                        </CommandItem>
+                                      ))}
+                                  </CommandGroup>
+                                </CommandList>
+                              </Command>
+                            </PopoverContent>
+                          </Popover>
+                          <p className="text-[10px] text-red-600 dark:text-red-400">
+                            Vincule ou marque "Auto Cadastrar"
+                          </p>
+                        </div>
                       )}
                     </TableCell>
                     <TableCell className="text-center">
@@ -491,6 +646,7 @@ export function ItensNFeTable({
                           onToggleCriarProduto(index, checked as boolean)
                         }
                         disabled={!!item.productId}
+                        className={rowStatus === 'red' && !item.productId ? 'border-red-500' : ''}
                       />
                     </TableCell>
                   </TableRow>
