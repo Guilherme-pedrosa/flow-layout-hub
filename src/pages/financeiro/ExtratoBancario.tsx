@@ -1,7 +1,9 @@
-import { useState, useEffect } from "react";
-import { PageHeader } from "@/components/shared";
+import { useState, useEffect, useCallback } from "react";
+import { PageHeader, SortableTableHeader, SelectionSummaryBar } from "@/components/shared";
 import { AIBannerEnhanced } from "@/components/shared/AIBannerEnhanced";
 import { useAiInsights } from "@/hooks/useAiInsights";
+import { useSortableData } from "@/hooks/useSortableData";
+import { useSelectionSum } from "@/hooks/useSelectionSum";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -43,7 +45,6 @@ export default function ExtratoBancario() {
   const [syncing, setSyncing] = useState(false);
   const [transactions, setTransactions] = useState<BankTransaction[]>([]);
   const [hasCredentials, setHasCredentials] = useState(false);
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   
   // Período padrão: últimos 30 dias
   const today = new Date();
@@ -52,6 +53,27 @@ export default function ExtratoBancario() {
   
   const [dateFrom, setDateFrom] = useState(thirtyDaysAgo.toISOString().split("T")[0]);
   const [dateTo, setDateTo] = useState(today.toISOString().split("T")[0]);
+
+  // Ordenação com 3 estados
+  const { items: sortedTransactions, requestSort, sortConfig } = useSortableData(transactions, 'transaction_date');
+
+  // Seleção com soma
+  const getId = useCallback((item: BankTransaction) => item.id, []);
+  const getAmount = useCallback((item: BankTransaction) => item.amount, []);
+  
+  const {
+    selectedCount,
+    totalSum,
+    positiveSum,
+    negativeSum,
+    selectedIds,
+    toggleSelection,
+    clearSelection,
+    isSelected,
+    toggleSelectAll,
+    isAllSelected,
+    isSomeSelected
+  } = useSelectionSum({ items: transactions, getAmount, getId });
 
   useEffect(() => {
     if (currentCompany?.id) {
@@ -152,8 +174,10 @@ export default function ExtratoBancario() {
   };
 
   const handleBulkReconcile = async () => {
-    if (selectedIds.length === 0) return;
+    if (selectedCount === 0) return;
 
+    const idsToReconcile = Array.from(selectedIds);
+    
     try {
       const { error } = await supabase
         .from("bank_transactions")
@@ -161,35 +185,20 @@ export default function ExtratoBancario() {
           is_reconciled: true,
           reconciled_at: new Date().toISOString(),
         })
-        .in("id", selectedIds);
+        .in("id", idsToReconcile);
 
       if (error) throw error;
 
       setTransactions(prev =>
-        prev.map(t => selectedIds.includes(t.id) ? { ...t, is_reconciled: true } : t)
+        prev.map(t => idsToReconcile.includes(t.id) ? { ...t, is_reconciled: true } : t)
       );
-      setSelectedIds([]);
+      clearSelection();
 
-      toast.success(`${selectedIds.length} transações conciliadas`);
+      toast.success(`${idsToReconcile.length} transações conciliadas`);
     } catch (error) {
       console.error("Erro ao conciliar em lote:", error);
       toast.error("Erro ao conciliar transações");
     }
-  };
-
-  const toggleSelectAll = () => {
-    const pendingIds = transactions.filter(t => !t.is_reconciled).map(t => t.id);
-    if (selectedIds.length === pendingIds.length) {
-      setSelectedIds([]);
-    } else {
-      setSelectedIds(pendingIds);
-    }
-  };
-
-  const toggleSelect = (id: string) => {
-    setSelectedIds(prev =>
-      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
-    );
   };
 
   // Totais
@@ -317,11 +326,11 @@ export default function ExtratoBancario() {
       </div>
 
       {/* Ações em Lote */}
-      {selectedIds.length > 0 && (
+      {selectedCount > 0 && (
         <Card className="bg-primary/5 border-primary">
           <CardContent className="flex items-center justify-between py-3">
             <span className="text-sm">
-              {selectedIds.length} transação(ões) selecionada(s)
+              {selectedCount} transação(ões) selecionada(s)
             </span>
             <Button size="sm" onClick={handleBulkReconcile}>
               <Check className="h-4 w-4 mr-2" />
@@ -358,31 +367,50 @@ export default function ExtratoBancario() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-[50px]">
+                  <TableHead className="w-12">
                     <Checkbox
-                      checked={
-                        selectedIds.length > 0 &&
-                        selectedIds.length === transactions.filter(t => !t.is_reconciled).length
-                      }
+                      checked={isAllSelected}
                       onCheckedChange={toggleSelectAll}
+                      className={isSomeSelected ? "data-[state=checked]:bg-primary/50" : ""}
                     />
                   </TableHead>
-                  <TableHead>Data</TableHead>
-                  <TableHead>Descrição</TableHead>
+                  <SortableTableHeader
+                    label="Data"
+                    sortKey="transaction_date"
+                    currentSortKey={sortConfig.key}
+                    sortDirection={sortConfig.direction}
+                    onSort={requestSort}
+                  />
+                  <SortableTableHeader
+                    label="Descrição"
+                    sortKey="description"
+                    currentSortKey={sortConfig.key}
+                    sortDirection={sortConfig.direction}
+                    onSort={requestSort}
+                  />
                   <TableHead>NSU</TableHead>
-                  <TableHead className="text-right">Valor</TableHead>
+                  <SortableTableHeader
+                    label="Valor"
+                    sortKey="amount"
+                    currentSortKey={sortConfig.key}
+                    sortDirection={sortConfig.direction}
+                    onSort={requestSort}
+                    className="text-right"
+                  />
                   <TableHead className="text-center">Status</TableHead>
                   <TableHead className="text-right">Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {transactions.map((tx) => (
-                  <TableRow key={tx.id} className={tx.is_reconciled ? "opacity-60" : ""}>
+                {sortedTransactions.map((tx) => (
+                  <TableRow 
+                    key={tx.id} 
+                    className={`${tx.is_reconciled ? "opacity-60" : ""} ${isSelected(tx.id) ? "bg-primary/5" : ""}`}
+                  >
                     <TableCell>
                       <Checkbox
-                        checked={selectedIds.includes(tx.id)}
-                        onCheckedChange={() => toggleSelect(tx.id)}
-                        disabled={tx.is_reconciled}
+                        checked={isSelected(tx.id)}
+                        onCheckedChange={() => toggleSelection(tx.id)}
                       />
                     </TableCell>
                     <TableCell className="font-medium">
@@ -439,6 +467,16 @@ export default function ExtratoBancario() {
           )}
         </CardContent>
       </Card>
+
+      {/* Barra de soma flutuante */}
+      <SelectionSummaryBar
+        selectedCount={selectedCount}
+        totalSum={totalSum}
+        positiveSum={positiveSum}
+        negativeSum={negativeSum}
+        onClear={clearSelection}
+        showBreakdown={true}
+      />
     </div>
   );
 }
