@@ -52,7 +52,7 @@ export function CTeDivergenceDialog({
   onCancel,
   isInApprovalFlow,
 }: CTeDivergenceDialogProps) {
-  const [applyFreight, setApplyFreight] = useState(false);
+  const [applyFreight, setApplyFreight] = useState(true);
 
   if (!comparison) return null;
 
