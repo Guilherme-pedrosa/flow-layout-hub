@@ -89,13 +89,11 @@ export default function ImportarXML() {
   const { generatePayables } = usePayablesGeneration();
   const { currentCompany } = useCompany();
 
-  // Carregar fornecedores e transportadores disponíveis quando empresa mudar
+  // Carregar fornecedores e transportadores disponíveis
   useEffect(() => {
-    if (currentCompany?.id) {
-      loadFornecedoresDisponiveis();
-      loadTransportadoresDisponiveis();
-    }
-  }, [currentCompany?.id]);
+    loadFornecedoresDisponiveis();
+    loadTransportadoresDisponiveis();
+  }, []);
 
   // Verificar se fornecedor/transportador já estão cadastrados
   useEffect(() => {
@@ -114,12 +112,10 @@ export default function ImportarXML() {
   }, [cteData]);
 
   const loadFornecedoresDisponiveis = async () => {
-    if (!currentCompany?.id) return;
-    
+    // Tabela pessoas é compartilhada entre todas as empresas
     const { data } = await supabase
       .from("pessoas")
       .select("id, razao_social, cpf_cnpj")
-      .eq("company_id", currentCompany.id)
       .eq("is_fornecedor", true)
       .eq("is_active", true)
       .order("razao_social");
@@ -130,14 +126,10 @@ export default function ImportarXML() {
   };
 
   const loadTransportadoresDisponiveis = async () => {
-    if (!currentCompany?.id) return;
-    
-    // Transportadores são marcados com is_transportadora = true
-    // Mas também incluímos os que são is_fornecedor para cobrir cadastros antigos
+    // Tabela pessoas é compartilhada entre todas as empresas
     const { data } = await supabase
       .from("pessoas")
       .select("id, razao_social, cpf_cnpj")
-      .eq("company_id", currentCompany.id)
       .or("is_transportadora.eq.true,is_fornecedor.eq.true")
       .eq("is_active", true)
       .order("razao_social");
@@ -158,18 +150,17 @@ export default function ImportarXML() {
   };
 
   const checkFornecedorCadastrado = async () => {
-    if (!nfeData?.fornecedor.cnpj || !currentCompany?.id) return;
+    if (!nfeData?.fornecedor.cnpj) return;
     
     // Normalizar CNPJ
     const cnpjOriginal = nfeData.fornecedor.cnpj;
     const cnpjNormalizado = cnpjOriginal.replace(/[^\d]/g, '');
     const cnpjFormatado = cnpjNormalizado.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5');
     
-    // Buscar na tabela unificada pessoas (fornecedores) - FILTRANDO POR COMPANY_ID
+    // Buscar na tabela unificada pessoas (compartilhada entre empresas)
     const { data: pessoaData } = await supabase
       .from("pessoas")
       .select("id")
-      .eq("company_id", currentCompany.id)
       .eq("is_fornecedor", true)
       .or(`cpf_cnpj.eq.${cnpjNormalizado},cpf_cnpj.eq.${cnpjFormatado}`)
       .maybeSingle();
@@ -198,16 +189,12 @@ export default function ImportarXML() {
     
     console.log("[DEBUG] Buscando transportadora:", { cnpjOriginal, cnpjNormalizado, cnpjFormatado });
     
-    // Buscar na tabela pessoas pelo CNPJ (normalizado ou formatado)
-    // Transportadoras são fornecedores para efeito de contas a pagar
+    // Buscar na tabela pessoas pelo CNPJ (compartilhada entre empresas)
     const { data, error } = await supabase
       .from("pessoas")
       .select("id, razao_social, nome_fantasia, cpf_cnpj, is_fornecedor")
-      .eq("company_id", currentCompany?.id)
       .or(`cpf_cnpj.eq.${cnpjNormalizado},cpf_cnpj.eq.${cnpjFormatado}`)
       .maybeSingle();
-    
-    console.log("[DEBUG] Query transportadora:", { cnpjNormalizado, cnpjFormatado, companyId: currentCompany?.id });
     
     console.log("[DEBUG] Resultado busca transportadora:", { data, error });
     
