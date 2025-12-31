@@ -27,7 +27,6 @@ import {
   Copy,
   Trash2,
   ShoppingCart,
-  ArrowUpDown,
   Link2,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
@@ -37,6 +36,8 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { SituationSelect } from "./SituationSelect";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { useSortableData } from "@/hooks/useSortableData";
+import { SortableTableHeader } from "@/components/shared";
 
 interface FinancialSituation {
   id: string;
@@ -111,9 +112,15 @@ export function PayablesTable({
   onRefresh,
   loading,
 }: PayablesTableProps) {
-  const [sortField, setSortField] = useState<"due_date" | "amount" | "supplier">("due_date");
-  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
   const isMobile = useIsMobile();
+
+  // Preparar dados com campo de ordenação por fornecedor
+  const payablesWithSortKey = payables.map(p => ({
+    ...p,
+    _supplierName: p.supplier?.nome_fantasia || p.supplier?.razao_social || ""
+  }));
+
+  const { items: sortedPayables, requestSort, sortConfig } = useSortableData(payablesWithSortKey, 'due_date');
 
   const selectablePayables = payables.filter(
     (p) => !p.is_paid && p.payment_status !== "sent_to_bank"
@@ -121,31 +128,6 @@ export function PayablesTable({
   
   const allSelected = selectablePayables.length > 0 && 
     selectablePayables.every((p) => selectedIds.has(p.id));
-
-  const handleSort = (field: typeof sortField) => {
-    if (sortField === field) {
-      setSortOrder(sortOrder === "asc" ? "desc" : "asc");
-    } else {
-      setSortField(field);
-      setSortOrder("asc");
-    }
-  };
-
-  const sortedPayables = [...payables].sort((a, b) => {
-    let comparison = 0;
-    
-    if (sortField === "due_date") {
-      comparison = new Date(a.due_date).getTime() - new Date(b.due_date).getTime();
-    } else if (sortField === "amount") {
-      comparison = a.amount - b.amount;
-    } else if (sortField === "supplier") {
-      const nameA = a.supplier?.nome_fantasia || a.supplier?.razao_social || "";
-      const nameB = b.supplier?.nome_fantasia || b.supplier?.razao_social || "";
-      comparison = nameA.localeCompare(nameB);
-    }
-    
-    return sortOrder === "asc" ? comparison : -comparison;
-  });
 
   // Handler para atualizar situação financeira
   const handleSituationChange = async (payableId: string, situationId: string) => {
@@ -350,41 +332,37 @@ export function PayablesTable({
                 aria-label="Selecionar todos"
               />
             </TableHead>
-            <TableHead className="min-w-[200px]">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="-ml-3 h-8 font-semibold"
-                onClick={() => handleSort("supplier")}
-              >
-                Descrição
-                <ArrowUpDown className="ml-1 h-3 w-3" />
-              </Button>
-            </TableHead>
-            <TableHead>Fornecedor</TableHead>
-            <TableHead>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="-ml-3 h-8 font-semibold"
-                onClick={() => handleSort("due_date")}
-              >
-                Vencimento
-                <ArrowUpDown className="ml-1 h-3 w-3" />
-              </Button>
-            </TableHead>
+            <SortableTableHeader
+              label="Descrição"
+              sortKey="description"
+              currentSortKey={sortConfig.key}
+              sortDirection={sortConfig.direction}
+              onSort={requestSort}
+              className="min-w-[200px]"
+            />
+            <SortableTableHeader
+              label="Fornecedor"
+              sortKey="_supplierName"
+              currentSortKey={sortConfig.key}
+              sortDirection={sortConfig.direction}
+              onSort={requestSort}
+            />
+            <SortableTableHeader
+              label="Vencimento"
+              sortKey="due_date"
+              currentSortKey={sortConfig.key}
+              sortDirection={sortConfig.direction}
+              onSort={requestSort}
+            />
             <TableHead>Método</TableHead>
-            <TableHead className="text-right">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="-ml-3 h-8 font-semibold"
-                onClick={() => handleSort("amount")}
-              >
-                Valor
-                <ArrowUpDown className="ml-1 h-3 w-3" />
-              </Button>
-            </TableHead>
+            <SortableTableHeader
+              label="Valor"
+              sortKey="amount"
+              currentSortKey={sortConfig.key}
+              sortDirection={sortConfig.direction}
+              onSort={requestSort}
+              className="text-right"
+            />
             <TableHead>Situação</TableHead>
             <TableHead className="w-12"></TableHead>
           </TableRow>
