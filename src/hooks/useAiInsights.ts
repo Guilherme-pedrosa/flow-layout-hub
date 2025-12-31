@@ -6,7 +6,7 @@ export interface AiInsight {
   id: string;
   company_id: string;
   type: 'info' | 'warning' | 'success' | 'critical';
-  category: 'financial' | 'stock' | 'sales' | 'fiscal' | 'audit' | 'opportunity';
+  category: 'financial' | 'stock' | 'sales' | 'fiscal' | 'audit' | 'opportunity' | 'purchases' | 'services' | 'system';
   mode: 'auditora' | 'cfo_bot' | 'especialista' | 'executora';
   title: string;
   message: string;
@@ -52,6 +52,8 @@ export function useAiInsights(category?: string) {
       }
 
       const { data, error } = await query;
+      
+      console.log('[useAiInsights] Fetched insights:', data?.length, 'for company:', companyId);
 
       if (error) throw error;
 
