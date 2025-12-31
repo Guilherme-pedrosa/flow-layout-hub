@@ -752,7 +752,15 @@ export default function ImportarXML() {
             />
             <NotaFiscalCard nota={nfeData.nota} />
             <TransportadorCard
-              transportador={nfeData.transportador}
+              transportador={cteData?.emit ? {
+                cnpj: cteData.emit.cnpj,
+                razaoSocial: cteData.emit.razaoSocial,
+                inscricaoEstadual: cteData.emit.inscricaoEstadual,
+                endereco: cteData.emit.endereco,
+                cidade: cteData.emit.cidade,
+                uf: cteData.emit.uf,
+                modalidadeFrete: 'CT-e',
+              } : nfeData.transportador}
               transportadorCadastrado={transportadorCadastrado}
               transportadorId={transportadorId}
               transportadoresDisponiveis={transportadoresDisponiveis}
@@ -1030,9 +1038,20 @@ export default function ImportarXML() {
       <CadastrarFornecedorDialog
         open={dialogTransportador}
         onOpenChange={setDialogTransportador}
-        dados={nfeData?.transportador || null}
+        dados={cteData?.emit ? {
+          cnpj: cteData.emit.cnpj,
+          razaoSocial: cteData.emit.razaoSocial,
+          inscricaoEstadual: cteData.emit.inscricaoEstadual,
+          endereco: cteData.emit.endereco,
+          cidade: cteData.emit.cidade,
+          uf: cteData.emit.uf,
+          modalidadeFrete: 'CTE',
+        } : nfeData?.transportador || null}
         tipo="transportador"
-        onSuccess={() => setTransportadorCadastrado(true)}
+        onSuccess={(pessoaId) => {
+          setTransportadorCadastrado(true);
+          if (pessoaId) setTransportadorId(pessoaId);
+        }}
       />
 
       <CadastrarProdutoDialog

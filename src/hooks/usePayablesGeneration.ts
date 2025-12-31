@@ -148,8 +148,9 @@ export function usePayablesGeneration() {
           chart_account_id: chartAccountId || undefined,
           cost_center_id: costCenterId || undefined,
           is_forecast: false,
-          recipient_name: cteData.remetente?.razaoSocial || 'Transportadora',
-          recipient_document: cteData.remetente?.cnpj || '',
+          // Usar dados do emitente do CT-e (transportadora), não do remetente
+          recipient_name: cteData.emit?.razaoSocial || cteData.remetente?.razaoSocial || 'Transportadora',
+          recipient_document: cteData.emit?.cnpj || cteData.remetente?.cnpj || '',
         };
 
         const { error } = await supabase
