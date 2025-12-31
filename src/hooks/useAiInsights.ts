@@ -80,14 +80,31 @@ export function useAiInsights(category?: string) {
   useEffect(() => {
     fetchInsights();
 
-    // Subscribe to realtime updates
+    // Subscribe to realtime updates - use unique channel name per category
     if (companyId) {
+      const channelName = `ai_insights_${companyId}${category ? `_${category}` : ''}`;
       const channel = supabase
-        .channel('ai_insights_changes')
+        .channel(channelName)
         .on(
           'postgres_changes',
           {
-            event: '*',
+            event: 'INSERT',
+            schema: 'public',
+            table: 'ai_insights',
+            filter: `company_id=eq.${companyId}`,
+          },
+          (payload) => {
+            console.log('[useAiInsights] Realtime INSERT detected:', payload);
+            // If we have a category filter, only refetch if the new insight matches
+            if (!category || (payload.new as any)?.category === category) {
+              fetchInsights();
+            }
+          }
+        )
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
             schema: 'public',
             table: 'ai_insights',
             filter: `company_id=eq.${companyId}`,
@@ -96,13 +113,15 @@ export function useAiInsights(category?: string) {
             fetchInsights();
           }
         )
-        .subscribe();
+        .subscribe((status) => {
+          console.log('[useAiInsights] Realtime subscription status:', status);
+        });
 
       return () => {
         supabase.removeChannel(channel);
       };
     }
-  }, [companyId, fetchInsights]);
+  }, [companyId, category, fetchInsights]);
 
   const markAsRead = useCallback(async (insightId: string) => {
     try {
