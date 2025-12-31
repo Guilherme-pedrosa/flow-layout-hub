@@ -163,20 +163,30 @@ export default function ImportarXML() {
   const checkTransportadorCadastrado = async () => {
     if (!nfeData?.transportador?.cnpj) return;
     
-    // Buscar na tabela pessoas (transportadoras são pessoas com is_transportador = true)
-    const { data } = await supabase
-      .from("pessoas")
-      .select("id, razao_social")
-      .eq("cpf_cnpj", nfeData.transportador.cnpj)
-      .maybeSingle();
+    // Normalizar CNPJ (remover formatação)
+    const cnpjNormalizado = nfeData.transportador.cnpj.replace(/[^\d]/g, '');
+    const cnpjFormatado = cnpjNormalizado.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5');
     
-    if (data) {
+    console.log("[DEBUG] Buscando transportadora:", { cnpjOriginal: nfeData.transportador.cnpj, cnpjNormalizado, cnpjFormatado });
+    
+    // Buscar na tabela pessoas (transportadoras são pessoas com is_transportadora = true)
+    // Tentar buscar com CNPJ normalizado e formatado
+    const { data, error } = await supabase
+      .from("pessoas")
+      .select("id, razao_social, nome_fantasia, cpf_cnpj")
+      .eq("company_id", currentCompany?.id)
+      .or(`cpf_cnpj.eq.${cnpjNormalizado},cpf_cnpj.eq.${cnpjFormatado}`);
+    
+    console.log("[DEBUG] Resultado busca transportadora:", { data, error });
+    
+    if (data && data.length > 0) {
       setTransportadorCadastrado(true);
-      setTransportadorId(data.id); // Já vincular automaticamente
-      console.log("[DEBUG] Transportadora encontrada:", data.razao_social);
+      setTransportadorId(data[0].id); // Já vincular automaticamente
+      console.log("[DEBUG] Transportadora encontrada:", data[0].razao_social || data[0].nome_fantasia);
     } else {
       setTransportadorCadastrado(false);
       setTransportadorId(null);
+      console.log("[DEBUG] Transportadora NÃO encontrada no banco");
     }
   };
 
