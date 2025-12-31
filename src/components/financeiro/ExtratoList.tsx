@@ -1,9 +1,10 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { 
   RefreshCw, 
@@ -24,8 +25,11 @@ import { formatCurrency, formatDate } from "@/lib/formatters";
 import { ReconciliationModal } from "./ReconciliationModal";
 import { ReconciliationReverseModal } from "./ReconciliationReverseModal";
 import { AIBannerEnhanced } from "@/components/shared/AIBannerEnhanced";
+import { SortableTableHeader, SelectionSummaryBar } from "@/components/shared";
 import { useAiInsights } from "@/hooks/useAiInsights";
 import { useCompany } from "@/contexts/CompanyContext";
+import { useSortableData } from "@/hooks/useSortableData";
+import { useSelectionSum } from "@/hooks/useSelectionSum";
 
 interface BankTransaction {
   id: string;
@@ -155,6 +159,26 @@ export const ExtratoList = () => {
     .filter(t => t.type === "DEBIT")
     .reduce((sum, t) => sum + Math.abs(t.amount), 0);
   const pendingCount = transactions.filter(t => !t.is_reconciled).length;
+  
+  // Ordenação com 3 estados
+  const { items: sortedTransactions, requestSort, sortConfig } = useSortableData(transactions, 'transaction_date');
+  
+  // Seleção com soma
+  const getId = useCallback((item: BankTransaction) => item.id, []);
+  const getAmount = useCallback((item: BankTransaction) => item.amount, []);
+  
+  const {
+    selectedCount,
+    totalSum,
+    positiveSum,
+    negativeSum,
+    toggleSelection,
+    clearSelection,
+    isSelected,
+    toggleSelectAll,
+    isAllSelected,
+    isSomeSelected
+  } = useSelectionSum({ items: transactions, getAmount, getId });
   
   // AI Insights
   const { insights, dismiss, markAsRead } = useAiInsights('financial');
@@ -332,16 +356,51 @@ export const ExtratoList = () => {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Data</TableHead>
-                  <TableHead>Descrição</TableHead>
-                  <TableHead className="text-right">Valor</TableHead>
+                  <TableHead className="w-12">
+                    <Checkbox
+                      checked={isAllSelected}
+                      onCheckedChange={toggleSelectAll}
+                      className={isSomeSelected ? "data-[state=checked]:bg-primary/50" : ""}
+                    />
+                  </TableHead>
+                  <SortableTableHeader
+                    label="Data"
+                    sortKey="transaction_date"
+                    currentSortKey={sortConfig.key}
+                    sortDirection={sortConfig.direction}
+                    onSort={requestSort}
+                  />
+                  <SortableTableHeader
+                    label="Descrição"
+                    sortKey="description"
+                    currentSortKey={sortConfig.key}
+                    sortDirection={sortConfig.direction}
+                    onSort={requestSort}
+                  />
+                  <SortableTableHeader
+                    label="Valor"
+                    sortKey="amount"
+                    currentSortKey={sortConfig.key}
+                    sortDirection={sortConfig.direction}
+                    onSort={requestSort}
+                    className="text-right"
+                  />
                   <TableHead className="text-center">Status</TableHead>
                   <TableHead className="text-right">Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {transactions.map((tx) => (
-                  <TableRow key={tx.id} className={tx.is_reconciled ? "opacity-60" : ""}>
+                {sortedTransactions.map((tx) => (
+                  <TableRow 
+                    key={tx.id} 
+                    className={`${tx.is_reconciled ? "opacity-60" : ""} ${isSelected(tx.id) ? "bg-primary/5" : ""}`}
+                  >
+                    <TableCell>
+                      <Checkbox
+                        checked={isSelected(tx.id)}
+                        onCheckedChange={() => toggleSelection(tx.id)}
+                      />
+                    </TableCell>
                     <TableCell className="font-medium">
                       {formatDate(tx.transaction_date)}
                     </TableCell>
@@ -411,6 +470,16 @@ export const ExtratoList = () => {
         onOpenChange={setReverseModalOpen}
         transaction={transactionToReverse}
         onSuccess={handleReconciliationSuccess}
+      />
+
+      {/* Barra de soma flutuante */}
+      <SelectionSummaryBar
+        selectedCount={selectedCount}
+        totalSum={totalSum}
+        positiveSum={positiveSum}
+        negativeSum={negativeSum}
+        onClear={clearSelection}
+        showBreakdown={true}
       />
     </div>
   );
