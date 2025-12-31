@@ -48,10 +48,10 @@ export function PayablesFilters({
 
   useEffect(() => {
     const fetchSuppliers = async () => {
+      // Buscar TODAS as pessoas ativas (não filtrar por is_fornecedor)
       const { data } = await supabase
         .from("pessoas")
         .select("id, nome_fantasia, razao_social")
-        .eq("is_fornecedor", true)
         .eq("is_active", true)
         .order("nome_fantasia");
       
