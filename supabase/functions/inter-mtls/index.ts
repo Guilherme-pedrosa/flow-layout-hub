@@ -144,33 +144,62 @@ async function makeHttpsRequest(
 
 function parseChunkedBody(chunkedBody: string): string {
   try {
-    let result = "";
-    let remaining = chunkedBody;
-    let iterations = 0;
-    const maxIterations = 100;
+    // O chunked encoding usa bytes, não caracteres
+    // Vamos processar como bytes para maior precisão
+    const encoder = new TextEncoder();
+    const decoder = new TextDecoder();
+    const bodyBytes = encoder.encode(chunkedBody);
     
-    while (remaining.length > 0 && iterations < maxIterations) {
+    const resultChunks: Uint8Array[] = [];
+    let offset = 0;
+    let iterations = 0;
+    const maxIterations = 500;
+    
+    while (offset < bodyBytes.length && iterations < maxIterations) {
       iterations++;
-      const lineEnd = remaining.indexOf("\r\n");
+      
+      // Encontrar fim da linha do tamanho (procurar \r\n)
+      let lineEnd = -1;
+      for (let i = offset; i < bodyBytes.length - 1; i++) {
+        if (bodyBytes[i] === 0x0D && bodyBytes[i + 1] === 0x0A) { // \r\n
+          lineEnd = i;
+          break;
+        }
+      }
       if (lineEnd === -1) break;
       
-      const sizeHex = remaining.substring(0, lineEnd).trim();
-      if (!sizeHex || !/^[0-9a-fA-F]+$/.test(sizeHex)) break;
+      // Ler o tamanho do chunk em hex
+      const sizeStr = decoder.decode(bodyBytes.subarray(offset, lineEnd)).trim();
+      if (!sizeStr || !/^[0-9a-fA-F]+$/.test(sizeStr)) break;
       
-      const size = parseInt(sizeHex, 16);
-      if (isNaN(size) || size === 0) break;
-      if (size > 10000000) break; // Limite de 10MB por chunk
+      const chunkSize = parseInt(sizeStr, 16);
+      if (isNaN(chunkSize) || chunkSize === 0) break;
+      if (chunkSize > 10000000) break;
       
-      const chunkStart = lineEnd + 2;
-      const chunkEnd = chunkStart + size;
+      const chunkStart = lineEnd + 2; // após \r\n
+      const chunkEnd = chunkStart + chunkSize;
       
-      if (chunkEnd > remaining.length) break;
+      if (chunkEnd > bodyBytes.length) {
+        console.log(`[inter-mtls] Chunk incompleto: esperado ${chunkSize} bytes a partir de ${chunkStart}, total ${bodyBytes.length}`);
+        break;
+      }
       
-      result += remaining.substring(chunkStart, chunkEnd);
-      remaining = remaining.substring(Math.min(chunkEnd + 2, remaining.length));
+      resultChunks.push(bodyBytes.subarray(chunkStart, chunkEnd));
+      offset = chunkEnd + 2; // pular \r\n após o chunk
     }
     
-    return result;
+    console.log(`[inter-mtls] Parsed ${resultChunks.length} chunks em ${iterations} iterações`);
+    
+    // Concatenar todos os chunks
+    const totalLength = resultChunks.reduce((acc, chunk) => acc + chunk.length, 0);
+    const result = new Uint8Array(totalLength);
+    let pos = 0;
+    for (const chunk of resultChunks) {
+      result.set(chunk, pos);
+      pos += chunk.length;
+    }
+    
+    return decoder.decode(result);
   } catch (e) {
     console.error("[inter-mtls] Erro no parseChunkedBody:", e);
     return "";
