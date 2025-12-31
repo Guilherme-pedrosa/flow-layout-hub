@@ -45,7 +45,7 @@ import { PageHeader } from "@/components/shared";
 import { AIBannerEnhanced } from "@/components/shared/AIBannerEnhanced";
 import { useAiInsights } from "@/hooks/useAiInsights";
 
-type StatusFilter = 'all' | 'active' | 'inactive' | 'low_stock' | 'negative_stock';
+type StatusFilter = 'all' | 'active' | 'inactive' | 'low_stock' | 'zero_stock' | 'negative_stock';
 
 export default function GerenciarProdutos() {
   const { products, isLoading, createProduct, updateProduct, toggleProductStatus } = useProducts();
@@ -62,18 +62,27 @@ export default function GerenciarProdutos() {
   const counts = useMemo(() => {
     const active = products.filter(p => p.is_active).length;
     const inactive = products.filter(p => !p.is_active).length;
+    // Estoque baixo: maior que 0 mas abaixo/igual ao mínimo
     const lowStock = products.filter(p => 
       p.is_active && 
       p.controls_stock && 
       (p.quantity ?? 0) > 0 && 
-      (p.quantity ?? 0) <= (p.min_stock ?? 0)
+      p.min_stock && 
+      (p.quantity ?? 0) <= p.min_stock
     ).length;
+    // Estoque zerado: exatamente 0
+    const zeroStock = products.filter(p => 
+      p.is_active && 
+      p.controls_stock && 
+      (p.quantity ?? 0) === 0
+    ).length;
+    // Estoque negativo: menor que 0
     const negativeStock = products.filter(p => 
       p.is_active && 
       p.controls_stock && 
       (p.quantity ?? 0) < 0
     ).length;
-    return { active, inactive, lowStock, negativeStock };
+    return { active, inactive, lowStock, zeroStock, negativeStock };
   }, [products]);
 
   // Filtrar produtos
@@ -93,7 +102,9 @@ export default function GerenciarProdutos() {
         case 'inactive':
           return !p.is_active;
         case 'low_stock':
-          return p.is_active && p.controls_stock && (p.quantity ?? 0) > 0 && (p.quantity ?? 0) <= (p.min_stock ?? 0);
+          return p.is_active && p.controls_stock && (p.quantity ?? 0) > 0 && p.min_stock && (p.quantity ?? 0) <= p.min_stock;
+        case 'zero_stock':
+          return p.is_active && p.controls_stock && (p.quantity ?? 0) === 0;
         case 'negative_stock':
           return p.is_active && p.controls_stock && (p.quantity ?? 0) < 0;
         default:
@@ -301,6 +312,14 @@ export default function GerenciarProdutos() {
       icon: AlertTriangle,
       color: 'text-amber-600',
       bgColor: 'bg-amber-50 dark:bg-amber-950/30'
+    },
+    { 
+      key: 'zero_stock' as StatusFilter, 
+      label: 'Sem Estoque', 
+      count: counts.zeroStock, 
+      icon: Package,
+      color: 'text-orange-600',
+      bgColor: 'bg-orange-50 dark:bg-orange-950/30'
     },
     { 
       key: 'negative_stock' as StatusFilter, 
