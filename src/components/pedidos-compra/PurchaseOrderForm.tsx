@@ -764,7 +764,8 @@ export function PurchaseOrderForm({ order: initialOrder, onClose }: PurchaseOrde
             <PurchaseOrderItems 
               items={items} 
               onItemsChange={setItems} 
-              purpose={purpose} 
+              purpose={purpose}
+              freightTotal={order?.cte_freight_value || parseFloat(freightValue) || 0}
             />
           )}
         </TabsContent>

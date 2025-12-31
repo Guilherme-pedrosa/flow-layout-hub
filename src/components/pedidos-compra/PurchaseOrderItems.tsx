@@ -60,6 +60,7 @@ interface PurchaseOrderItemsProps {
   items: LocalItem[];
   onItemsChange: (items: LocalItem[]) => void;
   purpose: "estoque" | "ordem_de_servico" | "despesa_operacional" | "garantia";
+  freightTotal?: number; // Valor total do frete (CT-e ou manual)
 }
 
 const formatCurrency = (value: number) => {
@@ -69,7 +70,7 @@ const formatCurrency = (value: number) => {
   }).format(value);
 };
 
-export function PurchaseOrderItems({ items, onItemsChange, purpose }: PurchaseOrderItemsProps) {
+export function PurchaseOrderItems({ items, onItemsChange, purpose, freightTotal = 0 }: PurchaseOrderItemsProps) {
   const { products, isLoading: productsLoading, createProduct, refetch: refetchProducts } = useProducts();
   const { accounts: chartOfAccounts, fetchAccounts } = useChartOfAccounts();
   const { costCenters, fetchCostCenters } = useCostCenters();
@@ -418,13 +419,15 @@ export function PurchaseOrderItems({ items, onItemsChange, purpose }: PurchaseOr
                           placeholder="Descrição"
                         />
                       </TableCell>
-                      <TableCell className="min-w-[80px]">
+                      <TableCell className="min-w-[100px]">
                         <Input
                           type="number"
-                          value={item.quantity || 0}
+                          step="0.01"
+                          value={item.quantity !== undefined && item.quantity !== null ? item.quantity : ''}
                           onChange={(e) => handleItemChange(index, "quantity", parseFloat(e.target.value) || 0)}
                           min={0}
-                          className="w-full text-center"
+                          className="w-[90px] text-center"
+                          placeholder="0"
                         />
                       </TableCell>
                       <TableCell className="min-w-[120px]">
@@ -497,10 +500,20 @@ export function PurchaseOrderItems({ items, onItemsChange, purpose }: PurchaseOr
 
             {/* Totals */}
             <div className="flex justify-end">
-              <div className="bg-muted p-3 md:p-4 rounded-lg">
+              <div className="bg-muted p-3 md:p-4 rounded-lg space-y-2">
                 <div className="flex items-center justify-between gap-4 md:gap-8">
+                  <span className="text-sm font-medium">Total Produtos:</span>
+                  <span className="text-base font-semibold">{formatCurrency(totalGeral)}</span>
+                </div>
+                {freightTotal > 0 && (
+                  <div className="flex items-center justify-between gap-4 md:gap-8 text-blue-600">
+                    <span className="text-sm font-medium">Frete Total:</span>
+                    <span className="text-base font-semibold">{formatCurrency(freightTotal)}</span>
+                  </div>
+                )}
+                <div className="flex items-center justify-between gap-4 md:gap-8 border-t pt-2">
                   <span className="text-sm font-medium">Total Geral:</span>
-                  <span className="text-base md:text-lg font-bold">{formatCurrency(totalGeral)}</span>
+                  <span className="text-base md:text-lg font-bold">{formatCurrency(totalGeral + freightTotal)}</span>
                 </div>
               </div>
             </div>

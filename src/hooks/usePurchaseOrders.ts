@@ -33,6 +33,7 @@ export interface PurchaseOrder {
   cte_key: string | null;
   cte_number: string | null;
   cte_carrier_id: string | null;
+  cte_carrier_name: string | null; // Nome da transportadora do CT-e (para quando não está cadastrada)
   cte_freight_value: number;
   cte_date: string | null;
   cte_imported_at: string | null;
@@ -494,14 +495,25 @@ export function usePurchaseOrders() {
       .select(`
         *,
         purchase_order_status:purchase_order_statuses(*),
-        supplier:pessoas!purchase_orders_supplier_id_fkey(*),
-        cte_carrier:pessoas!purchase_orders_cte_carrier_id_fkey(*)
+        supplier:pessoas!purchase_orders_supplier_id_fkey(*)
       `)
       .eq("id", orderId)
       .single();
 
     if (error) throw error;
-    return data as unknown as PurchaseOrder;
+    
+    // Buscar transportadora separadamente (pois a FK aponta para suppliers, mas usamos pessoas)
+    let cte_carrier = null;
+    if (data?.cte_carrier_id) {
+      const { data: carrierData } = await supabase
+        .from("pessoas")
+        .select("id, razao_social, nome_fantasia, cpf_cnpj")
+        .eq("id", data.cte_carrier_id)
+        .maybeSingle();
+      cte_carrier = carrierData;
+    }
+    
+    return { ...data, cte_carrier } as unknown as PurchaseOrder;
   };
 
   const getOrderDivergences = async (orderId: string) => {
