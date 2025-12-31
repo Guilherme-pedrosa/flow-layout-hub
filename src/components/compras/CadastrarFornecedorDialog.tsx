@@ -15,6 +15,7 @@ import { NFEFornecedor, Transportador } from "./types";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
+import { useCompany } from "@/contexts/CompanyContext";
 
 interface CadastrarFornecedorDialogProps {
   open: boolean;
@@ -33,6 +34,7 @@ export function CadastrarFornecedorDialog({
 }: CadastrarFornecedorDialogProps) {
   const [loading, setLoading] = useState(false);
   const queryClient = useQueryClient();
+  const { currentCompany } = useCompany();
 
   if (!dados) return null;
 
@@ -41,11 +43,17 @@ export function CadastrarFornecedorDialog({
   const transportador = dados as Transportador;
 
   const handleCadastrar = async () => {
+    if (!currentCompany?.id) {
+      toast.error("Selecione uma empresa primeiro");
+      return;
+    }
+    
     setLoading(true);
     try {
       // Cadastrar na tabela pessoas (unificada)
       const pessoaData = isFornecedor
         ? {
+            company_id: currentCompany.id,
             tipo_pessoa: "PJ" as const,
             cpf_cnpj: fornecedor.cnpj,
             razao_social: fornecedor.razaoSocial,
@@ -66,6 +74,7 @@ export function CadastrarFornecedorDialog({
             is_transportadora: false,
           }
         : {
+            company_id: currentCompany.id,
             tipo_pessoa: transportador.cnpj?.length === 11 ? "PF" as const : "PJ" as const,
             cpf_cnpj: transportador.cnpj,
             razao_social: transportador.razaoSocial,
