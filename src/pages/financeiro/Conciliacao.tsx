@@ -144,9 +144,11 @@ export default function Conciliacao() {
         .eq("company_id", companyId)
         .gte("transaction_date", dateFrom)
         .lte("transaction_date", dateTo)
-        .order("transaction_date", { ascending: false });
+        .order("transaction_date", { ascending: false })
+        .order("id", { ascending: false });
 
       if (txError) throw txError;
+      console.log(`[Conciliacao] Carregadas ${txData?.length || 0} transações. Última data: ${txData?.[0]?.transaction_date}`);
       setTransactions(txData || []);
 
       // Carregar contas a receber
