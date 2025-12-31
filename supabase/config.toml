@@ -77,3 +77,6 @@ verify_jwt = false
 
 [functions.cfo-efficiency-analysis]
 verify_jwt = false
+
+[functions.find-product-matches]
+verify_jwt = false
