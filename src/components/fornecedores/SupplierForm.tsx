@@ -30,6 +30,10 @@ const supplierSchema = z.object({
   observacoes_internas: z.string().optional().nullable(),
   condicao_pagamento: z.string().optional().nullable(),
   limite_credito: z.number().optional().nullable(),
+  is_cliente: z.boolean().optional(),
+  is_fornecedor: z.boolean().optional(),
+  is_transportadora: z.boolean().optional(),
+  is_colaborador: z.boolean().optional(),
 });
 
 type SupplierFormData = z.infer<typeof supplierSchema>;
@@ -63,6 +67,10 @@ export function SupplierForm({ supplier, onSubmit, onCancel, isLoading }: Suppli
       observacoes_internas: supplier?.observacoes_internas || "",
       condicao_pagamento: supplier?.condicao_pagamento || "",
       limite_credito: supplier?.limite_credito || undefined,
+      is_cliente: supplier?.is_cliente || false,
+      is_fornecedor: supplier?.is_fornecedor ?? true,
+      is_transportadora: supplier?.is_transportadora || false,
+      is_colaborador: supplier?.is_colaborador || false,
     },
   });
 
@@ -86,6 +94,10 @@ export function SupplierForm({ supplier, onSubmit, onCancel, isLoading }: Suppli
       observacoes_internas: data.observacoes_internas,
       condicao_pagamento: data.condicao_pagamento,
       limite_credito: data.limite_credito,
+      is_cliente: data.is_cliente,
+      is_fornecedor: data.is_fornecedor,
+      is_transportadora: data.is_transportadora,
+      is_colaborador: data.is_colaborador,
     });
   };
 

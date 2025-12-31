@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,24 +18,14 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Card, CardContent } from "@/components/ui/card";
-import { Plus, Search, MoreHorizontal, Edit, Eye, Building2, User } from "lucide-react";
-import { useClientes, Cliente } from "@/hooks/useClientes";
+import { Plus, Search, MoreHorizontal, Edit, Eye, Building2, User, Truck, Briefcase } from "lucide-react";
+import { usePessoas } from "@/hooks/usePessoas";
 import { formatCpfCnpj, formatTelefone } from "@/lib/formatters";
 
 export function ClientesList() {
   const navigate = useNavigate();
-  const { loading, fetchClientes } = useClientes();
-  const [clientes, setClientes] = useState<Cliente[]>([]);
+  const { clientes, isLoadingClientes } = usePessoas();
   const [search, setSearch] = useState("");
-
-  useEffect(() => {
-    loadClientes();
-  }, []);
-
-  const loadClientes = async () => {
-    const data = await fetchClientes();
-    setClientes(data);
-  };
 
   const filteredClientes = clientes.filter((cliente) => {
     const searchLower = search.toLowerCase();
@@ -65,6 +55,13 @@ export function ClientesList() {
       return <Building2 className="h-4 w-4 text-muted-foreground" />;
     }
     return <User className="h-4 w-4 text-muted-foreground" />;
+  };
+
+  const getRoleBadges = (pessoa: typeof clientes[0]) => {
+    const badges = [];
+    if (pessoa.is_fornecedor) badges.push(<Badge key="forn" variant="outline" className="text-xs"><Briefcase className="h-3 w-3 mr-1" />Fornecedor</Badge>);
+    if (pessoa.is_transportadora) badges.push(<Badge key="transp" variant="outline" className="text-xs"><Truck className="h-3 w-3 mr-1" />Transportadora</Badge>);
+    return badges;
   };
 
   return (
@@ -98,19 +95,20 @@ export function ClientesList() {
                 <TableHead>Telefone</TableHead>
                 <TableHead>Cidade/UF</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead>Outros Papéis</TableHead>
                 <TableHead className="w-12"></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {loading ? (
+              {isLoadingClientes ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                     Carregando...
                   </TableCell>
                 </TableRow>
               ) : filteredClientes.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                     {search ? 'Nenhum cliente encontrado' : 'Nenhum cliente cadastrado'}
                   </TableCell>
                 </TableRow>
@@ -141,6 +139,11 @@ export function ClientesList() {
                     </TableCell>
                     <TableCell>
                       {getStatusBadge(cliente.status)}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex gap-1 flex-wrap">
+                        {getRoleBadges(cliente)}
+                      </div>
                     </TableCell>
                     <TableCell>
                       <DropdownMenu>

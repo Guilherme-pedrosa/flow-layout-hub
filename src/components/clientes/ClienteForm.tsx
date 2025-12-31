@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
 import { Save, ShoppingCart, FileText, Loader2, Shield } from "lucide-react";
-import { useClientes, ClienteInsert } from "@/hooks/useClientes";
+import { usePessoas, PessoaInsert } from "@/hooks/usePessoas";
 import { ClienteFormDadosGerais } from "./ClienteFormDadosGerais";
 import { ClienteFormEndereco } from "./ClienteFormEndereco";
 import { ClienteFormContatos, Contato } from "./ClienteFormContatos";
@@ -22,7 +22,7 @@ interface ClienteFormProps {
   onSave?: (cliente: any) => void;
 }
 
-const initialFormData: ClienteInsert = {
+const initialFormData: PessoaInsert = {
   tipo_pessoa: 'PJ',
   status: 'ativo',
   razao_social: '',
@@ -33,7 +33,7 @@ const initialFormData: ClienteInsert = {
   email: '',
   telefone: '',
   situacao_cadastral: '',
-  data_abertura: null,
+  data_abertura: undefined,
   cnae_principal: '',
   cep: '',
   logradouro: '',
@@ -43,28 +43,33 @@ const initialFormData: ClienteInsert = {
   cidade: '',
   estado: '',
   condicao_pagamento: '',
-  limite_credito: null,
+  limite_credito: undefined,
   tipo_cliente: 'avulso',
   observacoes_comerciais: '',
   responsavel_comercial: '',
   responsavel_tecnico: '',
   sla_padrao: '',
   observacoes_internas: '',
-  regime_tributario: null,
+  regime_tributario: undefined,
   contribuinte_icms: false,
   retencao_impostos: false,
   observacoes_fiscais: '',
+  is_cliente: true,
+  is_fornecedor: false,
+  is_transportadora: false,
+  is_colaborador: false,
 };
 
 export function ClienteForm({ clienteId, onSave }: ClienteFormProps) {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { loading, fetchCliente, fetchContatos, saveCliente, updateCliente, checkDuplicateCpfCnpj } = useClientes();
+  const { createPessoa, updatePessoa, getPessoaById, getPessoaByCpfCnpj, getContatos } = usePessoas();
   
-  const [formData, setFormData] = useState<ClienteInsert>(initialFormData);
+  const [formData, setFormData] = useState<PessoaInsert>(initialFormData);
   const [contatos, setContatos] = useState<Contato[]>([]);
   const [duplicateWarning, setDuplicateWarning] = useState(false);
   const [activeTab, setActiveTab] = useState("dados-gerais");
+  const [loading, setLoading] = useState(false);
   const [cnpjValidation, setCnpjValidation] = useState<{
     status: 'idle' | 'loading' | 'valid' | 'invalid' | 'error';
     message?: string;
@@ -82,8 +87,8 @@ export function ClienteForm({ clienteId, onSave }: ClienteFormProps) {
   useEffect(() => {
     const checkDuplicate = async () => {
       if (formData.cpf_cnpj && formData.cpf_cnpj.length >= 11) {
-        const isDuplicate = await checkDuplicateCpfCnpj(formData.cpf_cnpj, clienteId);
-        setDuplicateWarning(isDuplicate);
+        const existing = await getPessoaByCpfCnpj(formData.cpf_cnpj);
+        setDuplicateWarning(existing !== null && existing.id !== clienteId);
       } else {
         setDuplicateWarning(false);
       }
@@ -91,7 +96,7 @@ export function ClienteForm({ clienteId, onSave }: ClienteFormProps) {
 
     const timeout = setTimeout(checkDuplicate, 500);
     return () => clearTimeout(timeout);
-  }, [formData.cpf_cnpj]);
+  }, [formData.cpf_cnpj, clienteId]);
 
   // Validar CNPJ automaticamente na Receita Federal
   const validateCnpj = useCallback(async () => {
@@ -158,49 +163,123 @@ export function ClienteForm({ clienteId, onSave }: ClienteFormProps) {
   }, [formData.cpf_cnpj, formData.tipo_pessoa, validateCnpj]);
 
   const loadCliente = async (id: string) => {
-    const cliente = await fetchCliente(id);
-    if (cliente) {
-      setFormData(cliente);
-      const contatosData = await fetchContatos(id);
-      setContatos(contatosData.map(c => ({
-        id: c.id,
-        nome: c.nome || '',
-        cargo: c.cargo || '',
-        telefone: c.telefone || '',
-        email: c.email || '',
-        principal: c.principal || false,
-      })));
+    setLoading(true);
+    try {
+      const pessoa = await getPessoaById(id);
+      if (pessoa) {
+        setFormData({
+          tipo_pessoa: pessoa.tipo_pessoa,
+          status: pessoa.status,
+          razao_social: pessoa.razao_social || '',
+          nome_fantasia: pessoa.nome_fantasia || '',
+          cpf_cnpj: pessoa.cpf_cnpj || '',
+          inscricao_estadual: pessoa.inscricao_estadual || '',
+          inscricao_municipal: pessoa.inscricao_municipal || '',
+          email: pessoa.email || '',
+          telefone: pessoa.telefone || '',
+          situacao_cadastral: pessoa.situacao_cadastral || '',
+          data_abertura: pessoa.data_abertura || undefined,
+          cnae_principal: pessoa.cnae_principal || '',
+          cep: pessoa.cep || '',
+          logradouro: pessoa.logradouro || '',
+          numero: pessoa.numero || '',
+          complemento: pessoa.complemento || '',
+          bairro: pessoa.bairro || '',
+          cidade: pessoa.cidade || '',
+          estado: pessoa.estado || '',
+          condicao_pagamento: pessoa.condicao_pagamento || '',
+          limite_credito: pessoa.limite_credito || undefined,
+          tipo_cliente: pessoa.tipo_cliente || 'avulso',
+          observacoes_comerciais: pessoa.observacoes_comerciais || '',
+          responsavel_comercial: pessoa.responsavel_comercial || '',
+          responsavel_tecnico: pessoa.responsavel_tecnico || '',
+          sla_padrao: pessoa.sla_padrao || '',
+          observacoes_internas: pessoa.observacoes_internas || '',
+          regime_tributario: pessoa.regime_tributario || undefined,
+          contribuinte_icms: pessoa.contribuinte_icms || false,
+          retencao_impostos: pessoa.retencao_impostos || false,
+          observacoes_fiscais: pessoa.observacoes_fiscais || '',
+          is_cliente: pessoa.is_cliente,
+          is_fornecedor: pessoa.is_fornecedor,
+          is_transportadora: pessoa.is_transportadora,
+          is_colaborador: pessoa.is_colaborador,
+        });
+        
+        const contatosData = await getContatos(id);
+        setContatos(contatosData.map(c => ({
+          id: c.id,
+          nome: c.nome || '',
+          cargo: c.cargo || '',
+          telefone: c.telefone || '',
+          email: c.email || '',
+          principal: c.principal || false,
+        })));
+      }
+    } catch (error) {
+      console.error('Erro ao carregar cliente:', error);
+      toast({
+        title: "Erro ao carregar cliente",
+        description: "Não foi possível carregar os dados do cliente.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
     }
   };
 
   const handleSave = async (action?: 'venda' | 'os') => {
-    const contatosToSave = contatos.map(c => ({
-      nome: c.nome || null,
-      cargo: c.cargo || null,
-      telefone: c.telefone || null,
-      email: c.email || null,
-      principal: c.principal,
-      cliente_id: clienteId || '', // Será preenchido após salvar
-    }));
-
-    let result;
-    
-    if (clienteId) {
-      result = await updateCliente(clienteId, formData, contatosToSave);
-    } else {
-      result = await saveCliente(formData, contatosToSave);
-    }
-
-    if (result) {
-      onSave?.(result);
-
-      if (action === 'venda') {
-        navigate('/checkout', { state: { clienteId: result.id } });
-      } else if (action === 'os') {
-        navigate('/ordens-servico', { state: { clienteId: result.id } });
+    setLoading(true);
+    try {
+      let result;
+      
+      // Garantir que is_cliente está true ao salvar da tela de clientes
+      const dataToSave = {
+        ...formData,
+        is_cliente: formData.is_cliente ?? true,
+      };
+      
+      if (clienteId) {
+        result = await updatePessoa.mutateAsync({ id: clienteId, data: dataToSave });
       } else {
-        navigate('/clientes');
+        result = await createPessoa.mutateAsync(dataToSave);
       }
+
+      if (result) {
+        // Salvar contatos
+        if (contatos.length > 0) {
+          // Deletar contatos existentes
+          await supabase
+            .from("pessoa_contatos")
+            .delete()
+            .eq("pessoa_id", result.id);
+          
+          // Inserir novos contatos
+          await supabase.from("pessoa_contatos").insert(
+            contatos.map(c => ({
+              pessoa_id: result.id,
+              nome: c.nome || null,
+              cargo: c.cargo || null,
+              telefone: c.telefone || null,
+              email: c.email || null,
+              principal: c.principal,
+            }))
+          );
+        }
+
+        onSave?.(result);
+
+        if (action === 'venda') {
+          navigate('/checkout', { state: { clienteId: result.id } });
+        } else if (action === 'os') {
+          navigate('/ordens-servico', { state: { clienteId: result.id } });
+        } else {
+          navigate('/clientes');
+        }
+      }
+    } catch (error) {
+      console.error('Erro ao salvar:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
