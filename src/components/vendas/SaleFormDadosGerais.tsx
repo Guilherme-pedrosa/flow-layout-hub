@@ -8,7 +8,7 @@ import { FileEdit, Search, Plus } from "lucide-react";
 import { useSaleStatuses } from "@/hooks/useSales";
 import { useCostCenters, CostCenter } from "@/hooks/useFinanceiro";
 import { useSystemUsers } from "@/hooks/useServices";
-import { supabase } from "@/integrations/supabase/client";
+import { usePessoas } from "@/hooks/usePessoas";
 import { CadastrarPessoaDialog } from "@/components/shared/CadastrarPessoaDialog";
 
 interface SaleFormDadosGeraisProps {
@@ -42,18 +42,20 @@ export function SaleFormDadosGerais({ formData, onChange }: SaleFormDadosGeraisP
   const { statuses } = useSaleStatuses();
   const { costCenters, fetchCostCenters } = useCostCenters();
   const { data: users } = useSystemUsers();
-  const [clientes, setClientes] = useState<any[]>([]);
+  const { activeClientes, refetch: refetchPessoas } = usePessoas();
   const [clienteSearch, setClienteSearch] = useState("");
   const [showCadastrarCliente, setShowCadastrarCliente] = useState(false);
 
-  const fetchClientes = () => {
-    supabase.from("clientes").select("id, razao_social, nome_fantasia, cpf_cnpj").eq("status", "ativo")
-      .then(({ data }) => setClientes(data ?? []));
-  };
+  // Converter pessoas para formato esperado
+  const clientes = activeClientes.map(p => ({
+    id: p.id,
+    razao_social: p.razao_social,
+    nome_fantasia: p.nome_fantasia,
+    cpf_cnpj: p.cpf_cnpj,
+  }));
 
   useEffect(() => {
     fetchCostCenters();
-    fetchClientes();
   }, [fetchCostCenters]);
 
   const activeStatuses = statuses?.filter(s => s.is_active) ?? [];
@@ -246,7 +248,7 @@ export function SaleFormDadosGerais({ formData, onChange }: SaleFormDadosGeraisP
     <CadastrarPessoaDialog
       open={showCadastrarCliente}
       onOpenChange={setShowCadastrarCliente}
-      onSuccess={fetchClientes}
+      onSuccess={refetchPessoas}
       tipo="cliente"
       title="Cadastrar Novo Cliente"
     />

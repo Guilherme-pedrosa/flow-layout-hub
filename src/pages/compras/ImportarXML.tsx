@@ -143,7 +143,7 @@ export default function ImportarXML() {
   const checkFornecedorCadastrado = async () => {
     if (!nfeData?.fornecedor.cnpj) return;
     
-    // Buscar na tabela pessoas (fornecedores)
+    // Buscar na tabela unificada pessoas (fornecedores)
     const { data: pessoaData } = await supabase
       .from("pessoas")
       .select("id")
@@ -154,18 +154,10 @@ export default function ImportarXML() {
     if (pessoaData) {
       setFornecedorCadastrado(true);
       setFornecedorId(pessoaData.id);
-      return;
+    } else {
+      setFornecedorCadastrado(false);
+      setFornecedorId(null);
     }
-    
-    // Fallback para tabela clientes (legado)
-    const { data: clienteData } = await supabase
-      .from("clientes")
-      .select("id")
-      .eq("cpf_cnpj", nfeData.fornecedor.cnpj)
-      .maybeSingle();
-    
-    setFornecedorCadastrado(!!clienteData);
-    setFornecedorId(null);
   };
 
   const checkTransportadorCadastrado = async () => {

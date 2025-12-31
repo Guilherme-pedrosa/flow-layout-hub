@@ -49,10 +49,12 @@ export function ReceivablesFilters({
 
   useEffect(() => {
     const fetchClients = async () => {
+      // Usar tabela unificada pessoas com filtro is_cliente
       const { data } = await supabase
-        .from("clientes")
+        .from("pessoas")
         .select("id, nome_fantasia, razao_social")
-        .eq("status", "ativo")
+        .eq("is_cliente", true)
+        .eq("is_active", true)
         .order("nome_fantasia");
       
       if (data) setClients(data);

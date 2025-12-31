@@ -1,14 +1,18 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
-import { toast } from "sonner";
-import { useCompany } from "@/contexts/CompanyContext";
+/**
+ * @deprecated Este hook está DEPRECADO. Use usePessoas() com filtro is_fornecedor = true.
+ * 
+ * Este arquivo agora é apenas um wrapper que redireciona para usePessoas
+ * para manter compatibilidade com código legado.
+ */
+import { usePessoas, Pessoa, PessoaInsert } from "./usePessoas";
 
+// Tipos legados para compatibilidade
 export interface Supplier {
   id: string;
-  company_id: string;
+  company_id: string | null;
   tipo_pessoa: "PF" | "PJ";
   cpf_cnpj: string | null;
-  razao_social: string;
+  razao_social: string | null;
   nome_fantasia: string | null;
   inscricao_estadual: string | null;
   inscricao_municipal: string | null;
@@ -52,114 +56,111 @@ export interface SupplierUpdate extends Partial<SupplierInsert> {
   id: string;
 }
 
+// Converter Pessoa para Supplier (formato legado)
+function pessoaToSupplier(pessoa: Pessoa): Supplier {
+  return {
+    id: pessoa.id,
+    company_id: pessoa.company_id,
+    tipo_pessoa: pessoa.tipo_pessoa as "PF" | "PJ",
+    cpf_cnpj: pessoa.cpf_cnpj,
+    razao_social: pessoa.razao_social,
+    nome_fantasia: pessoa.nome_fantasia,
+    inscricao_estadual: pessoa.inscricao_estadual,
+    inscricao_municipal: pessoa.inscricao_municipal,
+    logradouro: pessoa.logradouro,
+    numero: pessoa.numero,
+    complemento: pessoa.complemento,
+    bairro: pessoa.bairro,
+    cidade: pessoa.cidade,
+    estado: pessoa.estado,
+    cep: pessoa.cep,
+    telefone: pessoa.telefone,
+    email: pessoa.email,
+    observacoes: pessoa.observacoes_internas,
+    is_active: pessoa.is_active,
+    created_at: pessoa.created_at,
+    updated_at: pessoa.updated_at,
+  };
+}
+
+/**
+ * @deprecated Use usePessoas() com filtro is_fornecedor = true
+ */
 export function useSuppliers() {
-  const queryClient = useQueryClient();
-  const { currentCompany } = useCompany();
+  console.warn("[DEPRECATED] useSuppliers está deprecado. Use usePessoas() com filtro is_fornecedor = true.");
+  
+  const {
+    fornecedores,
+    activeFornecedores,
+    isLoadingFornecedores,
+    createPessoa,
+    updatePessoa,
+    toggleStatus,
+    getPessoaByCpfCnpj,
+    refetch,
+  } = usePessoas();
 
-  const suppliersQuery = useQuery({
-    queryKey: ["suppliers", currentCompany?.id],
-    queryFn: async () => {
-      if (!currentCompany) return [];
-      
-      const { data, error } = await supabase
-        .from("suppliers")
-        .select("*")
-        .eq("company_id", currentCompany.id)
-        .order("razao_social", { ascending: true });
+  // Converter para formato legado
+  const suppliers = fornecedores.map(pessoaToSupplier);
+  const activeSuppliers = activeFornecedores.map(pessoaToSupplier);
 
-      if (error) throw error;
-      return data as Supplier[];
+  // Wrapper para criar fornecedor
+  const createSupplier = {
+    mutateAsync: async (supplier: Omit<SupplierInsert, "company_id">) => {
+      const pessoaData: PessoaInsert = {
+        ...supplier,
+        is_fornecedor: true,
+        is_cliente: false,
+        is_transportadora: false,
+        is_colaborador: false,
+        observacoes_internas: supplier.observacoes,
+      };
+      const result = await createPessoa.mutateAsync(pessoaData);
+      return pessoaToSupplier(result);
     },
-    enabled: !!currentCompany,
-  });
+    isPending: createPessoa.isPending,
+  };
 
-  const createSupplier = useMutation({
-    mutationFn: async (supplier: Omit<SupplierInsert, "company_id">) => {
-      if (!currentCompany) throw new Error("Nenhuma empresa selecionada");
-      
-      const { data, error } = await supabase
-        .from("suppliers")
-        .insert({ ...supplier, company_id: currentCompany.id })
-        .select()
-        .single();
+  // Wrapper para atualizar fornecedor
+  const updateSupplier = {
+    mutateAsync: async ({ id, ...data }: SupplierUpdate) => {
+      const pessoaData: Partial<PessoaInsert> = {
+        ...data,
+        observacoes_internas: data.observacoes,
+      };
+      const result = await updatePessoa.mutateAsync({ id, data: pessoaData });
+      return pessoaToSupplier(result);
+    },
+    isPending: updatePessoa.isPending,
+  };
 
-      if (error) throw error;
-      return data as Supplier;
+  // Wrapper para toggle status
+  const toggleSupplierStatus = {
+    mutateAsync: async ({ id, is_active }: { id: string; is_active: boolean }) => {
+      const result = await toggleStatus.mutateAsync({ id, is_active });
+      return pessoaToSupplier(result);
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["suppliers"] });
-      toast.success("Fornecedor cadastrado com sucesso!");
-    },
-    onError: (error: Error) => {
-      toast.error(`Erro ao cadastrar fornecedor: ${error.message}`);
-    },
-  });
+    isPending: toggleStatus.isPending,
+  };
 
-  const updateSupplier = useMutation({
-    mutationFn: async ({ id, ...data }: SupplierUpdate) => {
-      const { data: result, error } = await supabase
-        .from("suppliers")
-        .update(data)
-        .eq("id", id)
-        .select()
-        .single();
-
-      if (error) throw error;
-      return result as Supplier;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["suppliers"] });
-      toast.success("Fornecedor atualizado com sucesso!");
-    },
-    onError: (error: Error) => {
-      toast.error(`Erro ao atualizar fornecedor: ${error.message}`);
-    },
-  });
-
-  const toggleSupplierStatus = useMutation({
-    mutationFn: async ({ id, is_active }: { id: string; is_active: boolean }) => {
-      const { data, error } = await supabase
-        .from("suppliers")
-        .update({ is_active })
-        .eq("id", id)
-        .select()
-        .single();
-
-      if (error) throw error;
-      return data as Supplier;
-    },
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["suppliers"] });
-      toast.success(`Fornecedor ${data.is_active ? "ativado" : "desativado"} com sucesso!`);
-    },
-    onError: (error: Error) => {
-      toast.error(`Erro ao alterar status: ${error.message}`);
-    },
-  });
-
+  // Wrapper para buscar por CNPJ
   const getSupplierByCnpj = async (cpfCnpj: string): Promise<Supplier | null> => {
-    if (!currentCompany) return null;
-    
-    const { data, error } = await supabase
-      .from("suppliers")
-      .select("*")
-      .eq("company_id", currentCompany.id)
-      .eq("cpf_cnpj", cpfCnpj)
-      .maybeSingle();
-
-    if (error) throw error;
-    return data as Supplier | null;
+    const pessoa = await getPessoaByCpfCnpj(cpfCnpj);
+    if (pessoa && pessoa.is_fornecedor) {
+      return pessoaToSupplier(pessoa);
+    }
+    return null;
   };
 
   return {
-    suppliers: suppliersQuery.data ?? [],
-    activeSuppliers: (suppliersQuery.data ?? []).filter(s => s.is_active),
-    isLoading: suppliersQuery.isLoading,
-    error: suppliersQuery.error,
+    suppliers,
+    activeSuppliers,
+    isLoading: isLoadingFornecedores,
+    error: null,
     createSupplier,
     updateSupplier,
     toggleSupplierStatus,
     getSupplierByCnpj,
-    refetch: suppliersQuery.refetch,
+    refetch,
   };
 }

@@ -63,8 +63,9 @@ export function HistoricoAlteracoes({ entityId, entityType }: HistoricoAlteracoe
 
     try {
       if (entityType === "cliente") {
+        // Usar tabela unificada pessoas
         const { data } = await supabase
-          .from("clientes")
+          .from("pessoas")
           .select("created_at, created_by")
           .eq("id", entityId)
           .single();

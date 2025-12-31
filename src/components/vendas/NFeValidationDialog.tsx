@@ -100,9 +100,9 @@ export function NFeValidationDialog({
           errors.push("Cliente sem CPF/CNPJ cadastrado");
         }
         
-        // Buscar dados completos do cliente
+        // Buscar dados completos do cliente (tabela unificada pessoas)
         const { data: clientData } = await supabase
-          .from("clientes")
+          .from("pessoas")
           .select("*")
           .eq("id", sale.client.id)
           .single();
