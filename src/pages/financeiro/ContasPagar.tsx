@@ -65,7 +65,7 @@ export default function ContasPagar() {
         </TabsContent>
 
         <TabsContent value="extrato">
-          <ExtratoList />
+          <ExtratoList transactionTypeFilter="DEBIT" />
         </TabsContent>
 
         <TabsContent value="dda">

@@ -18,6 +18,7 @@ import { Search, ChevronLeft, ChevronRight, Plus, MoreHorizontal, Calendar, X, D
 import { format, addMonths, subMonths } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { supabase } from "@/integrations/supabase/client";
+import { useFinancialSituations } from "@/hooks/useFinancialSituations";
 
 interface Supplier {
   id: string;
@@ -30,6 +31,7 @@ export interface PayablesFiltersState {
   supplierId: string;
   category: string;
   paymentMethod: string;
+  situationId: string;
   currentMonth: Date;
 }
 
@@ -45,6 +47,7 @@ export function PayablesFilters({
   onAddNew,
 }: PayablesFiltersProps) {
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const { situations } = useFinancialSituations();
 
   useEffect(() => {
     const fetchSuppliers = async () => {
@@ -80,11 +83,12 @@ export function PayablesFilters({
       supplierId: "",
       category: "",
       paymentMethod: "",
+      situationId: "",
       currentMonth: new Date(),
     });
   };
 
-  const hasActiveFilters = filters.search || filters.supplierId || filters.category || filters.paymentMethod;
+  const hasActiveFilters = filters.search || filters.supplierId || filters.category || filters.paymentMethod || filters.situationId;
 
   return (
     <div className="space-y-4">
@@ -147,6 +151,30 @@ export function PayablesFilters({
             <SelectItem value="pix">PIX</SelectItem>
             <SelectItem value="boleto">Boleto</SelectItem>
             <SelectItem value="transfer">Transferência</SelectItem>
+          </SelectContent>
+        </Select>
+
+        {/* Situation Filter */}
+        <Select 
+          value={filters.situationId || "all"} 
+          onValueChange={(value) => onFiltersChange({ ...filters, situationId: value === "all" ? "" : value })}
+        >
+          <SelectTrigger className="w-[160px] bg-card border-border h-9">
+            <SelectValue placeholder="Situação" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todas situações</SelectItem>
+            {situations.filter(s => s.is_active).map((situation) => (
+              <SelectItem key={situation.id} value={situation.id}>
+                <div className="flex items-center gap-2">
+                  <div 
+                    className="w-2 h-2 rounded-full" 
+                    style={{ backgroundColor: situation.color }}
+                  />
+                  {situation.name}
+                </div>
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
 
