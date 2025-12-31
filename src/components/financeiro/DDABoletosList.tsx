@@ -112,17 +112,17 @@ export function DDABoletosList() {
 
   const fetchSuppliers = async () => {
     try {
+      // Buscar TODAS as pessoas ativas (não filtrar por is_fornecedor)
       const { data, error } = await supabase
         .from("pessoas")
         .select("id, razao_social, nome_fantasia, cpf_cnpj")
-        .eq("is_fornecedor", true)
         .eq("is_active", true)
         .order("razao_social");
 
       if (error) throw error;
       setSuppliers(data || []);
     } catch (error) {
-      console.error("Erro ao carregar fornecedores:", error);
+      console.error("Erro ao carregar pessoas:", error);
     }
   };
 
