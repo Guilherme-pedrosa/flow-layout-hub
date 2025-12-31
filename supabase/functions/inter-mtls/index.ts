@@ -122,25 +122,38 @@ async function makeHttpsRequest(
 }
 
 function parseChunkedBody(chunkedBody: string): string {
-  let result = "";
-  let remaining = chunkedBody;
-  
-  while (remaining.length > 0) {
-    const lineEnd = remaining.indexOf("\r\n");
-    if (lineEnd === -1) break;
+  try {
+    let result = "";
+    let remaining = chunkedBody;
+    let iterations = 0;
+    const maxIterations = 100;
     
-    const sizeHex = remaining.substring(0, lineEnd);
-    const size = parseInt(sizeHex, 16);
+    while (remaining.length > 0 && iterations < maxIterations) {
+      iterations++;
+      const lineEnd = remaining.indexOf("\r\n");
+      if (lineEnd === -1) break;
+      
+      const sizeHex = remaining.substring(0, lineEnd).trim();
+      if (!sizeHex || !/^[0-9a-fA-F]+$/.test(sizeHex)) break;
+      
+      const size = parseInt(sizeHex, 16);
+      if (isNaN(size) || size === 0) break;
+      if (size > 10000000) break; // Limite de 10MB por chunk
+      
+      const chunkStart = lineEnd + 2;
+      const chunkEnd = chunkStart + size;
+      
+      if (chunkEnd > remaining.length) break;
+      
+      result += remaining.substring(chunkStart, chunkEnd);
+      remaining = remaining.substring(Math.min(chunkEnd + 2, remaining.length));
+    }
     
-    if (size === 0) break;
-    
-    const chunkStart = lineEnd + 2;
-    const chunkEnd = chunkStart + size;
-    result += remaining.substring(chunkStart, chunkEnd);
-    remaining = remaining.substring(chunkEnd + 2); // +2 for \r\n after chunk
+    return result;
+  } catch (e) {
+    console.error("[inter-mtls] Erro no parseChunkedBody:", e);
+    return "";
   }
-  
-  return result;
 }
 
 /**
@@ -206,15 +219,20 @@ async function getInterExtrato(
   const response = await makeHttpsRequest("GET", path, headers, null, cert, key);
   
   console.log(`[inter-mtls] Extrato response status: ${response.status}`);
-  console.log(`[inter-mtls] Extrato response body: ${response.body.slice(0, 500)}`);
+  
+  // Log seguro do body
+  const bodyPreview = response.body && typeof response.body === 'string' 
+    ? response.body.substring(0, Math.min(500, response.body.length))
+    : "(body inválido)";
+  console.log(`[inter-mtls] Extrato response body preview: ${bodyPreview}`);
   
   if (response.status !== 200) {
-    console.error(`[inter-mtls] Extrato error: ${response.body}`);
-    throw new Error(`Extrato failed (${response.status}): ${response.body}`);
+    console.error(`[inter-mtls] Extrato error: ${bodyPreview}`);
+    throw new Error(`Extrato failed (${response.status}): ${bodyPreview}`);
   }
 
   // Verificar se a resposta está vazia ou inválida
-  if (!response.body || response.body.trim().length === 0) {
+  if (!response.body || typeof response.body !== 'string' || response.body.trim().length === 0) {
     console.log(`[inter-mtls] Extrato retornou vazio, retornando array vazio`);
     return { transacoes: [] };
   }
@@ -223,8 +241,7 @@ async function getInterExtrato(
     return JSON.parse(response.body);
   } catch (parseError) {
     console.error(`[inter-mtls] Erro ao parsear JSON: ${parseError}`);
-    console.error(`[inter-mtls] Body recebido: "${response.body}"`);
-    // Se não conseguir parsear, retorna vazio
+    console.error(`[inter-mtls] Body length: ${response.body.length}`);
     return { transacoes: [] };
   }
 }
