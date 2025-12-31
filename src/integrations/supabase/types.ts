@@ -2133,6 +2133,62 @@ export type Database = {
           },
         ]
       }
+      pessoa_enderecos: {
+        Row: {
+          bairro: string | null
+          cep: string | null
+          cidade: string | null
+          complemento: string | null
+          created_at: string
+          estado: string | null
+          id: string
+          is_principal: boolean | null
+          logradouro: string | null
+          numero: string | null
+          pessoa_id: string
+          tipo_endereco: string
+          updated_at: string
+        }
+        Insert: {
+          bairro?: string | null
+          cep?: string | null
+          cidade?: string | null
+          complemento?: string | null
+          created_at?: string
+          estado?: string | null
+          id?: string
+          is_principal?: boolean | null
+          logradouro?: string | null
+          numero?: string | null
+          pessoa_id: string
+          tipo_endereco?: string
+          updated_at?: string
+        }
+        Update: {
+          bairro?: string | null
+          cep?: string | null
+          cidade?: string | null
+          complemento?: string | null
+          created_at?: string
+          estado?: string | null
+          id?: string
+          is_principal?: boolean | null
+          logradouro?: string | null
+          numero?: string | null
+          pessoa_id?: string
+          tipo_endereco?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pessoa_enderecos_pessoa_id_fkey"
+            columns: ["pessoa_id"]
+            isOneToOne: false
+            referencedRelation: "pessoas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pessoa_historico: {
         Row: {
           campo_alterado: string
@@ -4992,6 +5048,56 @@ export type Database = {
             columns: ["product_id"]
             isOneToOne: false
             referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      supplier_bank_accounts: {
+        Row: {
+          agencia: string | null
+          banco: string | null
+          conta: string | null
+          created_at: string
+          id: string
+          is_principal: boolean | null
+          pessoa_id: string
+          pix_key: string | null
+          pix_key_type: string | null
+          tipo_conta: string | null
+          updated_at: string
+        }
+        Insert: {
+          agencia?: string | null
+          banco?: string | null
+          conta?: string | null
+          created_at?: string
+          id?: string
+          is_principal?: boolean | null
+          pessoa_id: string
+          pix_key?: string | null
+          pix_key_type?: string | null
+          tipo_conta?: string | null
+          updated_at?: string
+        }
+        Update: {
+          agencia?: string | null
+          banco?: string | null
+          conta?: string | null
+          created_at?: string
+          id?: string
+          is_principal?: boolean | null
+          pessoa_id?: string
+          pix_key?: string | null
+          pix_key_type?: string | null
+          tipo_conta?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "supplier_bank_accounts_pessoa_id_fkey"
+            columns: ["pessoa_id"]
+            isOneToOne: false
+            referencedRelation: "pessoas"
             referencedColumns: ["id"]
           },
         ]
