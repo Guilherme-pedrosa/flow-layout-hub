@@ -187,13 +187,13 @@ export function PurchaseOrderForm({ order: initialOrder, onClose }: PurchaseOrde
                 id: item.id,
                 product_id: item.product_id || "",
                 description: item.description || item.product?.description || "",
-                quantity: item.quantity,
-                unit_price: item.unit_price || 0,
-                total_value: item.total_value || 0,
+                quantity: Number(item.quantity) || 0,
+                unit_price: Number(item.unit_price) || 0,
+                total_value: Number(item.total_value) || 0,
                 chart_account_id: item.chart_account_id || "",
                 cost_center_id: item.cost_center_id || "",
-                freight_allocated: item.freight_allocated || 0,
-                calculated_unit_cost: item.final_unit_cost || item.unit_price || 0,
+                freight_allocated: Number(item.freight_allocated) || 0,
+                calculated_unit_cost: Number(item.final_unit_cost) || Number(item.unit_price) || 0,
               }))
             );
 
@@ -913,11 +913,13 @@ export function PurchaseOrderForm({ order: initialOrder, onClose }: PurchaseOrde
                             Frete
                           </TableCell>
                           <TableCell className="text-blue-700 dark:text-blue-300">
-                            {order?.cte_imported_at 
-                              ? (order?.cte_carrier_id ? "Transportadora (CT-e)" : "Frete CT-e")
-                              : hasExternalFreight 
-                                ? "Frete Externo (aguardando CT-e)"
-                                : "Frete Incluso na Nota"}
+                            {order?.cte_carrier?.razao_social || order?.cte_carrier?.nome_fantasia
+                              ? (order?.cte_carrier?.nome_fantasia || order?.cte_carrier?.razao_social)
+                              : order?.cte_imported_at 
+                                ? "Transportadora (CT-e)"
+                                : hasExternalFreight 
+                                  ? "Frete Externo (aguardando CT-e)"
+                                  : "Frete Incluso na Nota"}
                           </TableCell>
                           <TableCell>
                             <span className="text-sm text-muted-foreground">

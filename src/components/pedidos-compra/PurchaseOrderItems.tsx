@@ -140,9 +140,10 @@ export function PurchaseOrderItems({ items, onItemsChange, purpose }: PurchaseOr
     newItems[index] = { ...newItems[index], [field]: value };
 
     if (field === "quantity" || field === "unit_price") {
-      const qty = field === "quantity" ? value : newItems[index].quantity;
-      const price = field === "unit_price" ? value : newItems[index].unit_price;
-      newItems[index].total_value = qty * price;
+      const qty = Number(field === "quantity" ? value : newItems[index].quantity) || 0;
+      const price = Number(field === "unit_price" ? value : newItems[index].unit_price) || 0;
+      // Arredondar para 2 casas decimais para evitar problemas de precisão
+      newItems[index].total_value = Math.round(qty * price * 100) / 100;
     }
 
     if (field === "product_id" && value) {
@@ -150,8 +151,9 @@ export function PurchaseOrderItems({ items, onItemsChange, purpose }: PurchaseOr
       if (product) {
         newItems[index].description = product.description;
         if (product.purchase_price) {
-          newItems[index].unit_price = product.purchase_price;
-          newItems[index].total_value = newItems[index].quantity * product.purchase_price;
+          newItems[index].unit_price = Number(product.purchase_price) || 0;
+          const qty = Number(newItems[index].quantity) || 0;
+          newItems[index].total_value = Math.round(qty * product.purchase_price * 100) / 100;
         }
       }
     }
@@ -164,7 +166,8 @@ export function PurchaseOrderItems({ items, onItemsChange, purpose }: PurchaseOr
     setOpenProductPopover(null);
   };
 
-  const totalGeral = items.reduce((acc, item) => acc + item.total_value, 0);
+  // Calcular total com precisão de 2 casas decimais
+  const totalGeral = Math.round(items.reduce((acc, item) => acc + (Number(item.total_value) || 0), 0) * 100) / 100;
   const showProductColumn = purpose === "estoque" || purpose === "ordem_de_servico";
 
   const ProductSelector = ({ item, index }: { item: LocalItem; index: number }) => (
@@ -415,21 +418,23 @@ export function PurchaseOrderItems({ items, onItemsChange, purpose }: PurchaseOr
                           placeholder="Descrição"
                         />
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="min-w-[80px]">
                         <Input
                           type="number"
-                          value={item.quantity}
+                          value={item.quantity || 0}
                           onChange={(e) => handleItemChange(index, "quantity", parseFloat(e.target.value) || 0)}
                           min={0}
+                          className="w-full text-center"
                         />
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="min-w-[120px]">
                         <Input
                           type="number"
                           step="0.01"
-                          value={item.unit_price}
+                          value={item.unit_price?.toFixed(2) || "0.00"}
                           onChange={(e) => handleItemChange(index, "unit_price", parseFloat(e.target.value) || 0)}
                           min={0}
+                          className="w-full text-right"
                         />
                       </TableCell>
                       <TableCell className="text-muted-foreground text-sm">
