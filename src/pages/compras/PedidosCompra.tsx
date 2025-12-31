@@ -345,8 +345,8 @@ Foque no insight mais relevante: pode ser sobre produtos, fornecedores, valores,
   };
 
   const handleViewFinanceiro = (order: PurchaseOrder) => {
-    // Redireciona para contas a pagar filtrado pelo fornecedor
-    navigate(`/contas-pagar?supplier=${order.supplier_id}`);
+    // Redireciona para contas a pagar filtrado pelo pedido de compra
+    navigate(`/contas-pagar?purchase_order_id=${order.id}`);
   };
 
   const handlePrintOrder = async (order: PurchaseOrder) => {
