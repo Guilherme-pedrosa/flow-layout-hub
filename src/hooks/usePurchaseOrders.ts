@@ -330,9 +330,17 @@ export function usePurchaseOrders() {
 
   const createOrderItems = useMutation({
     mutationFn: async (items: PurchaseOrderItemInsert[]) => {
+      if (!currentCompany) throw new Error("Nenhuma empresa selecionada");
+      
+      // Adicionar company_id a cada item
+      const itemsWithCompany = items.map(item => ({
+        ...item,
+        company_id: currentCompany.id,
+      }));
+      
       const { data, error } = await supabase
         .from("purchase_order_items")
-        .insert(items)
+        .insert(itemsWithCompany)
         .select();
 
       if (error) throw error;

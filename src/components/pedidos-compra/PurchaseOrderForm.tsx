@@ -404,6 +404,7 @@ export function PurchaseOrderForm({ order: initialOrder, onClose }: PurchaseOrde
         total_value: item.total_value,
         chart_account_id: item.chart_account_id || undefined,
         cost_center_id: item.cost_center_id || undefined,
+        cfop: cfopGeral,
       }));
 
       await createOrderItems.mutateAsync(itemsToCreate);
@@ -860,6 +861,25 @@ export function PurchaseOrderForm({ order: initialOrder, onClose }: PurchaseOrde
                           </TableCell>
                         </TableRow>
                       ))}
+                      {/* Linha do Frete (CT-e) - se houver */}
+                      {order?.cte_freight_value && order.cte_freight_value > 0 && (
+                        <TableRow className="bg-blue-50 dark:bg-blue-950/30">
+                          <TableCell className="font-medium text-blue-700 dark:text-blue-300">
+                            Frete
+                          </TableCell>
+                          <TableCell className="text-blue-700 dark:text-blue-300">
+                            {order?.cte_carrier_id ? "Transportadora" : "Frete CT-e"}
+                          </TableCell>
+                          <TableCell>
+                            <span className="text-sm text-muted-foreground">
+                              {order?.cte_date ? new Date(order.cte_date).toLocaleDateString() : "A definir"}
+                            </span>
+                          </TableCell>
+                          <TableCell className="font-medium text-blue-700 dark:text-blue-300">
+                            {formatCurrency(order.cte_freight_value)}
+                          </TableCell>
+                        </TableRow>
+                      )}
                     </TableBody>
                   </Table>
                 </div>
