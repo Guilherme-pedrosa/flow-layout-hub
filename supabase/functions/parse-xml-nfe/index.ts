@@ -305,10 +305,26 @@ function parseNFEXml(xmlContent: string): NFEData {
       let match: RegExpExecArray | null;
       const regexParcelas: Parcela[] = [];
       
+      let parcelaIndex = 0;
       while ((match = regex.exec(infCpl)) !== null) {
-        const numeroParcela = match[1];
+        parcelaIndex++;
+        const numeroParcelaRaw = match[1];
         const dataRaw = match[2];
         const valorRaw = match[3];
+        
+        // Convert letter parcela (A, B, C...) to number (1, 2, 3...)
+        // Also handles numeric strings like "01", "02"
+        let numeroParcela: string;
+        if (/^[A-Za-z]$/.test(numeroParcelaRaw)) {
+          // Single letter: A=1, B=2, C=3, etc.
+          numeroParcela = String(numeroParcelaRaw.toUpperCase().charCodeAt(0) - 64);
+        } else if (/^\d+$/.test(numeroParcelaRaw)) {
+          // Already numeric
+          numeroParcela = String(parseInt(numeroParcelaRaw, 10));
+        } else {
+          // Fallback to sequential index
+          numeroParcela = String(parcelaIndex);
+        }
         
         // Convert date from DD/MM/YY or DD/MM/YYYY to YYYY-MM-DD
         const dateParts = dataRaw.split('/');
