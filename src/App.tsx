@@ -9,6 +9,7 @@ import { CompanyProvider } from "@/contexts/CompanyContext";
 // Pages
 import Dashboard from "./pages/Dashboard";
 import NotFound from "./pages/NotFound";
+import Auth from "./pages/Auth";
 
 // Operação
 import Vendas from "./pages/receber/Vendas";
@@ -85,6 +86,7 @@ const App = () => (
       <BrowserRouter>
         <Routes>
           {/* Rotas públicas (sem layout) */}
+          <Route path="/auth" element={<Auth />} />
           <Route path="/orcamento/:token" element={<OrcamentoView />} />
 
           {/* Rotas com layout */}
