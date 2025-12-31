@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -469,6 +470,30 @@ export function PurchaseOrderForm({ order: initialOrder, onClose }: PurchaseOrde
       });
 
       await createOrderItems.mutateAsync(itemsToCreate);
+
+      // CRÍTICO: Atualizar o custo de compra (purchase_price) de cada produto vinculado
+      // O custo deve incluir o frete rateado para refletir o custo real de aquisição
+      const productUpdatePromises = items
+        .filter(item => item.product_id) // Apenas itens com produto vinculado
+        .map(async (item, index) => {
+          const freightAllocated = ratedFreights[index] || 0;
+          const freightPerUnit = item.quantity > 0 ? freightAllocated / item.quantity : 0;
+          const finalUnitCost = item.unit_price + freightPerUnit;
+          
+          const { error } = await supabase
+            .from("products")
+            .update({
+              purchase_price: Math.round(finalUnitCost * 100) / 100,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", item.product_id);
+          
+          if (error) {
+            console.error(`Erro ao atualizar custo do produto ${item.product_id}:`, error);
+          }
+        });
+      
+      await Promise.all(productUpdatePromises);
 
       await refetch();
       toast.success(order ? "Pedido atualizado com sucesso!" : "Pedido criado com sucesso!");
