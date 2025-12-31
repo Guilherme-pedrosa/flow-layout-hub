@@ -533,6 +533,29 @@ export function useBankAccounts() {
     return updateBankAccount(id, { is_active: isActive });
   }, [updateBankAccount]);
 
+  const deleteBankAccount = useCallback(async (id: string) => {
+    try {
+      const { error } = await supabase
+        .from('bank_accounts')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+      
+      await logAudit('delete', 'bank_accounts', id, {});
+      toast.success('Conta bancária excluída com sucesso');
+      return true;
+    } catch (error: any) {
+      if (error.message?.includes('violates foreign key constraint')) {
+        toast.error('Não é possível excluir: conta possui transações vinculadas');
+      } else {
+        toast.error('Erro ao excluir conta bancária');
+      }
+      console.error(error);
+      return false;
+    }
+  }, []);
+
   return {
     bankAccounts,
     loading,
@@ -540,5 +563,6 @@ export function useBankAccounts() {
     createBankAccount,
     updateBankAccount,
     toggleBankAccountStatus,
+    deleteBankAccount,
   };
 }
