@@ -5,10 +5,11 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { Building2, Upload, Key, FileKey, CheckCircle, AlertCircle, Loader2 } from "lucide-react";
+import { Building2, Upload, Key, FileKey, CheckCircle, AlertCircle, Loader2, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useCompany } from "@/contexts/CompanyContext";
+import { DeleteConfirmDialog } from "@/components/shared/DeleteConfirmDialog";
 
 interface InterCredentials {
   id: string;
@@ -24,6 +25,8 @@ export default function ConfiguracaoBancaria() {
   const { currentCompany } = useCompany();
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [credentials, setCredentials] = useState<InterCredentials | null>(null);
   
   const [clientId, setClientId] = useState("");
@@ -150,6 +153,51 @@ export default function ConfiguracaoBancaria() {
       toast.error(error.message || "Erro ao salvar configuração");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleDelete = async (): Promise<boolean> => {
+    if (!currentCompany?.id || !credentials) return false;
+
+    setDeleting(true);
+    try {
+      // Delete certificate files from storage
+      const filesToDelete = [
+        credentials.certificate_file_path,
+        credentials.private_key_file_path,
+      ].filter(Boolean);
+
+      if (filesToDelete.length > 0) {
+        const { error: storageError } = await supabase.storage
+          .from("inter-certs")
+          .remove(filesToDelete);
+
+        if (storageError) {
+          console.error("Erro ao deletar arquivos:", storageError);
+        }
+      }
+
+      // Delete credentials from database
+      const { error: dbError } = await supabase
+        .from("inter_credentials")
+        .delete()
+        .eq("company_id", currentCompany.id);
+
+      if (dbError) throw dbError;
+
+      toast.success("Configuração bancária removida com sucesso!");
+      setCredentials(null);
+      setClientId("");
+      setClientSecret("");
+      setAccountNumber("");
+      setShowDeleteDialog(false);
+      return true;
+    } catch (error: any) {
+      console.error("Erro ao deletar:", error);
+      toast.error(error.message || "Erro ao remover configuração");
+      return false;
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -355,6 +403,19 @@ export default function ConfiguracaoBancaria() {
                     <li>Clique em "Sincronizar" para importar o extrato</li>
                   </ul>
                 </div>
+
+                <Separator />
+
+                <div className="pt-2">
+                  <Button 
+                    variant="destructive" 
+                    className="w-full"
+                    onClick={() => setShowDeleteDialog(true)}
+                  >
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Remover Configuração
+                  </Button>
+                </div>
               </>
             ) : (
               <div className="flex flex-col items-center justify-center py-8 text-center">
@@ -389,6 +450,15 @@ export default function ConfiguracaoBancaria() {
           </p>
         </CardContent>
       </Card>
+
+      {/* Dialog de confirmação de exclusão */}
+      <DeleteConfirmDialog
+        open={showDeleteDialog}
+        onOpenChange={setShowDeleteDialog}
+        onConfirm={handleDelete}
+        title="Remover Configuração Bancária"
+        description={`Tem certeza que deseja remover a configuração do Banco Inter para ${currentCompany?.name}? Os certificados serão excluídos permanentemente.`}
+      />
     </div>
   );
 }
