@@ -54,6 +54,7 @@ export default function GerenciarProdutos() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [editingProductData, setEditingProductData] = useState<Partial<ProductFormData> | undefined>(undefined);
   
   // AI Insights - filtrar por categoria "stock" na tela de produtos
   const { insights, dismiss, markAsRead } = useAiInsights('stock');
@@ -116,18 +117,38 @@ export default function GerenciarProdutos() {
 
   const handleOpenNew = () => {
     setEditingProductId(null);
+    setEditingProductData(undefined);
     setDialogOpen(true);
   };
 
-  const handleOpenEdit = (productId: string) => {
+  const handleOpenEdit = async (productId: string) => {
     setEditingProductId(productId);
+    const data = await loadProductData(productId);
+    setEditingProductData(data);
     setDialogOpen(true);
   };
 
-  const getEditingProduct = () => {
-    if (!editingProductId) return undefined;
-    const product = products.find(p => p.id === editingProductId);
+  const loadProductData = async (productId: string) => {
+    const product = products.find(p => p.id === productId);
     if (!product) return undefined;
+
+    const { data: suppliersData } = await supabase
+      .from('product_suppliers')
+      .select('*')
+      .eq('product_id', productId);
+
+    const suppliers = (suppliersData || []).map(s => ({
+      id: s.id,
+      supplier_id: s.supplier_id,
+      supplier_name: s.supplier_name,
+      supplier_cnpj: s.supplier_cnpj || '',
+      supplier_code: s.supplier_code || '',
+      last_purchase_price: s.last_purchase_price || 0,
+      last_purchase_date: s.last_purchase_date,
+      is_preferred: s.is_preferred || false,
+      lead_time_days: s.lead_time_days || 0,
+      min_order_qty: s.min_order_qty || 1,
+    }));
     
     return {
       code: product.code,
@@ -169,7 +190,7 @@ export default function GerenciarProdutos() {
       benefit_code: product.benefit_code || '',
       icms_rate: 0,
       images: [],
-      suppliers: [],
+      suppliers,
     };
   };
 
@@ -218,6 +239,25 @@ export default function GerenciarProdutos() {
 
       if (editingProductId) {
         await updateProduct.mutateAsync({ id: editingProductId, ...productData });
+        
+        // Update - deletar fornecedores antigos e inserir novos
+        await supabase.from('product_suppliers').delete().eq('product_id', editingProductId);
+        
+        if (data.suppliers.length > 0) {
+          for (const supplier of data.suppliers) {
+            await supabase.from('product_suppliers').insert({
+              product_id: editingProductId,
+              supplier_id: supplier.supplier_id || null,
+              supplier_name: supplier.supplier_name,
+              supplier_cnpj: supplier.supplier_cnpj || null,
+              supplier_code: supplier.supplier_code || null,
+              last_purchase_price: supplier.last_purchase_price || 0,
+              is_preferred: supplier.is_preferred || false,
+              lead_time_days: supplier.lead_time_days || 0,
+              min_order_qty: supplier.min_order_qty || 1,
+            });
+          }
+        }
       } else {
         const result = await createProduct.mutateAsync(productData);
         
@@ -251,9 +291,14 @@ export default function GerenciarProdutos() {
           for (const supplier of data.suppliers) {
             await supabase.from('product_suppliers').insert({
               product_id: result.id,
+              supplier_id: supplier.supplier_id || null,
               supplier_name: supplier.supplier_name,
               supplier_cnpj: supplier.supplier_cnpj || null,
               supplier_code: supplier.supplier_code || null,
+              last_purchase_price: supplier.last_purchase_price || 0,
+              is_preferred: supplier.is_preferred || false,
+              lead_time_days: supplier.lead_time_days || 0,
+              min_order_qty: supplier.min_order_qty || 1,
             });
           }
         }
@@ -510,7 +555,7 @@ export default function GerenciarProdutos() {
           </DialogHeader>
 
           <ProductForm
-            initialData={getEditingProduct()}
+            initialData={editingProductData}
             onSubmit={handleSubmit}
             onCancel={() => setDialogOpen(false)}
             isLoading={isSubmitting}

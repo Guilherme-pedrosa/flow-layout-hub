@@ -24,9 +24,15 @@ interface ProductImage {
 
 interface Supplier {
   id?: string;
+  supplier_id?: string;
   supplier_name: string;
   supplier_cnpj: string;
   supplier_code: string;
+  last_purchase_price?: number;
+  last_purchase_date?: string;
+  is_preferred?: boolean;
+  lead_time_days?: number;
+  min_order_qty?: number;
 }
 
 interface UnitConversion {
