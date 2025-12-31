@@ -54,6 +54,10 @@ export default function ImportarXML() {
   const [transportadorId, setTransportadorId] = useState<string | null>(null);
   const [transportadorCadastrado, setTransportadorCadastrado] = useState(false);
   
+  // Listas de fornecedores e transportadores disponíveis para vinculação
+  const [fornecedoresDisponiveis, setFornecedoresDisponiveis] = useState<{ id: string; razao_social: string | null; cpf_cnpj: string | null }[]>([]);
+  const [transportadoresDisponiveis, setTransportadoresDisponiveis] = useState<{ id: string; razao_social: string | null; cpf_cnpj: string | null }[]>([]);
+  
   // Estado para CFOP geral
   const [cfopGeral, setCfopGeral] = useState<string>("");
   const [sugestaoAiCfop, setSugestaoAiCfop] = useState<string>("");
@@ -81,6 +85,12 @@ export default function ImportarXML() {
   const { calculateAllItemCosts, rateFreightToItems } = useProductCostCalculation();
   const { generatePayables } = usePayablesGeneration();
 
+  // Carregar fornecedores e transportadores disponíveis
+  useEffect(() => {
+    loadFornecedoresDisponiveis();
+    loadTransportadoresDisponiveis();
+  }, []);
+
   // Verificar se fornecedor/transportador já estão cadastrados
   useEffect(() => {
     if (nfeData) {
@@ -88,6 +98,43 @@ export default function ImportarXML() {
       checkTransportadorCadastrado();
     }
   }, [nfeData]);
+
+  const loadFornecedoresDisponiveis = async () => {
+    const { data } = await supabase
+      .from("pessoas")
+      .select("id, razao_social, cpf_cnpj")
+      .eq("is_fornecedor", true)
+      .eq("is_active", true)
+      .order("razao_social");
+    
+    if (data) {
+      setFornecedoresDisponiveis(data);
+    }
+  };
+
+  const loadTransportadoresDisponiveis = async () => {
+    // Transportadores também são fornecedores geralmente
+    const { data } = await supabase
+      .from("pessoas")
+      .select("id, razao_social, cpf_cnpj")
+      .eq("is_fornecedor", true)
+      .eq("is_active", true)
+      .order("razao_social");
+    
+    if (data) {
+      setTransportadoresDisponiveis(data);
+    }
+  };
+
+  const handleVincularFornecedor = (id: string) => {
+    setFornecedorId(id);
+    setFornecedorCadastrado(true);
+  };
+
+  const handleVincularTransportador = (id: string) => {
+    setTransportadorId(id);
+    setTransportadorCadastrado(true);
+  };
 
   const checkFornecedorCadastrado = async () => {
     if (!nfeData?.fornecedor.cnpj) return;
@@ -713,6 +760,7 @@ Responda APENAS com o código CFOP de 4 dígitos. Sem explicações.`;
     setFornecedorCadastrado(false);
     setFornecedorId(null);
     setTransportadorCadastrado(false);
+    setTransportadorId(null);
     setFinanceiroObservacao("");
     setPlanoContasId("");
     setCentroCustoId("");
@@ -754,13 +802,19 @@ Responda APENAS com o código CFOP de 4 dígitos. Sem explicações.`;
             <FornecedorCard
               fornecedor={nfeData.fornecedor}
               fornecedorCadastrado={fornecedorCadastrado}
+              fornecedorId={fornecedorId}
+              fornecedoresDisponiveis={fornecedoresDisponiveis}
               onCadastrar={() => setDialogFornecedor(true)}
+              onVincular={handleVincularFornecedor}
             />
             <NotaFiscalCard nota={nfeData.nota} />
             <TransportadorCard
               transportador={nfeData.transportador}
               transportadorCadastrado={transportadorCadastrado}
+              transportadorId={transportadorId}
+              transportadoresDisponiveis={transportadoresDisponiveis}
               onCadastrar={() => setDialogTransportador(true)}
+              onVincular={handleVincularTransportador}
             />
           </div>
 
@@ -959,12 +1013,28 @@ Responda APENAS com o código CFOP de 4 dígitos. Sem explicações.`;
             onCfopEntradaChange={handleCfopEntradaChange}
           />
 
+          {/* Alerta se fornecedor não cadastrado */}
+          {!fornecedorCadastrado && (
+            <Alert variant="destructive">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertTitle>Fornecedor Obrigatório</AlertTitle>
+              <AlertDescription>
+                O fornecedor deve estar cadastrado ou vinculado antes de importar a nota.
+                Cadastre um novo ou vincule a um fornecedor existente.
+              </AlertDescription>
+            </Alert>
+          )}
+
           {/* Botões de ação */}
           <div className="flex justify-end gap-4">
             <Button variant="outline" onClick={handleCancelar}>
               Cancelar
             </Button>
-            <Button onClick={handleFinalize} disabled={isProcessing}>
+            <Button 
+              onClick={handleFinalize} 
+              disabled={isProcessing || !fornecedorCadastrado}
+              title={!fornecedorCadastrado ? "Cadastre ou vincule o fornecedor primeiro" : undefined}
+            >
               {isProcessing ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               ) : (
