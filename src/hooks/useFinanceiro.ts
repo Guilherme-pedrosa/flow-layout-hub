@@ -83,15 +83,18 @@ async function logAudit(action: string, entity: string, entityId: string, metada
 
 // Hook para Plano de Contas
 export function useChartOfAccounts() {
+  const { currentCompany } = useCompany();
   const [accounts, setAccounts] = useState<ChartOfAccount[]>([]);
   const [loading, setLoading] = useState(false);
 
   const fetchAccounts = useCallback(async () => {
+    if (!currentCompany?.id) return [];
     setLoading(true);
     try {
       const { data, error } = await supabase
         .from('chart_of_accounts')
         .select('*')
+        .eq('company_id', currentCompany.id)
         .order('code');
 
       if (error) throw error;
@@ -104,7 +107,7 @@ export function useChartOfAccounts() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [currentCompany?.id]);
 
   const buildTree = useCallback((flatAccounts: ChartOfAccount[]): ChartOfAccount[] => {
     const map = new Map<string, ChartOfAccount>();
@@ -256,15 +259,18 @@ export function useChartOfAccounts() {
 
 // Hook para Centros de Custo
 export function useCostCenters() {
+  const { currentCompany } = useCompany();
   const [costCenters, setCostCenters] = useState<CostCenter[]>([]);
   const [loading, setLoading] = useState(false);
 
   const fetchCostCenters = useCallback(async () => {
+    if (!currentCompany?.id) return [];
     setLoading(true);
     try {
       const { data, error } = await supabase
         .from('cost_centers')
         .select('*')
+        .eq('company_id', currentCompany.id)
         .order('code');
 
       if (error) throw error;
@@ -277,7 +283,7 @@ export function useCostCenters() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [currentCompany?.id]);
 
   const createCostCenter = useCallback(async (data: Omit<CostCenter, 'id' | 'created_at' | 'updated_at'>) => {
     try {
@@ -368,10 +374,12 @@ export function useCostCenters() {
 
 // Hook para Categorias Rápidas
 export function useQuickCategories() {
+  const { currentCompany } = useCompany();
   const [categories, setCategories] = useState<QuickCategory[]>([]);
   const [loading, setLoading] = useState(false);
 
   const fetchCategories = useCallback(async () => {
+    if (!currentCompany?.id) return [];
     setLoading(true);
     try {
       const { data, error } = await supabase
@@ -381,6 +389,7 @@ export function useQuickCategories() {
           chart_account:chart_of_accounts(*),
           cost_center:cost_centers(*)
         `)
+        .eq('company_id', currentCompany.id)
         .order('name');
 
       if (error) throw error;
@@ -393,7 +402,7 @@ export function useQuickCategories() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [currentCompany?.id]);
 
   const createCategory = useCallback(async (data: Omit<QuickCategory, 'id' | 'created_at' | 'updated_at' | 'chart_account' | 'cost_center'>) => {
     try {
@@ -450,15 +459,18 @@ export function useQuickCategories() {
 
 // Hook para Contas Bancárias
 export function useBankAccounts() {
+  const { currentCompany } = useCompany();
   const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
   const [loading, setLoading] = useState(false);
 
   const fetchBankAccounts = useCallback(async () => {
+    if (!currentCompany?.id) return [];
     setLoading(true);
     try {
       const { data, error } = await supabase
         .from('bank_accounts')
         .select('*')
+        .eq('company_id', currentCompany.id)
         .order('name');
 
       if (error) throw error;
@@ -471,7 +483,7 @@ export function useBankAccounts() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [currentCompany?.id]);
 
   const createBankAccount = useCallback(async (data: Omit<BankAccount, 'id' | 'created_at' | 'updated_at' | 'current_balance'>) => {
     try {

@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { useCompany } from "@/contexts/CompanyContext";
 
 export interface StockMovement {
   id: string;
@@ -34,29 +35,34 @@ export interface StockMovementInsert {
 
 export function useStockMovements() {
   const queryClient = useQueryClient();
+  const { currentCompany } = useCompany();
 
   const movementsQuery = useQuery({
-    queryKey: ["stock_movements"],
+    queryKey: ["stock_movements", currentCompany?.id],
     queryFn: async () => {
+      if (!currentCompany?.id) return [];
       const { data, error } = await supabase
         .from("stock_movements")
         .select(`
           *,
           product:products(code, description, unit)
         `)
+        .eq("company_id", currentCompany.id)
         .order("created_at", { ascending: false });
 
       if (error) throw error;
       return data as StockMovement[];
     },
+    enabled: !!currentCompany?.id,
   });
 
   const createMovement = useMutation({
     mutationFn: async (movement: StockMovementInsert) => {
+      if (!currentCompany?.id) throw new Error("Empresa não selecionada");
       // Criar movimentação
       const { data: movementData, error: movementError } = await supabase
         .from("stock_movements")
-        .insert(movement)
+        .insert({ ...movement, company_id: currentCompany.id })
         .select()
         .single();
 
@@ -97,7 +103,7 @@ export function useStockMovements() {
       return movementData;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["stock_movements"] });
+      queryClient.invalidateQueries({ queryKey: ["stock_movements", currentCompany?.id] });
       queryClient.invalidateQueries({ queryKey: ["products"] });
       toast.success("Movimentação registrada com sucesso!");
     },
@@ -157,7 +163,7 @@ export function useStockMovements() {
       return movementData;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["stock_movements"] });
+      queryClient.invalidateQueries({ queryKey: ["stock_movements", currentCompany?.id] });
       queryClient.invalidateQueries({ queryKey: ["products"] });
       toast.success("Movimentação estornada com sucesso!");
     },
