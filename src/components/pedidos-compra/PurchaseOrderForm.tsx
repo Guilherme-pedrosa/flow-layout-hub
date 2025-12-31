@@ -504,6 +504,63 @@ export function PurchaseOrderForm({ order: initialOrder, onClose }: PurchaseOrde
         }
       }
 
+      // Criar payable do frete se houver CT-e importado com transportadora
+      const cteFreightValue = order?.cte_freight_value || 0;
+      const cteCarrierId = order?.cte_carrier_id;
+      const cteNumber = order?.cte_number;
+      const cteDate = order?.cte_date;
+
+      if (cteFreightValue > 0 && cteCarrierId && purpose !== "garantia") {
+        // Verificar se já existe payable de frete para este pedido
+        const { data: existingFreightPayable } = await supabase
+          .from("payables")
+          .select("id")
+          .eq("purchase_order_id", orderId)
+          .eq("document_type", "cte_frete")
+          .maybeSingle();
+        
+        if (!existingFreightPayable) {
+          // Criar novo payable para o frete
+          const { error: freightPayableError } = await supabase
+            .from("payables")
+            .insert({
+              company_id: COMPANY_ID,
+              supplier_id: cteCarrierId,
+              purchase_order_id: orderId,
+              amount: cteFreightValue,
+              due_date: cteDate || firstDueDate,
+              document_type: "cte_frete",
+              document_number: cteNumber || undefined,
+              description: `Frete CT-e #${cteNumber || 'N/A'} - Pedido #${order?.order_number || 'Novo'}`,
+              chart_account_id: chartAccountId || undefined,
+              cost_center_id: costCenterId || undefined,
+              is_forecast: true,
+            });
+          
+          if (freightPayableError) {
+            console.error("Erro ao criar payable do frete:", freightPayableError);
+          } else {
+            console.log("Payable do frete criado com sucesso");
+          }
+        } else {
+          // Atualizar payable existente
+          const { error: updateFreightError } = await supabase
+            .from("payables")
+            .update({
+              supplier_id: cteCarrierId,
+              amount: cteFreightValue,
+              due_date: cteDate || firstDueDate,
+              document_number: cteNumber || undefined,
+              description: `Frete CT-e #${cteNumber || 'N/A'} - Pedido #${order?.order_number || 'Novo'}`,
+            })
+            .eq("id", existingFreightPayable.id);
+          
+          if (updateFreightError) {
+            console.error("Erro ao atualizar payable do frete:", updateFreightError);
+          }
+        }
+      }
+
       await refetch();
       toast.success(order ? "Pedido atualizado com sucesso!" : "Pedido criado com sucesso!");
       onClose();
