@@ -170,16 +170,23 @@ serve(async (req) => {
     // Get bank statement via proxy with mTLS
     const extratoUrl = `${INTER_API_URL}/banking/v2/extrato?dataInicio=${date_from}&dataFim=${date_to}`;
 
+    console.log(`[inter-sync] Chamando extrato com token: ${token.substring(0, 10)}...`);
+    console.log(`[inter-sync] Account number: ${credentials.account_number}`);
+
+    const extratoHeaders = {
+      "Authorization": `Bearer ${token}`,
+      "Content-Type": "application/json",
+      "x-conta-corrente": credentials.account_number || "",
+    };
+    
+    console.log(`[inter-sync] Headers para extrato:`, JSON.stringify(extratoHeaders));
+
     const extratoResult = await callInterProxyWithMTLS(
       proxyUrl,
       proxySecret,
       "GET",
       extratoUrl,
-      {
-        "Authorization": `Bearer ${token}`,
-        "Content-Type": "application/json",
-        "x-conta-corrente": credentials.account_number || "",
-      },
+      extratoHeaders,
       certificate,
       privateKey,
       credentials.account_number || ""
