@@ -1,5 +1,5 @@
-import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { XMLParser } from "https://esm.sh/fast-xml-parser@4.3.2";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -15,7 +15,6 @@ interface NFEItem {
   quantidade: number;
   valorUnitario: number;
   valorTotal: number;
-  // Impostos do item
   impostos: {
     icms: { cst: string; baseCalculo: number; aliquota: number; valor: number };
     ipi: { cst: string; baseCalculo: number; aliquota: number; valor: number };
@@ -65,7 +64,7 @@ interface NFEData {
     valorDesconto: number;
     valorOutros: number;
     chaveAcesso: string;
-    naturezaOperacao: string; // ADICIONADO: natOp - ex: "Venda", "Remessa em garantia", etc
+    naturezaOperacao: string;
   };
   transportador: Transportador | null;
   financeiro: {
@@ -88,136 +87,158 @@ interface NFEData {
   itens: NFEItem[];
 }
 
-function extractTextContent(xml: string, tagName: string): string {
-  const regex = new RegExp(`<${tagName}[^>]*>([^<]*)</${tagName}>`, 'i');
-  const match = xml.match(regex);
-  return match ? match[1].trim() : '';
+// Helper function to safely get a value from an object, returning empty string if undefined
+function safeGet(obj: unknown, ...keys: string[]): string {
+  let current: unknown = obj;
+  for (const key of keys) {
+    if (current === null || current === undefined || typeof current !== 'object') {
+      return '';
+    }
+    current = (current as Record<string, unknown>)[key];
+  }
+  return current !== null && current !== undefined ? String(current) : '';
 }
 
-function extractItemTaxes(detContent: string) {
-  const impostoMatch = detContent.match(/<imposto>([\s\S]*?)<\/imposto>/i);
-  const impostoContent = impostoMatch ? impostoMatch[1] : '';
+// Helper function to safely get a number from an object
+function safeGetNumber(obj: unknown, ...keys: string[]): number {
+  const value = safeGet(obj, ...keys);
+  return parseFloat(value) || 0;
+}
+
+// Helper to ensure we always get an array (NFe can have single item or array)
+function ensureArray<T>(value: T | T[] | undefined): T[] {
+  if (value === undefined || value === null) return [];
+  return Array.isArray(value) ? value : [value];
+}
+
+// Extract ICMS data from any ICMS variant (ICMS00, ICMS10, ICMS20, etc.)
+function extractIcmsData(icmsObj: Record<string, unknown> | undefined): { cst: string; baseCalculo: number; aliquota: number; valor: number } {
+  if (!icmsObj) return { cst: '', baseCalculo: 0, aliquota: 0, valor: 0 };
   
-  // ICMS
-  const icmsMatch = impostoContent.match(/<ICMS>([\s\S]*?)<\/ICMS>/i);
-  const icmsContent = icmsMatch ? icmsMatch[1] : '';
-  const icmsCst = extractTextContent(icmsContent, 'CST') || extractTextContent(icmsContent, 'CSOSN') || '';
-  const icmsBase = parseFloat(extractTextContent(icmsContent, 'vBC')) || 0;
-  const icmsAliq = parseFloat(extractTextContent(icmsContent, 'pICMS')) || 0;
-  const icmsValor = parseFloat(extractTextContent(icmsContent, 'vICMS')) || 0;
+  // ICMS can be in ICMS00, ICMS10, ICMS20, ICMS40, ICMS51, ICMS60, ICMS70, ICMS90, ICMSSN101, etc.
+  const icmsVariants = ['ICMS00', 'ICMS10', 'ICMS20', 'ICMS30', 'ICMS40', 'ICMS41', 'ICMS50', 'ICMS51', 'ICMS60', 'ICMS70', 'ICMS90', 
+                        'ICMSSN101', 'ICMSSN102', 'ICMSSN201', 'ICMSSN202', 'ICMSSN500', 'ICMSSN900'];
+  
+  for (const variant of icmsVariants) {
+    const icmsData = icmsObj[variant] as Record<string, unknown> | undefined;
+    if (icmsData) {
+      return {
+        cst: safeGet(icmsData, 'CST') || safeGet(icmsData, 'CSOSN'),
+        baseCalculo: safeGetNumber(icmsData, 'vBC'),
+        aliquota: safeGetNumber(icmsData, 'pICMS'),
+        valor: safeGetNumber(icmsData, 'vICMS'),
+      };
+    }
+  }
+  
+  return { cst: '', baseCalculo: 0, aliquota: 0, valor: 0 };
+}
 
-  // IPI
-  const ipiMatch = impostoContent.match(/<IPI>([\s\S]*?)<\/IPI>/i);
-  const ipiContent = ipiMatch ? ipiMatch[1] : '';
-  const ipiCst = extractTextContent(ipiContent, 'CST') || '';
-  const ipiBase = parseFloat(extractTextContent(ipiContent, 'vBC')) || 0;
-  const ipiAliq = parseFloat(extractTextContent(ipiContent, 'pIPI')) || 0;
-  const ipiValor = parseFloat(extractTextContent(ipiContent, 'vIPI')) || 0;
-
-  // PIS
-  const pisMatch = impostoContent.match(/<PIS>([\s\S]*?)<\/PIS>/i);
-  const pisContent = pisMatch ? pisMatch[1] : '';
-  const pisCst = extractTextContent(pisContent, 'CST') || '';
-  const pisBase = parseFloat(extractTextContent(pisContent, 'vBC')) || 0;
-  const pisAliq = parseFloat(extractTextContent(pisContent, 'pPIS')) || 0;
-  const pisValor = parseFloat(extractTextContent(pisContent, 'vPIS')) || 0;
-
-  // COFINS
-  const cofinsMatch = impostoContent.match(/<COFINS>([\s\S]*?)<\/COFINS>/i);
-  const cofinsContent = cofinsMatch ? cofinsMatch[1] : '';
-  const cofinsCst = extractTextContent(cofinsContent, 'CST') || '';
-  const cofinsBase = parseFloat(extractTextContent(cofinsContent, 'vBC')) || 0;
-  const cofinsAliq = parseFloat(extractTextContent(cofinsContent, 'pCOFINS')) || 0;
-  const cofinsValor = parseFloat(extractTextContent(cofinsContent, 'vCOFINS')) || 0;
-
+// Extract IPI data from any IPI variant
+function extractIpiData(ipiObj: Record<string, unknown> | undefined): { cst: string; baseCalculo: number; aliquota: number; valor: number } {
+  if (!ipiObj) return { cst: '', baseCalculo: 0, aliquota: 0, valor: 0 };
+  
+  const ipiTrib = ipiObj.IPITrib as Record<string, unknown> | undefined;
+  const ipiNt = ipiObj.IPINT as Record<string, unknown> | undefined;
+  
+  const ipiData = ipiTrib || ipiNt;
+  if (!ipiData) return { cst: '', baseCalculo: 0, aliquota: 0, valor: 0 };
+  
   return {
-    icms: { cst: icmsCst, baseCalculo: icmsBase, aliquota: icmsAliq, valor: icmsValor },
-    ipi: { cst: ipiCst, baseCalculo: ipiBase, aliquota: ipiAliq, valor: ipiValor },
-    pis: { cst: pisCst, baseCalculo: pisBase, aliquota: pisAliq, valor: pisValor },
-    cofins: { cst: cofinsCst, baseCalculo: cofinsBase, aliquota: cofinsAliq, valor: cofinsValor },
+    cst: safeGet(ipiData, 'CST'),
+    baseCalculo: safeGetNumber(ipiData, 'vBC'),
+    aliquota: safeGetNumber(ipiData, 'pIPI'),
+    valor: safeGetNumber(ipiData, 'vIPI'),
   };
 }
 
-function extractAllItems(xml: string): NFEItem[] {
-  const items: NFEItem[] = [];
+// Extract PIS data from any PIS variant
+function extractPisData(pisObj: Record<string, unknown> | undefined): { cst: string; baseCalculo: number; aliquota: number; valor: number } {
+  if (!pisObj) return { cst: '', baseCalculo: 0, aliquota: 0, valor: 0 };
   
-  const detRegex = /<det[^>]*>([\s\S]*?)<\/det>/gi;
-  let detMatch;
+  const pisVariants = ['PISAliq', 'PISQtde', 'PISNT', 'PISOutr'];
   
-  while ((detMatch = detRegex.exec(xml)) !== null) {
-    const detContent = detMatch[1];
-    
-    const prodMatch = detContent.match(/<prod>([\s\S]*?)<\/prod>/i);
-    if (prodMatch) {
-      const prodContent = prodMatch[1];
-      
-      const item: NFEItem = {
-        codigo: extractTextContent(prodContent, 'cProd'),
-        descricao: extractTextContent(prodContent, 'xProd'),
-        ncm: extractTextContent(prodContent, 'NCM'),
-        cfopSaida: extractTextContent(prodContent, 'CFOP'),
-        unidade: extractTextContent(prodContent, 'uCom'),
-        quantidade: parseFloat(extractTextContent(prodContent, 'qCom')) || 0,
-        valorUnitario: parseFloat(extractTextContent(prodContent, 'vUnCom')) || 0,
-        valorTotal: parseFloat(extractTextContent(prodContent, 'vProd')) || 0,
-        impostos: extractItemTaxes(detContent),
+  for (const variant of pisVariants) {
+    const pisData = pisObj[variant] as Record<string, unknown> | undefined;
+    if (pisData) {
+      return {
+        cst: safeGet(pisData, 'CST'),
+        baseCalculo: safeGetNumber(pisData, 'vBC'),
+        aliquota: safeGetNumber(pisData, 'pPIS'),
+        valor: safeGetNumber(pisData, 'vPIS'),
       };
-      
-      items.push(item);
     }
   }
   
-  return items;
+  return { cst: '', baseCalculo: 0, aliquota: 0, valor: 0 };
 }
 
-function extractParcelas(xml: string): Parcela[] {
-  const parcelas: Parcela[] = [];
+// Extract COFINS data from any COFINS variant
+function extractCofinsData(cofinsObj: Record<string, unknown> | undefined): { cst: string; baseCalculo: number; aliquota: number; valor: number } {
+  if (!cofinsObj) return { cst: '', baseCalculo: 0, aliquota: 0, valor: 0 };
   
-  // Try <cobr> (cobrança) first
-  const cobrMatch = xml.match(/<cobr>([\s\S]*?)<\/cobr>/i);
-  if (cobrMatch) {
-    const dupRegex = /<dup>([\s\S]*?)<\/dup>/gi;
-    let dupMatch;
-    
-    while ((dupMatch = dupRegex.exec(cobrMatch[1])) !== null) {
-      const dupContent = dupMatch[1];
-      parcelas.push({
-        numero: extractTextContent(dupContent, 'nDup'),
-        dataVencimento: extractTextContent(dupContent, 'dVenc'),
-        valor: parseFloat(extractTextContent(dupContent, 'vDup')) || 0,
-      });
+  const cofinsVariants = ['COFINSAliq', 'COFINSQtde', 'COFINSNT', 'COFINSOutr'];
+  
+  for (const variant of cofinsVariants) {
+    const cofinsData = cofinsObj[variant] as Record<string, unknown> | undefined;
+    if (cofinsData) {
+      return {
+        cst: safeGet(cofinsData, 'CST'),
+        baseCalculo: safeGetNumber(cofinsData, 'vBC'),
+        aliquota: safeGetNumber(cofinsData, 'pCOFINS'),
+        valor: safeGetNumber(cofinsData, 'vCOFINS'),
+      };
     }
   }
   
-  // Also try <pag> (pagamento) - newer format
-  if (parcelas.length === 0) {
-    const pagMatch = xml.match(/<pag>([\s\S]*?)<\/pag>/i);
-    if (pagMatch) {
-      const detPagRegex = /<detPag>([\s\S]*?)<\/detPag>/gi;
-      let detPagMatch;
-      let numero = 1;
-      
-      while ((detPagMatch = detPagRegex.exec(pagMatch[1])) !== null) {
-        const detPagContent = detPagMatch[1];
-        parcelas.push({
-          numero: String(numero++),
-          dataVencimento: extractTextContent(detPagContent, 'dPag') || '',
-          valor: parseFloat(extractTextContent(detPagContent, 'vPag')) || 0,
-        });
-      }
-    }
-  }
-  
-  return parcelas;
+  return { cst: '', baseCalculo: 0, aliquota: 0, valor: 0 };
 }
 
-function extractTransportador(xml: string): Transportador | null {
-  const transpMatch = xml.match(/<transp>([\s\S]*?)<\/transp>/i);
-  if (!transpMatch) return null;
+function parseNFEXml(xmlContent: string): NFEData {
+  // Configure the XML parser
+  const parser = new XMLParser({
+    ignoreAttributes: false,
+    attributeNamePrefix: "@_",
+    textNodeName: "#text",
+    parseAttributeValue: false,
+    parseTagValue: true,
+    trimValues: true,
+    isArray: (name: string) => {
+      // Force these tags to always be arrays
+      return ['det', 'dup', 'detPag', 'vol'].includes(name);
+    }
+  });
+
+  const jsonObj = parser.parse(xmlContent);
   
-  const transpContent = transpMatch[1];
+  // NFe can be wrapped in nfeProc (when authorized) or just NFe
+  const nfe = jsonObj.nfeProc?.NFe || jsonObj.NFe;
+  if (!nfe) {
+    throw new Error("Estrutura de NFe não encontrada no XML");
+  }
   
-  // Modalidade do frete
+  const infNFe = nfe.infNFe;
+  if (!infNFe) {
+    throw new Error("Tag infNFe não encontrada no XML");
+  }
+  
+  // Extract chave de acesso from the Id attribute
+  const chaveAcesso = (infNFe["@_Id"] || '').replace('NFe', '');
+  
+  // Emit (fornecedor) data
+  const emit = infNFe.emit || {};
+  const enderEmit = emit.enderEmit || {};
+  
+  // Ide (identification) data
+  const ide = infNFe.ide || {};
+  
+  // ICMSTot (totals) data
+  const icmsTot = infNFe.total?.ICMSTot || {};
+  
+  // Transport data
+  const transp = infNFe.transp || {};
+  const transporta = transp.transporta || {};
+  
   const modFreteMap: Record<string, string> = {
     '0': 'Por conta do Emitente',
     '1': 'Por conta do Destinatário',
@@ -226,39 +247,9 @@ function extractTransportador(xml: string): Transportador | null {
     '4': 'Próprio por conta do Destinatário',
     '9': 'Sem Frete',
   };
-  const modFrete = extractTextContent(transpContent, 'modFrete');
   
-  // Transportador
-  const transportaMatch = transpContent.match(/<transporta>([\s\S]*?)<\/transporta>/i);
-  if (!transportaMatch) {
-    return {
-      cnpj: '',
-      razaoSocial: '',
-      inscricaoEstadual: '',
-      endereco: '',
-      cidade: '',
-      uf: '',
-      modalidadeFrete: modFreteMap[modFrete] || modFrete,
-    };
-  }
-  
-  const transportaContent = transportaMatch[1];
-  
-  return {
-    cnpj: extractTextContent(transportaContent, 'CNPJ') || extractTextContent(transportaContent, 'CPF'),
-    razaoSocial: extractTextContent(transportaContent, 'xNome'),
-    inscricaoEstadual: extractTextContent(transportaContent, 'IE'),
-    endereco: extractTextContent(transportaContent, 'xEnder'),
-    cidade: extractTextContent(transportaContent, 'xMun'),
-    uf: extractTextContent(transportaContent, 'UF'),
-    modalidadeFrete: modFreteMap[modFrete] || modFrete,
-  };
-}
-
-function extractFormaPagamento(xml: string): string {
-  const pagMatch = xml.match(/<pag>([\s\S]*?)<\/pag>/i);
-  if (!pagMatch) return '';
-  
+  // Payment data
+  const pag = infNFe.pag || {};
   const tPagMap: Record<string, string> = {
     '01': 'Dinheiro',
     '02': 'Cheque',
@@ -279,90 +270,127 @@ function extractFormaPagamento(xml: string): string {
     '99': 'Outros',
   };
   
-  const tPag = extractTextContent(pagMatch[1], 'tPag');
-  return tPagMap[tPag] || tPag;
-}
-
-function parseNFEXml(xmlContent: string): NFEData {
-  // Extract supplier info from <emit> tag
-  const emitMatch = xmlContent.match(/<emit>([\s\S]*?)<\/emit>/i);
-  const emitContent = emitMatch ? emitMatch[1] : '';
+  // Extract parcelas from cobr (cobrança)
+  const cobr = infNFe.cobr || {};
+  const dupArray = ensureArray(cobr.dup);
+  const parcelas: Parcela[] = dupArray.map((dup: Record<string, unknown>) => ({
+    numero: safeGet(dup, 'nDup'),
+    dataVencimento: safeGet(dup, 'dVenc'),
+    valor: safeGetNumber(dup, 'vDup'),
+  }));
   
-  const enderMatch = emitContent.match(/<enderEmit>([\s\S]*?)<\/enderEmit>/i);
-  const enderContent = enderMatch ? enderMatch[1] : '';
+  // If no parcelas in cobr, try detPag
+  if (parcelas.length === 0) {
+    const detPagArray = ensureArray(pag.detPag);
+    let numero = 1;
+    for (const detPag of detPagArray) {
+      parcelas.push({
+        numero: String(numero++),
+        dataVencimento: safeGet(detPag as Record<string, unknown>, 'dPag'),
+        valor: safeGetNumber(detPag as Record<string, unknown>, 'vPag'),
+      });
+    }
+  }
   
-  const logradouro = extractTextContent(enderContent, 'xLgr');
-  const numero = extractTextContent(enderContent, 'nro');
-  const endereco = [logradouro, numero].filter(Boolean).join(', ');
-
-  // Extract invoice info from <ide> tag
-  const ideMatch = xmlContent.match(/<ide>([\s\S]*?)<\/ide>/i);
-  const ideContent = ideMatch ? ideMatch[1] : '';
+  // Extract forma de pagamento
+  const detPagFirst = ensureArray(pag.detPag)[0] as Record<string, unknown> | undefined;
+  const tPag = safeGet(detPagFirst, 'tPag');
+  const formaPagamento = tPagMap[tPag] || tPag;
   
-  // Extract chave de acesso
-  const infNFeMatch = xmlContent.match(/<infNFe[^>]*Id="NFe(\d+)"[^>]*>/i);
-  const chaveAcesso = infNFeMatch ? infNFeMatch[1] : '';
+  // Extract items
+  const detArray = ensureArray(infNFe.det);
+  const itens: NFEItem[] = detArray.map((det: Record<string, unknown>) => {
+    const prod = det.prod as Record<string, unknown> || {};
+    const imposto = det.imposto as Record<string, unknown> || {};
+    
+    return {
+      codigo: safeGet(prod, 'cProd'),
+      descricao: safeGet(prod, 'xProd'),
+      ncm: safeGet(prod, 'NCM'),
+      cfopSaida: safeGet(prod, 'CFOP'),
+      unidade: safeGet(prod, 'uCom'),
+      quantidade: safeGetNumber(prod, 'qCom'),
+      valorUnitario: safeGetNumber(prod, 'vUnCom'),
+      valorTotal: safeGetNumber(prod, 'vProd'),
+      impostos: {
+        icms: extractIcmsData(imposto.ICMS as Record<string, unknown> | undefined),
+        ipi: extractIpiData(imposto.IPI as Record<string, unknown> | undefined),
+        pis: extractPisData(imposto.PIS as Record<string, unknown> | undefined),
+        cofins: extractCofinsData(imposto.COFINS as Record<string, unknown> | undefined),
+      },
+    };
+  });
   
-  // Extract totals from <ICMSTot>
-  const icmsTotMatch = xmlContent.match(/<ICMSTot>([\s\S]*?)<\/ICMSTot>/i);
-  const icmsTotContent = icmsTotMatch ? icmsTotMatch[1] : '';
+  // Additional info
+  const infAdic = infNFe.infAdic || {};
   
   // Format date
-  const dataEmissaoRaw = extractTextContent(ideContent, 'dhEmi') || extractTextContent(ideContent, 'dEmi');
+  const dataEmissaoRaw = safeGet(ide, 'dhEmi') || safeGet(ide, 'dEmi');
   const dataEmissao = dataEmissaoRaw ? dataEmissaoRaw.split('T')[0] : '';
   
-  // Extract observations
-  const infAdicMatch = xmlContent.match(/<infAdic>([\s\S]*?)<\/infAdic>/i);
-  const infAdicContent = infAdicMatch ? infAdicMatch[1] : '';
-  const infAdFisco = extractTextContent(infAdicContent, 'infAdFisco');
-  const infCpl = extractTextContent(infAdicContent, 'infCpl');
+  // Build endereco string
+  const logradouro = safeGet(enderEmit, 'xLgr');
+  const numero = safeGet(enderEmit, 'nro');
+  const endereco = [logradouro, numero].filter(Boolean).join(', ');
+  
+  // Build transportador object
+  const modFrete = safeGet(transp, 'modFrete');
+  const transportador: Transportador | null = {
+    cnpj: safeGet(transporta, 'CNPJ') || safeGet(transporta, 'CPF'),
+    razaoSocial: safeGet(transporta, 'xNome'),
+    inscricaoEstadual: safeGet(transporta, 'IE'),
+    endereco: safeGet(transporta, 'xEnder'),
+    cidade: safeGet(transporta, 'xMun'),
+    uf: safeGet(transporta, 'UF'),
+    modalidadeFrete: modFreteMap[modFrete] || modFrete,
+  };
 
   const nfeData: NFEData = {
     fornecedor: {
-      cnpj: extractTextContent(emitContent, 'CNPJ'),
-      razaoSocial: extractTextContent(emitContent, 'xNome'),
-      nomeFantasia: extractTextContent(emitContent, 'xFant'),
-      inscricaoEstadual: extractTextContent(emitContent, 'IE'),
+      cnpj: safeGet(emit, 'CNPJ'),
+      razaoSocial: safeGet(emit, 'xNome'),
+      nomeFantasia: safeGet(emit, 'xFant'),
+      inscricaoEstadual: safeGet(emit, 'IE'),
       endereco: endereco,
-      bairro: extractTextContent(enderContent, 'xBairro'),
-      cidade: extractTextContent(enderContent, 'xMun'),
-      uf: extractTextContent(enderContent, 'UF'),
-      cep: extractTextContent(enderContent, 'CEP'),
-      telefone: extractTextContent(emitContent, 'fone'),
-      email: extractTextContent(emitContent, 'email'),
+      bairro: safeGet(enderEmit, 'xBairro'),
+      cidade: safeGet(enderEmit, 'xMun'),
+      uf: safeGet(enderEmit, 'UF'),
+      cep: safeGet(enderEmit, 'CEP'),
+      telefone: safeGet(emit, 'fone'),
+      email: safeGet(emit, 'email'),
     },
     nota: {
-      numero: extractTextContent(ideContent, 'nNF'),
-      serie: extractTextContent(ideContent, 'serie'),
+      numero: safeGet(ide, 'nNF'),
+      serie: safeGet(ide, 'serie'),
       dataEmissao: dataEmissao,
-      valorTotal: parseFloat(extractTextContent(icmsTotContent, 'vNF')) || 0,
-      valorProdutos: parseFloat(extractTextContent(icmsTotContent, 'vProd')) || 0,
-      valorFrete: parseFloat(extractTextContent(icmsTotContent, 'vFrete')) || 0,
-      valorSeguro: parseFloat(extractTextContent(icmsTotContent, 'vSeg')) || 0,
-      valorDesconto: parseFloat(extractTextContent(icmsTotContent, 'vDesc')) || 0,
-      valorOutros: parseFloat(extractTextContent(icmsTotContent, 'vOutro')) || 0,
+      valorTotal: safeGetNumber(icmsTot, 'vNF'),
+      valorProdutos: safeGetNumber(icmsTot, 'vProd'),
+      valorFrete: safeGetNumber(icmsTot, 'vFrete'),
+      valorSeguro: safeGetNumber(icmsTot, 'vSeg'),
+      valorDesconto: safeGetNumber(icmsTot, 'vDesc'),
+      valorOutros: safeGetNumber(icmsTot, 'vOutro'),
       chaveAcesso: chaveAcesso,
-      naturezaOperacao: extractTextContent(ideContent, 'natOp'), // Ex: "Venda", "Remessa em garantia"
+      naturezaOperacao: safeGet(ide, 'natOp'),
     },
-    transportador: extractTransportador(xmlContent),
+    transportador: transportador,
     financeiro: {
-      formaPagamento: extractFormaPagamento(xmlContent),
-      parcelas: extractParcelas(xmlContent),
+      formaPagamento: formaPagamento,
+      parcelas: parcelas,
     },
     impostos: {
-      icms: parseFloat(extractTextContent(icmsTotContent, 'vICMS')) || 0,
-      ipi: parseFloat(extractTextContent(icmsTotContent, 'vIPI')) || 0,
-      pis: parseFloat(extractTextContent(icmsTotContent, 'vPIS')) || 0,
-      cofins: parseFloat(extractTextContent(icmsTotContent, 'vCOFINS')) || 0,
-      baseCalculoIcms: parseFloat(extractTextContent(icmsTotContent, 'vBC')) || 0,
-      baseCalculoIcmsSt: parseFloat(extractTextContent(icmsTotContent, 'vBCST')) || 0,
-      valorIcmsSt: parseFloat(extractTextContent(icmsTotContent, 'vST')) || 0,
+      icms: safeGetNumber(icmsTot, 'vICMS'),
+      ipi: safeGetNumber(icmsTot, 'vIPI'),
+      pis: safeGetNumber(icmsTot, 'vPIS'),
+      cofins: safeGetNumber(icmsTot, 'vCOFINS'),
+      baseCalculoIcms: safeGetNumber(icmsTot, 'vBC'),
+      baseCalculoIcmsSt: safeGetNumber(icmsTot, 'vBCST'),
+      valorIcmsSt: safeGetNumber(icmsTot, 'vST'),
     },
     observacoes: {
-      fiscal: infAdFisco,
-      complementar: infCpl,
+      fiscal: safeGet(infAdic, 'infAdFisco'),
+      complementar: safeGet(infAdic, 'infCpl'),
     },
-    itens: extractAllItems(xmlContent),
+    itens: itens,
   };
 
   return nfeData;
@@ -377,25 +405,25 @@ serve(async (req) => {
     const { xmlContent } = await req.json();
     
     if (!xmlContent) {
-      console.error('XML content is missing');
+      console.error('[parse-xml-nfe] XML content is missing');
       return new Response(
         JSON.stringify({ error: 'XML content is required' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    console.log('Parsing XML NFe...');
-    console.log('XML length:', xmlContent.length);
+    console.log('[parse-xml-nfe] Parsing XML NFe with fast-xml-parser...');
+    console.log('[parse-xml-nfe] XML length:', xmlContent.length);
     
     const nfeData = parseNFEXml(xmlContent);
     
-    console.log('Parsed NFe data:', {
+    console.log('[parse-xml-nfe] Parsed NFe data:', {
       fornecedor: nfeData.fornecedor.razaoSocial,
       fornecedorCNPJ: nfeData.fornecedor.cnpj,
       fornecedorUF: nfeData.fornecedor.uf,
       fornecedorCidade: nfeData.fornecedor.cidade,
       nota: nfeData.nota.numero,
-      naturezaOperacao: nfeData.nota.naturezaOperacao, // IMPORTANTE: Log para debug
+      naturezaOperacao: nfeData.nota.naturezaOperacao,
       itensCount: nfeData.itens.length,
       parcelasCount: nfeData.financeiro.parcelas.length,
       transportador: nfeData.transportador?.razaoSocial || 'N/A',
@@ -406,11 +434,11 @@ serve(async (req) => {
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error: unknown) {
-    console.error('Error parsing XML:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error('[parse-xml-nfe] Error parsing XML:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido ao processar XML';
     return new Response(
-      JSON.stringify({ error: errorMessage }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      JSON.stringify({ error: `XML inválido ou malformado: ${errorMessage}` }),
+      { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
 });
