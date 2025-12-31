@@ -32,7 +32,8 @@ interface CTeDivergenceDialogProps {
   comparison: CTeComparisonResult | null;
   onApplyChange: (applyFreight: boolean) => void;
   onCancel: () => void;
-  requiresReapproval: boolean;
+  /** Indica se o pedido está no fluxo de aprovação (verificado pelos limites configurados) */
+  isInApprovalFlow: boolean;
 }
 
 const formatCurrency = (value: number | null | undefined) => {
@@ -49,7 +50,7 @@ export function CTeDivergenceDialog({
   comparison,
   onApplyChange,
   onCancel,
-  requiresReapproval,
+  isInApprovalFlow,
 }: CTeDivergenceDialogProps) {
   const [applyFreight, setApplyFreight] = useState(false);
 
@@ -74,10 +75,10 @@ export function CTeDivergenceDialog({
           </DialogDescription>
         </DialogHeader>
 
-        {requiresReapproval && hasDivergence && (
+        {isInApprovalFlow && hasDivergence && (
           <Alert variant="destructive" className="border-amber-500 bg-amber-50 text-amber-800">
             <AlertTriangle className="h-4 w-4" />
-            <AlertTitle>Atenção: Pedido já aprovado</AlertTitle>
+            <AlertTitle>Atenção: Pedido no fluxo de aprovação</AlertTitle>
             <AlertDescription>
               Alterar o frete irá marcar o pedido para <strong>reaprovação</strong>.
             </AlertDescription>

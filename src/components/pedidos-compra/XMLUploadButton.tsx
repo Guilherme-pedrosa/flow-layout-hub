@@ -653,7 +653,7 @@ export function XMLUploadButton({
         comparison={nfeComparison}
         onApplyChanges={handleNfeApplyChanges}
         onCancel={handleNfeCancel}
-        requiresReapproval={wasApproved}
+        isInApprovalFlow={wasApproved}
       />
 
       <CTeDivergenceDialog
@@ -662,7 +662,7 @@ export function XMLUploadButton({
         comparison={cteComparison}
         onApplyChange={handleCteApplyChange}
         onCancel={handleCteCancel}
-        requiresReapproval={wasApproved}
+        isInApprovalFlow={wasApproved}
       />
     </>
   );
