@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
-import { Check, Loader2, AlertTriangle, Sparkles } from "lucide-react";
+import { Check, Loader2, AlertTriangle, Sparkles, Truck } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -33,12 +33,17 @@ import {
   NFEItem,
   NFEFornecedor,
   Transportador,
+  CTEData,
 } from "@/components/compras";
+import { XMLFileResult } from "@/components/compras/ImportarXMLUpload";
+import { Badge } from "@/components/ui/badge";
 
 export default function ImportarXML() {
   const [step, setStep] = useState<"upload" | "review">("upload");
   const [isProcessing, setIsProcessing] = useState(false);
   const [nfeData, setNfeData] = useState<NFEData | null>(null);
+  const [cteData, setCteData] = useState<CTEData | null>(null);
+  const [processedFiles, setProcessedFiles] = useState<{ fileName: string; type: "nfe" | "cte"; success: boolean }[]>([]);
   const [notaDuplicada, setNotaDuplicada] = useState(false);
   
   // Estados para cadastro
@@ -128,62 +133,94 @@ export default function ImportarXML() {
     return !!data;
   };
 
-  const handleFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const handleFilesUpload = useCallback(async (files: XMLFileResult[]) => {
+    if (files.length === 0) return;
 
     setIsProcessing(true);
     setNotaDuplicada(false);
+    setProcessedFiles([]);
+    
+    const results: { fileName: string; type: "nfe" | "cte"; success: boolean }[] = [];
     
     try {
-      const xmlContent = await file.text();
-      
-      const { data, error } = await supabase.functions.invoke('parse-xml-nfe', {
-        body: { xmlContent },
-      });
+      for (const file of files) {
+        try {
+          if (file.type === "nfe") {
+            // Processar NF-e
+            const { data, error } = await supabase.functions.invoke('parse-xml-nfe', {
+              body: { xmlContent: file.content },
+            });
 
-      if (error) throw error;
-      if (!data.success) throw new Error(data.error);
+            if (error) throw error;
+            if (!data.success) throw new Error(data.error);
 
-      // Verificar duplicidade
-      const isDuplicate = await checkNotaDuplicada(
-        data.data.nota.numero,
-        data.data.nota.serie,
-        data.data.fornecedor.cnpj
-      );
+            // Verificar duplicidade
+            const isDuplicate = await checkNotaDuplicada(
+              data.data.nota.numero,
+              data.data.nota.serie,
+              data.data.fornecedor.cnpj
+            );
 
-      if (isDuplicate) {
-        setNotaDuplicada(true);
-        toast.error("Esta nota fiscal já foi importada anteriormente!");
-        setIsProcessing(false);
-        return;
+            if (isDuplicate) {
+              setNotaDuplicada(true);
+              toast.error(`NF-e ${data.data.nota.numero} já foi importada anteriormente!`);
+              results.push({ fileName: file.fileName, type: "nfe", success: false });
+              continue;
+            }
+
+            // Adicionar CFOP de entrada sugerido para cada item
+            const itensComCfop = data.data.itens.map((item: any) => ({
+              ...item,
+              cfopEntrada: sugerirCfopEntrada(item.cfopSaida),
+              criarProduto: false,
+            }));
+
+            setNfeData({ ...data.data, itens: itensComCfop });
+            results.push({ fileName: file.fileName, type: "nfe", success: true });
+            
+            // Detectar finalidade automaticamente baseado na natureza da operação
+            const natOp = (data.data.nota.naturezaOperacao || '').toLowerCase();
+            if (natOp.includes('garantia') || natOp.includes('substituição') || natOp.includes('subst')) {
+              setFinalidade('garantia');
+              toast.info("Detectada nota de garantia - financeiro desabilitado automaticamente.");
+            } else if (natOp.includes('remessa') || natOp.includes('demonstração') || natOp.includes('conserto')) {
+              setFinalidade('outros');
+            } else {
+              setFinalidade('comercializacao');
+            }
+            
+            toast.success(`NF-e ${data.data.nota.numero} processada com sucesso!`);
+            
+          } else if (file.type === "cte") {
+            // Processar CT-e
+            const { data, error } = await supabase.functions.invoke('parse-cte-xml', {
+              body: { xmlContent: file.content },
+            });
+
+            if (error) throw error;
+            if (!data.success) throw new Error(data.error);
+
+            setCteData(data.data);
+            results.push({ fileName: file.fileName, type: "cte", success: true });
+            toast.success(`CT-e ${data.data.numero} processado com sucesso!`);
+          }
+        } catch (fileError) {
+          console.error(`Error processing ${file.fileName}:`, fileError);
+          toast.error(`Erro ao processar ${file.fileName}`);
+          results.push({ fileName: file.fileName, type: file.type, success: false });
+        }
       }
 
-      // Adicionar CFOP de entrada sugerido para cada item
-      const itensComCfop = data.data.itens.map((item: any) => ({
-        ...item,
-        cfopEntrada: sugerirCfopEntrada(item.cfopSaida),
-        criarProduto: false,
-      }));
-
-      setNfeData({ ...data.data, itens: itensComCfop });
-      setStep("review");
+      setProcessedFiles(results);
       
-      // Detectar finalidade automaticamente baseado na natureza da operação
-      const natOp = (data.data.nota.naturezaOperacao || '').toLowerCase();
-      if (natOp.includes('garantia') || natOp.includes('substituição') || natOp.includes('subst')) {
-        setFinalidade('garantia');
-        toast.info("Detectada nota de garantia - financeiro desabilitado automaticamente.");
-      } else if (natOp.includes('remessa') || natOp.includes('demonstração') || natOp.includes('conserto')) {
-        setFinalidade('outros');
-      } else {
-        setFinalidade('comercializacao');
+      // Se processou ao menos uma NF-e com sucesso, ir para review
+      if (results.some(r => r.type === "nfe" && r.success)) {
+        setStep("review");
       }
       
-      toast.success("XML processado com sucesso!");
     } catch (error) {
-      console.error("Error processing XML:", error);
-      toast.error("Erro ao processar XML");
+      console.error("Error processing XMLs:", error);
+      toast.error("Erro ao processar XMLs");
     } finally {
       setIsProcessing(false);
     }
@@ -592,6 +629,8 @@ Responda APENAS com o código CFOP de 4 dígitos. Sem explicações.`;
   const handleCancelar = () => {
     setStep("upload");
     setNfeData(null);
+    setCteData(null);
+    setProcessedFiles([]);
     setNotaDuplicada(false);
     setFornecedorCadastrado(false);
     setFornecedorId(null);
@@ -607,8 +646,8 @@ Responda APENAS com o código CFOP de 4 dígitos. Sem explicações.`;
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Importar XML de NF-e"
-        description="Importe notas fiscais de compra via arquivo XML"
+        title="Importar XML de NF-e e CT-e"
+        description="Importe notas fiscais e conhecimentos de transporte via arquivos XML"
         breadcrumbs={[{ label: "Compras" }, { label: "Importar XML" }]}
       />
 
@@ -623,7 +662,11 @@ Responda APENAS com o código CFOP de 4 dígitos. Sem explicações.`;
       )}
 
       {step === "upload" && (
-        <ImportarXMLUpload isProcessing={isProcessing} onFileUpload={handleFileUpload} />
+        <ImportarXMLUpload 
+          isProcessing={isProcessing} 
+          onFilesUpload={handleFilesUpload}
+          processedFiles={processedFiles}
+        />
       )}
 
       {step === "review" && nfeData && (
@@ -643,7 +686,43 @@ Responda APENAS com o código CFOP de 4 dígitos. Sem explicações.`;
             />
           </div>
 
-          {/* Finalidade e CFOP de Entrada - Campo Obrigatório */}
+          {/* Card de CT-e (se houver) */}
+          {cteData && (
+            <Card className="border-blue-500/50 bg-blue-50/50 dark:bg-blue-950/20">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Truck className="h-4 w-4" />
+                  CT-e Vinculado
+                  <Badge variant="secondary">#{cteData.numero}</Badge>
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid md:grid-cols-3 gap-4 text-sm">
+                  <div>
+                    <p className="text-muted-foreground">Tomador (Pagador do Frete)</p>
+                    <p className="font-medium">{cteData.tomador.razaoSocial || "N/A"}</p>
+                    <p className="text-xs text-muted-foreground">{cteData.tomador.tipo}</p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground">Valor do Frete</p>
+                    <p className="font-medium text-primary">
+                      {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(cteData.valorTotal)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground">Modalidade</p>
+                    <p className="font-medium">{cteData.modalidade}</p>
+                  </div>
+                </div>
+                {cteData.chaveNFe.length > 0 && (
+                  <div className="mt-3 pt-3 border-t">
+                    <p className="text-xs text-muted-foreground">NF-e vinculadas: {cteData.chaveNFe.length}</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
           <Card className="border-primary/50">
             <CardHeader className="pb-3">
               <CardTitle className="text-base flex items-center gap-2">

@@ -1,4 +1,4 @@
-// Tipos para o sistema de importação de XML NFe
+// Tipos para o sistema de importação de XML NFe e CTe
 
 export interface NFEItemImpostos {
   icms: { cst: string; baseCalculo: number; aliquota: number; valor: number };
@@ -90,4 +90,34 @@ export interface NFEData {
     complementar: string;
   };
   itens: NFEItem[];
+}
+
+// Tipos para CT-e
+export interface CTEPessoa {
+  cnpj: string;
+  razaoSocial: string;
+  inscricaoEstadual: string;
+  endereco: string;
+  cidade: string;
+  uf: string;
+}
+
+export interface CTETomador extends CTEPessoa {
+  tipo: string;
+}
+
+export interface CTEData {
+  remetente: CTEPessoa;
+  destinatario: CTEPessoa;
+  tomador: CTETomador;
+  valorTotal: number;
+  valorServico: number;
+  chaveNFe: string[];
+  chaveCTe: string;
+  numero: string;
+  serie: string;
+  dataEmissao: string;
+  naturezaOperacao: string;
+  cfop: string;
+  modalidade: string;
 }
