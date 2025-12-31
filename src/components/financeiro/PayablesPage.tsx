@@ -29,9 +29,10 @@ import { PayableForm } from "./PayableForm";
 
 interface PayablesPageProps {
   onRefresh?: () => void;
+  purchaseOrderId?: string;
 }
 
-export function PayablesPage({ onRefresh }: PayablesPageProps) {
+export function PayablesPage({ onRefresh, purchaseOrderId }: PayablesPageProps) {
   const { currentCompany } = useCompany();
   const [payables, setPayables] = useState<PayableRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -65,30 +66,48 @@ export function PayablesPage({ onRefresh }: PayablesPageProps) {
     if (currentCompany?.id) {
       fetchPayables();
     }
-  }, [filters.currentMonth, currentCompany?.id]);
+  }, [filters.currentMonth, currentCompany?.id, purchaseOrderId]);
 
   const fetchPayables = async () => {
     if (!currentCompany?.id) return;
     
     setLoading(true);
     try {
-      const monthStart = startOfMonth(filters.currentMonth);
-      const monthEnd = endOfMonth(filters.currentMonth);
+      // Se há filtro por pedido de compra, buscar todas as parcelas sem limite de mês
+      if (purchaseOrderId) {
+        const { data, error } = await supabase
+          .from("payables")
+          .select(`
+            *,
+            supplier:pessoas!payables_supplier_id_fkey(razao_social, nome_fantasia, cpf_cnpj),
+            purchase_order:purchase_orders!payables_purchase_order_id_fkey(order_number)
+          `)
+          .eq("company_id", currentCompany.id)
+          .eq("purchase_order_id", purchaseOrderId)
+          .order("due_date", { ascending: true });
 
-      const { data, error } = await supabase
-        .from("payables")
-        .select(`
-          *,
-          supplier:pessoas!payables_supplier_id_fkey(razao_social, nome_fantasia, cpf_cnpj),
-          purchase_order:purchase_orders!payables_purchase_order_id_fkey(order_number)
-        `)
-        .eq("company_id", currentCompany.id)
-        .gte("due_date", monthStart.toISOString())
-        .lte("due_date", monthEnd.toISOString())
-        .order("due_date", { ascending: true });
+        if (error) throw error;
+        setPayables((data as PayableRow[]) || []);
+      } else {
+        // Comportamento padrão - filtrar por mês
+        const monthStart = startOfMonth(filters.currentMonth);
+        const monthEnd = endOfMonth(filters.currentMonth);
 
-      if (error) throw error;
-      setPayables((data as PayableRow[]) || []);
+        const { data, error } = await supabase
+          .from("payables")
+          .select(`
+            *,
+            supplier:pessoas!payables_supplier_id_fkey(razao_social, nome_fantasia, cpf_cnpj),
+            purchase_order:purchase_orders!payables_purchase_order_id_fkey(order_number)
+          `)
+          .eq("company_id", currentCompany.id)
+          .gte("due_date", monthStart.toISOString())
+          .lte("due_date", monthEnd.toISOString())
+          .order("due_date", { ascending: true });
+
+        if (error) throw error;
+        setPayables((data as PayableRow[]) || []);
+      }
     } catch (error) {
       console.error("Erro ao carregar contas:", error);
       toast.error("Erro ao carregar contas a pagar");

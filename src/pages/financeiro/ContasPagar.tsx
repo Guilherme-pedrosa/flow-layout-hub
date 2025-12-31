@@ -1,18 +1,29 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { PageHeader } from "@/components/shared";
 import { AIBannerEnhanced } from "@/components/shared/AIBannerEnhanced";
 import { useAiInsights } from "@/hooks/useAiInsights";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Receipt, FileText, CheckCircle, Wallet } from "lucide-react";
+import { Receipt, FileText, CheckCircle, Wallet, X } from "lucide-react";
 import { DDABoletosList, ExtratoList, ReconciliationReview, PayablesPage, FinancialAIChat } from "@/components/financeiro";
 import { useCompany } from "@/contexts/CompanyContext";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 
 export default function ContasPagar() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const { currentCompany } = useCompany();
   const { insights, dismiss, markAsRead } = useAiInsights('financial');
   const [refreshKey, setRefreshKey] = useState(0);
+  
+  const purchaseOrderId = searchParams.get("purchase_order_id");
 
   const handleRefresh = () => setRefreshKey((k) => k + 1);
+  
+  const clearPurchaseOrderFilter = () => {
+    searchParams.delete("purchase_order_id");
+    setSearchParams(searchParams);
+  };
 
   return (
     <div className="space-y-6">
@@ -21,6 +32,26 @@ export default function ContasPagar() {
         description="Gerencie lançamentos, conciliações e DDA"
         breadcrumbs={[{ label: "Financeiro" }, { label: "Contas a Pagar" }]}
       />
+
+      {purchaseOrderId && (
+        <div className="flex items-center gap-2 p-3 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg">
+          <span className="text-sm text-blue-700 dark:text-blue-300">
+            Filtrando por pedido de compra:
+          </span>
+          <Badge variant="secondary" className="bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300">
+            Pedido vinculado
+          </Badge>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={clearPurchaseOrderFilter}
+            className="ml-auto text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900"
+          >
+            <X className="h-4 w-4 mr-1" />
+            Limpar filtro
+          </Button>
+        </div>
+      )}
 
       <AIBannerEnhanced
         insights={insights}
@@ -51,7 +82,11 @@ export default function ContasPagar() {
         </TabsList>
 
         <TabsContent value="lancamentos" className="mt-0">
-          <PayablesPage key={`${refreshKey}-${currentCompany?.id}`} onRefresh={handleRefresh} />
+          <PayablesPage 
+            key={`${refreshKey}-${currentCompany?.id}-${purchaseOrderId}`} 
+            onRefresh={handleRefresh}
+            purchaseOrderId={purchaseOrderId || undefined}
+          />
         </TabsContent>
 
         <TabsContent value="conciliacao">
