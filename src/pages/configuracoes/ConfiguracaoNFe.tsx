@@ -56,12 +56,12 @@ export default function ConfiguracaoNFe() {
         .from('nfe_config')
         .select('*')
         .eq('company_id', currentCompany?.id)
-        .single();
+        .maybeSingle();
 
       if (nfeData) {
         setConfigNfe({
           ambiente: nfeData.ambiente || 'homologacao',
-          serie_nfe: nfeData.serie_nfe || 1,
+          serie_nfe: parseInt(String(nfeData.serie_nfe)) || 1,
           proximo_numero: nfeData.proximo_numero || 1,
           csc_id: nfeData.csc_id || '',
           csc_token: nfeData.csc_token || '',
@@ -73,12 +73,12 @@ export default function ConfiguracaoNFe() {
         .from('nfse_config')
         .select('*')
         .eq('company_id', currentCompany?.id)
-        .single();
+        .maybeSingle();
 
       if (nfseData) {
         setConfigNfse({
           ambiente: nfseData.ambiente || 'homologacao',
-          serie_nfse: nfseData.serie_nfse || 1,
+          serie_nfse: parseInt(String(nfseData.serie_nfse)) || 1,
           proximo_numero: nfseData.proximo_numero || 1,
           inscricao_municipal: nfseData.inscricao_municipal || '',
           codigo_municipio: nfseData.codigo_municipio || '5201108',
@@ -92,8 +92,7 @@ export default function ConfiguracaoNFe() {
         .from('certificados_digitais')
         .select('*')
         .eq('company_id', currentCompany?.id)
-        .eq('ativo', true)
-        .single();
+        .maybeSingle();
 
       if (certData) {
         setCertificadoInfo({
@@ -113,11 +112,15 @@ export default function ConfiguracaoNFe() {
     try {
       const { error } = await supabase
         .from('nfe_config')
-        .upsert({
+        .upsert([{
           company_id: currentCompany?.id,
-          ...configNfe,
+          ambiente: configNfe.ambiente,
+          serie_nfe: String(configNfe.serie_nfe),
+          proximo_numero: configNfe.proximo_numero,
+          csc_id: configNfe.csc_id,
+          csc_token: configNfe.csc_token,
           updated_at: new Date().toISOString(),
-        }, { onConflict: 'company_id' });
+        }], { onConflict: 'company_id' });
 
       if (error) throw error;
 
@@ -141,11 +144,17 @@ export default function ConfiguracaoNFe() {
     try {
       const { error } = await supabase
         .from('nfse_config')
-        .upsert({
+        .upsert([{
           company_id: currentCompany?.id,
-          ...configNfse,
+          ambiente: configNfse.ambiente,
+          serie_nfse: String(configNfse.serie_nfse),
+          proximo_numero: configNfse.proximo_numero,
+          inscricao_municipal: configNfse.inscricao_municipal,
+          codigo_municipio: configNfse.codigo_municipio,
+          regime_tributacao: configNfse.regime_tributacao,
+          optante_simples: configNfse.optante_simples,
           updated_at: new Date().toISOString(),
-        }, { onConflict: 'company_id' });
+        }], { onConflict: 'company_id' });
 
       if (error) throw error;
 
@@ -184,13 +193,12 @@ export default function ConfiguracaoNFe() {
         // Salvar no banco
         const { error } = await supabase
           .from('certificados_digitais')
-          .upsert({
+          .upsert([{
             company_id: currentCompany?.id,
             certificado_base64: base64,
             senha: certificado.senha,
-            ativo: true,
             updated_at: new Date().toISOString(),
-          }, { onConflict: 'company_id' });
+          }], { onConflict: 'company_id' });
 
         if (error) throw error;
 
@@ -334,7 +342,7 @@ export default function ConfiguracaoNFe() {
                   <Input
                     type="number"
                     value={configNfe.serie_nfe}
-                    onChange={(e) => setConfigNfe({ ...configNfe, serie_nfe: parseInt(e.target.value) })}
+                    onChange={(e) => setConfigNfe({ ...configNfe, serie_nfe: parseInt(e.target.value) || 1 })}
                   />
                 </div>
 
@@ -343,7 +351,7 @@ export default function ConfiguracaoNFe() {
                   <Input
                     type="number"
                     value={configNfe.proximo_numero}
-                    onChange={(e) => setConfigNfe({ ...configNfe, proximo_numero: parseInt(e.target.value) })}
+                    onChange={(e) => setConfigNfe({ ...configNfe, proximo_numero: parseInt(e.target.value) || 1 })}
                   />
                 </div>
               </div>
@@ -430,7 +438,7 @@ export default function ConfiguracaoNFe() {
                   <Input
                     type="number"
                     value={configNfse.serie_nfse}
-                    onChange={(e) => setConfigNfse({ ...configNfse, serie_nfse: parseInt(e.target.value) })}
+                    onChange={(e) => setConfigNfse({ ...configNfse, serie_nfse: parseInt(e.target.value) || 1 })}
                   />
                 </div>
 
@@ -439,7 +447,7 @@ export default function ConfiguracaoNFe() {
                   <Input
                     type="number"
                     value={configNfse.proximo_numero}
-                    onChange={(e) => setConfigNfse({ ...configNfse, proximo_numero: parseInt(e.target.value) })}
+                    onChange={(e) => setConfigNfse({ ...configNfse, proximo_numero: parseInt(e.target.value) || 1 })}
                   />
                 </div>
 

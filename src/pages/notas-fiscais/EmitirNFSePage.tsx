@@ -24,12 +24,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { SearchableSelect } from "@/components/shared/SearchableSelect";
 import { Plus, Trash2, Calculator, Save } from "lucide-react";
 import { format } from "date-fns";
@@ -141,7 +135,7 @@ export default function EmitirNFSePage() {
   const { currentCompany } = useCompany();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { emitirNFSe, isLoading: isEmitting } = useNFSeEmissor();
+  const { emitir, loading: isEmitting } = useNFSeEmissor();
   
   const [formData, setFormData] = useState<FormData>(initialFormData);
   const [servicos, setServicos] = useState<Servico[]>([]);
@@ -152,13 +146,14 @@ export default function EmitirNFSePage() {
     queryFn: async () => {
       if (!currentCompany?.id) return 1;
       const { data } = await supabase
-        .from("notas_fiscais_servico")
+        .from("nfse_emitidas")
         .select("numero")
         .eq("company_id", currentCompany.id)
         .order("numero", { ascending: false })
         .limit(1)
-        .single();
-      return (data?.numero || 0) + 1;
+        .maybeSingle();
+      const num = data?.numero ? parseInt(String(data.numero)) : 0;
+      return num + 1;
     },
     enabled: !!currentCompany?.id,
   });
@@ -171,12 +166,12 @@ export default function EmitirNFSePage() {
 
   // Buscar clientes
   const { data: pessoas } = useQuery({
-    queryKey: ["pessoas", currentCompany?.id],
+    queryKey: ["pessoas-nfse", currentCompany?.id],
     queryFn: async () => {
       if (!currentCompany?.id) return [];
       const { data } = await supabase
         .from("pessoas")
-        .select("id, razao_social, cpf_cnpj, tipo_pessoa, im, endereco, numero, bairro, cidade, uf, cep, telefone, email")
+        .select("id, razao_social, cpf_cnpj, tipo_pessoa, inscricao_municipal, logradouro, numero, bairro, cidade, estado, cep, telefone, email")
         .eq("company_id", currentCompany.id);
       return data || [];
     },
@@ -206,13 +201,13 @@ export default function EmitirNFSePage() {
         tomador_tipo_documento: pessoa.cpf_cnpj?.length === 14 ? "cnpj" : "cpf",
         tomador_documento: pessoa.cpf_cnpj || "",
         tomador_razao_social: pessoa.razao_social || "",
-        tomador_im: pessoa.im || "",
+        tomador_im: pessoa.inscricao_municipal || "",
         tomador_cep: pessoa.cep || "",
-        tomador_logradouro: pessoa.endereco || "",
+        tomador_logradouro: pessoa.logradouro || "",
         tomador_numero: pessoa.numero || "",
         tomador_bairro: pessoa.bairro || "",
         tomador_cidade: pessoa.cidade || "",
-        tomador_uf: pessoa.uf || "",
+        tomador_uf: pessoa.estado || "",
         tomador_telefone: pessoa.telefone || "",
         tomador_email: pessoa.email || "",
       }));
@@ -274,7 +269,7 @@ export default function EmitirNFSePage() {
 
   const totais = calcularTotais();
 
-  const handleSalvar = async (emitir: boolean = false) => {
+  const handleSalvar = async (emitirNota: boolean = false) => {
     try {
       // Validações básicas
       if (!formData.tomador_documento) {
@@ -292,35 +287,31 @@ export default function EmitirNFSePage() {
 
       // Salvar no banco
       const { data: nota, error } = await supabase
-        .from("notas_fiscais_servico")
-        .insert({
+        .from("nfse_emitidas")
+        .insert([{
           company_id: currentCompany?.id,
-          numero: formData.numero,
-          data_emissao: formData.data_emissao,
+          numero: String(formData.numero),
+          serie: "1",
           tomador_nome: formData.tomador_razao_social,
-          tomador_documento: formData.tomador_documento,
+          tomador_cpf_cnpj: formData.tomador_documento,
           discriminacao: formData.discriminacao,
           valor_servicos: totais.totalServicos,
           valor_iss: totais.totalISS,
-          situacao: "em_aberto",
-          dados_json: {
-            formData,
-            servicos,
-            totais,
-          },
-        })
+          status: "PENDENTE",
+          data_emissao: formData.data_emissao,
+        }])
         .select()
         .single();
 
       if (error) throw error;
 
-      if (emitir) {
+      if (emitirNota) {
         // Chamar API de emissão
         toast.info("Emitindo NFS-e...");
-        // await emitirNFSe(nota.id);
+        // await emitir(nota.id);
       }
 
-      toast.success(emitir ? "NFS-e emitida com sucesso!" : "NFS-e salva com sucesso!");
+      toast.success(emitirNota ? "NFS-e emitida com sucesso!" : "NFS-e salva com sucesso!");
       navigate("/notas-fiscais-servico");
     } catch (error: any) {
       toast.error("Erro ao salvar: " + error.message);
@@ -444,7 +435,7 @@ export default function EmitirNFSePage() {
                   sublabel: p.cpf_cnpj || "",
                 }))}
                 value={formData.tomador_id}
-                onValueChange={handleTomadorChange}
+                onChange={handleTomadorChange}
                 placeholder="Digite para buscar"
               />
             </div>
@@ -559,306 +550,175 @@ export default function EmitirNFSePage() {
           <CardTitle className="text-lg">Serviços</CardTitle>
           <Button onClick={handleAddServico} size="sm">
             <Plus className="h-4 w-4 mr-2" />
-            Adicionar serviço
+            Adicionar Serviço
           </Button>
         </CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-12">#</TableHead>
-                <TableHead>Descrição</TableHead>
-                <TableHead>Código</TableHead>
-                <TableHead className="text-right">Qtd</TableHead>
-                <TableHead className="text-right">Valor</TableHead>
-                <TableHead className="text-right">Alíq. ISS</TableHead>
-                <TableHead className="text-right">ISS</TableHead>
-                <TableHead>Retido</TableHead>
-                <TableHead className="w-20">Ações</TableHead>
+                <TableHead className="w-[300px]">Descrição</TableHead>
+                <TableHead>Código Serviço</TableHead>
+                <TableHead>Qtd</TableHead>
+                <TableHead>Valor Unit.</TableHead>
+                <TableHead>Valor Total</TableHead>
+                <TableHead>Alíq. ISS</TableHead>
+                <TableHead>ISS Retido</TableHead>
+                <TableHead className="w-[50px]"></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {servicos.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
-                    Nenhum serviço adicionado
+              {servicos.map((servico) => (
+                <TableRow key={servico.id}>
+                  <TableCell>
+                    <Input
+                      value={servico.descricao}
+                      onChange={(e) => handleServicoChange(servico.id, "descricao", e.target.value)}
+                      placeholder="Descrição do serviço"
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <Input
+                      value={servico.codigo_servico}
+                      onChange={(e) => handleServicoChange(servico.id, "codigo_servico", e.target.value)}
+                      className="w-24"
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <Input
+                      type="number"
+                      value={servico.quantidade}
+                      onChange={(e) => handleServicoChange(servico.id, "quantidade", parseFloat(e.target.value) || 0)}
+                      className="w-20"
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <Input
+                      type="number"
+                      value={servico.valor_unitario}
+                      onChange={(e) => handleServicoChange(servico.id, "valor_unitario", parseFloat(e.target.value) || 0)}
+                      className="w-28"
+                    />
+                  </TableCell>
+                  <TableCell className="font-medium">
+                    R$ {servico.valor_total.toFixed(2)}
+                  </TableCell>
+                  <TableCell>
+                    <Input
+                      type="number"
+                      value={servico.aliquota_iss}
+                      onChange={(e) => handleServicoChange(servico.id, "aliquota_iss", parseFloat(e.target.value) || 0)}
+                      className="w-20"
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <Checkbox
+                      checked={servico.iss_retido}
+                      onCheckedChange={(checked) => handleServicoChange(servico.id, "iss_retido", !!checked)}
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleRemoveServico(servico.id)}
+                    >
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
                   </TableCell>
                 </TableRow>
-              ) : (
-                servicos.map((servico, index) => (
-                  <TableRow key={servico.id}>
-                    <TableCell>{index + 1}</TableCell>
-                    <TableCell>
-                      <Input
-                        placeholder="Descrição do serviço"
-                        value={servico.descricao}
-                        onChange={(e) => handleServicoChange(servico.id, "descricao", e.target.value)}
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Input
-                        placeholder="Código"
-                        value={servico.codigo_servico}
-                        onChange={(e) => handleServicoChange(servico.id, "codigo_servico", e.target.value)}
-                        className="w-24"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Input
-                        type="number"
-                        value={servico.quantidade}
-                        onChange={(e) => handleServicoChange(servico.id, "quantidade", parseFloat(e.target.value) || 0)}
-                        className="w-20 text-right"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Input
-                        type="number"
-                        step="0.01"
-                        value={servico.valor_unitario}
-                        onChange={(e) => handleServicoChange(servico.id, "valor_unitario", parseFloat(e.target.value) || 0)}
-                        className="w-24 text-right"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Input
-                        type="number"
-                        step="0.01"
-                        value={servico.aliquota_iss}
-                        onChange={(e) => handleServicoChange(servico.id, "aliquota_iss", parseFloat(e.target.value) || 0)}
-                        className="w-20 text-right"
-                      />
-                    </TableCell>
-                    <TableCell className="text-right font-medium">
-                      {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(servico.valor_iss)}
-                    </TableCell>
-                    <TableCell>
-                      <Checkbox
-                        checked={servico.iss_retido}
-                        onCheckedChange={(checked) => handleServicoChange(servico.id, "iss_retido", !!checked)}
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleRemoveServico(servico.id)}
-                      >
-                        <Trash2 className="h-4 w-4 text-red-500" />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))
+              ))}
+              {servicos.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
+                    Nenhum serviço adicionado. Clique em "Adicionar Serviço" para começar.
+                  </TableCell>
+                </TableRow>
               )}
             </TableBody>
           </Table>
         </CardContent>
       </Card>
 
-      {/* Discriminação dos Serviços */}
+      {/* Discriminação */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">Discriminação dos serviços <span className="text-red-500">*</span></CardTitle>
+          <CardTitle className="text-lg">Discriminação dos Serviços</CardTitle>
         </CardHeader>
         <CardContent>
           <Textarea
-            placeholder="Descreva detalhadamente os serviços prestados..."
             value={formData.discriminacao}
             onChange={(e) => setFormData(prev => ({ ...prev, discriminacao: e.target.value }))}
-            rows={5}
+            placeholder="Descreva detalhadamente os serviços prestados..."
+            rows={4}
           />
-        </CardContent>
-      </Card>
-
-      {/* Valores e Retenções */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">Valores e retenções</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div>
-              <Label>Valor das deduções</Label>
-              <Input
-                type="number"
-                step="0.01"
-                value={formData.valor_deducoes}
-                onChange={(e) => setFormData(prev => ({ ...prev, valor_deducoes: parseFloat(e.target.value) || 0 }))}
-              />
-            </div>
-            <div>
-              <Label>Desconto incondicionado</Label>
-              <Input
-                type="number"
-                step="0.01"
-                value={formData.desconto_incondicionado}
-                onChange={(e) => setFormData(prev => ({ ...prev, desconto_incondicionado: parseFloat(e.target.value) || 0 }))}
-              />
-            </div>
-            <div>
-              <Label>Desconto condicionado</Label>
-              <Input
-                type="number"
-                step="0.01"
-                value={formData.desconto_condicionado}
-                onChange={(e) => setFormData(prev => ({ ...prev, desconto_condicionado: parseFloat(e.target.value) || 0 }))}
-              />
-            </div>
-            <div>
-              <Label>Outras retenções</Label>
-              <Input
-                type="number"
-                step="0.01"
-                value={formData.outras_retencoes}
-                onChange={(e) => setFormData(prev => ({ ...prev, outras_retencoes: parseFloat(e.target.value) || 0 }))}
-              />
-            </div>
-          </div>
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-            <div>
-              <Label>PIS</Label>
-              <Input
-                type="number"
-                step="0.01"
-                value={formData.valor_pis}
-                onChange={(e) => setFormData(prev => ({ ...prev, valor_pis: parseFloat(e.target.value) || 0 }))}
-              />
-            </div>
-            <div>
-              <Label>COFINS</Label>
-              <Input
-                type="number"
-                step="0.01"
-                value={formData.valor_cofins}
-                onChange={(e) => setFormData(prev => ({ ...prev, valor_cofins: parseFloat(e.target.value) || 0 }))}
-              />
-            </div>
-            <div>
-              <Label>INSS</Label>
-              <Input
-                type="number"
-                step="0.01"
-                value={formData.valor_inss}
-                onChange={(e) => setFormData(prev => ({ ...prev, valor_inss: parseFloat(e.target.value) || 0 }))}
-              />
-            </div>
-            <div>
-              <Label>IR</Label>
-              <Input
-                type="number"
-                step="0.01"
-                value={formData.valor_ir}
-                onChange={(e) => setFormData(prev => ({ ...prev, valor_ir: parseFloat(e.target.value) || 0 }))}
-              />
-            </div>
-            <div>
-              <Label>CSLL</Label>
-              <Input
-                type="number"
-                step="0.01"
-                value={formData.valor_csll}
-                onChange={(e) => setFormData(prev => ({ ...prev, valor_csll: parseFloat(e.target.value) || 0 }))}
-              />
-            </div>
-          </div>
         </CardContent>
       </Card>
 
       {/* Totais */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">Totais</CardTitle>
+          <CardTitle className="text-lg flex items-center gap-2">
+            <Calculator className="h-5 w-5" />
+            Totais
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
             <div>
-              <Label>Total dos serviços</Label>
-              <Input
-                value={new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(totais.totalServicos)}
-                readOnly
-                className="bg-muted"
-              />
+              <Label className="text-muted-foreground">Total Serviços</Label>
+              <p className="text-xl font-bold">R$ {totais.totalServicos.toFixed(2)}</p>
             </div>
             <div>
-              <Label>Base de cálculo</Label>
-              <Input
-                value={new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(totais.baseCalculo)}
-                readOnly
-                className="bg-muted"
-              />
+              <Label className="text-muted-foreground">Base de Cálculo</Label>
+              <p className="text-xl font-bold">R$ {totais.baseCalculo.toFixed(2)}</p>
             </div>
             <div>
-              <Label>Total ISS</Label>
-              <Input
-                value={new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(totais.totalISS)}
-                readOnly
-                className="bg-muted"
-              />
+              <Label className="text-muted-foreground">Total ISS</Label>
+              <p className="text-xl font-bold">R$ {totais.totalISS.toFixed(2)}</p>
             </div>
             <div>
-              <Label>ISS Retido</Label>
-              <Input
-                value={new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(totais.totalISSRetido)}
-                readOnly
-                className="bg-muted"
-              />
+              <Label className="text-muted-foreground">ISS Retido</Label>
+              <p className="text-xl font-bold">R$ {totais.totalISSRetido.toFixed(2)}</p>
             </div>
             <div>
-              <Label>Total retenções</Label>
-              <Input
-                value={new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(totais.totalRetencoes)}
-                readOnly
-                className="bg-muted"
-              />
+              <Label className="text-muted-foreground">Total Retenções</Label>
+              <p className="text-xl font-bold">R$ {totais.totalRetencoes.toFixed(2)}</p>
             </div>
             <div>
-              <Label className="text-lg font-bold">Valor líquido</Label>
-              <Input
-                value={new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(totais.valorLiquido)}
-                readOnly
-                className="bg-green-50 text-lg font-bold text-green-700"
-              />
+              <Label className="text-muted-foreground">Valor Líquido</Label>
+              <p className="text-xl font-bold text-primary">R$ {totais.valorLiquido.toFixed(2)}</p>
             </div>
           </div>
         </CardContent>
       </Card>
 
-      {/* Informações Adicionais */}
+      {/* Informações Complementares */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">Informações adicionais</CardTitle>
+          <CardTitle className="text-lg">Informações Complementares</CardTitle>
         </CardHeader>
         <CardContent>
           <Textarea
-            placeholder="Informações complementares..."
             value={formData.info_complementares}
             onChange={(e) => setFormData(prev => ({ ...prev, info_complementares: e.target.value }))}
+            placeholder="Informações adicionais que aparecerão na nota..."
             rows={3}
           />
         </CardContent>
       </Card>
 
-      {/* Botões de Ação */}
-      <div className="flex items-center gap-4 sticky bottom-0 bg-background py-4 border-t">
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button className="bg-green-600 hover:bg-green-700">
-              <Save className="h-4 w-4 mr-2" />
-              Cadastrar
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent>
-            <DropdownMenuItem onClick={() => handleSalvar(false)}>
-              Salvar como rascunho
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => handleSalvar(true)}>
-              Salvar e emitir
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-        
-        <Button variant="destructive" asChild>
-          <Link to="/notas-fiscais-servico">Cancelar</Link>
+      {/* Ações */}
+      <div className="flex justify-end gap-4">
+        <Button variant="outline" onClick={() => navigate("/notas-fiscais-servico")}>
+          Cancelar
+        </Button>
+        <Button variant="secondary" onClick={() => handleSalvar(false)} disabled={isEmitting}>
+          <Save className="h-4 w-4 mr-2" />
+          Salvar Rascunho
+        </Button>
+        <Button onClick={() => handleSalvar(true)} disabled={isEmitting}>
+          {isEmitting ? "Emitindo..." : "Salvar e Emitir NFS-e"}
         </Button>
       </div>
     </div>

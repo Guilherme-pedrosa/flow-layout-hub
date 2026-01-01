@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useSearchParams, Link } from "react-router-dom";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/contexts/CompanyContext";
 import { Button } from "@/components/ui/button";
@@ -24,14 +24,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { SearchableSelect } from "@/components/shared/SearchableSelect";
-import { Plus, Trash2, MoreHorizontal, Calculator, Save } from "lucide-react";
+import { Plus, Trash2, Calculator, Save } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { useNFeEmissor } from "@/hooks/useNFeEmissor";
@@ -178,16 +172,10 @@ export default function EmitirNFePage() {
   const { currentCompany } = useCompany();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { emitirNFe, isLoading: isEmitting } = useNFeEmissor();
+  const { emitirNFe, loading: isEmitting } = useNFeEmissor();
   
   const [formData, setFormData] = useState<FormData>(initialFormData);
   const [produtos, setProdutos] = useState<Produto[]>([]);
-  const [mostrarEnderecoEntrega, setMostrarEnderecoEntrega] = useState(false);
-  const [mostrarEnderecoRetirada, setMostrarEnderecoRetirada] = useState(false);
-  const [mostrarRetencaoICMS, setMostrarRetencaoICMS] = useState(false);
-  const [mostrarFormaPagamento, setMostrarFormaPagamento] = useState(false);
-  const [mostrarRetencaoImpostos, setMostrarRetencaoImpostos] = useState(false);
-  const [mostrarLocalEmbarque, setMostrarLocalEmbarque] = useState(false);
 
   // Buscar próximo número de nota
   const { data: proximoNumero } = useQuery({
@@ -195,13 +183,15 @@ export default function EmitirNFePage() {
     queryFn: async () => {
       if (!currentCompany?.id) return 1;
       const { data } = await supabase
-        .from("notas_fiscais")
+        .from("nfe_emitidas")
         .select("numero")
         .eq("company_id", currentCompany.id)
         .order("numero", { ascending: false })
         .limit(1)
-        .single();
-      return (data?.numero || 0) + 1;
+        .maybeSingle();
+      
+      const currentNum = data?.numero ? parseInt(String(data.numero)) : 0;
+      return currentNum + 1;
     },
     enabled: !!currentCompany?.id,
   });
@@ -214,12 +204,12 @@ export default function EmitirNFePage() {
 
   // Buscar clientes/fornecedores
   const { data: pessoas } = useQuery({
-    queryKey: ["pessoas", currentCompany?.id],
+    queryKey: ["pessoas-nfe", currentCompany?.id],
     queryFn: async () => {
       if (!currentCompany?.id) return [];
       const { data } = await supabase
         .from("pessoas")
-        .select("id, razao_social, cpf_cnpj, tipo_pessoa, ie, endereco, numero, bairro, cidade, uf, cep, telefone, email")
+        .select("id, razao_social, cpf_cnpj, tipo_pessoa, inscricao_estadual, logradouro, numero, bairro, cidade, estado, cep, telefone, email")
         .eq("company_id", currentCompany.id);
       return data || [];
     },
@@ -249,13 +239,13 @@ export default function EmitirNFePage() {
         destinatario_tipo_documento: pessoa.cpf_cnpj?.length === 14 ? "cnpj" : "cpf",
         destinatario_documento: pessoa.cpf_cnpj || "",
         destinatario_razao_social: pessoa.razao_social || "",
-        destinatario_ie: pessoa.ie || "",
+        destinatario_ie: pessoa.inscricao_estadual || "",
         destinatario_cep: pessoa.cep || "",
-        destinatario_logradouro: pessoa.endereco || "",
+        destinatario_logradouro: pessoa.logradouro || "",
         destinatario_numero: pessoa.numero || "",
         destinatario_bairro: pessoa.bairro || "",
         destinatario_cidade: pessoa.cidade || "",
-        destinatario_uf: pessoa.uf || "",
+        destinatario_uf: pessoa.estado || "",
         destinatario_telefone: pessoa.telefone || "",
         destinatario_email: pessoa.email || "",
       }));
@@ -329,24 +319,20 @@ export default function EmitirNFePage() {
 
       // Salvar no banco
       const { data: nota, error } = await supabase
-        .from("notas_fiscais")
-        .insert({
+        .from("nfe_emitidas")
+        .insert([{
           company_id: currentCompany?.id,
-          numero: formData.numero,
-          serie: formData.serie,
-          tipo: formData.tipo,
+          referencia: `NFE-${formData.numero}`,
+          numero: String(formData.numero),
+          serie: String(formData.serie),
           natureza_operacao: formData.natureza_operacao,
           data_emissao: formData.data_emissao,
+          destinatario_cpf_cnpj: formData.destinatario_documento,
           destinatario_nome: formData.destinatario_razao_social,
-          destinatario_documento: formData.destinatario_documento,
+          valor_produtos: totais.totalProdutos,
           valor_total: totais.totalNF,
-          situacao: "em_aberto",
-          dados_json: {
-            formData,
-            produtos,
-            totais,
-          },
-        })
+          status: "PENDENTE",
+        }])
         .select()
         .single();
 
@@ -454,95 +440,13 @@ export default function EmitirNFePage() {
               onChange={(e) => setFormData(prev => ({ ...prev, hora_emissao: e.target.value }))}
             />
           </div>
-          <div>
-            <Label>Data de saída/entrada</Label>
-            <Input
-              type="date"
-              value={formData.data_saida_entrada}
-              onChange={(e) => setFormData(prev => ({ ...prev, data_saida_entrada: e.target.value }))}
-            />
-          </div>
-          <div>
-            <Label>Hora de saída/entrada</Label>
-            <Input
-              type="time"
-              value={formData.hora_saida_entrada}
-              onChange={(e) => setFormData(prev => ({ ...prev, hora_saida_entrada: e.target.value }))}
-            />
-          </div>
-          <div>
-            <Label>Finalidade de emissão</Label>
-            <Select
-              value={formData.finalidade}
-              onValueChange={(value: any) => setFormData(prev => ({ ...prev, finalidade: value }))}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="normal">NF-e normal</SelectItem>
-                <SelectItem value="complementar">NF-e complementar</SelectItem>
-                <SelectItem value="ajuste">NF-e de ajuste</SelectItem>
-                <SelectItem value="devolucao">Devolução de mercadoria</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <Label>Forma de emissão</Label>
-            <Select
-              value={formData.forma_emissao}
-              onValueChange={(value: any) => setFormData(prev => ({ ...prev, forma_emissao: value }))}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="normal">Emissão normal</SelectItem>
-                <SelectItem value="contingencia">Contingência</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <Label>Destino da operação</Label>
-            <Select
-              value={formData.destino_operacao}
-              onValueChange={(value: any) => setFormData(prev => ({ ...prev, destino_operacao: value }))}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="interna">Operação interna</SelectItem>
-                <SelectItem value="interestadual">Operação interestadual</SelectItem>
-                <SelectItem value="exterior">Operação com exterior</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <Label>Tipo de atendimento</Label>
-            <Select
-              value={formData.tipo_atendimento}
-              onValueChange={(value: any) => setFormData(prev => ({ ...prev, tipo_atendimento: value }))}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="nao_se_aplica">Não se aplica</SelectItem>
-                <SelectItem value="presencial">Operação presencial</SelectItem>
-                <SelectItem value="internet">Operação não presencial, pela Internet</SelectItem>
-                <SelectItem value="teleatendimento">Operação não presencial, Teleatendimento</SelectItem>
-                <SelectItem value="outros">Operação não presencial, outros</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
         </CardContent>
       </Card>
 
-      {/* Dados do Destinatário */}
+      {/* Destinatário */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">Dados do destinatário</CardTitle>
+          <CardTitle className="text-lg">Destinatário</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -555,25 +459,9 @@ export default function EmitirNFePage() {
                   sublabel: p.cpf_cnpj || "",
                 }))}
                 value={formData.destinatario_id}
-                onValueChange={handleDestinatarioChange}
+                onChange={handleDestinatarioChange}
                 placeholder="Digite para buscar"
               />
-            </div>
-            <div>
-              <Label>Tipo de documento</Label>
-              <Select
-                value={formData.destinatario_tipo_documento}
-                onValueChange={(value: any) => setFormData(prev => ({ ...prev, destinatario_tipo_documento: value }))}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="cnpj">CNPJ</SelectItem>
-                  <SelectItem value="cpf">CPF</SelectItem>
-                  <SelectItem value="estrangeiro">Estrangeiro</SelectItem>
-                </SelectContent>
-              </Select>
             </div>
             <div>
               <Label>CNPJ/CPF <span className="text-red-500">*</span></Label>
@@ -582,40 +470,22 @@ export default function EmitirNFePage() {
                 onChange={(e) => setFormData(prev => ({ ...prev, destinatario_documento: e.target.value }))}
               />
             </div>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
-              <Label>Razão social <span className="text-red-500">*</span></Label>
+              <Label>Razão Social <span className="text-red-500">*</span></Label>
               <Input
                 value={formData.destinatario_razao_social}
                 onChange={(e) => setFormData(prev => ({ ...prev, destinatario_razao_social: e.target.value }))}
               />
             </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div>
-              <Label>Tipo de contribuinte</Label>
-              <Select
-                value={formData.destinatario_tipo_contribuinte}
-                onValueChange={(value: any) => setFormData(prev => ({ ...prev, destinatario_tipo_contribuinte: value }))}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="contribuinte">Contribuinte ICMS</SelectItem>
-                  <SelectItem value="isento">Contribuinte ISENTO</SelectItem>
-                  <SelectItem value="nao_contribuinte">Não contribuinte</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>Inscrição estadual</Label>
+              <Label>IE</Label>
               <Input
                 value={formData.destinatario_ie}
                 onChange={(e) => setFormData(prev => ({ ...prev, destinatario_ie: e.target.value }))}
               />
             </div>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div>
               <Label>CEP</Label>
               <Input
@@ -630,20 +500,13 @@ export default function EmitirNFePage() {
                 onChange={(e) => setFormData(prev => ({ ...prev, destinatario_logradouro: e.target.value }))}
               />
             </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
             <div>
               <Label>Número</Label>
               <Input
                 value={formData.destinatario_numero}
                 onChange={(e) => setFormData(prev => ({ ...prev, destinatario_numero: e.target.value }))}
-              />
-            </div>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div>
-              <Label>Complemento</Label>
-              <Input
-                value={formData.destinatario_complemento}
-                onChange={(e) => setFormData(prev => ({ ...prev, destinatario_complemento: e.target.value }))}
               />
             </div>
             <div>
@@ -654,56 +517,26 @@ export default function EmitirNFePage() {
               />
             </div>
             <div>
-              <Label>Cidade/UF</Label>
+              <Label>Cidade</Label>
               <Input
-                value={`${formData.destinatario_cidade}${formData.destinatario_uf ? ` - ${formData.destinatario_uf}` : ""}`}
-                onChange={(e) => {
-                  const [cidade, uf] = e.target.value.split(" - ");
-                  setFormData(prev => ({ ...prev, destinatario_cidade: cidade || "", destinatario_uf: uf || "" }));
-                }}
+                value={formData.destinatario_cidade}
+                onChange={(e) => setFormData(prev => ({ ...prev, destinatario_cidade: e.target.value }))}
               />
             </div>
             <div>
-              <Label>País</Label>
+              <Label>UF</Label>
               <Input
-                value={formData.destinatario_pais}
-                onChange={(e) => setFormData(prev => ({ ...prev, destinatario_pais: e.target.value }))}
+                value={formData.destinatario_uf}
+                onChange={(e) => setFormData(prev => ({ ...prev, destinatario_uf: e.target.value }))}
+                maxLength={2}
               />
             </div>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <Label>Telefone</Label>
               <Input
                 value={formData.destinatario_telefone}
                 onChange={(e) => setFormData(prev => ({ ...prev, destinatario_telefone: e.target.value }))}
               />
-            </div>
-            <div>
-              <Label>E-mail</Label>
-              <Input
-                type="email"
-                value={formData.destinatario_email}
-                onChange={(e) => setFormData(prev => ({ ...prev, destinatario_email: e.target.value }))}
-              />
-            </div>
-          </div>
-          <div className="flex gap-4">
-            <div className="flex items-center space-x-2">
-              <Checkbox
-                id="endereco_entrega"
-                checked={mostrarEnderecoEntrega}
-                onCheckedChange={(checked) => setMostrarEnderecoEntrega(!!checked)}
-              />
-              <label htmlFor="endereco_entrega" className="text-sm">Informar endereço de entrega</label>
-            </div>
-            <div className="flex items-center space-x-2">
-              <Checkbox
-                id="endereco_retirada"
-                checked={mostrarEnderecoRetirada}
-                onCheckedChange={(checked) => setMostrarEnderecoRetirada(!!checked)}
-              />
-              <label htmlFor="endereco_retirada" className="text-sm">Informar endereço de retirada</label>
             </div>
           </div>
         </CardContent>
@@ -715,302 +548,160 @@ export default function EmitirNFePage() {
           <CardTitle className="text-lg">Produtos</CardTitle>
           <Button onClick={handleAddProduto} size="sm">
             <Plus className="h-4 w-4 mr-2" />
-            Adicionar produto
+            Adicionar Produto
           </Button>
         </CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-12">#</TableHead>
-                <TableHead>Descrição</TableHead>
+                <TableHead className="w-[300px]">Descrição</TableHead>
                 <TableHead>NCM</TableHead>
                 <TableHead>CFOP</TableHead>
-                <TableHead className="text-right">Qtd</TableHead>
-                <TableHead className="text-right">Valor</TableHead>
-                <TableHead className="text-right">Subtotal</TableHead>
-                <TableHead className="w-20">Ações</TableHead>
+                <TableHead>Qtd</TableHead>
+                <TableHead>Valor Unit.</TableHead>
+                <TableHead>Valor Total</TableHead>
+                <TableHead className="w-[50px]"></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {produtos.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
-                    Nenhum produto adicionado
+              {produtos.map((produto) => (
+                <TableRow key={produto.id}>
+                  <TableCell>
+                    <Input
+                      value={produto.descricao}
+                      onChange={(e) => handleProdutoChange(produto.id, "descricao", e.target.value)}
+                      placeholder="Descrição do produto"
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <Input
+                      value={produto.ncm}
+                      onChange={(e) => handleProdutoChange(produto.id, "ncm", e.target.value)}
+                      className="w-28"
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <Input
+                      value={produto.cfop}
+                      onChange={(e) => handleProdutoChange(produto.id, "cfop", e.target.value)}
+                      className="w-20"
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <Input
+                      type="number"
+                      value={produto.quantidade}
+                      onChange={(e) => handleProdutoChange(produto.id, "quantidade", parseFloat(e.target.value) || 0)}
+                      className="w-20"
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <Input
+                      type="number"
+                      value={produto.valor_unitario}
+                      onChange={(e) => handleProdutoChange(produto.id, "valor_unitario", parseFloat(e.target.value) || 0)}
+                      className="w-28"
+                    />
+                  </TableCell>
+                  <TableCell className="font-medium">
+                    R$ {produto.valor_total.toFixed(2)}
+                  </TableCell>
+                  <TableCell>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleRemoveProduto(produto.id)}
+                    >
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
                   </TableCell>
                 </TableRow>
-              ) : (
-                produtos.map((produto, index) => (
-                  <TableRow key={produto.id}>
-                    <TableCell>{index + 1}</TableCell>
-                    <TableCell>
-                      <Input
-                        placeholder="Descrição do produto"
-                        value={produto.descricao}
-                        onChange={(e) => handleProdutoChange(produto.id, "descricao", e.target.value)}
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Input
-                        placeholder="NCM"
-                        value={produto.ncm}
-                        onChange={(e) => handleProdutoChange(produto.id, "ncm", e.target.value)}
-                        className="w-28"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Input
-                        placeholder="CFOP"
-                        value={produto.cfop}
-                        onChange={(e) => handleProdutoChange(produto.id, "cfop", e.target.value)}
-                        className="w-20"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Input
-                        type="number"
-                        value={produto.quantidade}
-                        onChange={(e) => handleProdutoChange(produto.id, "quantidade", parseFloat(e.target.value) || 0)}
-                        className="w-20 text-right"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Input
-                        type="number"
-                        step="0.01"
-                        value={produto.valor_unitario}
-                        onChange={(e) => handleProdutoChange(produto.id, "valor_unitario", parseFloat(e.target.value) || 0)}
-                        className="w-24 text-right"
-                      />
-                    </TableCell>
-                    <TableCell className="text-right font-medium">
-                      {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(produto.valor_total)}
-                    </TableCell>
-                    <TableCell>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleRemoveProduto(produto.id)}
-                      >
-                        <Trash2 className="h-4 w-4 text-red-500" />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))
+              ))}
+              {produtos.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
+                    Nenhum produto adicionado. Clique em "Adicionar Produto" para começar.
+                  </TableCell>
+                </TableRow>
               )}
             </TableBody>
           </Table>
         </CardContent>
       </Card>
 
-      {/* Transporte */}
+      {/* Totais */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">Transporte</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-              <Label>Modalidade</Label>
-              <Select
-                value={formData.modalidade_frete}
-                onValueChange={(value: any) => setFormData(prev => ({ ...prev, modalidade_frete: value }))}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="cif">Contratação do Frete por conta do Remetente (CIF)</SelectItem>
-                  <SelectItem value="fob">Contratação do Frete por conta do Destinatário (FOB)</SelectItem>
-                  <SelectItem value="terceiros">Contratação do Frete por conta de Terceiros</SelectItem>
-                  <SelectItem value="proprio_remetente">Transporte Próprio por conta do Remetente</SelectItem>
-                  <SelectItem value="proprio_destinatario">Transporte Próprio por conta do Destinatário</SelectItem>
-                  <SelectItem value="sem_frete">Sem Ocorrência de Transporte</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>Transportadora</Label>
-              <Input
-                placeholder="Digite para buscar"
-                value={formData.transportadora_razao_social}
-                onChange={(e) => setFormData(prev => ({ ...prev, transportadora_razao_social: e.target.value }))}
-              />
-            </div>
-            <div>
-              <Label>Placa do veículo</Label>
-              <Input
-                placeholder="AAA0000"
-                value={formData.veiculo_placa}
-                onChange={(e) => setFormData(prev => ({ ...prev, veiculo_placa: e.target.value }))}
-              />
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Volumes */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">Volumes</CardTitle>
+          <CardTitle className="text-lg flex items-center gap-2">
+            <Calculator className="h-5 w-5" />
+            Totais
+          </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
             <div>
-              <Label>Quantidade</Label>
-              <Input
-                type="number"
-                value={formData.volumes_quantidade}
-                onChange={(e) => setFormData(prev => ({ ...prev, volumes_quantidade: parseInt(e.target.value) || 0 }))}
-              />
+              <Label className="text-muted-foreground">Total Produtos</Label>
+              <p className="text-xl font-bold">R$ {totais.totalProdutos.toFixed(2)}</p>
             </div>
             <div>
-              <Label>Peso líquido (kg)</Label>
-              <Input
-                type="number"
-                step="0.001"
-                value={formData.volumes_peso_liquido}
-                onChange={(e) => setFormData(prev => ({ ...prev, volumes_peso_liquido: parseFloat(e.target.value) || 0 }))}
-              />
+              <Label className="text-muted-foreground">Total ICMS</Label>
+              <p className="text-xl font-bold">R$ {totais.totalICMS.toFixed(2)}</p>
             </div>
             <div>
-              <Label>Peso bruto (kg)</Label>
-              <Input
-                type="number"
-                step="0.001"
-                value={formData.volumes_peso_bruto}
-                onChange={(e) => setFormData(prev => ({ ...prev, volumes_peso_bruto: parseFloat(e.target.value) || 0 }))}
-              />
+              <Label className="text-muted-foreground">Total PIS</Label>
+              <p className="text-xl font-bold">R$ {totais.totalPIS.toFixed(2)}</p>
             </div>
             <div>
-              <Label>Espécie</Label>
-              <Input
-                placeholder="Ex: Caixa"
-                value={formData.volumes_especie}
-                onChange={(e) => setFormData(prev => ({ ...prev, volumes_especie: e.target.value }))}
-              />
+              <Label className="text-muted-foreground">Total COFINS</Label>
+              <p className="text-xl font-bold">R$ {totais.totalCOFINS.toFixed(2)}</p>
             </div>
             <div>
-              <Label>Marca</Label>
-              <Input
-                value={formData.volumes_marca}
-                onChange={(e) => setFormData(prev => ({ ...prev, volumes_marca: e.target.value }))}
-              />
-            </div>
-            <div>
-              <Label>Numeração</Label>
-              <Input
-                value={formData.volumes_numeracao}
-                onChange={(e) => setFormData(prev => ({ ...prev, volumes_numeracao: e.target.value }))}
-              />
+              <Label className="text-muted-foreground">Total NF-e</Label>
+              <p className="text-xl font-bold text-primary">R$ {totais.totalNF.toFixed(2)}</p>
             </div>
           </div>
         </CardContent>
       </Card>
 
-      {/* Totais da Nota */}
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="text-lg">Totais da nota</CardTitle>
-          <Button variant="outline" size="sm">
-            <Calculator className="h-4 w-4 mr-2" />
-            Calcular
-          </Button>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-            <div>
-              <Label>Total BC ICMS</Label>
-              <Input value="0,00" readOnly className="bg-muted" />
-            </div>
-            <div>
-              <Label>Total ICMS</Label>
-              <Input value={totais.totalICMS.toFixed(2).replace(".", ",")} readOnly className="bg-muted" />
-            </div>
-            <div>
-              <Label>Total bruto produtos</Label>
-              <Input value={totais.totalProdutos.toFixed(2).replace(".", ",")} readOnly className="bg-muted" />
-            </div>
-            <div>
-              <Label>Total de frete</Label>
-              <Input value="0,00" readOnly className="bg-muted" />
-            </div>
-            <div>
-              <Label>Total de desconto</Label>
-              <Input value="0,00" readOnly className="bg-muted" />
-            </div>
-            <div>
-              <Label>Total de IPI</Label>
-              <Input value="0,00" readOnly className="bg-muted" />
-            </div>
-            <div>
-              <Label>Total de PIS</Label>
-              <Input value={totais.totalPIS.toFixed(2).replace(".", ",")} readOnly className="bg-muted" />
-            </div>
-            <div>
-              <Label>Total de COFINS</Label>
-              <Input value={totais.totalCOFINS.toFixed(2).replace(".", ",")} readOnly className="bg-muted" />
-            </div>
-            <div className="md:col-span-2">
-              <Label className="text-lg font-bold">Total da NF</Label>
-              <Input
-                value={new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(totais.totalNF)}
-                readOnly
-                className="bg-green-50 text-lg font-bold text-green-700"
-              />
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Informações Adicionais */}
+      {/* Informações Complementares */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">Informações adicionais</CardTitle>
+          <CardTitle className="text-lg">Informações Complementares</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div>
-            <Label>Informações complementares</Label>
+            <Label>Informações ao Consumidor</Label>
             <Textarea
-              placeholder="O valor aprox. tributos será acrescentado automaticamente."
               value={formData.info_complementares}
               onChange={(e) => setFormData(prev => ({ ...prev, info_complementares: e.target.value }))}
+              placeholder="Informações que aparecerão na nota..."
               rows={3}
             />
           </div>
           <div>
-            <Label>Informações para o Fisco</Label>
+            <Label>Informações ao Fisco</Label>
             <Textarea
-              placeholder="Informações reservadas para o Fisco."
               value={formData.info_fisco}
               onChange={(e) => setFormData(prev => ({ ...prev, info_fisco: e.target.value }))}
-              rows={3}
+              placeholder="Informações adicionais ao fisco..."
+              rows={2}
             />
           </div>
         </CardContent>
       </Card>
 
-      {/* Botões de Ação */}
-      <div className="flex items-center gap-4 sticky bottom-0 bg-background py-4 border-t">
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button className="bg-green-600 hover:bg-green-700">
-              <Save className="h-4 w-4 mr-2" />
-              Cadastrar
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent>
-            <DropdownMenuItem onClick={() => handleSalvar(false)}>
-              Salvar como rascunho
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => handleSalvar(true)}>
-              Salvar e emitir
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-        
-        <Button variant="destructive" asChild>
-          <Link to="/notas-fiscais">Cancelar</Link>
+      {/* Ações */}
+      <div className="flex justify-end gap-4">
+        <Button variant="outline" onClick={() => navigate("/notas-fiscais")}>
+          Cancelar
+        </Button>
+        <Button variant="secondary" onClick={() => handleSalvar(false)} disabled={isEmitting}>
+          <Save className="h-4 w-4 mr-2" />
+          Salvar Rascunho
+        </Button>
+        <Button onClick={() => handleSalvar(true)} disabled={isEmitting}>
+          {isEmitting ? "Emitindo..." : "Salvar e Emitir NF-e"}
         </Button>
       </div>
     </div>
