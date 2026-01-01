@@ -147,10 +147,8 @@ export function ReconciliationPanel() {
           company_id: selectedCompany?.id,
           bank_transaction_id: suggestion.transaction_id,
           total_reconciled_amount: suggestion.total_matched,
-          difference: suggestion.difference,
           method: 'suggested',
-          confidence_score: suggestion.confidence_score,
-          match_type: suggestion.match_type
+          notes: `Match: ${suggestion.match_type}, Confiança: ${suggestion.confidence_score}%`
         })
         .select()
         .single();
@@ -164,10 +162,7 @@ export function ReconciliationPanel() {
             reconciliation_id: reconciliation.id,
             financial_id: entry.id,
             financial_type: entry.type,
-            amount_used: entry.amount_used,
-            original_amount: entry.amount,
-            entity_name: entry.entity_name,
-            due_date: entry.due_date
+            amount_used: entry.amount_used
           });
         
         const table = entry.type === 'receivable' ? 'accounts_receivable' : 'payables';
