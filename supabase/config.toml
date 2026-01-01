@@ -80,3 +80,9 @@ verify_jwt = false
 
 [functions.find-product-matches]
 verify_jwt = false
+
+[functions.nfe-focus]
+verify_jwt = false
+
+[functions.nfse-focus]
+verify_jwt = false
