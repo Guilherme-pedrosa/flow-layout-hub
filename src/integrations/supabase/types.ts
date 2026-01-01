@@ -6041,6 +6041,7 @@ export type Database = {
           field_sync_status: string | null
           field_synced_at: string | null
           field_task_id: string | null
+          field_technicians: Json | null
           financial_status: string | null
           finished_at: string | null
           freight_value: number | null
@@ -6096,6 +6097,7 @@ export type Database = {
           field_sync_status?: string | null
           field_synced_at?: string | null
           field_task_id?: string | null
+          field_technicians?: Json | null
           financial_status?: string | null
           finished_at?: string | null
           freight_value?: number | null
@@ -6151,6 +6153,7 @@ export type Database = {
           field_sync_status?: string | null
           field_synced_at?: string | null
           field_task_id?: string | null
+          field_technicians?: Json | null
           financial_status?: string | null
           finished_at?: string | null
           freight_value?: number | null
