@@ -20,9 +20,9 @@ serve(async (req) => {
       );
     }
 
-    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-    if (!LOVABLE_API_KEY) {
-      throw new Error('LOVABLE_API_KEY is not configured');
+    const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
+    if (!OPENAI_API_KEY) {
+      throw new Error('OPENAI_API_KEY is not configured');
     }
 
     const cleanNCM = ncm.replace(/\D/g, '');
@@ -60,10 +60,10 @@ Exemplos de NCMs válidos:
 
 Se o NCM não existir ou parecer inválido, retorne valid: false com uma sugestão apropriada.`;
 
-    const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+        'Authorization': `Bearer ${OPENAI_API_KEY}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -71,6 +71,7 @@ Se o NCM não existir ou parecer inválido, retorne valid: false com uma sugest�
         messages: [
           { role: 'user', content: prompt }
         ],
+        temperature: 0.3,
       }),
     });
 

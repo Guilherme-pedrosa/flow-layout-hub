@@ -6,7 +6,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -266,9 +266,9 @@ ${topSellingProducts.map((p, i) => `${i+1}. ${p.product?.code || 'S/C'} ${p.prod
 - Pedidos de compra em aberto: ${purchaseOrders?.filter(po => po.status !== 'recebido' && po.status !== 'cancelado').length || 0}
 `;
 
-    // Use Lovable AI to generate insights
-    if (!LOVABLE_API_KEY) {
-      console.log("[analyze-insights] No LOVABLE_API_KEY, generating basic insights");
+    // Use OpenAI to generate insights
+    if (!OPENAI_API_KEY) {
+      console.log("[analyze-insights] No OPENAI_API_KEY, generating basic insights");
       // Fallback: generate basic insights without AI
       const insights: any[] = [];
 
@@ -331,7 +331,7 @@ ${topSellingProducts.map((p, i) => `${i+1}. ${p.product?.code || 'S/C'} ${p.prod
       ? `- OBRIGATÓRIO: Todos os insights devem ter category: "${category}"`
       : '- Distribua entre as categorias relevantes';
 
-    // Use Lovable AI for smarter analysis
+    // Use OpenAI for smarter analysis
     const aiPrompt = `Com base nos dados abaixo, gere de 3 a 5 insights ACIONÁVEIS para a empresa. 
 ${categoryFocus}
 Cada insight deve ter:
@@ -355,12 +355,12 @@ ${contextSummary}
 
 Responda APENAS com um JSON array de insights, sem markdown:`;
 
-    console.log("[analyze-insights] Calling Lovable AI...");
+    console.log("[analyze-insights] Calling OpenAI...");
 
-    const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const aiResponse = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
+        Authorization: `Bearer ${OPENAI_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
@@ -369,6 +369,7 @@ Responda APENAS com um JSON array de insights, sem markdown:`;
           { role: "system", content: "Você é um analista de negócios especializado em ERP. Responda APENAS com JSON válido, sem markdown." },
           { role: "user", content: aiPrompt }
         ],
+        temperature: 0.3,
       }),
     });
 

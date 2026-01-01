@@ -110,3 +110,6 @@ verify_jwt = false
 
 [functions.field-sync-activity]
 verify_jwt = false
+
+[functions.field-fetch-technicians]
+verify_jwt = false
