@@ -364,7 +364,7 @@ Responda APENAS com um JSON array de insights, sem markdown:`;
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
+        model: "openai/gpt-5-mini",
         messages: [
           { role: "system", content: "Você é um analista de negócios especializado em ERP. Responda APENAS com JSON válido, sem markdown." },
           { role: "user", content: aiPrompt }
