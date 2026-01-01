@@ -274,13 +274,13 @@ export default function EmitirNFePage() {
           descricao: p.descricao,
           ncm: p.ncm,
           cfop: p.cfop,
-          unidade: p.unidade,
-          quantidade: p.quantidade,
+          unidade_comercial: p.unidade,
+          quantidade_comercial: p.quantidade,
           valor_unitario: p.valor_unitario,
-          valor_total: p.valor_total,
-          cst_icms: p.icms_cst,
-          aliquota_icms: p.icms_aliquota,
-          valor_icms: p.icms_valor,
+          valor_bruto: p.valor_total,
+          icms_situacao_tributaria: p.icms_cst,
+          icms_aliquota: p.icms_aliquota,
+          icms_valor: p.icms_valor,
         }));
 
         await supabase.from("nfe_itens").insert(itens);
@@ -426,7 +426,7 @@ export default function EmitirNFePage() {
                   sublabel: p.cpf_cnpj || "",
                 }))}
                 value={formData.destinatario_id}
-                onValueChange={handleDestinatarioChange}
+                onChange={handleDestinatarioChange}
                 placeholder="Digite para buscar"
               />
             </div>

@@ -80,3 +80,12 @@ verify_jwt = false
 
 [functions.find-product-matches]
 verify_jwt = false
+
+[functions.xml-signer]
+verify_jwt = false
+
+[functions.nfe-direto]
+verify_jwt = false
+
+[functions.nfse-direto]
+verify_jwt = false
