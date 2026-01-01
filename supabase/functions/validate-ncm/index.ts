@@ -67,7 +67,7 @@ Se o NCM não existir ou parecer inválido, retorne valid: false com uma sugest�
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'openai/gpt-5-mini',
+        model: 'gpt-4.1-mini-2025-04-14',
         messages: [
           { role: 'user', content: prompt }
         ],
