@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { NumericInput } from "@/components/ui/numeric-input";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -398,10 +399,9 @@ export function ServiceOrderFormProdutos({ items, onChange }: ServiceOrderFormPr
         <div className="grid grid-cols-2 gap-3">
           <div>
             <Label className="text-xs text-muted-foreground">Valor Unit.</Label>
-            <NumericInput
+            <CurrencyInput
               value={item.unit_price}
               onChange={(val) => updateItem(index, 'unit_price', val)}
-              step={0.01}
               className="h-9"
             />
           </div>
@@ -549,11 +549,10 @@ export function ServiceOrderFormProdutos({ items, onChange }: ServiceOrderFormPr
                       />
                     </TableCell>
                     <TableCell>
-                      <NumericInput
+                      <CurrencyInput
                         value={item.unit_price}
                         onChange={(val) => updateItem(index, 'unit_price', val)}
-                        step={0.01}
-                        className="text-sm min-w-[90px]"
+                        className="text-sm min-w-[100px]"
                       />
                     </TableCell>
                     <TableCell>
