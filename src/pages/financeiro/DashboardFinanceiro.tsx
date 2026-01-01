@@ -17,6 +17,7 @@ import {
   Landmark
 } from "lucide-react";
 import { FinancialAIChat } from "@/components/financeiro/FinancialAIChat";
+import { AlertAnalysisModal } from "@/components/financeiro/AlertAnalysisModal";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -104,6 +105,7 @@ const formatCurrency = (value: number) => {
 const DashboardFinanceiro = () => {
   const navigate = useNavigate();
   const [showAIChat, setShowAIChat] = useState(false);
+  const [showAlertAnalysis, setShowAlertAnalysis] = useState(false);
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -226,7 +228,7 @@ const DashboardFinanceiro = () => {
               variant="secondary" 
               size="sm" 
               className="bg-white text-primary hover:bg-white/90"
-              onClick={() => setShowAIChat(true)}
+              onClick={() => setShowAlertAnalysis(true)}
             >
               Ver análise completa
               <ArrowRight className="h-4 w-4 ml-2" />
@@ -512,6 +514,14 @@ const DashboardFinanceiro = () => {
 
       {/* AI Chat Panel */}
       {showAIChat && <FinancialAIChat onClose={() => setShowAIChat(false)} />}
+      
+      {/* Alert Analysis Modal */}
+      <AlertAnalysisModal
+        open={showAlertAnalysis}
+        onClose={() => setShowAlertAnalysis(false)}
+        alertTitle="IA prevê déficit de R$ 5.000 na próxima semana"
+        alertSuggestion="Sugestão: Considere antecipar recebíveis"
+      />
     </div>
   );
 };
