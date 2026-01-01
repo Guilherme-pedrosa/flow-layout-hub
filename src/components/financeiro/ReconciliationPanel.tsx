@@ -44,6 +44,15 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 
+interface RawData {
+  nome?: string;
+  nomePagador?: string;
+  nomeRecebedor?: string;
+  favorecido?: { nome?: string };
+  pagador?: { nome?: string };
+  [key: string]: unknown;
+}
+
 interface BankTransaction {
   id: string;
   transaction_date: string;
@@ -52,6 +61,7 @@ interface BankTransaction {
   type: string | null;
   nsu: string | null;
   is_reconciled: boolean;
+  raw_data?: RawData | null;
 }
 
 interface FinancialEntry {
@@ -152,7 +162,10 @@ export function ReconciliationPanel() {
         .eq("is_reconciled", false)
         .order("transaction_date", { ascending: false });
 
-      setTransactions(txData || []);
+      setTransactions((txData || []).map(tx => ({
+        ...tx,
+        raw_data: tx.raw_data as RawData | null
+      })));
 
       // Carregar contas a receber
       const { data: recData } = await supabase
@@ -751,6 +764,22 @@ export function ReconciliationPanel() {
                           {formatCurrency(suggestion.transaction.amount)}
                         </span>
                       </div>
+                      {(() => {
+                        const rawData = suggestion.transaction.raw_data as RawData | null;
+                        const remetente = rawData?.nome || 
+                          rawData?.nomePagador || 
+                          rawData?.nomeRecebedor || 
+                          rawData?.favorecido?.nome || 
+                          rawData?.pagador?.nome;
+                        return remetente ? (
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground text-sm">Remetente</span>
+                            <span className="font-medium text-right max-w-[200px] truncate text-sm">
+                              {remetente}
+                            </span>
+                          </div>
+                        ) : null;
+                      })()}
                       <div className="flex justify-between">
                         <span className="text-muted-foreground text-sm">Descrição</span>
                         <span className="font-medium text-right max-w-[200px] truncate text-sm">
