@@ -93,9 +93,9 @@ export default function ConfiguracaoNFe() {
           codigo_municipio: nfseData.codigo_municipio || '5201108',
           regime_tributacao: nfseData.regime_tributacao || '6',
           optante_simples: nfseData.optante_simples ?? true,
-          cnae: nfseData.cnae || '',
-          item_lista_servico: nfseData.item_lista_servico || '',
-          aliquota_iss: nfseData.aliquota_iss || 5,
+          cnae: (nfseData as any).cnae || '',
+          item_lista_servico: (nfseData as any).item_lista_servico || '',
+          aliquota_iss: (nfseData as any).aliquota_iss || 5,
         });
       }
 
