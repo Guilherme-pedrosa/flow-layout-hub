@@ -7,14 +7,15 @@ const corsHeaders = {
 };
 
 /**
- * Motor de Conciliação Inteligente - WeDo ERP
+ * Motor de Conciliação Inteligente v2.0 - WAI ERP
+ * Baseado em referências: Kamino, Dynamics 365, Cashbook
  * 
- * Níveis de Confiança (conforme spec):
- * - ≥95%: Sugestão de alta confiança (ainda requer confirmação humana)
- * - 70-94%: Sugestão de média confiança
- * - <70%: Sugestão de baixa confiança (requer revisão manual)
- * 
- * IMPORTANTE: NUNCA executa conciliação automática sem confirmação humana
+ * Características:
+ * - Matching 1:1, 1:N (aglutinação), N:1 (pagamento parcelado)
+ * - Pesos configuráveis por critério
+ * - Níveis de confiança: Alta (≥90), Média (70-89), Baixa (<70)
+ * - NUNCA executa conciliação automática sem confirmação humana
+ * - Processa tanto créditos (recebimentos) quanto débitos (pagamentos)
  */
 
 interface BankTransaction {
@@ -27,6 +28,7 @@ interface BankTransaction {
   is_reconciled: boolean;
   external_id: string | null;
   raw_data: Record<string, unknown> | null;
+  category: string | null;
 }
 
 interface FinancialEntry {
@@ -42,21 +44,71 @@ interface FinancialEntry {
   inter_nosso_numero: string | null;
   inter_boleto_id: string | null;
   pix_key: string | null;
+  payment_date: string | null;
+}
+
+interface MatchingConfig {
+  // Pesos para cada critério (total deve dar ~100)
+  peso_valor_exato: number;
+  peso_valor_proximo: number;
+  peso_data_exata: number;
+  peso_data_proxima: number;
+  peso_nome_completo: number;
+  peso_nome_parcial: number;
+  peso_documento: number;
+  peso_nosso_numero: number;
+  peso_chave_pix: number;
+  peso_numero_documento: number;
+  
+  // Tolerâncias
+  tolerancia_valor_percentual: number; // ex: 0.05 = 5%
+  tolerancia_valor_absoluto: number;   // ex: 10.00 = R$ 10
+  tolerancia_dias: number;             // ex: 7 = 7 dias
+  
+  // Scores mínimos
+  score_minimo_sugestao: number;       // ex: 40
+  score_alta_confianca: number;        // ex: 90
+  score_media_confianca: number;       // ex: 70
 }
 
 interface ReconciliationSuggestion {
   transaction_id: string;
+  transaction: BankTransaction;
   entries: {
     id: string;
     type: 'receivable' | 'payable';
-    amount_used: number;
+    amount: number;
+    entity_name: string | null;
+    due_date: string;
   }[];
   confidence_score: number;
+  confidence_level: 'high' | 'medium' | 'low';
   match_reasons: string[];
-  match_type: 'exact' | 'aggregation' | 'partial' | 'nsu' | 'document';
+  match_type: 'exact' | 'aggregation' | 'partial' | 'split';
   total_matched: number;
   difference: number;
+  requires_review: boolean;
 }
+
+// Configuração padrão de pesos (baseada em melhores práticas)
+const defaultConfig: MatchingConfig = {
+  peso_valor_exato: 40,
+  peso_valor_proximo: 30,
+  peso_data_exata: 15,
+  peso_data_proxima: 10,
+  peso_nome_completo: 15,
+  peso_nome_parcial: 8,
+  peso_documento: 20,
+  peso_nosso_numero: 25,
+  peso_chave_pix: 20,
+  peso_numero_documento: 15,
+  tolerancia_valor_percentual: 0.02, // 2%
+  tolerancia_valor_absoluto: 5.00,   // R$ 5
+  tolerancia_dias: 7,
+  score_minimo_sugestao: 45,
+  score_alta_confianca: 90,
+  score_media_confianca: 70,
+};
 
 // Normalização de texto para matching
 function normalizeText(text: string | null): string {
@@ -74,192 +126,288 @@ function normalizeDocument(doc: string | null): string {
   return doc?.replace(/\D/g, '') || '';
 }
 
-// Calcular score de proximidade de data
-function dateProximityScore(txDate: string, entryDate: string): number {
+// Extrair possíveis documentos da descrição
+function extractDocumentsFromText(text: string): string[] {
+  if (!text) return [];
+  const docs: string[] = [];
+  
+  // CPF: 11 dígitos
+  const cpfMatches = text.match(/\d{11}/g);
+  if (cpfMatches) docs.push(...cpfMatches);
+  
+  // CNPJ: 14 dígitos
+  const cnpjMatches = text.match(/\d{14}/g);
+  if (cnpjMatches) docs.push(...cnpjMatches);
+  
+  return docs;
+}
+
+// Calcular score de valor
+function calculateValueScore(
+  txAmount: number, 
+  entryAmount: number, 
+  config: MatchingConfig
+): { score: number; reason: string; isValid: boolean } {
+  const diff = Math.abs(txAmount - entryAmount);
+  const percentDiff = diff / Math.max(entryAmount, 0.01);
+  
+  // Valor exato (diferença < 1 centavo)
+  if (diff < 0.01) {
+    return { score: config.peso_valor_exato, reason: '✓ Valor exato', isValid: true };
+  }
+  
+  // Valor muito próximo (diferença de centavos, até R$ 1)
+  if (diff <= 1) {
+    return { score: config.peso_valor_exato - 5, reason: '✓ Valor muito próximo (centavos)', isValid: true };
+  }
+  
+  // Dentro da tolerância percentual E absoluta
+  if (percentDiff <= config.tolerancia_valor_percentual && diff <= config.tolerancia_valor_absoluto) {
+    return { score: config.peso_valor_proximo, reason: `✓ Valor dentro da tolerância (${(percentDiff * 100).toFixed(1)}%)`, isValid: true };
+  }
+  
+  // Dentro apenas da tolerância percentual (até 5%)
+  if (percentDiff <= 0.05) {
+    return { score: config.peso_valor_proximo - 10, reason: `~ Valor próximo (${(percentDiff * 100).toFixed(1)}% diferença)`, isValid: true };
+  }
+  
+  // Dentro de 10% - ainda válido mas com score baixo
+  if (percentDiff <= 0.10) {
+    return { score: 15, reason: `~ Valor com diferença moderada (${(percentDiff * 100).toFixed(1)}%)`, isValid: true };
+  }
+  
+  // Fora da tolerância - inválido
+  return { score: 0, reason: 'Valores incompatíveis', isValid: false };
+}
+
+// Calcular score de data
+function calculateDateScore(
+  txDate: string, 
+  entryDate: string, 
+  config: MatchingConfig
+): { score: number; reason: string } {
   const d1 = new Date(txDate);
   const d2 = new Date(entryDate);
   const diffDays = Math.abs((d1.getTime() - d2.getTime()) / (1000 * 60 * 60 * 24));
   
-  if (diffDays === 0) return 100;
-  if (diffDays <= 1) return 95;
-  if (diffDays <= 3) return 85;
-  if (diffDays <= 7) return 70;
-  if (diffDays <= 14) return 50;
-  if (diffDays <= 30) return 30;
-  return 10;
-}
-
-// Calcular score de similaridade de texto
-function textSimilarityScore(text1: string | null, text2: string | null): number {
-  const n1 = normalizeText(text1);
-  const n2 = normalizeText(text2);
-  
-  if (!n1 || !n2) return 0;
-  if (n1 === n2) return 100;
-  
-  const tokens1 = n1.split(/\s+/);
-  const tokens2 = n2.split(/\s+/);
-  
-  let matchCount = 0;
-  for (const token of tokens1) {
-    if (token.length > 2 && tokens2.some(t => t.includes(token) || token.includes(t))) {
-      matchCount++;
-    }
+  if (diffDays === 0) {
+    return { score: config.peso_data_exata, reason: '✓ Mesma data' };
+  }
+  if (diffDays <= 1) {
+    return { score: config.peso_data_exata - 2, reason: '✓ Data muito próxima (1 dia)' };
+  }
+  if (diffDays <= 3) {
+    return { score: config.peso_data_proxima, reason: '✓ Data próxima (até 3 dias)' };
+  }
+  if (diffDays <= config.tolerancia_dias) {
+    return { score: config.peso_data_proxima - 5, reason: `~ Data dentro da tolerância (${Math.round(diffDays)} dias)` };
+  }
+  if (diffDays <= 15) {
+    return { score: 3, reason: `~ Data distante (${Math.round(diffDays)} dias)` };
   }
   
-  return Math.round((matchCount / Math.max(tokens1.length, 1)) * 100);
+  return { score: 0, reason: '' };
 }
 
-// Motor principal de matching - CORRIGIDO
-// CORREÇÕES APLICADAS:
-// 1. Filtro de proporção de valor - rejeita matches com diferença > 20% ou > R$ 100
-// 2. Peso do valor aumentado para 60%
-// 3. Verificação de destinatário/entidade
-function calculateMatchScore(
+// Calcular score de nome/entidade
+function calculateNameScore(
+  txDescription: string | null,
+  entityName: string | null,
+  config: MatchingConfig
+): { score: number; reason: string } {
+  if (!txDescription || !entityName) return { score: 0, reason: '' };
+  
+  const descNorm = normalizeText(txDescription);
+  const nameNorm = normalizeText(entityName);
+  
+  if (!descNorm || !nameNorm) return { score: 0, reason: '' };
+  
+  // Nome completo encontrado
+  if (descNorm.includes(nameNorm)) {
+    return { score: config.peso_nome_completo, reason: '✓ Nome completo encontrado' };
+  }
+  
+  // Verificar tokens do nome (palavras com mais de 3 caracteres)
+  const nameTokens = nameNorm.split(/\s+/).filter(t => t.length > 3);
+  if (nameTokens.length === 0) return { score: 0, reason: '' };
+  
+  const matchedTokens = nameTokens.filter(t => descNorm.includes(t));
+  const matchRatio = matchedTokens.length / nameTokens.length;
+  
+  if (matchRatio >= 0.7) {
+    return { score: config.peso_nome_completo - 3, reason: `✓ Nome encontrado (${matchedTokens.length}/${nameTokens.length} palavras)` };
+  }
+  if (matchRatio >= 0.5) {
+    return { score: config.peso_nome_parcial, reason: `~ Nome parcial (${matchedTokens.length}/${nameTokens.length} palavras)` };
+  }
+  if (matchedTokens.length >= 1) {
+    return { score: config.peso_nome_parcial - 3, reason: `~ ${matchedTokens.length} palavra(s) do nome` };
+  }
+  
+  return { score: 0, reason: '' };
+}
+
+// Calcular score de documento (CPF/CNPJ)
+function calculateDocumentScore(
+  txDescription: string | null,
+  entityDocument: string | null,
+  config: MatchingConfig
+): { score: number; reason: string } {
+  if (!txDescription || !entityDocument) return { score: 0, reason: '' };
+  
+  const docNorm = normalizeDocument(entityDocument);
+  if (docNorm.length < 11) return { score: 0, reason: '' };
+  
+  // Verificar se documento está na descrição
+  const descClean = txDescription.replace(/\D/g, '');
+  if (descClean.includes(docNorm)) {
+    return { score: config.peso_documento, reason: '✓ CPF/CNPJ encontrado' };
+  }
+  
+  // Verificar documentos extraídos da descrição
+  const extractedDocs = extractDocumentsFromText(txDescription);
+  if (extractedDocs.includes(docNorm)) {
+    return { score: config.peso_documento, reason: '✓ CPF/CNPJ identificado' };
+  }
+  
+  return { score: 0, reason: '' };
+}
+
+// Calcular score de identificadores específicos (nosso número, boleto, PIX)
+function calculateIdentifierScore(
   tx: BankTransaction,
-  entry: FinancialEntry
-): { score: number; reasons: string[]; valueScore: number } {
-  const reasons: string[] = [];
+  entry: FinancialEntry,
+  config: MatchingConfig
+): { score: number; reasons: string[] } {
   let score = 0;
-  let valueScore = 0;
-
-  const txAmount = Math.abs(tx.amount);
-  const entryAmount = entry.amount;
-  const amountDiff = Math.abs(txAmount - entryAmount);
-  const percentDiff = amountDiff / Math.max(entryAmount, 1);
-
-  // CORREÇÃO 1: Filtro de proporção de valor
-  // Rejeitar se diferença > 20% OU diferença absoluta > R$ 100
-  if (percentDiff > 0.20 || amountDiff > 100) {
-    console.log(`[reconciliation-engine] REJEITADO: tx=${txAmount.toFixed(2)}, entry=${entryAmount.toFixed(2)}, diff=${amountDiff.toFixed(2)} (${(percentDiff*100).toFixed(1)}%)`);
-    return { score: 0, reasons: ['Valores muito diferentes - rejeitado'], valueScore: 0 };
-  }
-
-  // 1. Match por valor (PRINCIPAL - até 60 pontos) - PESO AUMENTADO
-  if (amountDiff < 0.01) {
-    score += 60;
-    valueScore = 60;
-    reasons.push('✓ Valor exato');
-  } else if (amountDiff < 1) {
-    score += 55;
-    valueScore = 55;
-    reasons.push('✓ Valor muito próximo (centavos)');
-  } else if (percentDiff < 0.01) {
-    score += 50;
-    valueScore = 50;
-    reasons.push('✓ Valor <1% diferença');
-  } else if (percentDiff < 0.05) {
-    score += 40;
-    valueScore = 40;
-    reasons.push('~ Valor <5% diferença');
-  } else if (percentDiff < 0.10) {
-    score += 30;
-    valueScore = 30;
-    reasons.push('~ Valor <10% diferença');
-  } else if (percentDiff < 0.20) {
-    score += 20;
-    valueScore = 20;
-    reasons.push('? Valor com diferença moderada');
-  }
-
-  // CORREÇÃO: Exigir match de valor mínimo
-  if (valueScore === 0) {
-    console.log(`[reconciliation-engine] REJEITADO por falta de match de valor: tx=${txAmount.toFixed(2)}, entry=${entryAmount.toFixed(2)}`);
-    return { score: 0, reasons: ['Sem correspondência de valor'], valueScore: 0 };
-  }
-
-  // 2. Match por data (até 25 pontos)
-  const dateScore = dateProximityScore(tx.transaction_date, entry.due_date);
-  score += Math.round(dateScore * 0.25);
-  if (dateScore >= 85) {
-    reasons.push('✓ Data próxima');
-  } else if (dateScore >= 50) {
-    reasons.push('~ Data similar');
-  }
-
-  // 3. Match por nome na descrição (até 20 pontos)
-  const txDesc = normalizeText(tx.description);
-  const entityName = normalizeText(entry.entity_name);
-  const entryDesc = normalizeText(entry.description);
+  const reasons: string[] = [];
+  const descNorm = normalizeText(tx.description);
   
-  if (entityName && txDesc.includes(entityName)) {
-    score += 20;
-    reasons.push('✓ Nome encontrado');
-  } else if (entityName) {
-    // Tentar tokens do nome
-    const nameTokens = entityName.split(/\s+/).filter(t => t.length > 3);
-    const matchedTokens = nameTokens.filter(t => txDesc.includes(t));
-    if (matchedTokens.length > 0) {
-      score += Math.min(15, matchedTokens.length * 5);
-      reasons.push(`~ ${matchedTokens.length} palavra(s) do nome`);
-    }
-  }
-  
-  // 4. Match por descrição similar (até 5 pontos)
-  if (entryDesc && txDesc) {
-    const descTokens = entryDesc.split(/\s+/).filter(t => t.length > 3);
-    const matchedDesc = descTokens.filter(t => txDesc.includes(t));
-    if (matchedDesc.length > 0) {
-      score += Math.min(5, matchedDesc.length * 2);
-    }
-  }
-
-  // 5. Match por NSU/nosso número (bônus de 15 pontos)
-  if (tx.nsu && entry.inter_nosso_numero) {
-    if (tx.nsu.includes(entry.inter_nosso_numero) || 
-        entry.inter_nosso_numero.includes(tx.nsu)) {
-      score += 15;
-      reasons.push('✓ Nosso número');
-    }
-  }
-  if (tx.description && entry.inter_nosso_numero) {
-    if (tx.description.includes(entry.inter_nosso_numero)) {
-      score += 10;
+  // Nosso número (boleto Inter)
+  if (entry.inter_nosso_numero) {
+    if (tx.nsu?.includes(entry.inter_nosso_numero) || 
+        entry.inter_nosso_numero.includes(tx.nsu || '')) {
+      score += config.peso_nosso_numero;
+      reasons.push('✓ Nosso número do boleto');
+    } else if (tx.description?.includes(entry.inter_nosso_numero)) {
+      score += config.peso_nosso_numero - 5;
       reasons.push('✓ Nosso número na descrição');
     }
   }
-
-  // 6. Match por documento (bônus de 10 pontos)  
-  if (entry.document_number && tx.description) {
-    if (tx.description.includes(entry.document_number)) {
-      score += 10;
-      reasons.push('✓ Documento na descrição');
+  
+  // Chave PIX
+  if (entry.pix_key && tx.description) {
+    const pixNorm = normalizeText(entry.pix_key);
+    if (descNorm.includes(pixNorm)) {
+      score += config.peso_chave_pix;
+      reasons.push('✓ Chave PIX encontrada');
     }
   }
-
-  // Limitar a 100
-  const finalScore = Math.min(100, score);
   
-  console.log(`[reconciliation-engine] Match: tx=${tx.id.slice(0,8)} entry=${entry.id.slice(0,8)} valor_tx=${txAmount.toFixed(2)} valor_entry=${entryAmount.toFixed(2)} score=${finalScore} valueScore=${valueScore} reasons=${reasons.join(', ')}`);
+  // Número do documento
+  if (entry.document_number && tx.description) {
+    if (tx.description.includes(entry.document_number)) {
+      score += config.peso_numero_documento;
+      reasons.push('✓ Número do documento');
+    }
+  }
   
-  return { score: finalScore, reasons, valueScore };
+  return { score, reasons };
 }
 
-// Encontrar combinações de títulos que somam o valor
-function findCombinations(
-  target: number, 
-  entries: FinancialEntry[], 
-  maxItems: number = 10,
-  tolerance: number = 0.01
+// Motor principal de matching para uma transação vs um título
+function calculateMatchScore(
+  tx: BankTransaction,
+  entry: FinancialEntry,
+  config: MatchingConfig
+): { score: number; reasons: string[]; isValid: boolean } {
+  const reasons: string[] = [];
+  let totalScore = 0;
+  
+  const txAmount = Math.abs(tx.amount);
+  
+  // 1. Score de valor (obrigatório)
+  const valueResult = calculateValueScore(txAmount, entry.amount, config);
+  if (!valueResult.isValid) {
+    return { score: 0, reasons: [valueResult.reason], isValid: false };
+  }
+  totalScore += valueResult.score;
+  if (valueResult.reason) reasons.push(valueResult.reason);
+  
+  // 2. Score de data
+  const dateResult = calculateDateScore(tx.transaction_date, entry.due_date, config);
+  totalScore += dateResult.score;
+  if (dateResult.reason) reasons.push(dateResult.reason);
+  
+  // 3. Score de nome/entidade
+  const nameResult = calculateNameScore(tx.description, entry.entity_name, config);
+  totalScore += nameResult.score;
+  if (nameResult.reason) reasons.push(nameResult.reason);
+  
+  // 4. Score de documento
+  const docResult = calculateDocumentScore(tx.description, entry.entity_document, config);
+  totalScore += docResult.score;
+  if (docResult.reason) reasons.push(docResult.reason);
+  
+  // 5. Score de identificadores específicos
+  const idResult = calculateIdentifierScore(tx, entry, config);
+  totalScore += idResult.score;
+  reasons.push(...idResult.reasons);
+  
+  // Limitar a 100
+  const finalScore = Math.min(100, totalScore);
+  
+  return { score: finalScore, reasons, isValid: true };
+}
+
+// Encontrar combinações de títulos que somam o valor (aglutinação 1:N)
+function findAggregations(
+  targetAmount: number,
+  entries: FinancialEntry[],
+  config: MatchingConfig,
+  maxItems: number = 8
 ): FinancialEntry[][] {
   const results: FinancialEntry[][] = [];
+  const tolerance = Math.max(
+    targetAmount * config.tolerancia_valor_percentual,
+    config.tolerancia_valor_absoluto
+  );
+  
+  // Ordenar por valor decrescente para otimização
+  const sorted = [...entries].sort((a, b) => b.amount - a.amount);
   
   const backtrack = (start: number, remaining: number, current: FinancialEntry[]) => {
-    if (Math.abs(remaining) <= tolerance && current.length > 0) {
+    // Encontrou combinação válida
+    if (Math.abs(remaining) <= tolerance && current.length >= 2) {
       results.push([...current]);
       return;
     }
-    if (remaining < -tolerance || current.length >= maxItems) return;
     
-    for (let i = start; i < entries.length && results.length < 20; i++) {
-      current.push(entries[i]);
-      backtrack(i + 1, remaining - entries[i].amount, current);
+    // Limite de itens ou valor negativo demais
+    if (current.length >= maxItems || remaining < -tolerance) return;
+    
+    // Limite de resultados
+    if (results.length >= 10) return;
+    
+    for (let i = start; i < sorted.length; i++) {
+      // Poda: se o item é maior que o restante + tolerância, pular
+      if (sorted[i].amount > remaining + tolerance) continue;
+      
+      current.push(sorted[i]);
+      backtrack(i + 1, remaining - sorted[i].amount, current);
       current.pop();
     }
   };
   
-  backtrack(0, target, []);
+  backtrack(0, targetAmount, []);
   return results;
+}
+
+// Determinar nível de confiança
+function getConfidenceLevel(score: number, config: MatchingConfig): 'high' | 'medium' | 'low' {
+  if (score >= config.score_alta_confianca) return 'high';
+  if (score >= config.score_media_confianca) return 'medium';
+  return 'low';
 }
 
 serve(async (req) => {
@@ -268,38 +416,56 @@ serve(async (req) => {
   }
 
   try {
+    const body = await req.json();
     const { 
-      company_id, 
-      tolerance_days = 7, 
-      tolerance_amount = 0.01,
-      max_suggestions = 50,
-      include_low_confidence = true
-    } = await req.json();
+      company_id,
+      config: userConfig,
+      date_from,
+      date_to,
+      max_suggestions = 100,
+      include_low_confidence = true,
+      transaction_type = 'all' // 'all', 'credit', 'debit'
+    } = body;
 
     if (!company_id) {
       throw new Error("company_id é obrigatório");
     }
 
-    console.log(`[reconciliation-engine] Iniciando análise para company: ${company_id}`);
+    // Mesclar configuração do usuário com padrão
+    const config: MatchingConfig = { ...defaultConfig, ...userConfig };
+
+    console.log(`[reconciliation-engine v2] Iniciando para company: ${company_id}`);
+    console.log(`[reconciliation-engine v2] Config: score_minimo=${config.score_minimo_sugestao}, alta=${config.score_alta_confianca}, media=${config.score_media_confianca}`);
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     // 1. Buscar transações não conciliadas
-    const { data: transactions, error: txError } = await supabase
+    let txQuery = supabase
       .from("bank_transactions")
       .select("*")
       .eq("company_id", company_id)
       .eq("is_reconciled", false)
       .order("transaction_date", { ascending: false })
-      .limit(1000);
+      .limit(500);
 
+    if (date_from) txQuery = txQuery.gte("transaction_date", date_from);
+    if (date_to) txQuery = txQuery.lte("transaction_date", date_to);
+    
+    // Filtrar por tipo se especificado
+    if (transaction_type === 'credit') {
+      txQuery = txQuery.gt("amount", 0);
+    } else if (transaction_type === 'debit') {
+      txQuery = txQuery.lt("amount", 0);
+    }
+
+    const { data: transactions, error: txError } = await txQuery;
     if (txError) throw txError;
 
-    console.log(`[reconciliation-engine] ${transactions?.length || 0} transações não conciliadas`);
+    console.log(`[reconciliation-engine v2] ${transactions?.length || 0} transações não conciliadas`);
 
-    // 2. Buscar títulos a receber não pagos
+    // 2. Buscar contas a receber não pagas (para créditos)
     const { data: receivables, error: recError } = await supabase
       .from("accounts_receivable")
       .select("*, clientes(razao_social, nome_fantasia, cpf_cnpj)")
@@ -309,7 +475,7 @@ serve(async (req) => {
 
     if (recError) throw recError;
 
-    // 3. Buscar títulos a pagar não pagos
+    // 3. Buscar contas a pagar não pagas (para débitos)
     const { data: payables, error: payError } = await supabase
       .from("payables")
       .select("*, pessoas:supplier_id(razao_social, nome_fantasia, cpf_cnpj)")
@@ -320,180 +486,231 @@ serve(async (req) => {
     if (payError) throw payError;
 
     // Mapear para formato uniforme
-    const financialEntries: FinancialEntry[] = [
-      ...(receivables || []).map(r => ({
-        id: r.id,
-        amount: r.amount,
-        due_date: r.due_date,
-        description: r.description,
-        document_number: r.document_number,
-        is_paid: r.is_paid || false,
-        type: 'receivable' as const,
-        entity_name: (r.clientes as Record<string, string>)?.nome_fantasia || (r.clientes as Record<string, string>)?.razao_social || null,
-        entity_document: (r.clientes as Record<string, string>)?.cpf_cnpj || null,
-        inter_nosso_numero: r.inter_nosso_numero,
-        inter_boleto_id: r.inter_boleto_id,
-        pix_key: null
-      })),
-      ...(payables || []).map(p => ({
-        id: p.id,
-        amount: p.amount,
-        due_date: p.due_date,
-        description: p.description,
-        document_number: p.document_number,
-        is_paid: p.is_paid || false,
-        type: 'payable' as const,
-        entity_name: (p.pessoas as Record<string, string>)?.nome_fantasia || (p.pessoas as Record<string, string>)?.razao_social || null,
-        entity_document: (p.pessoas as Record<string, string>)?.cpf_cnpj || null,
-        inter_nosso_numero: null,
-        inter_boleto_id: null,
-        pix_key: p.pix_key
-      }))
-    ];
+    const receivableEntries: FinancialEntry[] = (receivables || []).map(r => ({
+      id: r.id,
+      amount: r.amount,
+      due_date: r.due_date,
+      description: r.description,
+      document_number: r.document_number,
+      is_paid: r.is_paid || false,
+      type: 'receivable' as const,
+      entity_name: (r.clientes as Record<string, string>)?.nome_fantasia || 
+                   (r.clientes as Record<string, string>)?.razao_social || null,
+      entity_document: (r.clientes as Record<string, string>)?.cpf_cnpj || null,
+      inter_nosso_numero: r.inter_nosso_numero,
+      inter_boleto_id: r.inter_boleto_id,
+      pix_key: null,
+      payment_date: r.paid_at
+    }));
 
-    console.log(`[reconciliation-engine] ${financialEntries.length} títulos financeiros em aberto`);
+    const payableEntries: FinancialEntry[] = (payables || []).map(p => ({
+      id: p.id,
+      amount: p.amount,
+      due_date: p.due_date,
+      description: p.description,
+      document_number: p.document_number,
+      is_paid: p.is_paid || false,
+      type: 'payable' as const,
+      entity_name: (p.pessoas as Record<string, string>)?.nome_fantasia || 
+                   (p.pessoas as Record<string, string>)?.razao_social || null,
+      entity_document: (p.pessoas as Record<string, string>)?.cpf_cnpj || null,
+      inter_nosso_numero: null,
+      inter_boleto_id: null,
+      pix_key: p.pix_key,
+      payment_date: p.paid_at
+    }));
+
+    console.log(`[reconciliation-engine v2] ${receivableEntries.length} recebíveis, ${payableEntries.length} pagáveis`);
 
     const suggestions: ReconciliationSuggestion[] = [];
+    const usedEntryIds = new Set<string>();
 
-    // 4. Analisar cada transação
+    // 4. Processar cada transação
     for (const tx of transactions || []) {
-      const isCredit = tx.type === "CREDIT" || tx.amount > 0;
+      const isCredit = tx.amount > 0;
       const txAmount = Math.abs(tx.amount);
 
-      // Log para debug
-      console.log(`[reconciliation-engine] Analisando tx: ${tx.id}, valor: ${tx.amount}, tipo: ${tx.type}, isCredit: ${isCredit}`);
+      // Selecionar títulos relevantes baseado no tipo da transação
+      // Créditos (entradas) -> Recebíveis
+      // Débitos (saídas) -> Pagáveis
+      const relevantEntries = isCredit ? receivableEntries : payableEntries;
+      
+      // Filtrar apenas não utilizados
+      const availableEntries = relevantEntries.filter(e => !usedEntryIds.has(e.id));
 
-      // Para débitos (saídas), buscar payables
-      // Para créditos (entradas), buscar receivables
-      // MAS também tentar match geral se não houver específico
-      let relevantEntries = financialEntries.filter(e => 
-        isCredit ? e.type === 'receivable' : e.type === 'payable'
-      );
+      if (availableEntries.length === 0) continue;
 
-      // Se não encontrar do tipo correto, tenta com todos (pode ser lançamento manual)
-      if (relevantEntries.length === 0) {
-        console.log(`[reconciliation-engine] Nenhum título do tipo esperado, tentando todos`);
-        relevantEntries = financialEntries;
-      }
-
-      if (relevantEntries.length === 0) continue;
-
-      // 4.1 Tentar match exato (1:1)
+      // 4.1 Tentar match 1:1 (exato)
       const exactMatches: { entry: FinancialEntry; score: number; reasons: string[] }[] = [];
       
-      for (const entry of relevantEntries) {
-        const { score, reasons, valueScore } = calculateMatchScore(tx, entry);
-        // CORREÇÃO: Score mínimo aumentado de 30 para 50
-        // E exige que valueScore seja > 0 (match de valor obrigatório)
-        const minScore = include_low_confidence ? 50 : 70;
-        if (score >= minScore && valueScore > 0) {
+      for (const entry of availableEntries) {
+        const { score, reasons, isValid } = calculateMatchScore(tx, entry, config);
+        
+        if (isValid && score >= config.score_minimo_sugestao) {
           exactMatches.push({ entry, score, reasons });
         }
       }
 
-      // Ordenar por score
+      // Ordenar por score decrescente
       exactMatches.sort((a, b) => b.score - a.score);
 
-      // Adicionar melhor match exato
+      // Adicionar melhor match 1:1
       if (exactMatches.length > 0) {
         const best = exactMatches[0];
-        const amountDiff = Math.abs(txAmount - best.entry.amount);
+        const confidenceLevel = getConfidenceLevel(best.score, config);
         
-        suggestions.push({
-          transaction_id: tx.id,
-          entries: [{
-            id: best.entry.id,
-            type: best.entry.type,
-            amount_used: best.entry.amount
-          }],
-          confidence_score: best.score,
-          match_reasons: best.reasons,
-          match_type: amountDiff < 0.01 ? 'exact' : 'partial',
-          total_matched: best.entry.amount,
-          difference: txAmount - best.entry.amount
-        });
-      }
+        // Só adicionar se for alta/média confiança, ou se incluir baixa
+        if (confidenceLevel !== 'low' || include_low_confidence) {
+          const diff = txAmount - best.entry.amount;
+          
+          suggestions.push({
+            transaction_id: tx.id,
+            transaction: tx,
+            entries: [{
+              id: best.entry.id,
+              type: best.entry.type,
+              amount: best.entry.amount,
+              entity_name: best.entry.entity_name,
+              due_date: best.entry.due_date
+            }],
+            confidence_score: best.score,
+            confidence_level: confidenceLevel,
+            match_reasons: best.reasons,
+            match_type: Math.abs(diff) < 0.01 ? 'exact' : 'partial',
+            total_matched: best.entry.amount,
+            difference: diff,
+            requires_review: confidenceLevel !== 'high'
+          });
 
-      // 4.2 Tentar aglutinação por cliente/fornecedor
-      const groupedByEntity = new Map<string, FinancialEntry[]>();
-      
-      for (const entry of relevantEntries) {
-        const key = entry.entity_name || 'unknown';
-        if (!groupedByEntity.has(key)) {
-          groupedByEntity.set(key, []);
+          // Marcar como usado para evitar duplicatas
+          usedEntryIds.add(best.entry.id);
         }
-        groupedByEntity.get(key)!.push(entry);
       }
 
-      for (const [entityName, group] of groupedByEntity) {
-        if (entityName === 'unknown' || group.length < 2) continue;
-
-        const combinations = findCombinations(txAmount, group, 10, tolerance_amount);
+      // 4.2 Tentar aglutinação 1:N (se não encontrou match 1:1 bom)
+      if (exactMatches.length === 0 || exactMatches[0].score < config.score_alta_confianca) {
+        // Agrupar por entidade para aglutinação
+        const entriesByEntity = new Map<string, FinancialEntry[]>();
         
-        for (const combo of combinations) {
-          const total = combo.reduce((sum, e) => sum + e.amount, 0);
-          
-          // Calcular score médio da combinação
-          const scores = combo.map(e => calculateMatchScore(tx, e));
-          const avgScore = Math.round(scores.reduce((sum, s) => sum + s.score, 0) / scores.length);
-          
-          // Boost para aglutinação exata
-          const finalScore = Math.abs(total - txAmount) < 0.01 
-            ? Math.min(avgScore + 10, 100) 
-            : avgScore;
+        for (const entry of availableEntries) {
+          if (usedEntryIds.has(entry.id)) continue;
+          const key = entry.entity_name || 'unknown';
+          if (!entriesByEntity.has(key)) {
+            entriesByEntity.set(key, []);
+          }
+          entriesByEntity.get(key)!.push(entry);
+        }
 
-          // CORREÇÃO: Score mínimo aumentado de 30 para 50
-          const minScore = include_low_confidence ? 50 : 70;
-          if (finalScore >= minScore) {
-            suggestions.push({
-              transaction_id: tx.id,
-              entries: combo.map(e => ({
-                id: e.id,
-                type: e.type,
-                amount_used: e.amount
-              })),
-              confidence_score: finalScore,
-              match_reasons: [`Aglutinação: ${combo.length} títulos de "${entityName}"`],
-              match_type: 'aggregation',
-              total_matched: total,
-              difference: txAmount - total
-            });
+        for (const [entityName, entityEntries] of entriesByEntity) {
+          if (entityName === 'unknown' || entityEntries.length < 2) continue;
+
+          const combinations = findAggregations(txAmount, entityEntries, config);
+          
+          for (const combo of combinations) {
+            const total = combo.reduce((sum, e) => sum + e.amount, 0);
+            const diff = txAmount - total;
+            
+            // Calcular score médio ponderado
+            let totalWeight = 0;
+            let weightedScore = 0;
+            
+            for (const entry of combo) {
+              const { score } = calculateMatchScore(tx, entry, config);
+              weightedScore += score * entry.amount;
+              totalWeight += entry.amount;
+            }
+            
+            let avgScore = Math.round(weightedScore / totalWeight);
+            
+            // Bônus por match exato de valor na aglutinação
+            if (Math.abs(diff) < 0.01) {
+              avgScore = Math.min(100, avgScore + 10);
+            }
+            
+            const confidenceLevel = getConfidenceLevel(avgScore, config);
+            
+            if (avgScore >= config.score_minimo_sugestao && 
+                (confidenceLevel !== 'low' || include_low_confidence)) {
+              suggestions.push({
+                transaction_id: tx.id,
+                transaction: tx,
+                entries: combo.map(e => ({
+                  id: e.id,
+                  type: e.type,
+                  amount: e.amount,
+                  entity_name: e.entity_name,
+                  due_date: e.due_date
+                })),
+                confidence_score: avgScore,
+                confidence_level: confidenceLevel,
+                match_reasons: [`Aglutinação: ${combo.length} títulos de "${entityName}"`],
+                match_type: 'aggregation',
+                total_matched: total,
+                difference: diff,
+                requires_review: true // Aglutinação sempre requer revisão
+              });
+            }
           }
         }
       }
     }
 
-    // 5. Ordenar e limitar sugestões
-    suggestions.sort((a, b) => b.confidence_score - a.confidence_score);
+    // 5. Ordenar sugestões por confiança e limitar
+    suggestions.sort((a, b) => {
+      // Primeiro por nível de confiança
+      const levelOrder = { high: 0, medium: 1, low: 2 };
+      if (levelOrder[a.confidence_level] !== levelOrder[b.confidence_level]) {
+        return levelOrder[a.confidence_level] - levelOrder[b.confidence_level];
+      }
+      // Depois por score
+      return b.confidence_score - a.confidence_score;
+    });
+
     const limitedSuggestions = suggestions.slice(0, max_suggestions);
 
-    // 6. Categorizar por nível de confiança
-    const highConfidence = limitedSuggestions.filter(s => s.confidence_score >= 95);
-    const mediumConfidence = limitedSuggestions.filter(s => s.confidence_score >= 70 && s.confidence_score < 95);
-    const lowConfidence = limitedSuggestions.filter(s => s.confidence_score < 70);
+    // 6. Categorizar
+    const highConfidence = limitedSuggestions.filter(s => s.confidence_level === 'high');
+    const mediumConfidence = limitedSuggestions.filter(s => s.confidence_level === 'medium');
+    const lowConfidence = limitedSuggestions.filter(s => s.confidence_level === 'low');
 
-    console.log(`[reconciliation-engine] Sugestões geradas: ${limitedSuggestions.length}`);
-    console.log(`  - Alta confiança (≥95%): ${highConfidence.length}`);
-    console.log(`  - Média confiança (70-94%): ${mediumConfidence.length}`);
-    console.log(`  - Baixa confiança (<70%): ${lowConfidence.length}`);
+    // 7. Identificar transações sem match
+    const matchedTxIds = new Set(limitedSuggestions.map(s => s.transaction_id));
+    const unmatchedTransactions = (transactions || [])
+      .filter(tx => !matchedTxIds.has(tx.id))
+      .map(tx => ({
+        id: tx.id,
+        date: tx.transaction_date,
+        description: tx.description,
+        amount: tx.amount,
+        type: tx.type
+      }));
+
+    console.log(`[reconciliation-engine v2] Resultado:`);
+    console.log(`  - Alta confiança: ${highConfidence.length}`);
+    console.log(`  - Média confiança: ${mediumConfidence.length}`);
+    console.log(`  - Baixa confiança: ${lowConfidence.length}`);
+    console.log(`  - Sem match: ${unmatchedTransactions.length}`);
 
     return new Response(
       JSON.stringify({
         success: true,
         data: {
           suggestions: limitedSuggestions,
+          unmatched_transactions: unmatchedTransactions,
           summary: {
             total_suggestions: limitedSuggestions.length,
             high_confidence: highConfidence.length,
             medium_confidence: mediumConfidence.length,
             low_confidence: lowConfidence.length,
+            unmatched: unmatchedTransactions.length,
             transactions_analyzed: transactions?.length || 0,
-            financial_entries_analyzed: financialEntries.length
+            receivables_available: receivableEntries.length,
+            payables_available: payableEntries.length
           },
-          // IMPORTANTE: Lista de sugestões para confirmação humana
-          // A IA NÃO executa nenhuma conciliação automaticamente
-          pending_human_review: limitedSuggestions.length,
-          auto_executed: 0 // Sempre zero - conciliação requer confirmação
+          config_used: config,
+          // IMPORTANTE: Todas as sugestões requerem confirmação humana
+          auto_executed: 0,
+          pending_human_review: limitedSuggestions.length
         }
       }),
       {
@@ -502,7 +719,7 @@ serve(async (req) => {
       }
     );
   } catch (error) {
-    console.error("[reconciliation-engine] Erro:", error);
+    console.error("[reconciliation-engine v2] Erro:", error);
     return new Response(
       JSON.stringify({ 
         success: false,

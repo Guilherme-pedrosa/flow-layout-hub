@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -9,12 +9,13 @@ import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Textarea } from "@/components/ui/textarea";
+import { Progress } from "@/components/ui/progress";
 import {
   AlertCircle,
   ArrowRight,
   Check,
   CheckCircle2,
+  ChevronDown,
   ChevronRight,
   Filter,
   Lightbulb,
@@ -24,13 +25,24 @@ import {
   Search,
   Sparkles,
   XCircle,
-  Zap
+  Zap,
+  Settings2,
+  FileText,
+  TrendingUp,
+  TrendingDown,
+  AlertTriangle,
+  CheckCheck
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { formatCurrency, formatDate } from "@/lib/formatters";
 import { useCompany } from "@/contexts/CompanyContext";
 import { AIBanner } from "@/components/shared";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 
 interface BankTransaction {
   id: string;
@@ -55,20 +67,32 @@ interface FinancialEntry {
 
 interface Suggestion {
   transaction_id: string;
+  transaction: BankTransaction;
   entries: {
     id: string;
     type: 'receivable' | 'payable';
-    amount_used: number;
+    amount: number;
+    entity_name: string | null;
+    due_date: string;
   }[];
   confidence_score: number;
+  confidence_level: 'high' | 'medium' | 'low';
   match_reasons: string[];
   match_type: string;
   total_matched: number;
   difference: number;
-  transaction?: BankTransaction;
-  financial_entries?: FinancialEntry[];
+  requires_review: boolean;
 }
 
+interface UnmatchedTransaction {
+  id: string;
+  date: string;
+  description: string | null;
+  amount: number;
+  type: string | null;
+}
+
+type ViewMode = 'suggestions' | 'unmatched' | 'all';
 type ConfidenceLevel = 'all' | 'high' | 'medium' | 'low';
 
 export function ReconciliationPanel() {
@@ -77,12 +101,15 @@ export function ReconciliationPanel() {
 
   const [loading, setLoading] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
+  const [confirmingBatch, setConfirmingBatch] = useState(false);
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
+  const [unmatchedTransactions, setUnmatchedTransactions] = useState<UnmatchedTransaction[]>([]);
   const [transactions, setTransactions] = useState<BankTransaction[]>([]);
   const [receivables, setReceivables] = useState<FinancialEntry[]>([]);
   const [payables, setPayables] = useState<FinancialEntry[]>([]);
   
   // Filtros
+  const [viewMode, setViewMode] = useState<ViewMode>('suggestions');
   const [confidenceFilter, setConfidenceFilter] = useState<ConfidenceLevel>('all');
   const [typeFilter, setTypeFilter] = useState<'all' | 'credit' | 'debit'>('all');
   const [searchTerm, setSearchTerm] = useState('');
@@ -92,7 +119,19 @@ export function ReconciliationPanel() {
   
   // Confirmação individual
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
-  const [confirmNotes, setConfirmNotes] = useState('');
+  
+  // Configurações avançadas
+  const [showConfig, setShowConfig] = useState(false);
+
+  // Summary
+  const [summary, setSummary] = useState({
+    total_suggestions: 0,
+    high_confidence: 0,
+    medium_confidence: 0,
+    low_confidence: 0,
+    unmatched: 0,
+    transactions_analyzed: 0
+  });
 
   useEffect(() => {
     if (companyId) {
@@ -172,32 +211,25 @@ export function ReconciliationPanel() {
         body: {
           company_id: companyId,
           include_low_confidence: true,
-          max_suggestions: 100
+          max_suggestions: 200
         }
       });
 
       if (error) throw error;
 
       if (data?.success) {
-        // Enriquecer sugestões com dados das transações e títulos
-        const enrichedSuggestions = (data.data.suggestions || []).map((s: Suggestion) => {
-          const tx = transactions.find(t => t.id === s.transaction_id);
-          const allEntries = [...receivables, ...payables];
-          const entries = s.entries.map(e => allEntries.find(fe => fe.id === e.id)).filter(Boolean);
-          
-          return {
-            ...s,
-            transaction: tx,
-            financial_entries: entries
-          };
-        });
-
-        setSuggestions(enrichedSuggestions);
+        setSuggestions(data.data.suggestions || []);
+        setUnmatchedTransactions(data.data.unmatched_transactions || []);
+        setSummary(data.data.summary || {});
         setSelectedSuggestions(new Set());
 
+        const { high_confidence, medium_confidence, low_confidence, unmatched } = data.data.summary;
+        
         toast.success(
-          `Análise concluída! ${data.data.summary.total_suggestions} sugestões encontradas.`,
-          { description: `${data.data.summary.high_confidence} alta, ${data.data.summary.medium_confidence} média, ${data.data.summary.low_confidence} baixa confiança` }
+          `Análise concluída!`,
+          { 
+            description: `${high_confidence} alta, ${medium_confidence} média, ${low_confidence} baixa confiança. ${unmatched} sem match.`
+          }
         );
       }
     } catch (error) {
@@ -209,21 +241,12 @@ export function ReconciliationPanel() {
   };
 
   const confirmSuggestion = async (suggestion: Suggestion) => {
-    if (!companyId || !suggestion.transaction) return;
+    if (!companyId) return;
     setConfirmingId(suggestion.transaction_id);
 
     try {
       const tx = suggestion.transaction;
       const totalAmount = Math.abs(tx.amount);
-
-      // Buscar situação "Conciliado Automático" para atribuição automática
-      const { data: situacaoAutomatica } = await supabase
-        .from("financial_situations")
-        .select("id")
-        .eq("company_id", companyId)
-        .ilike("name", "%conciliado autom%")
-        .eq("is_active", true)
-        .single();
 
       // 1. Criar registro de conciliação
       const { data: reconciliation, error: recError } = await supabase
@@ -232,8 +255,9 @@ export function ReconciliationPanel() {
           company_id: companyId,
           bank_transaction_id: tx.id,
           total_reconciled_amount: totalAmount,
-          method: suggestion.confidence_score >= 95 ? 'ai_high' : suggestion.confidence_score >= 70 ? 'ai_medium' : 'ai_low',
-          notes: confirmNotes || `Conciliação via IA (${suggestion.confidence_score}% confiança)`
+          method: suggestion.confidence_level === 'high' ? 'ai_high' : 
+                  suggestion.confidence_level === 'medium' ? 'ai_medium' : 'ai_low',
+          notes: `Conciliação via IA (${suggestion.confidence_score}% - ${suggestion.match_reasons.join(', ')})`
         })
         .select()
         .single();
@@ -245,7 +269,7 @@ export function ReconciliationPanel() {
         reconciliation_id: reconciliation.id,
         financial_id: entry.id,
         financial_type: entry.type,
-        amount_used: entry.amount_used
+        amount_used: entry.amount
       }));
 
       const { error: itemsError } = await supabase
@@ -265,42 +289,37 @@ export function ReconciliationPanel() {
         })
         .eq("id", tx.id);
 
-      // 4. Atualizar títulos financeiros com situação automática
+      // 4. Atualizar títulos financeiros
       for (const entry of suggestion.entries) {
         const table = entry.type === 'receivable' ? 'accounts_receivable' : 'payables';
         
-        const updateData: Record<string, unknown> = {
-          is_paid: true,
-          paid_at: tx.transaction_date,
-          paid_amount: entry.amount_used,
-          reconciled_at: new Date().toISOString(),
-          reconciliation_id: reconciliation.id,
-          payment_method: 'transferencia'
-        };
-
-        // Adicionar situação financeira automaticamente (Conciliado Automático)
-        if (situacaoAutomatica?.id) {
-          updateData.financial_situation_id = situacaoAutomatica.id;
-        }
-
-        if (entry.type === 'receivable') {
-          updateData.bank_transaction_id = tx.id;
-        }
-        
         await supabase
           .from(table)
-          .update(updateData)
+          .update({
+            is_paid: true,
+            paid_at: tx.transaction_date,
+            paid_amount: entry.amount,
+            reconciled_at: new Date().toISOString(),
+            reconciliation_id: reconciliation.id,
+            payment_method: 'transferencia'
+          })
           .eq("id", entry.id);
       }
 
-      toast.success("Conciliação confirmada com sucesso!");
+      toast.success("Conciliação confirmada!");
       
       // Remover sugestão da lista
       setSuggestions(prev => prev.filter(s => s.transaction_id !== suggestion.transaction_id));
-      setConfirmNotes('');
       
-      // Recarregar dados
-      loadData();
+      // Atualizar contadores
+      setSummary(prev => ({
+        ...prev,
+        total_suggestions: prev.total_suggestions - 1,
+        [suggestion.confidence_level === 'high' ? 'high_confidence' : 
+         suggestion.confidence_level === 'medium' ? 'medium_confidence' : 'low_confidence']: 
+          prev[suggestion.confidence_level === 'high' ? 'high_confidence' : 
+               suggestion.confidence_level === 'medium' ? 'medium_confidence' : 'low_confidence'] - 1
+      }));
 
     } catch (error) {
       console.error("Erro ao confirmar:", error);
@@ -308,6 +327,37 @@ export function ReconciliationPanel() {
     } finally {
       setConfirmingId(null);
     }
+  };
+
+  const confirmBatchHighConfidence = async () => {
+    const highConfidenceSuggestions = suggestions.filter(s => s.confidence_level === 'high');
+    if (highConfidenceSuggestions.length === 0) {
+      toast.info("Nenhuma sugestão de alta confiança para confirmar");
+      return;
+    }
+
+    setConfirmingBatch(true);
+    let successCount = 0;
+    let errorCount = 0;
+
+    for (const suggestion of highConfidenceSuggestions) {
+      try {
+        await confirmSuggestion(suggestion);
+        successCount++;
+      } catch {
+        errorCount++;
+      }
+    }
+
+    setConfirmingBatch(false);
+    
+    if (errorCount === 0) {
+      toast.success(`${successCount} conciliações confirmadas com sucesso!`);
+    } else {
+      toast.warning(`${successCount} confirmadas, ${errorCount} com erro`);
+    }
+
+    loadData();
   };
 
   const rejectSuggestion = (transactionId: string) => {
@@ -318,20 +368,17 @@ export function ReconciliationPanel() {
   // Filtros
   const filteredSuggestions = useMemo(() => {
     return suggestions.filter(s => {
-      // Filtro de confiança
-      if (confidenceFilter === 'high' && s.confidence_score < 95) return false;
-      if (confidenceFilter === 'medium' && (s.confidence_score < 70 || s.confidence_score >= 95)) return false;
-      if (confidenceFilter === 'low' && s.confidence_score >= 70) return false;
+      if (confidenceFilter === 'high' && s.confidence_level !== 'high') return false;
+      if (confidenceFilter === 'medium' && s.confidence_level !== 'medium') return false;
+      if (confidenceFilter === 'low' && s.confidence_level !== 'low') return false;
 
-      // Filtro de tipo
-      if (typeFilter === 'credit' && s.transaction?.type !== 'CREDIT') return false;
-      if (typeFilter === 'debit' && s.transaction?.type !== 'DEBIT') return false;
+      if (typeFilter === 'credit' && s.transaction?.amount <= 0) return false;
+      if (typeFilter === 'debit' && s.transaction?.amount > 0) return false;
 
-      // Busca
       if (searchTerm) {
         const term = searchTerm.toLowerCase();
         const matchDesc = s.transaction?.description?.toLowerCase().includes(term);
-        const matchEntity = s.financial_entries?.some(e => e.entity_name?.toLowerCase().includes(term));
+        const matchEntity = s.entries?.some(e => e.entity_name?.toLowerCase().includes(term));
         if (!matchDesc && !matchEntity) return false;
       }
 
@@ -339,50 +386,92 @@ export function ReconciliationPanel() {
     });
   }, [suggestions, confidenceFilter, typeFilter, searchTerm]);
 
-  // Contadores
-  const highCount = suggestions.filter(s => s.confidence_score >= 95).length;
-  const mediumCount = suggestions.filter(s => s.confidence_score >= 70 && s.confidence_score < 95).length;
-  const lowCount = suggestions.filter(s => s.confidence_score < 70).length;
-
-  const getConfidenceBadge = (score: number) => {
-    if (score >= 95) {
-      return <Badge className="bg-green-500 text-white"><CheckCircle2 className="h-3 w-3 mr-1" /> {score}%</Badge>;
+  const getConfidenceBadge = (level: string, score: number) => {
+    if (level === 'high') {
+      return <Badge className="bg-green-500 text-white"><CheckCircle2 className="h-3 w-3 mr-1" /> {score}% Alta</Badge>;
     }
-    if (score >= 70) {
-      return <Badge className="bg-amber-500 text-white"><Lightbulb className="h-3 w-3 mr-1" /> {score}%</Badge>;
+    if (level === 'medium') {
+      return <Badge className="bg-amber-500 text-white"><Lightbulb className="h-3 w-3 mr-1" /> {score}% Média</Badge>;
     }
-    return <Badge variant="outline" className="text-muted-foreground"><AlertCircle className="h-3 w-3 mr-1" /> {score}%</Badge>;
+    return <Badge variant="outline" className="text-muted-foreground"><AlertCircle className="h-3 w-3 mr-1" /> {score}% Baixa</Badge>;
   };
+
+  const progressPercentage = transactions.length > 0 
+    ? ((transactions.length - summary.unmatched) / transactions.length) * 100 
+    : 0;
 
   return (
     <div className="space-y-4">
-      {/* AI Banner */}
-      <AIBanner
-        insights={[{
-          id: 'reconciliation-info',
-          message: 'A IA analisa padrões de valor, data, nome e identificadores para sugerir conciliações. Todas as sugestões requerem sua confirmação antes de serem aplicadas.',
-          type: 'info'
-        }]}
-        context="Motor de Conciliação Inteligente"
-      />
+      {/* Header com progresso estilo Kamino */}
+      <Card className="bg-gradient-to-r from-primary/10 to-primary/5">
+        <CardContent className="py-6">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="text-2xl font-bold">Conciliação Inteligente</h2>
+              <p className="text-muted-foreground">
+                {summary.total_suggestions > 0 
+                  ? `${summary.total_suggestions} sugestões encontradas para revisão`
+                  : 'Analise suas transações para encontrar correspondências'}
+              </p>
+            </div>
+            <Button 
+              onClick={runAnalysis} 
+              disabled={analyzing || loading}
+              size="lg"
+              className="gap-2"
+            >
+              {analyzing ? (
+                <>
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                  Analisando...
+                </>
+              ) : (
+                <>
+                  <Sparkles className="h-5 w-5" />
+                  Analisar Transações
+                </>
+              )}
+            </Button>
+          </div>
+
+          {/* Barra de progresso */}
+          <div className="space-y-2">
+            <div className="flex justify-between text-sm">
+              <span>Progresso da conciliação</span>
+              <span className="font-medium">{Math.round(progressPercentage)}%</span>
+            </div>
+            <Progress value={progressPercentage} className="h-2" />
+            <div className="flex justify-between text-xs text-muted-foreground">
+              <span>{transactions.length - summary.unmatched} conciliadas</span>
+              <span>{summary.unmatched} pendentes</span>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Cards de resumo */}
       <div className="grid gap-4 md:grid-cols-5">
-        <Card>
+        <Card 
+          className={`cursor-pointer transition-all ${viewMode === 'all' ? 'ring-2 ring-primary' : 'hover:bg-muted/50'}`}
+          onClick={() => setViewMode('all')}
+        >
           <CardContent className="pt-4">
             <div className="flex items-center gap-3">
               <div className="p-2 rounded-lg bg-muted">
-                <Link2 className="h-5 w-5 text-muted-foreground" />
+                <FileText className="h-5 w-5 text-muted-foreground" />
               </div>
               <div>
-                <p className="text-xs text-muted-foreground">Pendentes</p>
+                <p className="text-xs text-muted-foreground">Total Pendentes</p>
                 <p className="text-2xl font-bold">{transactions.length}</p>
               </div>
             </div>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card 
+          className={`cursor-pointer transition-all ${confidenceFilter === 'high' && viewMode === 'suggestions' ? 'ring-2 ring-green-500' : 'hover:bg-muted/50'}`}
+          onClick={() => { setViewMode('suggestions'); setConfidenceFilter('high'); }}
+        >
           <CardContent className="pt-4">
             <div className="flex items-center gap-3">
               <div className="p-2 rounded-lg bg-green-100 dark:bg-green-900/30">
@@ -390,13 +479,16 @@ export function ReconciliationPanel() {
               </div>
               <div>
                 <p className="text-xs text-muted-foreground">Alta Confiança</p>
-                <p className="text-2xl font-bold text-green-600">{highCount}</p>
+                <p className="text-2xl font-bold text-green-600">{summary.high_confidence}</p>
               </div>
             </div>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card 
+          className={`cursor-pointer transition-all ${confidenceFilter === 'medium' && viewMode === 'suggestions' ? 'ring-2 ring-amber-500' : 'hover:bg-muted/50'}`}
+          onClick={() => { setViewMode('suggestions'); setConfidenceFilter('medium'); }}
+        >
           <CardContent className="pt-4">
             <div className="flex items-center gap-3">
               <div className="p-2 rounded-lg bg-amber-100 dark:bg-amber-900/30">
@@ -404,13 +496,16 @@ export function ReconciliationPanel() {
               </div>
               <div>
                 <p className="text-xs text-muted-foreground">Média Confiança</p>
-                <p className="text-2xl font-bold text-amber-600">{mediumCount}</p>
+                <p className="text-2xl font-bold text-amber-600">{summary.medium_confidence}</p>
               </div>
             </div>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card 
+          className={`cursor-pointer transition-all ${confidenceFilter === 'low' && viewMode === 'suggestions' ? 'ring-2 ring-gray-400' : 'hover:bg-muted/50'}`}
+          onClick={() => { setViewMode('suggestions'); setConfidenceFilter('low'); }}
+        >
           <CardContent className="pt-4">
             <div className="flex items-center gap-3">
               <div className="p-2 rounded-lg bg-muted">
@@ -418,34 +513,67 @@ export function ReconciliationPanel() {
               </div>
               <div>
                 <p className="text-xs text-muted-foreground">Baixa Confiança</p>
-                <p className="text-2xl font-bold text-muted-foreground">{lowCount}</p>
+                <p className="text-2xl font-bold text-muted-foreground">{summary.low_confidence}</p>
               </div>
             </div>
           </CardContent>
         </Card>
 
-        <Card>
-          <CardContent className="pt-4 flex items-center justify-center">
-            <Button 
-              onClick={runAnalysis} 
-              disabled={analyzing || loading}
-              className="w-full"
-            >
-              {analyzing ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Analisando...
-                </>
-              ) : (
-                <>
-                  <Sparkles className="h-4 w-4 mr-2" />
-                  Analisar com IA
-                </>
-              )}
-            </Button>
+        <Card 
+          className={`cursor-pointer transition-all ${viewMode === 'unmatched' ? 'ring-2 ring-red-500' : 'hover:bg-muted/50'}`}
+          onClick={() => setViewMode('unmatched')}
+        >
+          <CardContent className="pt-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-red-100 dark:bg-red-900/30">
+                <AlertTriangle className="h-5 w-5 text-red-600" />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Sem Match</p>
+                <p className="text-2xl font-bold text-red-600">{summary.unmatched}</p>
+              </div>
+            </div>
           </CardContent>
         </Card>
       </div>
+
+      {/* Ação em lote para alta confiança */}
+      {summary.high_confidence > 0 && (
+        <Card className="bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800">
+          <CardContent className="py-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <CheckCheck className="h-6 w-6 text-green-600" />
+                <div>
+                  <p className="font-medium text-green-800 dark:text-green-200">
+                    {summary.high_confidence} sugestões de alta confiança prontas
+                  </p>
+                  <p className="text-sm text-green-600 dark:text-green-400">
+                    Estas conciliações têm ≥90% de certeza e podem ser confirmadas em lote
+                  </p>
+                </div>
+              </div>
+              <Button 
+                onClick={confirmBatchHighConfidence}
+                disabled={confirmingBatch}
+                className="bg-green-600 hover:bg-green-700"
+              >
+                {confirmingBatch ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Confirmando...
+                  </>
+                ) : (
+                  <>
+                    <CheckCheck className="h-4 w-4 mr-2" />
+                    Confirmar Todas ({summary.high_confidence})
+                  </>
+                )}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Filtros */}
       <Card>
@@ -462,8 +590,8 @@ export function ReconciliationPanel() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todas</SelectItem>
-                <SelectItem value="high">Alta (≥95%)</SelectItem>
-                <SelectItem value="medium">Média (70-94%)</SelectItem>
+                <SelectItem value="high">Alta (≥90%)</SelectItem>
+                <SelectItem value="medium">Média (70-89%)</SelectItem>
                 <SelectItem value="low">Baixa (&lt;70%)</SelectItem>
               </SelectContent>
             </Select>
@@ -482,7 +610,7 @@ export function ReconciliationPanel() {
             <div className="relative flex-1 max-w-xs">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Buscar..."
+                placeholder="Buscar por descrição ou cliente..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="pl-9"
@@ -497,11 +625,53 @@ export function ReconciliationPanel() {
         </CardContent>
       </Card>
 
-      {/* Lista de Sugestões */}
+      {/* Conteúdo principal */}
       {loading ? (
         <Card>
           <CardContent className="py-12 flex items-center justify-center">
             <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+          </CardContent>
+        </Card>
+      ) : viewMode === 'unmatched' ? (
+        /* Lista de transações sem match */
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-red-600" />
+              Transações Sem Correspondência
+            </CardTitle>
+            <CardDescription>
+              Estas transações não encontraram títulos correspondentes. Verifique se há lançamentos faltando.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {unmatchedTransactions.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                <CheckCircle2 className="h-12 w-12 mx-auto mb-4 text-green-500" />
+                <p>Todas as transações têm sugestões de correspondência!</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {unmatchedTransactions.map(tx => (
+                  <div key={tx.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/50 hover:bg-muted">
+                    <div className="flex items-center gap-4">
+                      {tx.amount > 0 ? (
+                        <TrendingUp className="h-5 w-5 text-green-600" />
+                      ) : (
+                        <TrendingDown className="h-5 w-5 text-red-600" />
+                      )}
+                      <div>
+                        <p className="font-medium">{tx.description || 'Sem descrição'}</p>
+                        <p className="text-sm text-muted-foreground">{formatDate(tx.date)}</p>
+                      </div>
+                    </div>
+                    <span className={`text-lg font-bold ${tx.amount > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      {tx.amount > 0 ? '+' : ''}{formatCurrency(tx.amount)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
       ) : filteredSuggestions.length === 0 ? (
@@ -512,7 +682,7 @@ export function ReconciliationPanel() {
                 <Sparkles className="h-12 w-12 text-muted-foreground/50 mb-4" />
                 <p className="font-medium">Nenhuma sugestão disponível</p>
                 <p className="text-sm text-muted-foreground mb-4">
-                  Clique em "Analisar com IA" para gerar sugestões de conciliação
+                  Clique em "Analisar Transações" para gerar sugestões de conciliação
                 </p>
                 <Button onClick={runAnalysis} disabled={analyzing}>
                   <Sparkles className="h-4 w-4 mr-2" />
@@ -522,7 +692,7 @@ export function ReconciliationPanel() {
             ) : (
               <>
                 <Filter className="h-12 w-12 text-muted-foreground/50 mb-4" />
-                <p className="font-medium">Nenhuma sugestão encontrada com estes filtros</p>
+                <p className="font-medium">Nenhuma sugestão com estes filtros</p>
                 <p className="text-sm text-muted-foreground">
                   Tente ajustar os filtros para ver mais resultados
                 </p>
@@ -531,13 +701,14 @@ export function ReconciliationPanel() {
           </CardContent>
         </Card>
       ) : (
+        /* Lista de sugestões */
         <div className="space-y-4">
           {filteredSuggestions.map((suggestion) => (
             <Card key={suggestion.transaction_id} className="overflow-hidden">
               <CardHeader className="py-3 bg-muted/30">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    {getConfidenceBadge(suggestion.confidence_score)}
+                    {getConfidenceBadge(suggestion.confidence_level, suggestion.confidence_score)}
                     <Badge variant="outline">
                       {suggestion.match_type === 'exact' ? 'Match Exato' :
                        suggestion.match_type === 'aggregation' ? 'Aglutinação' :
@@ -550,49 +721,47 @@ export function ReconciliationPanel() {
                     )}
                   </div>
                   <div className="text-sm text-muted-foreground">
-                    {suggestion.match_reasons.join(' • ')}
+                    {suggestion.match_reasons.slice(0, 3).join(' • ')}
                   </div>
                 </div>
               </CardHeader>
 
               <CardContent className="pt-4">
                 {/* Layout Side-by-Side */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 relative">
                   {/* Transação Bancária */}
                   <div className="space-y-3">
-                    <h4 className="font-medium text-sm flex items-center gap-2 text-primary">
-                      <span className="w-2 h-2 rounded-full bg-primary"></span>
+                    <h4 className="font-medium text-sm flex items-center gap-2">
+                      {suggestion.transaction.amount > 0 ? (
+                        <TrendingUp className="h-4 w-4 text-green-600" />
+                      ) : (
+                        <TrendingDown className="h-4 w-4 text-red-600" />
+                      )}
                       Transação Bancária
                     </h4>
                     <div className="bg-muted/50 rounded-lg p-4 space-y-2">
                       <div className="flex justify-between">
                         <span className="text-muted-foreground text-sm">Data</span>
-                        <span className="font-medium">{formatDate(suggestion.transaction?.transaction_date || '')}</span>
+                        <span className="font-medium">{formatDate(suggestion.transaction.transaction_date)}</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-muted-foreground text-sm">Valor</span>
-                        <span className={`text-xl font-bold ${suggestion.transaction?.type === 'CREDIT' ? 'text-green-600' : 'text-red-600'}`}>
-                          {suggestion.transaction?.type === 'CREDIT' ? '+' : '-'}
-                          {formatCurrency(Math.abs(suggestion.transaction?.amount || 0))}
+                        <span className={`text-xl font-bold ${suggestion.transaction.amount > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                          {suggestion.transaction.amount > 0 ? '+' : ''}
+                          {formatCurrency(suggestion.transaction.amount)}
                         </span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-muted-foreground text-sm">Descrição</span>
                         <span className="font-medium text-right max-w-[200px] truncate text-sm">
-                          {suggestion.transaction?.description || '-'}
+                          {suggestion.transaction.description || '-'}
                         </span>
                       </div>
-                      {suggestion.transaction?.nsu && (
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground text-sm">NSU</span>
-                          <span className="font-mono text-sm">{suggestion.transaction.nsu}</span>
-                        </div>
-                      )}
                     </div>
                   </div>
 
-                  {/* Seta central em desktop */}
-                  <div className="hidden lg:flex items-center justify-center absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
+                  {/* Seta central */}
+                  <div className="hidden lg:flex items-center justify-center absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-10">
                     <div className="p-2 rounded-full bg-background border shadow-sm">
                       <ArrowRight className="h-4 w-4 text-muted-foreground" />
                     </div>
@@ -600,13 +769,13 @@ export function ReconciliationPanel() {
 
                   {/* Títulos Financeiros */}
                   <div className="space-y-3">
-                    <h4 className="font-medium text-sm flex items-center gap-2 text-green-600">
-                      <span className="w-2 h-2 rounded-full bg-green-600"></span>
+                    <h4 className="font-medium text-sm flex items-center gap-2 text-primary">
+                      <FileText className="h-4 w-4" />
                       {suggestion.entries[0]?.type === 'receivable' ? 'Conta(s) a Receber' : 'Conta(s) a Pagar'}
                     </h4>
-                    <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-4 space-y-3">
-                      {suggestion.financial_entries?.map((entry, idx) => (
-                        <div key={entry.id} className={idx > 0 ? 'pt-3 border-t border-green-200 dark:border-green-800' : ''}>
+                    <div className="bg-primary/5 rounded-lg p-4 space-y-3">
+                      {suggestion.entries.map((entry, idx) => (
+                        <div key={entry.id} className={idx > 0 ? 'pt-3 border-t border-primary/20' : ''}>
                           <div className="flex justify-between">
                             <span className="text-muted-foreground text-sm">Valor</span>
                             <span className="font-bold text-lg">{formatCurrency(entry.amount)}</span>
@@ -621,18 +790,12 @@ export function ReconciliationPanel() {
                             <span className="text-muted-foreground text-sm">Vencimento</span>
                             <span className="text-sm">{formatDate(entry.due_date)}</span>
                           </div>
-                          {entry.document_number && (
-                            <div className="flex justify-between">
-                              <span className="text-muted-foreground text-sm">Documento</span>
-                              <span className="font-mono text-sm">{entry.document_number}</span>
-                            </div>
-                          )}
                         </div>
                       ))}
 
-                      {/* Diferença (se houver) */}
+                      {/* Diferença */}
                       {Math.abs(suggestion.difference) >= 0.01 && (
-                        <div className="pt-3 border-t border-green-200 dark:border-green-800">
+                        <div className="pt-3 border-t border-primary/20">
                           <div className="flex justify-between text-amber-600">
                             <span className="text-sm font-medium">Diferença</span>
                             <span className="font-bold">{formatCurrency(suggestion.difference)}</span>
@@ -665,7 +828,7 @@ export function ReconciliationPanel() {
                     ) : (
                       <Check className="h-4 w-4 mr-1" />
                     )}
-                    Confirmar Conciliação
+                    Confirmar
                   </Button>
                 </div>
               </CardContent>
