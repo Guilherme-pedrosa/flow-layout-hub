@@ -31,6 +31,7 @@ export interface StatusFormData {
   financial_behavior: FinancialBehavior;
   checkout_behavior: CheckoutBehavior;
   display_order: number;
+  opens_field_activity?: boolean; // Novo campo para integração Field Control
 }
 
 interface StatusConfigFormProps {
@@ -85,6 +86,7 @@ export function StatusConfigForm({
     financial_behavior: 'none',
     checkout_behavior: 'none',
     display_order: 0,
+    opens_field_activity: false,
   });
 
   const [formData, setFormData] = useState<StatusFormData>(
@@ -104,6 +106,7 @@ export function StatusConfigForm({
           financial_behavior: initialData.financial_behavior || 'none',
           checkout_behavior: initialData.checkout_behavior || 'none',
           display_order: initialData.display_order || 0,
+          opens_field_activity: initialData.opens_field_activity ?? false,
         });
       } else {
         setFormData(getDefaultFormData());
@@ -237,6 +240,25 @@ export function StatusConfigForm({
               value={formData.display_order}
               onChange={(e) => setFormData({ ...formData, display_order: parseInt(e.target.value) || 0 })}
             />
+          </div>
+
+          {/* Integração Field Control */}
+          <div className="p-4 bg-muted/50 rounded-lg border">
+            <div className="flex items-center gap-3">
+              <Switch
+                id="opens_field_activity"
+                checked={formData.opens_field_activity ?? false}
+                onCheckedChange={(checked) => setFormData({ ...formData, opens_field_activity: checked })}
+              />
+              <div>
+                <Label htmlFor="opens_field_activity" className="text-base font-medium">
+                  Abre atividade no Field Control?
+                </Label>
+                <p className="text-sm text-muted-foreground">
+                  Quando uma OS entrar neste status, será criada uma atividade no Field Control automaticamente
+                </p>
+              </div>
+            </div>
           </div>
 
           <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:justify-between">

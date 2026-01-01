@@ -19,6 +19,7 @@ export interface ServiceOrderStatus {
   checkout_behavior: CheckoutBehavior;
   display_order: number;
   is_active: boolean;
+  opens_field_activity: boolean; // Novo campo
   created_at: string;
   updated_at: string;
 }
@@ -367,19 +368,26 @@ export function useServiceOrders() {
     },
   });
 
-  // Atualizar status e sincronizar automaticamente se for "aprovado"
+  // Atualizar status e sincronizar automaticamente se o status estiver configurado para abrir no Field
   const updateStatusWithFieldSync = useMutation({
     mutationFn: async ({ 
       id, 
       statusId, 
-      statusName,
+      opensFieldActivity,
       companyId 
     }: { 
       id: string; 
       statusId: string;
-      statusName: string;
+      opensFieldActivity: boolean;
       companyId: string;
     }) => {
+      // Verificar se a OS já foi sincronizada antes
+      const { data: currentOrder } = await supabase
+        .from("service_orders")
+        .select("field_order_id")
+        .eq("id", id)
+        .single();
+
       // Atualizar o status
       const { data, error } = await supabase
         .from("service_orders")
@@ -390,9 +398,8 @@ export function useServiceOrders() {
 
       if (error) throw error;
 
-      // Se o status for "aprovado", sincronizar com Field
-      const isApproved = statusName.toLowerCase().includes('aprovad');
-      if (isApproved) {
+      // Se o status abre atividade no Field E a OS ainda não foi sincronizada
+      if (opensFieldActivity && !currentOrder?.field_order_id) {
         try {
           const { data: syncResult, error: syncError } = await supabase.functions.invoke('field-sync-activity', {
             body: { service_order_id: id, company_id: companyId }
@@ -411,6 +418,8 @@ export function useServiceOrders() {
           console.error('Erro ao sincronizar com Field:', syncErr);
           toast.warning('Status atualizado, mas houve erro na sincronização com Field Control');
         }
+      } else if (opensFieldActivity && currentOrder?.field_order_id) {
+        toast.info('Status atualizado. OS já foi sincronizada anteriormente com Field Control.');
       }
 
       return data;
