@@ -421,16 +421,43 @@ serve(async (req) => {
         
         if (entityMatch && entityMatch.similarity >= 0.5) {
           // Buscar títulos dessa entidade
-          const entityEntries = availableEntries.filter(e => 
+          const entityEntriesAll = availableEntries.filter(e => 
             e.supplier_id === entityMatch.entity.id ||
             e.customer_id === entityMatch.entity.id
           );
           
-          // 2a. Match 1:1 exato
+          // IMPORTANTE: Priorizar títulos com vencimento <= data da transação
+          // Só considerar títulos que venceram até 30 dias DEPOIS da transação (margem de tolerância)
+          const txDate = new Date(tx.transaction_date);
+          const maxDueDate = new Date(txDate);
+          maxDueDate.setDate(maxDueDate.getDate() + 30); // tolerância de 30 dias para o futuro
+          
+          const entityEntries = entityEntriesAll
+            .filter(e => new Date(e.due_date) <= maxDueDate)
+            .sort((a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime()); // Ordenar por vencimento mais antigo primeiro
+          
+          // 2a. Match 1:1 exato - priorizar títulos vencidos ou com vencimento próximo
           for (const entry of entityEntries) {
             const valueDiff = Math.abs(entry.amount - txAmount);
             if (valueDiff < 0.01) {
-              const score = entityMatch.similarity >= 0.9 ? 98 : entityMatch.similarity >= 0.7 ? 92 : 85;
+              // Calcular penalidade por vencimento futuro
+              const dueDate = new Date(entry.due_date);
+              const daysDiff = Math.floor((dueDate.getTime() - txDate.getTime()) / (1000 * 60 * 60 * 24));
+              
+              let baseScore = entityMatch.similarity >= 0.9 ? 98 : entityMatch.similarity >= 0.7 ? 92 : 85;
+              let dateReason = '✓ Valor exato';
+              
+              // Se vencimento é DEPOIS da transação, reduzir score
+              if (daysDiff > 0) {
+                baseScore = Math.max(40, baseScore - (daysDiff * 2)); // -2 pontos por dia no futuro
+                dateReason = `⚠ Vencimento ${daysDiff} dias após transação`;
+              } else if (daysDiff < 0) {
+                // Se já venceu, aumentar ligeiramente a confiança (título atrasado sendo pago)
+                dateReason = `✓ Título vencido há ${Math.abs(daysDiff)} dias`;
+              }
+              
+              const confidenceLevel = baseScore >= 80 ? 'high' : baseScore >= 60 ? 'medium' : 'low';
+              
               const suggestion: Suggestion = {
                 transaction_id: tx.id,
                 transaction: tx,
@@ -443,17 +470,17 @@ serve(async (req) => {
                   due_date: entry.due_date,
                   document_number: entry.document_number
                 }],
-                confidence_score: score,
-                confidence_level: 'high',
+                confidence_score: baseScore,
+                confidence_level: confidenceLevel,
                 match_reasons: [
                   `✓ Nome: "${extractedName}" → "${entityMatch.matchedName}"`,
                   `Similaridade: ${Math.round(entityMatch.similarity * 100)}%`,
-                  '✓ Valor exato'
+                  dateReason
                 ],
                 match_type: 'exact_1_1',
                 total_matched: entry.amount,
                 difference: 0,
-                requires_review: false,
+                requires_review: daysDiff > 7, // Revisão se vencimento muito no futuro
                 extracted_name: extractedName,
                 matched_entity: entityMatch.matchedName
               };
