@@ -24,8 +24,8 @@ export interface ServicoNFSe {
   valor_servicos: number;
   aliquota?: number;
   item_lista_servico?: string;
-  codigo_tributario_municipio?: string;
   codigo_cnae?: string;
+  codigo_tributario_municipio?: string;
   iss_retido?: boolean;
   valor_deducoes?: number;
   valor_pis?: number;
@@ -38,21 +38,19 @@ export interface ServicoNFSe {
 export interface DadosNFSe {
   tomador: TomadorNFSe;
   servico: ServicoNFSe;
-  natureza_operacao?: number;
-  natureza_operacao_texto?: string;
   data_emissao?: string;
+  natureza_operacao?: number; // 1=Tributação no município, 2=Tributação fora, etc
 }
 
 export interface RespostaNFSe {
   success: boolean;
   nfse_id?: string;
   referencia?: string;
-  status?: string;
   numero?: string;
   codigo_verificacao?: string;
-  url?: string;
+  protocolo?: string;
+  status?: string;
   error?: string;
-  erros?: any[];
 }
 
 export function useNFSeEmissor() {
@@ -62,7 +60,7 @@ export function useNFSeEmissor() {
   const { currentCompany } = useCompany();
 
   /**
-   * Emite uma NFS-e via Edge Function
+   * Emite uma NFS-e diretamente na prefeitura via Edge Function
    */
   const emitir = async (dados: DadosNFSe): Promise<RespostaNFSe> => {
     if (!currentCompany?.id) {
@@ -80,17 +78,16 @@ export function useNFSeEmissor() {
     setError(null);
 
     try {
-      // Chamar Edge Function nfse-focus
-      const { data, error: fnError } = await supabase.functions.invoke('nfse-focus', {
+      // Chamar Edge Function nfse-direto
+      const { data, error: fnError } = await supabase.functions.invoke('nfse-direto', {
         body: {
           action: 'emitir',
           company_id: currentCompany.id,
           data: {
             tomador: dados.tomador,
             servico: dados.servico,
-            natureza_operacao: dados.natureza_operacao || 1,
-            natureza_operacao_texto: dados.natureza_operacao_texto || 'Prestação de serviços',
             data_emissao: dados.data_emissao || new Date().toISOString(),
+            natureza_operacao: dados.natureza_operacao || 1,
           }
         }
       });
@@ -102,9 +99,9 @@ export function useNFSeEmissor() {
       if (data?.success) {
         toast({
           title: 'NFS-e processada!',
-          description: data.status === 'autorizado' 
-            ? `Número: ${data.data?.numero}` 
-            : 'Aguardando autorização da prefeitura...',
+          description: data.numero 
+            ? `Número: ${data.numero}` 
+            : 'Aguardando processamento na prefeitura...',
         });
       } else {
         const errorMsg = data?.error || 'Erro ao emitir NFS-e';
@@ -143,7 +140,7 @@ export function useNFSeEmissor() {
     setError(null);
 
     try {
-      const { data, error: fnError } = await supabase.functions.invoke('nfse-focus', {
+      const { data, error: fnError } = await supabase.functions.invoke('nfse-direto', {
         body: {
           action: 'consultar',
           company_id: currentCompany.id,
@@ -187,7 +184,7 @@ export function useNFSeEmissor() {
     setError(null);
 
     try {
-      const { data, error: fnError } = await supabase.functions.invoke('nfse-focus', {
+      const { data, error: fnError } = await supabase.functions.invoke('nfse-direto', {
         body: {
           action: 'cancelar',
           company_id: currentCompany.id,
@@ -236,7 +233,7 @@ export function useNFSeEmissor() {
     }
 
     try {
-      const { data, error: fnError } = await supabase.functions.invoke('nfse-focus', {
+      const { data, error: fnError } = await supabase.functions.invoke('nfse-direto', {
         body: {
           action: 'config',
           company_id: currentCompany.id,

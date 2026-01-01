@@ -66,14 +66,16 @@ export interface RespostaNFe {
   nfe_id?: string;
   referencia?: string;
   status?: string;
+  chave?: string;
   chave_acesso?: string;
   protocolo?: string;
   numero?: number;
   serie?: number;
   danfe_url?: string;
   xml_url?: string;
+  cStat?: string;
+  xMotivo?: string;
   error?: string;
-  erros?: any[];
 }
 
 export function useNFeEmissor() {
@@ -83,7 +85,36 @@ export function useNFeEmissor() {
   const { currentCompany } = useCompany();
 
   /**
-   * Emite uma NF-e via Edge Function
+   * Verifica status do serviço SEFAZ
+   */
+  const verificarStatus = async (): Promise<{ online: boolean; mensagem: string }> => {
+    if (!currentCompany?.id) {
+      return { online: false, mensagem: 'Empresa não selecionada' };
+    }
+
+    try {
+      const { data, error: fnError } = await supabase.functions.invoke('nfe-direto', {
+        body: {
+          action: 'status',
+          company_id: currentCompany.id,
+        }
+      });
+
+      if (fnError) {
+        throw new Error(fnError.message);
+      }
+
+      return {
+        online: data?.online || false,
+        mensagem: data?.xMotivo || 'Status desconhecido'
+      };
+    } catch (err: any) {
+      return { online: false, mensagem: err.message };
+    }
+  };
+
+  /**
+   * Emite uma NF-e diretamente na SEFAZ via Edge Function
    */
   const emitirNFe = async (dados: DadosNFe): Promise<RespostaNFe> => {
     if (!currentCompany?.id) {
@@ -101,8 +132,8 @@ export function useNFeEmissor() {
     setError(null);
 
     try {
-      // Chamar Edge Function nfe-focus
-      const { data, error: fnError } = await supabase.functions.invoke('nfe-focus', {
+      // Chamar Edge Function nfe-direto
+      const { data, error: fnError } = await supabase.functions.invoke('nfe-direto', {
         body: {
           action: 'emitir',
           company_id: currentCompany.id,
@@ -133,22 +164,25 @@ export function useNFeEmissor() {
 
       if (data?.success) {
         toast({
-          title: 'NF-e processada!',
-          description: data.chave_acesso 
-            ? `Chave: ${data.chave_acesso}` 
-            : 'Aguardando autorização da SEFAZ...',
+          title: data.status === 'autorizada' ? 'NF-e Autorizada!' : 'NF-e em processamento',
+          description: data.chave 
+            ? `Chave: ${data.chave}` 
+            : data.xMotivo || 'Aguardando resposta da SEFAZ...',
         });
       } else {
-        const errorMsg = data?.error || 'Erro ao emitir NF-e';
+        const errorMsg = data?.xMotivo || data?.error || 'Erro ao emitir NF-e';
         toast({
           title: 'Erro ao emitir NF-e',
-          description: errorMsg,
+          description: `${data?.cStat ? `[${data.cStat}] ` : ''}${errorMsg}`,
           variant: 'destructive'
         });
         setError(errorMsg);
       }
 
-      return data as RespostaNFe;
+      return {
+        ...data,
+        chave_acesso: data?.chave,
+      } as RespostaNFe;
     } catch (err: any) {
       const errorMsg = err.message || 'Erro ao emitir NF-e';
       setError(errorMsg);
@@ -175,7 +209,7 @@ export function useNFeEmissor() {
     setError(null);
 
     try {
-      const { data, error: fnError } = await supabase.functions.invoke('nfe-focus', {
+      const { data, error: fnError } = await supabase.functions.invoke('nfe-direto', {
         body: {
           action: 'consultar',
           company_id: currentCompany.id,
@@ -187,7 +221,10 @@ export function useNFeEmissor() {
         throw new Error(fnError.message);
       }
 
-      return data as RespostaNFe;
+      return {
+        ...data,
+        chave_acesso: data?.chave,
+      } as RespostaNFe;
     } catch (err: any) {
       const errorMsg = err.message || 'Erro ao consultar NF-e';
       setError(errorMsg);
@@ -219,7 +256,7 @@ export function useNFeEmissor() {
     setError(null);
 
     try {
-      const { data, error: fnError } = await supabase.functions.invoke('nfe-focus', {
+      const { data, error: fnError } = await supabase.functions.invoke('nfe-direto', {
         body: {
           action: 'cancelar',
           company_id: currentCompany.id,
@@ -236,6 +273,12 @@ export function useNFeEmissor() {
         toast({
           title: 'NF-e cancelada',
           description: 'A nota foi cancelada com sucesso.',
+        });
+      } else {
+        toast({
+          title: 'Erro ao cancelar',
+          description: data?.xMotivo || 'Erro ao cancelar NF-e',
+          variant: 'destructive'
         });
       }
 
@@ -276,7 +319,7 @@ export function useNFeEmissor() {
     setError(null);
 
     try {
-      const { data, error: fnError } = await supabase.functions.invoke('nfe-focus', {
+      const { data, error: fnError } = await supabase.functions.invoke('nfe-direto', {
         body: {
           action: 'carta_correcao',
           company_id: currentCompany.id,
@@ -293,6 +336,12 @@ export function useNFeEmissor() {
         toast({
           title: 'Carta de correção emitida',
           description: 'A carta de correção foi registrada com sucesso.',
+        });
+      } else {
+        toast({
+          title: 'Erro',
+          description: data?.xMotivo || 'Erro ao emitir carta de correção',
+          variant: 'destructive'
         });
       }
 
@@ -325,7 +374,7 @@ export function useNFeEmissor() {
     }
 
     try {
-      const { data, error: fnError } = await supabase.functions.invoke('nfe-focus', {
+      const { data, error: fnError } = await supabase.functions.invoke('nfe-direto', {
         body: {
           action: 'config',
           company_id: currentCompany.id,
@@ -356,6 +405,7 @@ export function useNFeEmissor() {
   return {
     loading,
     error,
+    verificarStatus,
     emitirNFe,
     consultarNFe,
     cancelarNFe,
