@@ -6693,7 +6693,9 @@ export type Database = {
           field_employee_id: string | null
           id: string
           is_active: boolean
+          last_login_at: string | null
           name: string
+          password_hash: string | null
           permissions: Json | null
           role: Database["public"]["Enums"]["user_role"]
           updated_at: string
@@ -6706,7 +6708,9 @@ export type Database = {
           field_employee_id?: string | null
           id?: string
           is_active?: boolean
+          last_login_at?: string | null
           name: string
+          password_hash?: string | null
           permissions?: Json | null
           role?: Database["public"]["Enums"]["user_role"]
           updated_at?: string
@@ -6719,7 +6723,9 @@ export type Database = {
           field_employee_id?: string | null
           id?: string
           is_active?: boolean
+          last_login_at?: string | null
           name?: string
+          password_hash?: string | null
           permissions?: Json | null
           role?: Database["public"]["Enums"]["user_role"]
           updated_at?: string
@@ -6813,7 +6819,14 @@ export type Database = {
         | "mei"
       tipo_cliente_comercial: "avulso" | "contrato" | "grande_conta"
       tipo_pessoa: "PF" | "PJ"
-      user_role: "admin" | "financeiro" | "operador" | "tecnico"
+      user_role:
+        | "admin"
+        | "financeiro"
+        | "operador"
+        | "tecnico"
+        | "gerente"
+        | "vendedor"
+        | "estoque"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -6970,7 +6983,15 @@ export const Constants = {
       ],
       tipo_cliente_comercial: ["avulso", "contrato", "grande_conta"],
       tipo_pessoa: ["PF", "PJ"],
-      user_role: ["admin", "financeiro", "operador", "tecnico"],
+      user_role: [
+        "admin",
+        "financeiro",
+        "operador",
+        "tecnico",
+        "gerente",
+        "vendedor",
+        "estoque",
+      ],
     },
   },
 } as const
