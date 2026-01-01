@@ -278,44 +278,40 @@ export default function EmitirNFSePage() {
       if (emitirNota && nota) {
         toast.info("Emitindo NFS-e...");
         
+        const doc = formData.tomador_documento.replace(/\D/g, '');
         const dadosNFSe: DadosNFSe = {
           tomador: {
-            cpfCnpj: formData.tomador_documento.replace(/\D/g, ''),
-            inscricaoMunicipal: formData.tomador_im,
-            razaoSocial: formData.tomador_razao_social,
+            cpf: doc.length === 11 ? doc : undefined,
+            cnpj: doc.length === 14 ? doc : undefined,
+            razao_social: formData.tomador_razao_social,
             email: formData.tomador_email,
             telefone: formData.tomador_telefone,
             logradouro: formData.tomador_logradouro,
             numero: formData.tomador_numero,
             complemento: formData.tomador_complemento,
             bairro: formData.tomador_bairro,
-            codigoMunicipio: "",
-            municipio: formData.tomador_cidade,
+            codigo_municipio: "",
             uf: formData.tomador_uf,
             cep: formData.tomador_cep.replace(/\D/g, ''),
           },
           servico: {
-            codigoServico: servicos[0]?.codigo_servico || "",
             discriminacao: formData.discriminacao,
-            valorServicos: totais.totalServicos,
-            valorDeducoes: formData.valor_deducoes,
-            aliquotaIss: servicos[0]?.aliquota_iss || 5,
-            issRetido: servicos.some(s => s.iss_retido),
+            valor_servicos: totais.totalServicos,
+            valor_deducoes: formData.valor_deducoes,
+            aliquota: servicos[0]?.aliquota_iss || 5,
+            iss_retido: servicos.some(s => s.iss_retido),
           },
-          naturezaOperacao: parseInt(formData.natureza_operacao),
-          optanteSimplesNacional: formData.optante_simples,
-          incentivadorCultural: formData.incentivador_cultural,
-          informacoesComplementares: formData.info_complementares,
+          natureza_operacao: parseInt(formData.natureza_operacao),
         };
 
         const resultado = await emitir(dadosNFSe);
         
-        if (resultado.sucesso) {
+        if (resultado.success) {
           await supabase
             .from("notas_fiscais")
             .update({
               status: "autorizada",
-              chave_nfe: resultado.codigoVerificacao,
+              chave_nfe: resultado.codigo_verificacao,
               data_autorizacao: new Date().toISOString(),
             })
             .eq("id", nota.id);
@@ -324,7 +320,7 @@ export default function EmitirNFSePage() {
             .from("notas_fiscais")
             .update({
               status: "erro",
-              mensagem_sefaz: resultado.motivo,
+              mensagem_sefaz: resultado.error,
             })
             .eq("id", nota.id);
         }

@@ -440,12 +440,12 @@ serve(async (req) => {
         }
 
         // Buscar próximo número
-        const proximoNumero = (config.ultimo_numero_nfe || 0) + 1;
+        const proximoNumero = (config.proximo_numero || 0) + 1;
         const serie = config.serie_nfe || 1;
         const ref = referencia || `nfe_${company_id}_${Date.now()}`;
 
         // Gerar XML da NF-e
-        const { xml: xmlNFe, chave } = gerarXmlNFe(dados, config, empresa, proximoNumero, serie);
+        const { xml: xmlNFe, chave } = gerarXmlNFe(data, config, empresa, proximoNumero, serie);
 
         console.log("[NF-e] Chave gerada:", chave);
 
@@ -469,13 +469,13 @@ serve(async (req) => {
             chave_nfe: chave,
             numero: String(proximoNumero),
             serie: String(serie),
-            natureza_operacao: dados.natureza_operacao || config.natureza_operacao_padrao,
-            data_emissao: dados.data_emissao || new Date().toISOString(),
-            destinatario_nome: dados.destinatario?.nome || dados.destinatario?.razao_social,
-            destinatario_cpf_cnpj: dados.destinatario?.cnpj || dados.destinatario?.cpf,
-            destinatario_email: dados.destinatario?.email,
-            valor_total: dados.valor_total,
-            valor_produtos: dados.valor_produtos,
+            natureza_operacao: data?.natureza_operacao || config.natureza_operacao_padrao,
+            data_emissao: data?.data_emissao || new Date().toISOString(),
+            destinatario_nome: data?.destinatario?.nome || data?.destinatario?.razao_social,
+            destinatario_cpf_cnpj: data?.destinatario?.cnpj || data?.destinatario?.cpf,
+            destinatario_email: data?.destinatario?.email,
+            valor_total: data?.valor_total,
+            valor_produtos: data?.valor_produtos,
           })
           .select()
           .single();
