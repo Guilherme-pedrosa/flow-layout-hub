@@ -29,6 +29,8 @@ interface SyncRequest {
   record?: CustomerRecord;
   sync_all?: boolean;
   company_id?: string;
+  customer_ids?: string[]; // Sincronizar lista específica de IDs
+  filter_name?: string; // Filtrar por nome (ILIKE)
 }
 
 function cleanDocument(doc: string | undefined): string {
@@ -207,12 +209,84 @@ serve(async (req) => {
       );
     }
 
-    // Modo 2: Sincronizar todas as pessoas de uma empresa (clientes, fornecedores, etc.)
+    // Modo 2: Sincronizar por IDs específicos
+    if (payload.customer_ids && payload.customer_ids.length > 0) {
+      console.log(`[field-sync] Sincronizando ${payload.customer_ids.length} clientes específicos`);
+      
+      const { data: pessoas, error: fetchError } = await supabase
+        .from('pessoas')
+        .select('id, razao_social, nome_fantasia, cpf_cnpj, email, telefone, cep, logradouro, numero, bairro, complemento, cidade, estado, company_id')
+        .in('id', payload.customer_ids);
+
+      if (fetchError) {
+        return new Response(
+          JSON.stringify({ success: false, error: fetchError.message }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      console.log(`[field-sync] Encontradas ${pessoas?.length || 0} pessoas`);
+
+      const results = { total: pessoas?.length || 0, created: 0, updated: 0, errors: 0, errorDetails: [] as any[] };
+
+      for (const pessoa of pessoas || []) {
+        const result = await syncCustomerToField(pessoa, apiKey, supabase);
+        if (result.success) {
+          if (result.action === 'create') results.created++;
+          else results.updated++;
+        } else {
+          results.errors++;
+          results.errorDetails.push({ id: pessoa.id, nome: pessoa.nome_fantasia || pessoa.razao_social, error: result.error });
+        }
+        await new Promise(resolve => setTimeout(resolve, 200));
+      }
+
+      console.log(`[field-sync] Concluído: ${results.created} criados, ${results.updated} atualizados, ${results.errors} erros`);
+      return new Response(JSON.stringify({ success: true, ...results }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+
+    // Modo 3: Sincronizar por filtro de nome (ILIKE)
+    if (payload.filter_name && payload.company_id) {
+      console.log(`[field-sync] Sincronizando clientes com nome contendo: ${payload.filter_name}`);
+      
+      const { data: pessoas, error: fetchError } = await supabase
+        .from('pessoas')
+        .select('id, razao_social, nome_fantasia, cpf_cnpj, email, telefone, cep, logradouro, numero, bairro, complemento, cidade, estado, company_id')
+        .eq('company_id', payload.company_id)
+        .eq('is_active', true)
+        .or(`nome_fantasia.ilike.%${payload.filter_name}%,razao_social.ilike.%${payload.filter_name}%`);
+
+      if (fetchError) {
+        return new Response(
+          JSON.stringify({ success: false, error: fetchError.message }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      console.log(`[field-sync] Encontradas ${pessoas?.length || 0} pessoas com "${payload.filter_name}"`);
+
+      const results = { total: pessoas?.length || 0, created: 0, updated: 0, errors: 0, errorDetails: [] as any[] };
+
+      for (const pessoa of pessoas || []) {
+        const result = await syncCustomerToField(pessoa, apiKey, supabase);
+        if (result.success) {
+          if (result.action === 'create') results.created++;
+          else results.updated++;
+        } else {
+          results.errors++;
+          results.errorDetails.push({ id: pessoa.id, nome: pessoa.nome_fantasia || pessoa.razao_social, error: result.error });
+        }
+        await new Promise(resolve => setTimeout(resolve, 200));
+      }
+
+      console.log(`[field-sync] Concluído: ${results.created} criados, ${results.updated} atualizados, ${results.errors} erros`);
+      return new Response(JSON.stringify({ success: true, ...results }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+
+    // Modo 4: Sincronizar todas as pessoas de uma empresa (clientes, fornecedores, etc.)
     if (payload.sync_all && payload.company_id) {
       console.log(`[field-sync] Iniciando sync_all para company_id: ${payload.company_id}`);
       
-      // Buscar TODAS as pessoas ativas da empresa (clientes, fornecedores, transportadoras, etc.)
-      // Muitas vezes clientes são fornecedores e vice-versa
       const { data: pessoas, error: fetchError } = await supabase
         .from('pessoas')
         .select('id, razao_social, nome_fantasia, cpf_cnpj, email, telefone, cep, logradouro, numero, bairro, complemento, cidade, estado, company_id')
@@ -235,40 +309,23 @@ serve(async (req) => {
 
       console.log(`[field-sync] Encontradas ${pessoas.length} pessoas para sincronizar`);
 
-      const results = {
-        total: pessoas.length,
-        created: 0,
-        updated: 0,
-        errors: 0,
-        details: [] as any[]
-      };
+      const results = { total: pessoas.length, created: 0, updated: 0, errors: 0, details: [] as any[] };
 
       for (const pessoa of pessoas) {
         const result = await syncCustomerToField(pessoa, apiKey, supabase);
-        
         if (result.success) {
           if (result.action === 'create') results.created++;
           else results.updated++;
         } else {
           results.errors++;
         }
-        
-        results.details.push({
-          wai_id: pessoa.id,
-          nome: pessoa.razao_social || pessoa.nome_fantasia,
-          ...result
-        });
-
-        // Pequeno delay para não sobrecarregar a API
+        results.details.push({ wai_id: pessoa.id, nome: pessoa.razao_social || pessoa.nome_fantasia, ...result });
         await new Promise(resolve => setTimeout(resolve, 200));
       }
 
       console.log(`[field-sync] Sync concluído: ${results.created} criados, ${results.updated} atualizados, ${results.errors} erros`);
 
-      return new Response(
-        JSON.stringify({ success: true, ...results }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      return new Response(JSON.stringify({ success: true, ...results }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
     return new Response(
