@@ -156,13 +156,13 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({
         success: true,
-        summary: {
-          total: products.length,
+        stats: {
+          total_processed: products.length,
           created: results.created,
           updated: results.updated,
           errors: results.errors.length,
         },
-        errors: results.errors,
+        error_details: results.errors,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
