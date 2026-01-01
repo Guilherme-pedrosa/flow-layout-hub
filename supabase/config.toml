@@ -89,3 +89,6 @@ verify_jwt = false
 
 [functions.nfse-direto]
 verify_jwt = false
+
+[functions.migrate-gestaoclick]
+verify_jwt = false
