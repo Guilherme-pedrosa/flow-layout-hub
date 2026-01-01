@@ -46,12 +46,12 @@ export default function ExtratoBancario() {
   const [transactions, setTransactions] = useState<BankTransaction[]>([]);
   const [hasCredentials, setHasCredentials] = useState(false);
   
-  // Período padrão: últimos 30 dias
+  // Período padrão: últimos 60 dias (para incluir mês anterior)
   const today = new Date();
-  const thirtyDaysAgo = new Date(today);
-  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+  const sixtyDaysAgo = new Date(today);
+  sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
   
-  const [dateFrom, setDateFrom] = useState(thirtyDaysAgo.toISOString().split("T")[0]);
+  const [dateFrom, setDateFrom] = useState(sixtyDaysAgo.toISOString().split("T")[0]);
   const [dateTo, setDateTo] = useState(today.toISOString().split("T")[0]);
 
   // Ordenação com 3 estados
