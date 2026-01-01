@@ -37,22 +37,39 @@ function cleanDocument(doc: string | undefined): string {
 }
 
 function buildFieldControlPayload(record: CustomerRecord) {
+  // Normaliza CEP para formato 8 dígitos (sem hífen)
+  const cleanZipCode = (cep: string | null | undefined): string => {
+    if (!cep) return '';
+    const cleaned = cep.replace(/\D/g, '');
+    return cleaned.length === 8 ? cleaned : '';
+  };
+
+  // Normaliza telefone
+  const cleanPhone = (phone: string | null | undefined): string => {
+    if (!phone) return '';
+    return phone.replace(/\D/g, '');
+  };
+
   return {
     name: record.razao_social || record.nome_fantasia || 'Cliente sem nome',
     documentNumber: cleanDocument(record.cpf_cnpj),
     externalId: record.id,
     contact: {
       email: record.email || '',
-      phone: record.telefone || ''
+      phone: cleanPhone(record.telefone)
     },
     address: {
-      zipCode: record.cep || '',
+      zipCode: cleanZipCode(record.cep),
       street: record.logradouro || '',
       number: record.numero || '',
       neighborhood: record.bairro || '',
       complement: record.complemento || '',
       city: record.cidade || '',
-      state: record.estado || ''
+      state: record.estado || '',
+      coords: {
+        latitude: 0,
+        longitude: 0
+      }
     }
   };
 }
