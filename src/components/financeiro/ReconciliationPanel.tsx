@@ -83,7 +83,11 @@ interface FinancialEntry {
   description?: string;
 }
 
-export function ReconciliationPanel() {
+interface ReconciliationPanelProps {
+  transactionType?: 'payables' | 'receivables' | 'all';
+}
+
+export function ReconciliationPanel({ transactionType = 'all' }: ReconciliationPanelProps) {
   const { toast } = useToast();
   const { currentCompany: selectedCompany } = useCompany();
   
@@ -112,7 +116,7 @@ export function ReconciliationPanel() {
     setLoading(true);
     try {
       const { data, error } = await supabase.functions.invoke('reconciliation-engine', {
-        body: { company_id: selectedCompany.id }
+        body: { company_id: selectedCompany.id, transaction_type: transactionType }
       });
       
       if (error) throw error;
@@ -137,7 +141,7 @@ export function ReconciliationPanel() {
     if (selectedCompany?.id) {
       loadSuggestions();
     }
-  }, [selectedCompany?.id]);
+  }, [selectedCompany?.id, transactionType]);
 
   const confirmSuggestion = async (suggestion: Suggestion) => {
     try {
