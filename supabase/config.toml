@@ -92,3 +92,6 @@ verify_jwt = false
 
 [functions.migrate-gestaoclick]
 verify_jwt = false
+
+[functions.enrich-pessoas-cnpj]
+verify_jwt = false
