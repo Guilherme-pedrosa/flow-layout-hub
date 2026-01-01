@@ -57,10 +57,11 @@ function buildFieldControlPayload(record: CustomerRecord) {
 
   const displayName = record.nome_fantasia?.trim() || record.razao_social?.trim() || 'Cliente sem nome';
   
+  // NÃO enviar documentNumber (CNPJ) para evitar erro de duplicidade
+  // Usar apenas externalId (ID do ERP) como amarração
   return {
     name: displayName,
-    documentNumber: cleanDocument(record.cpf_cnpj),
-    externalId: record.id,
+    externalId: record.id, // ID do ERP como chave de amarração
     contact: {
       email: record.email || '',
       phone: cleanPhone(record.telefone)
@@ -220,39 +221,39 @@ async function syncCustomerToField(
       });
       action = 'create';
       
-      // Se deu erro de CNPJ duplicado, buscar o existente e linkar
+      // Se deu erro 422 (antes era CNPJ duplicado, agora pode ser outro motivo)
       if (response.status === 422) {
         const errorBody = await response.text();
-        if (errorBody.includes('document number already exists')) {
-          console.log(`[field-sync] CNPJ já existe no Field, buscando cliente existente...`);
-          const existingFieldId = await findExistingCustomer(payload.documentNumber, record.id, apiKey);
-          if (existingFieldId) {
-            // Salvar o link e tentar atualizar
-            await supabase.from('field_control_sync').insert({
-              company_id: companyId,
-              entity_type: 'customer',
-              wai_id: record.id,
-              field_id: existingFieldId,
-              last_sync: new Date().toISOString()
-            });
-            
-            // Agora atualizar o registro existente
-            const updateResponse = await fetch(`${FIELD_CONTROL_BASE_URL}/customers/${existingFieldId}`, {
-              method: 'PUT',
-              headers,
-              body: JSON.stringify(payload)
-            });
-            
-            if (updateResponse.ok) {
-              console.log(`[field-sync] OK: linked e atualizado ${record.id} -> ${existingFieldId}`);
-              return { success: true, field_id: existingFieldId, action: 'linked' };
-            } else {
-              console.log(`[field-sync] OK: linked ${record.id} -> ${existingFieldId} (sem update)`);
-              return { success: true, field_id: existingFieldId, action: 'linked' };
-            }
+        console.log(`[field-sync] Erro 422: ${errorBody}`);
+        
+        // Tentar buscar por externalId e linkar
+        const existingFieldId = await findExistingCustomer('', record.id, apiKey);
+        if (existingFieldId) {
+          // Salvar o link e tentar atualizar
+          await supabase.from('field_control_sync').insert({
+            company_id: companyId,
+            entity_type: 'customer',
+            wai_id: record.id,
+            field_id: existingFieldId,
+            last_sync: new Date().toISOString()
+          });
+          
+          // Agora atualizar o registro existente
+          const updateResponse = await fetch(`${FIELD_CONTROL_BASE_URL}/customers/${existingFieldId}`, {
+            method: 'PUT',
+            headers,
+            body: JSON.stringify(payload)
+          });
+          
+          if (updateResponse.ok) {
+            console.log(`[field-sync] OK: linked e atualizado ${record.id} -> ${existingFieldId}`);
+            return { success: true, field_id: existingFieldId, action: 'linked' };
+          } else {
+            console.log(`[field-sync] OK: linked ${record.id} -> ${existingFieldId} (sem update)`);
+            return { success: true, field_id: existingFieldId, action: 'linked' };
           }
         }
-        console.error(`[field-sync] Erro 422: ${errorBody}`);
+        
         return { success: false, error: `HTTP 422: ${errorBody}`, action };
       }
     }
