@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, forwardRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Bot, Send, X, AlertTriangle, TrendingDown, TrendingUp, DollarSign, Clock, FileText, Users, PieChart, Loader2, ArrowLeft, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,7 +24,7 @@ interface FinancialAIChatProps {
   onClose?: () => void;
 }
 
-export const FinancialAIChat = forwardRef<HTMLDivElement, FinancialAIChatProps>(function FinancialAIChat({ onClose }, ref) {
+export function FinancialAIChat({ onClose }: FinancialAIChatProps = {}) {
   const { currentCompany } = useCompany();
   const [isOpen, setIsOpen] = useState(!onClose);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -515,4 +515,4 @@ Responda APENAS com o JSON array, sem markdown ou explicações.` }],
       </div>
     </div>
   );
-});
+}
