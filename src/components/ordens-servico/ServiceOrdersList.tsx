@@ -251,6 +251,14 @@ export function ServiceOrdersList({ onEdit, onView }: ServiceOrdersListProps) {
                 className="w-[180px]"
               />
               <SortableTableHeader
+                label="Técnicos"
+                sortKey=""
+                currentSortKey={sortConfig.key}
+                sortDirection={sortConfig.direction}
+                onSort={() => {}}
+                className="w-[150px]"
+              />
+              <SortableTableHeader
                 label="Valor"
                 sortKey="total_value"
                 currentSortKey={sortConfig.key}
@@ -270,7 +278,7 @@ export function ServiceOrdersList({ onEdit, onView }: ServiceOrdersListProps) {
           </TableHeader>
           <TableBody>
             {sortedOrders.length === 0 ? (
-              <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Nenhuma OS encontrada</TableCell></TableRow>
+              <TableRow><TableCell colSpan={9} className="text-center py-8 text-muted-foreground">Nenhuma OS encontrada</TableCell></TableRow>
             ) : (
               sortedOrders.map(order => (
                 <TableRow key={order.id} className={isSelected(order.id) ? "bg-muted/30" : ""}>
@@ -330,6 +338,25 @@ export function ServiceOrdersList({ onEdit, onView }: ServiceOrdersListProps) {
                         ))}
                       </SelectContent>
                     </Select>
+                  </TableCell>
+                  <TableCell>
+                    {order.field_technicians && order.field_technicians.length > 0 ? (
+                      <div className="flex items-center gap-1">
+                        <Users className="h-3 w-3 text-muted-foreground" />
+                        <span className="text-xs">
+                          {order.field_technicians.map(t => t.name.split(' ')[0]).join(', ')}
+                        </span>
+                        {order.field_technicians.length > 1 && (
+                          <Badge variant="secondary" className="text-[10px] px-1 py-0">
+                            +{order.field_technicians.length - 1}
+                          </Badge>
+                        )}
+                      </div>
+                    ) : order.field_order_id ? (
+                      <span className="text-xs text-muted-foreground">Sem técnico</span>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">-</span>
+                    )}
                   </TableCell>
                   <TableCell className="text-right font-medium">{formatCurrency(order.total_value)}</TableCell>
                   <TableCell>
