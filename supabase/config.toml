@@ -107,3 +107,6 @@ verify_jwt = false
 
 [functions.import-auvo-customers]
 verify_jwt = false
+
+[functions.field-sync-activity]
+verify_jwt = false

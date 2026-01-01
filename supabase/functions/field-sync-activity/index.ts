@@ -1,0 +1,260 @@
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
+
+const FIELD_CONTROL_BASE_URL = 'https://production.fieldcontrol.com.br';
+
+interface ServiceOrderData {
+  id: string;
+  order_number: number;
+  client_id: string;
+  technician_id?: string;
+  delivery_date?: string;
+  scheduled_time?: string;
+  estimated_duration?: number;
+  equipment_type?: string;
+  equipment_brand?: string;
+  equipment_model?: string;
+  equipment_serial?: string;
+  reported_issue?: string;
+  diagnosis?: string;
+  observations?: string;
+  total_value?: number;
+  company_id: string;
+}
+
+serve(async (req) => {
+  // CORS preflight
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
+  }
+
+  try {
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    );
+
+    const body = await req.json();
+    const { service_order_id, company_id } = body;
+
+    console.log(`[field-sync-activity] Iniciando sync para OS ${service_order_id}`);
+
+    if (!service_order_id || !company_id) {
+      return new Response(
+        JSON.stringify({ error: 'service_order_id e company_id são obrigatórios' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Buscar credenciais do Field Control
+    const { data: credentials, error: credError } = await supabase
+      .from('system_settings')
+      .select('setting_value')
+      .eq('company_id', company_id)
+      .eq('setting_key', 'field_control_api_key')
+      .single();
+
+    if (credError || !credentials?.setting_value) {
+      console.error('[field-sync-activity] API Key do Field Control não configurada');
+      return new Response(
+        JSON.stringify({ error: 'API Key do Field Control não configurada' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const apiKey = credentials.setting_value;
+
+    // Buscar dados completos da OS
+    const { data: order, error: orderError } = await supabase
+      .from('service_orders')
+      .select(`
+        *,
+        clientes:client_id (
+          id,
+          razao_social,
+          nome_fantasia,
+          cpf_cnpj,
+          telefone,
+          email,
+          logradouro,
+          numero,
+          bairro,
+          cidade,
+          estado,
+          cep
+        ),
+        technician:technician_id (
+          id,
+          name,
+          field_employee_id
+        )
+      `)
+      .eq('id', service_order_id)
+      .single();
+
+    if (orderError || !order) {
+      console.error('[field-sync-activity] OS não encontrada:', orderError);
+      return new Response(
+        JSON.stringify({ error: 'OS não encontrada' }),
+        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Verificar se já foi sincronizada
+    if (order.field_order_id) {
+      console.log(`[field-sync-activity] OS ${order.order_number} já sincronizada: ${order.field_order_id}`);
+      return new Response(
+        JSON.stringify({ 
+          success: true, 
+          message: 'OS já sincronizada',
+          field_order_id: order.field_order_id 
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Buscar field_id do cliente na tabela de sync
+    const { data: clientSync } = await supabase
+      .from('field_control_sync')
+      .select('field_id')
+      .eq('wai_id', order.client_id)
+      .eq('entity_type', 'customer')
+      .single();
+
+    if (!clientSync?.field_id) {
+      console.error('[field-sync-activity] Cliente não sincronizado com Field Control');
+      
+      // Marcar como erro
+      await supabase
+        .from('service_orders')
+        .update({ 
+          field_sync_status: 'error',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', service_order_id);
+
+      return new Response(
+        JSON.stringify({ error: 'Cliente não sincronizado com Field Control. Sincronize o cliente primeiro.' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Montar payload da atividade para o Field Control
+    const scheduledDate = order.delivery_date || new Date().toISOString().split('T')[0];
+    const scheduledTime = order.scheduled_time || '09:00';
+    const duration = order.estimated_duration || 60;
+
+    // Montar descrição completa
+    const descriptionParts = [];
+    descriptionParts.push(`OS #${order.order_number}`);
+    
+    if (order.equipment_type || order.equipment_brand || order.equipment_model) {
+      descriptionParts.push(`\n\n📦 EQUIPAMENTO:`);
+      if (order.equipment_type) descriptionParts.push(`Tipo: ${order.equipment_type}`);
+      if (order.equipment_brand) descriptionParts.push(`Marca: ${order.equipment_brand}`);
+      if (order.equipment_model) descriptionParts.push(`Modelo: ${order.equipment_model}`);
+      if (order.equipment_serial) descriptionParts.push(`Série: ${order.equipment_serial}`);
+    }
+
+    if (order.reported_issue) {
+      descriptionParts.push(`\n\n🔧 PROBLEMA RELATADO:\n${order.reported_issue}`);
+    }
+
+    if (order.diagnosis) {
+      descriptionParts.push(`\n\n📋 DIAGNÓSTICO:\n${order.diagnosis}`);
+    }
+
+    if (order.observations) {
+      descriptionParts.push(`\n\n📝 OBSERVAÇÕES:\n${order.observations}`);
+    }
+
+    if (order.total_value > 0) {
+      descriptionParts.push(`\n\n💰 VALOR: R$ ${order.total_value.toFixed(2)}`);
+    }
+
+    const activityPayload: Record<string, any> = {
+      customerId: clientSync.field_id,
+      identifier: `OS-${order.order_number}`,
+      description: descriptionParts.join('\n'),
+      scheduledTo: `${scheduledDate}T${scheduledTime}:00`,
+      duration: duration,
+      externalId: order.id
+    };
+
+    // Se tiver técnico com field_employee_id, atribuir
+    if (order.technician?.field_employee_id) {
+      activityPayload.assignedEmployeeId = order.technician.field_employee_id;
+    }
+
+    console.log('[field-sync-activity] Payload:', JSON.stringify(activityPayload, null, 2));
+
+    // Criar atividade no Field Control
+    const response = await fetch(`${FIELD_CONTROL_BASE_URL}/orders`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Api-Key': apiKey
+      },
+      body: JSON.stringify(activityPayload)
+    });
+
+    const responseText = await response.text();
+    console.log(`[field-sync-activity] Response ${response.status}: ${responseText}`);
+
+    if (!response.ok) {
+      console.error('[field-sync-activity] Erro ao criar atividade:', responseText);
+      
+      // Marcar como erro
+      await supabase
+        .from('service_orders')
+        .update({ 
+          field_sync_status: 'error',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', service_order_id);
+
+      return new Response(
+        JSON.stringify({ error: `Erro Field Control: ${responseText}` }),
+        { status: response.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const fieldResponse = JSON.parse(responseText);
+    const fieldOrderId = fieldResponse.id || fieldResponse.orderId;
+
+    console.log(`[field-sync-activity] Atividade criada: ${fieldOrderId}`);
+
+    // Atualizar a OS com o ID do Field
+    await supabase
+      .from('service_orders')
+      .update({
+        field_order_id: fieldOrderId,
+        field_synced_at: new Date().toISOString(),
+        field_sync_status: 'synced',
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', service_order_id);
+
+    return new Response(
+      JSON.stringify({ 
+        success: true, 
+        field_order_id: fieldOrderId,
+        message: `OS #${order.order_number} sincronizada com sucesso!`
+      }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+
+  } catch (error) {
+    console.error('[field-sync-activity] Erro:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido';
+    return new Response(
+      JSON.stringify({ error: errorMessage }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
+});

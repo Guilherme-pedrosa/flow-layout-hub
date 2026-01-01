@@ -1287,6 +1287,84 @@ export type Database = {
           },
         ]
       }
+      equipments: {
+        Row: {
+          brand: string | null
+          client_id: string | null
+          company_id: string
+          created_at: string | null
+          environment: string | null
+          equipment_type: string | null
+          field_equipment_id: string | null
+          id: string
+          is_active: boolean | null
+          location_description: string | null
+          model: string | null
+          notes: string | null
+          qr_code: string | null
+          sector: string | null
+          serial_number: string
+          updated_at: string | null
+          warranty_end: string | null
+          warranty_start: string | null
+        }
+        Insert: {
+          brand?: string | null
+          client_id?: string | null
+          company_id: string
+          created_at?: string | null
+          environment?: string | null
+          equipment_type?: string | null
+          field_equipment_id?: string | null
+          id?: string
+          is_active?: boolean | null
+          location_description?: string | null
+          model?: string | null
+          notes?: string | null
+          qr_code?: string | null
+          sector?: string | null
+          serial_number: string
+          updated_at?: string | null
+          warranty_end?: string | null
+          warranty_start?: string | null
+        }
+        Update: {
+          brand?: string | null
+          client_id?: string | null
+          company_id?: string
+          created_at?: string | null
+          environment?: string | null
+          equipment_type?: string | null
+          field_equipment_id?: string | null
+          id?: string
+          is_active?: boolean | null
+          location_description?: string | null
+          model?: string | null
+          notes?: string | null
+          qr_code?: string | null
+          sector?: string | null
+          serial_number?: string
+          updated_at?: string | null
+          warranty_end?: string | null
+          warranty_start?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "equipments_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "equipments_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       extract_rules: {
         Row: {
           category_id: string | null
@@ -5950,10 +6028,16 @@ export type Database = {
           discount_percent: number | null
           discount_value: number | null
           equipment_brand: string | null
+          equipment_id: string | null
           equipment_model: string | null
           equipment_serial: string | null
           equipment_type: string | null
+          estimated_duration: number | null
           external_service_cost: number | null
+          field_order_id: string | null
+          field_sync_status: string | null
+          field_synced_at: string | null
+          field_task_id: string | null
           financial_status: string | null
           finished_at: string | null
           freight_value: number | null
@@ -5971,7 +6055,9 @@ export type Database = {
           products_total: number | null
           reported_issue: string | null
           sales_channel: string | null
+          scheduled_time: string | null
           seller_id: string | null
+          service_type_id: string | null
           services_total: number | null
           solution: string | null
           started_at: string | null
@@ -5997,10 +6083,16 @@ export type Database = {
           discount_percent?: number | null
           discount_value?: number | null
           equipment_brand?: string | null
+          equipment_id?: string | null
           equipment_model?: string | null
           equipment_serial?: string | null
           equipment_type?: string | null
+          estimated_duration?: number | null
           external_service_cost?: number | null
+          field_order_id?: string | null
+          field_sync_status?: string | null
+          field_synced_at?: string | null
+          field_task_id?: string | null
           financial_status?: string | null
           finished_at?: string | null
           freight_value?: number | null
@@ -6018,7 +6110,9 @@ export type Database = {
           products_total?: number | null
           reported_issue?: string | null
           sales_channel?: string | null
+          scheduled_time?: string | null
           seller_id?: string | null
+          service_type_id?: string | null
           services_total?: number | null
           solution?: string | null
           started_at?: string | null
@@ -6044,10 +6138,16 @@ export type Database = {
           discount_percent?: number | null
           discount_value?: number | null
           equipment_brand?: string | null
+          equipment_id?: string | null
           equipment_model?: string | null
           equipment_serial?: string | null
           equipment_type?: string | null
+          estimated_duration?: number | null
           external_service_cost?: number | null
+          field_order_id?: string | null
+          field_sync_status?: string | null
+          field_synced_at?: string | null
+          field_task_id?: string | null
           financial_status?: string | null
           finished_at?: string | null
           freight_value?: number | null
@@ -6065,7 +6165,9 @@ export type Database = {
           products_total?: number | null
           reported_issue?: string | null
           sales_channel?: string | null
+          scheduled_time?: string | null
           seller_id?: string | null
+          service_type_id?: string | null
           services_total?: number | null
           solution?: string | null
           started_at?: string | null
@@ -6107,10 +6209,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "service_orders_equipment_id_fkey"
+            columns: ["equipment_id"]
+            isOneToOne: false
+            referencedRelation: "equipments"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "service_orders_seller_id_fkey"
             columns: ["seller_id"]
             isOneToOne: false
             referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "service_orders_service_type_id_fkey"
+            columns: ["service_type_id"]
+            isOneToOne: false
+            referencedRelation: "service_types"
             referencedColumns: ["id"]
           },
           {
@@ -6125,6 +6241,53 @@ export type Database = {
             columns: ["technician_id"]
             isOneToOne: false
             referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      service_types: {
+        Row: {
+          color: string | null
+          company_id: string
+          created_at: string | null
+          default_duration: number | null
+          description: string | null
+          field_service_id: string | null
+          id: string
+          is_active: boolean | null
+          name: string
+          updated_at: string | null
+        }
+        Insert: {
+          color?: string | null
+          company_id: string
+          created_at?: string | null
+          default_duration?: number | null
+          description?: string | null
+          field_service_id?: string | null
+          id?: string
+          is_active?: boolean | null
+          name: string
+          updated_at?: string | null
+        }
+        Update: {
+          color?: string | null
+          company_id?: string
+          created_at?: string | null
+          default_duration?: number | null
+          description?: string | null
+          field_service_id?: string | null
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "service_types_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
             referencedColumns: ["id"]
           },
         ]
@@ -6524,6 +6687,7 @@ export type Database = {
           company_id: string | null
           created_at: string
           email: string
+          field_employee_id: string | null
           id: string
           is_active: boolean
           name: string
@@ -6536,6 +6700,7 @@ export type Database = {
           company_id?: string | null
           created_at?: string
           email: string
+          field_employee_id?: string | null
           id?: string
           is_active?: boolean
           name: string
@@ -6548,6 +6713,7 @@ export type Database = {
           company_id?: string | null
           created_at?: string
           email?: string
+          field_employee_id?: string | null
           id?: string
           is_active?: boolean
           name?: string
