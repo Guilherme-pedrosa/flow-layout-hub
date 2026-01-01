@@ -92,7 +92,7 @@ serve(async (req) => {
             supplierId = newSupplier.id;
             results.suppliers_created++;
           }
-          supplierCache.set(row.fornecedor, supplierId);
+          if (row.fornecedor && supplierId) supplierCache.set(row.fornecedor, supplierId);
         }
 
         // Converter datas
@@ -149,8 +149,8 @@ serve(async (req) => {
         } else {
           results.imported++;
         }
-      } catch (err) {
-        results.errors.push(`Erro inesperado: ${err.message}`);
+      } catch (err: unknown) {
+        results.errors.push(`Erro inesperado: ${err instanceof Error ? err.message : String(err)}`);
       }
     }
 
@@ -161,9 +161,9 @@ serve(async (req) => {
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
-  } catch (error) {
+  } catch (error: unknown) {
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: error instanceof Error ? error.message : String(error) }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
