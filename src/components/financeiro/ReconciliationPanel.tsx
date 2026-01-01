@@ -1,73 +1,67 @@
-import { useState, useEffect, useMemo } from "react";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { useState, useEffect } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Separator } from "@/components/ui/separator";
+import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Progress } from "@/components/ui/progress";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
-  AlertCircle,
-  Check,
-  CheckCircle2,
-  FileText,
-  Filter,
-  Lightbulb,
-  Loader2,
-  Plus,
-  RefreshCw,
-  Search,
-  Sparkles,
-  Trash2,
-  X,
-  Zap
-} from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { toast } from "sonner";
-import { formatCurrency, formatDate } from "@/lib/formatters";
 import { useCompany } from "@/contexts/CompanyContext";
+import { 
+  RefreshCw, 
+  Check, 
+  X, 
+  AlertTriangle, 
+  Search,
+  Filter,
+  ChevronDown,
+  ChevronUp,
+  Undo2,
+  FileText,
+  Calendar,
+  DollarSign,
+  Building2,
+  CheckCircle2,
+  Clock,
+  XCircle,
+  Layers,
+  ArrowRightLeft
+} from "lucide-react";
+import { format } from "date-fns";
+import { ptBR } from "date-fns/locale";
 
-interface BankTransaction {
-  id: string;
-  transaction_date: string;
-  description: string | null;
-  amount: number;
-  type: string | null;
-  nsu: string | null;
-  is_reconciled: boolean;
-}
-
-interface MatchedEntry {
+interface SuggestionEntry {
   id: string;
   type: 'receivable' | 'payable';
   amount: number;
+  amount_used: number;
   entity_name: string | null;
   due_date: string;
+  document_number?: string;
 }
 
 interface Suggestion {
   transaction_id: string;
-  transaction: BankTransaction;
-  entries: MatchedEntry[];
+  transaction: {
+    id: string;
+    transaction_date: string;
+    description: string | null;
+    amount: number;
+    type: string | null;
+  };
+  entries: SuggestionEntry[];
   confidence_score: number;
   confidence_level: 'high' | 'medium' | 'low';
   match_reasons: string[];
-  match_type: 'rule' | 'exact_value_name' | 'exact_value_only' | 'nosso_numero';
+  match_type: string;
   total_matched: number;
   difference: number;
-  rule_id?: string;
-  requires_review: boolean;
+  extracted_name?: string;
+  matched_entity?: string;
 }
 
 interface UnmatchedTransaction {
@@ -76,774 +70,738 @@ interface UnmatchedTransaction {
   description: string | null;
   amount: number;
   type: string | null;
+  extracted_name?: string;
 }
 
-interface ExtractRule {
+interface FinancialEntry {
   id: string;
-  search_text: string;
-  supplier_id: string | null;
-  category_id: string | null;
-  description: string | null;
-  is_active: boolean;
-  times_used: number;
+  amount: number;
+  due_date: string;
+  entity_name: string | null;
+  document_number?: string;
+  type: 'receivable' | 'payable';
+  description?: string;
 }
-
-interface Summary {
-  total_suggestions: number;
-  high_confidence: number;
-  medium_confidence: number;
-  low_confidence: number;
-  unmatched: number;
-  transactions_analyzed: number;
-  rules_active: number;
-}
-
-type ConfidenceLevel = 'all' | 'high' | 'medium' | 'low';
 
 export function ReconciliationPanel() {
-  const { currentCompany } = useCompany();
-  const companyId = currentCompany?.id;
-
+  const { toast } = useToast();
+  const { selectedCompany } = useCompany();
+  
   const [loading, setLoading] = useState(false);
-  const [analyzing, setAnalyzing] = useState(false);
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [unmatchedTransactions, setUnmatchedTransactions] = useState<UnmatchedTransaction[]>([]);
-  const [rules, setRules] = useState<ExtractRule[]>([]);
-  const [summary, setSummary] = useState<Summary>({
-    total_suggestions: 0,
-    high_confidence: 0,
-    medium_confidence: 0,
-    low_confidence: 0,
-    unmatched: 0,
-    transactions_analyzed: 0,
-    rules_active: 0
-  });
+  const [summary, setSummary] = useState<any>(null);
   
-  // UI State
-  const [activeTab, setActiveTab] = useState("suggestions");
-  const [confidenceFilter, setConfidenceFilter] = useState<ConfidenceLevel>('all');
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchTerm, setSearchTerm] = useState("");
+  const [filterConfidence, setFilterConfidence] = useState<string>("all");
   
-  // Dialog para criar regra
-  const [showRuleDialog, setShowRuleDialog] = useState(false);
-  const [newRule, setNewRule] = useState({ search_text: "", description: "" });
-  const [transactionForRule, setTransactionForRule] = useState<UnmatchedTransaction | null>(null);
+  const [selectedTransaction, setSelectedTransaction] = useState<UnmatchedTransaction | null>(null);
+  const [availableEntries, setAvailableEntries] = useState<FinancialEntry[]>([]);
+  const [selectedEntries, setSelectedEntries] = useState<Set<string>>(new Set());
+  const [manualDialogOpen, setManualDialogOpen] = useState(false);
+  const [loadingEntries, setLoadingEntries] = useState(false);
   
-  // Confirmação
-  const [confirmingId, setConfirmingId] = useState<string | null>(null);
+  const [selectedSuggestions, setSelectedSuggestions] = useState<Set<string>>(new Set());
+  const [confirmingBatch, setConfirmingBatch] = useState(false);
+  
+  const [expandedSuggestions, setExpandedSuggestions] = useState<Set<string>>(new Set());
 
-  useEffect(() => {
-    if (companyId) {
-      loadRules();
-    }
-  }, [companyId]);
-
-  // Carregar regras de extrato
-  const loadRules = async () => {
-    if (!companyId) return;
+  const loadSuggestions = async () => {
+    if (!selectedCompany?.id) return;
     
+    setLoading(true);
     try {
-      const { data, error } = await (supabase
-        .from('extract_rules' as any)
-        .select('*')
-        .eq('company_id', companyId)
-        .order('times_used', { ascending: false }));
-
-      if (!error && data) {
-        setRules(data as unknown as ExtractRule[]);
-      }
-    } catch (error) {
-      console.error('Erro ao carregar regras:', error);
-    }
-  };
-
-  // Executar análise de conciliação
-  const runAnalysis = async () => {
-    if (!companyId) return;
-    setAnalyzing(true);
-
-    try {
-      const { data, error } = await supabase.functions.invoke("reconciliation-engine", {
-        body: {
-          company_id: companyId,
-          max_suggestions: 100
-        }
+      const { data, error } = await supabase.functions.invoke('reconciliation-engine', {
+        body: { company_id: selectedCompany.id }
       });
-
+      
       if (error) throw error;
-
+      
       if (data?.success) {
         setSuggestions(data.data.suggestions || []);
         setUnmatchedTransactions(data.data.unmatched_transactions || []);
-        setSummary(data.data.summary || {});
-
-        const s = data.data.summary;
-        toast.success(
-          `Análise concluída!`,
-          { 
-            description: `${s.high_confidence} alta, ${s.medium_confidence} média, ${s.low_confidence} baixa confiança. ${s.unmatched} exceções.` 
-          }
-        );
+        setSummary(data.data.summary || null);
       }
-    } catch (error) {
-      console.error("Erro na análise:", error);
-      toast.error("Erro ao executar análise de conciliação");
+    } catch (error: any) {
+      toast({
+        title: "Erro ao carregar sugestões",
+        description: error.message,
+        variant: "destructive"
+      });
     } finally {
-      setAnalyzing(false);
+      setLoading(false);
     }
   };
 
-  // Confirmar conciliação individual
+  useEffect(() => {
+    if (selectedCompany?.id) {
+      loadSuggestions();
+    }
+  }, [selectedCompany?.id]);
+
   const confirmSuggestion = async (suggestion: Suggestion) => {
-    if (!companyId) return;
-    setConfirmingId(suggestion.transaction_id);
-
     try {
-      const tx = suggestion.transaction;
-
-      // 1. Atualizar transação bancária como conciliada
-      await supabase
-        .from("bank_transactions")
-        .update({
-          is_reconciled: true,
-          reconciled_at: new Date().toISOString()
+      const { data: reconciliation, error: recError } = await supabase
+        .from('bank_reconciliations')
+        .insert({
+          company_id: selectedCompany?.id,
+          bank_transaction_id: suggestion.transaction_id,
+          total_reconciled_amount: suggestion.total_matched,
+          difference: suggestion.difference,
+          method: 'suggested',
+          confidence_score: suggestion.confidence_score,
+          match_type: suggestion.match_type
         })
-        .eq("id", tx.id);
-
-      // 2. Atualizar títulos financeiros
+        .select()
+        .single();
+      
+      if (recError) throw recError;
+      
       for (const entry of suggestion.entries) {
-        const table = entry.type === 'receivable' ? 'accounts_receivable' : 'payables';
+        await supabase
+          .from('bank_reconciliation_items')
+          .insert({
+            reconciliation_id: reconciliation.id,
+            financial_id: entry.id,
+            financial_type: entry.type,
+            amount_used: entry.amount_used,
+            original_amount: entry.amount,
+            entity_name: entry.entity_name,
+            due_date: entry.due_date
+          });
         
+        const table = entry.type === 'receivable' ? 'accounts_receivable' : 'payables';
         await supabase
           .from(table)
           .update({
             is_paid: true,
-            paid_at: tx.transaction_date,
-            reconciliation_id: tx.id
+            paid_at: new Date().toISOString(),
+            reconciliation_id: reconciliation.id
           })
-          .eq("id", entry.id);
+          .eq('id', entry.id);
       }
-
-      // 3. Se foi match por regra, incrementar contador
-      if (suggestion.rule_id) {
-        await supabase.rpc('increment_rule_usage' as any, { rule_id: suggestion.rule_id });
-      }
-
-      toast.success("Conciliação confirmada!");
       
-      // Remover da lista
-      setSuggestions(prev => prev.filter(s => s.transaction_id !== suggestion.transaction_id));
-      setSummary(prev => ({
-        ...prev,
-        total_suggestions: prev.total_suggestions - 1,
-        [suggestion.confidence_level === 'high' ? 'high_confidence' : 
-         suggestion.confidence_level === 'medium' ? 'medium_confidence' : 'low_confidence']: 
-          prev[suggestion.confidence_level === 'high' ? 'high_confidence' : 
-               suggestion.confidence_level === 'medium' ? 'medium_confidence' : 'low_confidence'] - 1
-      }));
-
-    } catch (error) {
-      console.error("Erro ao confirmar:", error);
-      toast.error("Erro ao confirmar conciliação");
-    } finally {
-      setConfirmingId(null);
+      await supabase
+        .from('bank_transactions')
+        .update({
+          is_reconciled: true,
+          reconciled_at: new Date().toISOString()
+        })
+        .eq('id', suggestion.transaction_id);
+      
+      toast({
+        title: "Conciliação confirmada",
+        description: `Transação conciliada com ${suggestion.entries.length} título(s)`,
+      });
+      
+      loadSuggestions();
+      
+    } catch (error: any) {
+      toast({
+        title: "Erro ao confirmar",
+        description: error.message,
+        variant: "destructive"
+      });
     }
   };
 
-  // Confirmar todas de alta confiança
-  const confirmAllHighConfidence = async () => {
-    const highConfidenceSuggestions = suggestions.filter(s => 
-      s.confidence_level === 'high' && !s.requires_review
+  const confirmBatch = async () => {
+    const highConfidenceSuggestions = suggestions.filter(
+      s => s.confidence_level === 'high' && selectedSuggestions.has(s.transaction_id)
     );
-
+    
     if (highConfidenceSuggestions.length === 0) {
-      toast.info("Nenhuma sugestão de alta confiança para confirmar");
+      toast({
+        title: "Nenhuma sugestão selecionada",
+        description: "Selecione sugestões de alta confiança para confirmar em lote",
+        variant: "destructive"
+      });
       return;
     }
-
-    setAnalyzing(true);
+    
+    setConfirmingBatch(true);
     let confirmed = 0;
-
+    let errors = 0;
+    
     for (const suggestion of highConfidenceSuggestions) {
       try {
         await confirmSuggestion(suggestion);
         confirmed++;
-      } catch (error) {
-        console.error(`Erro ao confirmar ${suggestion.transaction_id}:`, error);
+      } catch {
+        errors++;
       }
     }
-
-    setAnalyzing(false);
-    toast.success(`${confirmed} transações conciliadas em lote`);
+    
+    setConfirmingBatch(false);
+    setSelectedSuggestions(new Set());
+    
+    toast({
+      title: "Conciliação em lote",
+      description: `${confirmed} confirmadas, ${errors} erros`,
+    });
+    
+    loadSuggestions();
   };
 
-  // Descartar sugestão
-  const rejectSuggestion = (transactionId: string) => {
+  const discardSuggestion = (transactionId: string) => {
     setSuggestions(prev => prev.filter(s => s.transaction_id !== transactionId));
-    toast.info("Sugestão descartada");
+    toast({
+      title: "Sugestão descartada",
+      description: "A transação foi movida para exceções",
+    });
   };
 
-  // Criar regra de extrato
-  const createRule = async () => {
-    if (!companyId || !newRule.search_text.trim()) {
-      toast.error("Texto de busca é obrigatório");
+  const openManualSelection = async (transaction: UnmatchedTransaction) => {
+    setSelectedTransaction(transaction);
+    setSelectedEntries(new Set());
+    setManualDialogOpen(true);
+    setLoadingEntries(true);
+    
+    try {
+      const isDebit = transaction.amount < 0;
+      const table = isDebit ? 'payables' : 'accounts_receivable';
+      const entityTable = isDebit ? 'pessoas' : 'clientes';
+      const entityField = isDebit ? 'supplier_id' : 'customer_id';
+      
+      const { data, error } = await supabase
+        .from(table)
+        .select(`*, ${entityTable}:${entityField}(razao_social, nome_fantasia)`)
+        .eq('company_id', selectedCompany?.id)
+        .eq('is_paid', false)
+        .is('reconciliation_id', null)
+        .order('due_date', { ascending: true });
+      
+      if (error) throw error;
+      
+      const entries: FinancialEntry[] = (data || []).map((item: any) => ({
+        id: item.id,
+        amount: item.amount,
+        due_date: item.due_date,
+        entity_name: item[entityTable]?.nome_fantasia || item[entityTable]?.razao_social || null,
+        document_number: item.document_number,
+        type: isDebit ? 'payable' : 'receivable',
+        description: item.description
+      }));
+      
+      setAvailableEntries(entries);
+    } catch (error: any) {
+      toast({
+        title: "Erro ao carregar títulos",
+        description: error.message,
+        variant: "destructive"
+      });
+    } finally {
+      setLoadingEntries(false);
+    }
+  };
+
+  const calculateSelectedTotal = () => {
+    return availableEntries
+      .filter(e => selectedEntries.has(e.id))
+      .reduce((sum, e) => sum + e.amount, 0);
+  };
+
+  const confirmManualSelection = async () => {
+    if (!selectedTransaction || selectedEntries.size === 0) return;
+    
+    const txAmount = Math.abs(selectedTransaction.amount);
+    const selectedTotal = calculateSelectedTotal();
+    const difference = Math.abs(txAmount - selectedTotal);
+    
+    if (difference > 0.01) {
+      toast({
+        title: "Diferença de valores",
+        description: `Diferença de R$ ${difference.toFixed(2)}. Ajuste a seleção.`,
+        variant: "destructive"
+      });
       return;
     }
-
+    
     try {
-      const { error } = await (supabase
-        .from('extract_rules' as any)
-        .insert({
-          company_id: companyId,
-          search_text: newRule.search_text.trim(),
-          description: newRule.description.trim() || null,
-          is_active: true,
-          times_used: 0
-        }));
-
-      if (error) {
-        if (error.code === '23505') {
-          toast.error("Já existe uma regra com esse texto");
-          return;
-        }
-        throw error;
-      }
-
-      toast.success(`Regra criada!`, {
-        description: `Transações com "${newRule.search_text}" serão conciliadas automaticamente`
-      });
-
-      setShowRuleDialog(false);
-      setNewRule({ search_text: "", description: "" });
-      setTransactionForRule(null);
-      loadRules();
+      const entries = availableEntries.filter(e => selectedEntries.has(e.id));
       
-      // Rodar análise novamente para aplicar nova regra
-      runAnalysis();
-    } catch (error) {
-      console.error('Erro ao criar regra:', error);
-      toast.error("Erro ao criar regra");
-    }
-  };
-
-  // Deletar regra
-  const deleteRule = async (ruleId: string) => {
-    try {
-      await (supabase
-        .from('extract_rules' as any)
-        .delete())
-        .eq('id', ruleId);
-
-      toast.success("Regra removida");
-      loadRules();
-    } catch (error) {
-      toast.error("Erro ao remover regra");
-    }
-  };
-
-  // Abrir dialog para criar regra a partir de transação
-  const openCreateRuleFromTransaction = (tx: UnmatchedTransaction) => {
-    setTransactionForRule(tx);
-    setNewRule({ 
-      search_text: tx.description || "", 
-      description: "" 
-    });
-    setShowRuleDialog(true);
-  };
-
-  // Filtrar sugestões
-  const filteredSuggestions = useMemo(() => {
-    return suggestions.filter(s => {
-      if (confidenceFilter === 'high' && s.confidence_level !== 'high') return false;
-      if (confidenceFilter === 'medium' && s.confidence_level !== 'medium') return false;
-      if (confidenceFilter === 'low' && s.confidence_level !== 'low') return false;
-
-      if (searchTerm) {
-        const term = searchTerm.toLowerCase();
-        const matchDesc = s.transaction?.description?.toLowerCase().includes(term);
-        const matchEntity = s.entries?.some(e => e.entity_name?.toLowerCase().includes(term));
-        if (!matchDesc && !matchEntity) return false;
+      const { data: reconciliation, error: recError } = await supabase
+        .from('bank_reconciliations')
+        .insert({
+          company_id: selectedCompany?.id,
+          bank_transaction_id: selectedTransaction.id,
+          total_reconciled_amount: selectedTotal,
+          difference: difference,
+          method: 'manual',
+          match_type: entries.length > 1 ? 'aggregation_1_n' : 'exact_1_1'
+        })
+        .select()
+        .single();
+      
+      if (recError) throw recError;
+      
+      for (const entry of entries) {
+        await supabase
+          .from('bank_reconciliation_items')
+          .insert({
+            reconciliation_id: reconciliation.id,
+            financial_id: entry.id,
+            financial_type: entry.type,
+            amount_used: entry.amount,
+            original_amount: entry.amount,
+            entity_name: entry.entity_name,
+            due_date: entry.due_date
+          });
+        
+        const table = entry.type === 'receivable' ? 'accounts_receivable' : 'payables';
+        await supabase
+          .from(table)
+          .update({
+            is_paid: true,
+            paid_at: new Date().toISOString(),
+            reconciliation_id: reconciliation.id
+          })
+          .eq('id', entry.id);
       }
+      
+      await supabase
+        .from('bank_transactions')
+        .update({
+          is_reconciled: true,
+          reconciled_at: new Date().toISOString()
+        })
+        .eq('id', selectedTransaction.id);
+      
+      toast({
+        title: "Conciliação manual confirmada",
+        description: `Transação conciliada com ${entries.length} título(s)`,
+      });
+      
+      setManualDialogOpen(false);
+      loadSuggestions();
+      
+    } catch (error: any) {
+      toast({
+        title: "Erro ao confirmar",
+        description: error.message,
+        variant: "destructive"
+      });
+    }
+  };
 
-      return true;
+  const filteredSuggestions = suggestions.filter(s => {
+    if (filterConfidence !== 'all' && s.confidence_level !== filterConfidence) return false;
+    if (searchTerm) {
+      const search = searchTerm.toLowerCase();
+      const matchesDesc = s.transaction.description?.toLowerCase().includes(search);
+      const matchesEntity = s.matched_entity?.toLowerCase().includes(search);
+      const matchesName = s.extracted_name?.toLowerCase().includes(search);
+      if (!matchesDesc && !matchesEntity && !matchesName) return false;
+    }
+    return true;
+  });
+
+  const toggleExpand = (id: string) => {
+    setExpandedSuggestions(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
     });
-  }, [suggestions, confidenceFilter, searchTerm]);
+  };
 
-  // Calcular progresso
-  const totalConciliado = summary.high_confidence + summary.medium_confidence + summary.low_confidence;
-  const progressPercent = summary.transactions_analyzed > 0 
-    ? Math.round((totalConciliado / summary.transactions_analyzed) * 100) 
-    : 0;
+  const toggleBatchSelection = (id: string) => {
+    setSelectedSuggestions(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const selectAllHighConfidence = () => {
+    const highIds = suggestions.filter(s => s.confidence_level === 'high').map(s => s.transaction_id);
+    setSelectedSuggestions(new Set(highIds));
+  };
 
   const getConfidenceBadge = (level: string, score: number) => {
     switch (level) {
       case 'high':
-        return <Badge className="bg-green-500 text-white"><CheckCircle2 className="h-3 w-3 mr-1" /> {score}%</Badge>;
+        return <Badge className="bg-green-500 hover:bg-green-600"><CheckCircle2 className="w-3 h-3 mr-1" />{score}% Alta</Badge>;
       case 'medium':
-        return <Badge className="bg-amber-500 text-white"><Lightbulb className="h-3 w-3 mr-1" /> {score}%</Badge>;
+        return <Badge className="bg-yellow-500 hover:bg-yellow-600"><Clock className="w-3 h-3 mr-1" />{score}% Média</Badge>;
       case 'low':
-        return <Badge variant="outline" className="text-muted-foreground"><AlertCircle className="h-3 w-3 mr-1" /> {score}%</Badge>;
+        return <Badge className="bg-red-500 hover:bg-red-600"><AlertTriangle className="w-3 h-3 mr-1" />{score}% Baixa</Badge>;
       default:
         return <Badge>{score}%</Badge>;
     }
   };
 
+  const getMatchTypeBadge = (type: string) => {
+    switch (type) {
+      case 'exact_1_1':
+        return <Badge variant="outline"><ArrowRightLeft className="w-3 h-3 mr-1" />1:1</Badge>;
+      case 'aggregation_1_n':
+        return <Badge variant="outline"><Layers className="w-3 h-3 mr-1" />1:N</Badge>;
+      case 'nosso_numero':
+        return <Badge variant="outline"><FileText className="w-3 h-3 mr-1" />Nosso Nº</Badge>;
+      case 'rule':
+        return <Badge variant="outline"><Filter className="w-3 h-3 mr-1" />Regra</Badge>;
+      default:
+        return <Badge variant="outline">{type}</Badge>;
+    }
+  };
+
   return (
     <div className="space-y-4">
-      {/* Cards de resumo */}
-      <div className="grid gap-4 md:grid-cols-5">
-        <Card 
-          className={`cursor-pointer transition-all ${activeTab === 'suggestions' && confidenceFilter === 'high' ? 'ring-2 ring-green-500' : ''}`}
-          onClick={() => { setActiveTab('suggestions'); setConfidenceFilter('high'); }}
-        >
-          <CardContent className="pt-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-green-100 dark:bg-green-900/30">
-                <CheckCircle2 className="h-5 w-5 text-green-600" />
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Alta Confiança</p>
-                <p className="text-2xl font-bold text-green-600">{summary.high_confidence}</p>
-              </div>
-            </div>
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+        <Card className="cursor-pointer hover:bg-accent" onClick={() => setFilterConfidence('all')}>
+          <CardContent className="p-4 text-center">
+            <div className="text-2xl font-bold">{summary?.total_suggestions || 0}</div>
+            <div className="text-sm text-muted-foreground">Total</div>
           </CardContent>
         </Card>
-
-        <Card 
-          className={`cursor-pointer transition-all ${activeTab === 'suggestions' && confidenceFilter === 'medium' ? 'ring-2 ring-amber-500' : ''}`}
-          onClick={() => { setActiveTab('suggestions'); setConfidenceFilter('medium'); }}
-        >
-          <CardContent className="pt-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-amber-100 dark:bg-amber-900/30">
-                <Lightbulb className="h-5 w-5 text-amber-600" />
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Média Confiança</p>
-                <p className="text-2xl font-bold text-amber-600">{summary.medium_confidence}</p>
-              </div>
-            </div>
+        <Card className="cursor-pointer hover:bg-accent border-green-500" onClick={() => setFilterConfidence('high')}>
+          <CardContent className="p-4 text-center">
+            <div className="text-2xl font-bold text-green-600">{summary?.high_confidence || 0}</div>
+            <div className="text-sm text-muted-foreground">Alta Confiança</div>
           </CardContent>
         </Card>
-
-        <Card 
-          className={`cursor-pointer transition-all ${activeTab === 'suggestions' && confidenceFilter === 'low' ? 'ring-2 ring-gray-500' : ''}`}
-          onClick={() => { setActiveTab('suggestions'); setConfidenceFilter('low'); }}
-        >
-          <CardContent className="pt-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-muted">
-                <AlertCircle className="h-5 w-5 text-muted-foreground" />
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Baixa Confiança</p>
-                <p className="text-2xl font-bold text-muted-foreground">{summary.low_confidence}</p>
-              </div>
-            </div>
+        <Card className="cursor-pointer hover:bg-accent border-yellow-500" onClick={() => setFilterConfidence('medium')}>
+          <CardContent className="p-4 text-center">
+            <div className="text-2xl font-bold text-yellow-600">{summary?.medium_confidence || 0}</div>
+            <div className="text-sm text-muted-foreground">Média</div>
           </CardContent>
         </Card>
-
-        <Card 
-          className={`cursor-pointer transition-all ${activeTab === 'unmatched' ? 'ring-2 ring-red-500' : ''}`}
-          onClick={() => setActiveTab('unmatched')}
-        >
-          <CardContent className="pt-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-red-100 dark:bg-red-900/30">
-                <FileText className="h-5 w-5 text-red-600" />
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Exceções</p>
-                <p className="text-2xl font-bold text-red-600">{summary.unmatched}</p>
-              </div>
-            </div>
+        <Card className="cursor-pointer hover:bg-accent border-red-500" onClick={() => setFilterConfidence('low')}>
+          <CardContent className="p-4 text-center">
+            <div className="text-2xl font-bold text-red-600">{summary?.low_confidence || 0}</div>
+            <div className="text-sm text-muted-foreground">Baixa</div>
           </CardContent>
         </Card>
-
-        <Card 
-          className={`cursor-pointer transition-all ${activeTab === 'rules' ? 'ring-2 ring-blue-500' : ''}`}
-          onClick={() => setActiveTab('rules')}
-        >
-          <CardContent className="pt-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-blue-100 dark:bg-blue-900/30">
-                <Zap className="h-5 w-5 text-blue-600" />
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Regras Ativas</p>
-                <p className="text-2xl font-bold text-blue-600">{rules.length}</p>
-              </div>
-            </div>
+        <Card className="cursor-pointer hover:bg-accent border-gray-500">
+          <CardContent className="p-4 text-center">
+            <div className="text-2xl font-bold text-gray-600">{summary?.unmatched || 0}</div>
+            <div className="text-sm text-muted-foreground">Exceções</div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Barra de progresso */}
-      {summary.transactions_analyzed > 0 && (
+      {summary && summary.transactions_analyzed > 0 && (
         <Card>
-          <CardContent className="py-3">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-medium">Progresso da Conciliação</span>
-              <span className="text-sm text-muted-foreground">
-                {totalConciliado} de {summary.transactions_analyzed} transações ({progressPercent}%)
-              </span>
+          <CardContent className="p-4">
+            <div className="flex justify-between text-sm mb-2">
+              <span>Progresso da conciliação</span>
+              <span>{Math.round(((summary.total_suggestions) / summary.transactions_analyzed) * 100)}%</span>
             </div>
-            <Progress value={progressPercent} className="h-2" />
+            <Progress value={((summary.total_suggestions) / summary.transactions_analyzed) * 100} className="h-2" />
+            <div className="flex justify-between text-xs text-muted-foreground mt-1">
+              <span>{summary.total_suggestions} sugestões</span>
+              <span>{summary.transactions_analyzed} transações analisadas</span>
+            </div>
           </CardContent>
         </Card>
       )}
 
-      {/* Ações */}
-      <div className="flex flex-wrap gap-2">
-        <Button onClick={runAnalysis} disabled={analyzing || loading}>
-          {analyzing ? (
-            <>
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              Analisando...
-            </>
-          ) : (
-            <>
-              <Sparkles className="h-4 w-4 mr-2" />
-              Analisar Transações
-            </>
-          )}
-        </Button>
-        
-        {summary.high_confidence > 0 && (
-          <Button 
-            variant="default" 
-            className="bg-green-600 hover:bg-green-700" 
-            onClick={confirmAllHighConfidence}
-            disabled={analyzing}
-          >
-            <Check className="h-4 w-4 mr-2" />
-            Confirmar Todas Alta Confiança ({summary.high_confidence})
-          </Button>
-        )}
-
-        <Button variant="outline" onClick={() => setShowRuleDialog(true)}>
-          <Plus className="h-4 w-4 mr-2" />
-          Nova Regra
-        </Button>
-      </div>
-
-      {/* Tabs */}
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList>
-          <TabsTrigger value="suggestions">
-            Sugestões ({suggestions.length})
-          </TabsTrigger>
-          <TabsTrigger value="unmatched">
-            Exceções ({unmatchedTransactions.length})
-          </TabsTrigger>
-          <TabsTrigger value="rules">
-            Regras ({rules.length})
-          </TabsTrigger>
-        </TabsList>
-
-        {/* Sugestões de conciliação */}
-        <TabsContent value="suggestions" className="space-y-4">
-          {/* Filtros */}
-          <div className="flex flex-wrap items-center gap-4">
-            <div className="flex items-center gap-2">
-              <Filter className="h-4 w-4 text-muted-foreground" />
-              <span className="text-sm font-medium">Filtros:</span>
+      <Card>
+        <CardContent className="p-4">
+          <div className="flex flex-wrap gap-4 items-center">
+            <div className="flex-1 min-w-[200px]">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
+                <Input placeholder="Buscar por descrição, fornecedor..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-10" />
+              </div>
             </div>
-
-            <Select value={confidenceFilter} onValueChange={(v) => setConfidenceFilter(v as ConfidenceLevel)}>
-              <SelectTrigger className="w-[160px]">
+            
+            <Select value={filterConfidence} onValueChange={setFilterConfidence}>
+              <SelectTrigger className="w-[180px]">
                 <SelectValue placeholder="Confiança" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todas</SelectItem>
-                <SelectItem value="high">Alta (≥90%)</SelectItem>
-                <SelectItem value="medium">Média (60-89%)</SelectItem>
-                <SelectItem value="low">Baixa (&lt;60%)</SelectItem>
+                <SelectItem value="high">Alta confiança</SelectItem>
+                <SelectItem value="medium">Média confiança</SelectItem>
+                <SelectItem value="low">Baixa confiança</SelectItem>
               </SelectContent>
             </Select>
-
-            <div className="relative flex-1 max-w-xs">
-              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Buscar..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-8"
-              />
-            </div>
+            
+            <Button variant="outline" onClick={loadSuggestions} disabled={loading}>
+              <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+              Atualizar
+            </Button>
+            
+            {selectedSuggestions.size > 0 && (
+              <Button onClick={confirmBatch} disabled={confirmingBatch}>
+                <Check className="w-4 h-4 mr-2" />
+                Confirmar {selectedSuggestions.size} selecionadas
+              </Button>
+            )}
           </div>
+          
+          {summary?.high_confidence > 0 && (
+            <div className="mt-4 flex gap-2">
+              <Button variant="outline" size="sm" onClick={selectAllHighConfidence}>
+                Selecionar todas de alta confiança ({summary.high_confidence})
+              </Button>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
-          {filteredSuggestions.length === 0 ? (
+      <Tabs defaultValue="suggestions">
+        <TabsList>
+          <TabsTrigger value="suggestions">Sugestões ({filteredSuggestions.length})</TabsTrigger>
+          <TabsTrigger value="exceptions">Exceções ({unmatchedTransactions.length})</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="suggestions" className="space-y-4">
+          {loading ? (
+            <Card>
+              <CardContent className="p-8 text-center">
+                <RefreshCw className="w-8 h-8 animate-spin mx-auto mb-4 text-muted-foreground" />
+                <p>Analisando transações...</p>
+              </CardContent>
+            </Card>
+          ) : filteredSuggestions.length === 0 ? (
             <Card>
               <CardContent className="p-8 text-center text-muted-foreground">
-                {suggestions.length === 0 ? (
-                  <>
-                    Nenhuma sugestão de conciliação encontrada.
-                    <br />
-                    Clique em "Analisar Transações" para buscar matches.
-                  </>
-                ) : (
-                  "Nenhuma sugestão corresponde aos filtros selecionados."
-                )}
+                <CheckCircle2 className="w-12 h-12 mx-auto mb-4 text-green-500" />
+                <p>Nenhuma sugestão de conciliação pendente</p>
               </CardContent>
             </Card>
           ) : (
-            <ScrollArea className="h-[600px]">
-              <div className="space-y-4 pr-4">
-                {filteredSuggestions.map((suggestion) => (
-                  <Card key={suggestion.transaction_id} className="hover:shadow-md transition-shadow">
-                    <CardContent className="p-4">
-                      <div className="flex items-start justify-between gap-4">
-                        {/* Conteúdo principal */}
-                        <div className="flex-1">
-                          {/* Badges */}
-                          <div className="flex items-center gap-2 mb-3">
-                            {getConfidenceBadge(suggestion.confidence_level, suggestion.confidence_score)}
-                            <Badge variant="outline">{suggestion.match_type}</Badge>
-                            {suggestion.requires_review && (
-                              <Badge variant="destructive">Requer Revisão</Badge>
-                            )}
-                          </div>
-                          
-                          {/* Grid lado a lado */}
-                          <div className="grid grid-cols-2 gap-4">
-                            {/* Transação bancária */}
-                            <div className="border-r pr-4">
-                              <p className="text-xs text-muted-foreground mb-1">Transação Bancária</p>
-                              <p className="text-sm font-medium">
-                                {formatDate(suggestion.transaction.transaction_date)}
-                              </p>
-                              <p className={`text-lg font-bold ${suggestion.transaction.amount < 0 ? 'text-red-600' : 'text-green-600'}`}>
-                                {formatCurrency(suggestion.transaction.amount)}
-                              </p>
-                              <p className="text-sm text-muted-foreground line-clamp-2">
-                                {suggestion.transaction.description}
-                              </p>
-                            </div>
-
-                            {/* Título financeiro */}
-                            <div className="pl-4">
-                              <p className="text-xs text-muted-foreground mb-1">
-                                {suggestion.entries.length > 0 
-                                  ? `Título(s) a ${suggestion.entries[0]?.type === 'payable' ? 'Pagar' : 'Receber'}` 
-                                  : 'Regra de Extrato'}
-                              </p>
-                              {suggestion.entries.length > 0 ? (
-                                suggestion.entries.map((entry, idx) => (
-                                  <div key={idx} className="mb-2">
-                                    <p className="text-sm font-medium">{entry.entity_name || 'Sem nome'}</p>
-                                    <p className="text-lg font-bold">{formatCurrency(entry.amount)}</p>
-                                    <p className="text-xs text-muted-foreground">
-                                      Venc: {formatDate(entry.due_date)}
-                                    </p>
-                                  </div>
-                                ))
-                              ) : (
-                                <p className="text-sm text-muted-foreground">Conciliação por regra automática</p>
-                              )}
-                            </div>
-                          </div>
-
-                          {/* Motivos do match */}
-                          <div className="mt-3 pt-3 border-t">
-                            <p className="text-xs text-muted-foreground mb-1">Motivos do match:</p>
-                            <div className="flex flex-wrap gap-1">
-                              {suggestion.match_reasons.map((reason, idx) => (
-                                <Badge key={idx} variant="secondary" className="text-xs">
-                                  {reason}
-                                </Badge>
-                              ))}
-                            </div>
-                            {suggestion.difference !== 0 && (
-                              <p className="text-xs text-red-500 mt-1">
-                                Diferença: {formatCurrency(suggestion.difference)}
-                              </p>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Ações */}
-                        <div className="flex flex-col gap-2">
-                          <Button 
-                            size="sm" 
-                            className="bg-green-600 hover:bg-green-700"
-                            onClick={() => confirmSuggestion(suggestion)}
-                            disabled={confirmingId === suggestion.transaction_id}
-                          >
-                            {confirmingId === suggestion.transaction_id ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : (
-                              <>
-                                <Check className="h-4 w-4 mr-1" />
-                                Confirmar
-                              </>
-                            )}
-                          </Button>
-                          <Button 
-                            size="sm" 
-                            variant="outline"
-                            onClick={() => rejectSuggestion(suggestion.transaction_id)}
-                          >
-                            <X className="h-4 w-4 mr-1" />
-                            Descartar
-                          </Button>
-                        </div>
+            filteredSuggestions.map((suggestion) => (
+              <Card key={suggestion.transaction_id} className="overflow-hidden">
+                <CardContent className="p-0">
+                  <div className="p-4 bg-muted/50 flex items-center gap-4">
+                    <Checkbox checked={selectedSuggestions.has(suggestion.transaction_id)} onCheckedChange={() => toggleBatchSelection(suggestion.transaction_id)} disabled={suggestion.confidence_level !== 'high'} />
+                    
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        {getConfidenceBadge(suggestion.confidence_level, suggestion.confidence_score)}
+                        {getMatchTypeBadge(suggestion.match_type)}
+                        {suggestion.entries.length > 1 && <Badge variant="secondary">{suggestion.entries.length} títulos</Badge>}
                       </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            </ScrollArea>
+                      <div className="text-sm text-muted-foreground">{suggestion.match_reasons.join(' • ')}</div>
+                    </div>
+                    
+                    <Button variant="ghost" size="sm" onClick={() => toggleExpand(suggestion.transaction_id)}>
+                      {expandedSuggestions.has(suggestion.transaction_id) ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                    </Button>
+                  </div>
+                  
+                  <div className="grid md:grid-cols-2 divide-x">
+                    <div className="p-4">
+                      <div className="text-sm font-medium text-muted-foreground mb-2">Transação Bancária</div>
+                      <div className="space-y-2">
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Data</span>
+                          <span>{format(new Date(suggestion.transaction.transaction_date), 'dd/MM/yyyy', { locale: ptBR })}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Valor</span>
+                          <span className={suggestion.transaction.amount < 0 ? 'text-red-600 font-bold' : 'text-green-600 font-bold'}>
+                            R$ {Math.abs(suggestion.transaction.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground text-sm">Descrição</span>
+                          <p className="text-sm">{suggestion.transaction.description || '-'}</p>
+                        </div>
+                        {suggestion.extracted_name && (
+                          <div>
+                            <span className="text-muted-foreground text-sm">Nome extraído</span>
+                            <p className="text-sm font-medium">{suggestion.extracted_name}</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    
+                    <div className="p-4">
+                      <div className="text-sm font-medium text-muted-foreground mb-2">{suggestion.entries.length > 1 ? 'Títulos Sugeridos' : 'Título Sugerido'}</div>
+                      <div className="space-y-3">
+                        {suggestion.entries.map((entry, idx) => (
+                          <div key={entry.id} className={idx > 0 ? 'pt-3 border-t' : ''}>
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">Valor</span>
+                              <span className="font-bold">R$ {entry.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">Vencimento</span>
+                              <span>{format(new Date(entry.due_date), 'dd/MM/yyyy', { locale: ptBR })}</span>
+                            </div>
+                            {entry.entity_name && (
+                              <div className="flex justify-between">
+                                <span className="text-muted-foreground">Fornecedor</span>
+                                <span className="text-sm">{entry.entity_name}</span>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                        
+                        {suggestion.entries.length > 1 && (
+                          <div className="pt-3 border-t">
+                            <div className="flex justify-between font-bold">
+                              <span>Total</span>
+                              <span>R$ {suggestion.total_matched.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                            </div>
+                          </div>
+                        )}
+                        
+                        {suggestion.difference > 0.01 && (
+                          <div className="text-red-600 text-sm">Diferença: R$ {suggestion.difference.toFixed(2)}</div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {expandedSuggestions.has(suggestion.transaction_id) && (
+                    <div className="p-4 bg-muted/30 border-t">
+                      <div className="text-sm">
+                        <strong>Motivos do match:</strong>
+                        <ul className="list-disc list-inside mt-1">
+                          {suggestion.match_reasons.map((reason, idx) => <li key={idx}>{reason}</li>)}
+                        </ul>
+                      </div>
+                    </div>
+                  )}
+                  
+                  <div className="p-4 bg-muted/50 flex justify-end gap-2 border-t">
+                    <Button variant="outline" size="sm" onClick={() => discardSuggestion(suggestion.transaction_id)}>
+                      <X className="w-4 h-4 mr-2" />Descartar
+                    </Button>
+                    <Button size="sm" onClick={() => confirmSuggestion(suggestion)} disabled={suggestion.difference > 0.01}>
+                      <Check className="w-4 h-4 mr-2" />Confirmar
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ))
           )}
         </TabsContent>
 
-        {/* Exceções (transações sem match) */}
-        <TabsContent value="unmatched" className="space-y-4">
+        <TabsContent value="exceptions" className="space-y-4">
           {unmatchedTransactions.length === 0 ? (
             <Card>
               <CardContent className="p-8 text-center text-muted-foreground">
-                Nenhuma exceção encontrada. 
-                {suggestions.length === 0 && " Clique em 'Analisar Transações' para começar."}
+                <CheckCircle2 className="w-12 h-12 mx-auto mb-4 text-green-500" />
+                <p>Nenhuma exceção pendente</p>
               </CardContent>
             </Card>
           ) : (
-            <ScrollArea className="h-[600px]">
-              <div className="space-y-4 pr-4">
-                {unmatchedTransactions.map((tx) => (
-                  <Card key={tx.id}>
-                    <CardContent className="p-4">
-                      <div className="flex items-center justify-between">
-                        <div className="flex-1">
-                          <p className="text-sm text-muted-foreground">
-                            {formatDate(tx.date)}
-                          </p>
-                          <p className={`text-lg font-bold ${tx.amount < 0 ? 'text-red-600' : 'text-green-600'}`}>
-                            {formatCurrency(tx.amount)}
-                          </p>
-                          <p className="text-sm line-clamp-2">{tx.description}</p>
-                        </div>
-                        <div className="flex gap-2">
-                          <Button 
-                            size="sm" 
-                            variant="outline"
-                            onClick={() => openCreateRuleFromTransaction(tx)}
-                          >
-                            <Zap className="h-4 w-4 mr-1" />
-                            Criar Regra
-                          </Button>
-                        </div>
+            unmatchedTransactions.map((tx) => (
+              <Card key={tx.id}>
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Badge variant="outline"><XCircle className="w-3 h-3 mr-1" />Sem match</Badge>
+                        <span className="text-sm text-muted-foreground">{format(new Date(tx.date), 'dd/MM/yyyy', { locale: ptBR })}</span>
                       </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            </ScrollArea>
-          )}
-        </TabsContent>
-
-        {/* Regras de extrato */}
-        <TabsContent value="rules" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">Regras de Extrato</CardTitle>
-              <CardDescription>
-                Funciona como PROCV do Excel: defina um texto a ser buscado na descrição do extrato 
-                e a transação será categorizada automaticamente.
-              </CardDescription>
-            </CardHeader>
-          </Card>
-
-          {rules.length === 0 ? (
-            <Card>
-              <CardContent className="p-8 text-center text-muted-foreground">
-                Nenhuma regra de extrato criada.
-                <br />
-                Crie regras para automatizar a conciliação de transações recorrentes.
-              </CardContent>
-            </Card>
-          ) : (
-            <ScrollArea className="h-[500px]">
-              <div className="space-y-4 pr-4">
-                {rules.map((rule) => (
-                  <Card key={rule.id}>
-                    <CardContent className="p-4">
-                      <div className="flex items-center justify-between">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2">
-                            <Zap className="h-4 w-4 text-blue-500" />
-                            <p className="font-medium">"{rule.search_text}"</p>
-                            {!rule.is_active && <Badge variant="secondary">Inativa</Badge>}
-                          </div>
-                          {rule.description && (
-                            <p className="text-sm text-muted-foreground mt-1">{rule.description}</p>
-                          )}
-                          <p className="text-xs text-muted-foreground mt-1">
-                            Usada {rule.times_used} vezes
-                          </p>
-                        </div>
-                        <Button 
-                          size="sm" 
-                          variant="ghost" 
-                          className="text-red-500 hover:text-red-700"
-                          onClick={() => deleteRule(rule.id)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            </ScrollArea>
+                      <p className="text-sm mb-1">{tx.description || 'Sem descrição'}</p>
+                      <p className={`font-bold ${tx.amount < 0 ? 'text-red-600' : 'text-green-600'}`}>
+                        R$ {Math.abs(tx.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      </p>
+                      {tx.extracted_name && <p className="text-sm text-muted-foreground mt-1">Nome extraído: {tx.extracted_name}</p>}
+                    </div>
+                    <Button onClick={() => openManualSelection(tx)}>
+                      <Search className="w-4 h-4 mr-2" />Selecionar títulos
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ))
           )}
         </TabsContent>
       </Tabs>
 
-      {/* Dialog para criar regra */}
-      <Dialog open={showRuleDialog} onOpenChange={setShowRuleDialog}>
-        <DialogContent>
+      <Dialog open={manualDialogOpen} onOpenChange={setManualDialogOpen}>
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Criar Regra de Extrato</DialogTitle>
-            <DialogDescription>
-              Defina um texto a ser buscado nas descrições do extrato. 
-              Transações que contiverem esse texto serão identificadas automaticamente.
-            </DialogDescription>
+            <DialogTitle>Seleção Manual de Títulos</DialogTitle>
           </DialogHeader>
           
-          <div className="space-y-4">
-            <div>
-              <Label>Texto a buscar *</Label>
-              <Input 
-                value={newRule.search_text}
-                onChange={(e) => setNewRule(prev => ({ ...prev, search_text: e.target.value }))}
-                placeholder="Ex: PIX ENVIADO - DANILO"
-              />
-              <p className="text-xs text-muted-foreground mt-1">
-                Funciona como PROCV do Excel - busca esse texto na descrição
-              </p>
+          {selectedTransaction && (
+            <div className="space-y-4">
+              <Card>
+                <CardContent className="p-4">
+                  <div className="grid grid-cols-3 gap-4">
+                    <div>
+                      <span className="text-sm text-muted-foreground">Data</span>
+                      <p>{format(new Date(selectedTransaction.date), 'dd/MM/yyyy', { locale: ptBR })}</p>
+                    </div>
+                    <div>
+                      <span className="text-sm text-muted-foreground">Valor</span>
+                      <p className={`font-bold ${selectedTransaction.amount < 0 ? 'text-red-600' : 'text-green-600'}`}>
+                        R$ {Math.abs(selectedTransaction.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      </p>
+                    </div>
+                    <div>
+                      <span className="text-sm text-muted-foreground">Descrição</span>
+                      <p className="text-sm">{selectedTransaction.description || '-'}</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+              
+              <div className="border rounded-lg">
+                <div className="p-3 bg-muted font-medium">Títulos disponíveis ({availableEntries.length})</div>
+                {loadingEntries ? (
+                  <div className="p-8 text-center"><RefreshCw className="w-6 h-6 animate-spin mx-auto" /></div>
+                ) : (
+                  <div className="max-h-[300px] overflow-y-auto">
+                    {availableEntries.map((entry) => (
+                      <div
+                        key={entry.id}
+                        className={`p-3 border-b flex items-center gap-3 hover:bg-accent cursor-pointer ${selectedEntries.has(entry.id) ? 'bg-accent' : ''}`}
+                        onClick={() => {
+                          setSelectedEntries(prev => {
+                            const next = new Set(prev);
+                            if (next.has(entry.id)) next.delete(entry.id);
+                            else next.add(entry.id);
+                            return next;
+                          });
+                        }}
+                      >
+                        <Checkbox checked={selectedEntries.has(entry.id)} />
+                        <div className="flex-1">
+                          <div className="flex justify-between">
+                            <span className="font-medium">{entry.entity_name || 'Sem fornecedor'}</span>
+                            <span className="font-bold">R$ {entry.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                          </div>
+                          <div className="text-sm text-muted-foreground">
+                            Venc: {format(new Date(entry.due_date), 'dd/MM/yyyy', { locale: ptBR })}
+                            {entry.document_number && ` • Doc: ${entry.document_number}`}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+              
+              <Card>
+                <CardContent className="p-4">
+                  <div className="grid grid-cols-3 gap-4 text-center">
+                    <div>
+                      <span className="text-sm text-muted-foreground">Transação</span>
+                      <p className="font-bold">R$ {Math.abs(selectedTransaction.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                    </div>
+                    <div>
+                      <span className="text-sm text-muted-foreground">Selecionado ({selectedEntries.size})</span>
+                      <p className="font-bold">R$ {calculateSelectedTotal().toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                    </div>
+                    <div>
+                      <span className="text-sm text-muted-foreground">Diferença</span>
+                      <p className={`font-bold ${Math.abs(Math.abs(selectedTransaction.amount) - calculateSelectedTotal()) > 0.01 ? 'text-red-600' : 'text-green-600'}`}>
+                        R$ {Math.abs(Math.abs(selectedTransaction.amount) - calculateSelectedTotal()).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      </p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
             </div>
-            
-            <div>
-              <Label>Descrição (opcional)</Label>
-              <Input 
-                value={newRule.description}
-                onChange={(e) => setNewRule(prev => ({ ...prev, description: e.target.value }))}
-                placeholder="Ex: Pagamento ao Danilo - Frete"
-              />
-            </div>
-          </div>
-
+          )}
+          
           <DialogFooter>
-            <Button variant="outline" onClick={() => {
-              setShowRuleDialog(false);
-              setNewRule({ search_text: "", description: "" });
-              setTransactionForRule(null);
-            }}>
-              Cancelar
-            </Button>
-            <Button onClick={createRule} disabled={!newRule.search_text.trim()}>
-              <Zap className="h-4 w-4 mr-2" />
-              Criar Regra
+            <Button variant="outline" onClick={() => setManualDialogOpen(false)}>Cancelar</Button>
+            <Button onClick={confirmManualSelection} disabled={selectedEntries.size === 0 || Math.abs(Math.abs(selectedTransaction?.amount || 0) - calculateSelectedTotal()) > 0.01}>
+              <Check className="w-4 h-4 mr-2" />Confirmar Conciliação
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -851,3 +809,5 @@ export function ReconciliationPanel() {
     </div>
   );
 }
+
+export default ReconciliationPanel;
