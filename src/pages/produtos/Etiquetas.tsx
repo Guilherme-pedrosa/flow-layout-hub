@@ -146,9 +146,9 @@ export default function Etiquetas() {
     if (!printWindow) return;
 
     const sizeStyles = {
-      small: { width: '35mm', height: '22mm', fontSize: '8px' },
-      medium: { width: '50mm', height: '30mm', fontSize: '10px' },
-      large: { width: '80mm', height: '40mm', fontSize: '12px' },
+      small: { width: '35mm', height: '22mm', fontSize: '8px', pageWidth: '35mm', pageHeight: '22mm' },
+      medium: { width: '50mm', height: '30mm', fontSize: '10px', pageWidth: '50mm', pageHeight: '30mm' },
+      large: { width: '80mm', height: '40mm', fontSize: '12px', pageWidth: '80mm', pageHeight: '40mm' },
     };
 
     const style = sizeStyles[config.size];
@@ -156,30 +156,17 @@ export default function Etiquetas() {
     let labelsHtml = '';
     selectedProducts.forEach(product => {
       for (let i = 0; i < product.quantity; i++) {
-        const barcodeHtml = config.showBarcode && product.barcode
-          ? generateBarcodeSVG(product.barcode) || ''
+        const barcodeValue = product.barcode || product.code;
+        const barcodeHtml = config.showBarcode && barcodeValue
+          ? generateBarcodeSVG(barcodeValue) || ''
           : '';
 
         labelsHtml += `
-          <div class="label" style="
-            width: ${style.width};
-            height: ${style.height};
-            border: 1px solid #ddd;
-            padding: 2mm;
-            display: inline-flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            text-align: center;
-            font-size: ${style.fontSize};
-            margin: 1mm;
-            page-break-inside: avoid;
-            box-sizing: border-box;
-          ">
-            ${config.showName ? `<div style="font-weight: bold; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%;">${product.description}</div>` : ''}
-            ${config.showCode ? `<div style="color: #666;">Cód: ${product.code}</div>` : ''}
-            ${config.showBarcode && barcodeHtml ? `<div style="margin: 2px 0;">${barcodeHtml}</div>` : ''}
-            ${config.showPrice ? `<div style="font-weight: bold; font-size: 1.2em;">R$ ${product.sale_price.toFixed(2)}</div>` : ''}
+          <div class="label">
+            ${config.showName ? `<div class="name">${product.description}</div>` : ''}
+            ${config.showCode ? `<div class="code">Cód: ${product.code}</div>` : ''}
+            ${config.showBarcode && barcodeHtml ? `<div class="barcode">${barcodeHtml}</div>` : ''}
+            ${config.showPrice ? `<div class="price">R$ ${product.sale_price.toFixed(2)}</div>` : ''}
           </div>
         `;
       }
@@ -191,22 +178,72 @@ export default function Etiquetas() {
       <head>
         <title>Etiquetas</title>
         <style>
-          @page { margin: 5mm; }
+          @page {
+            size: ${style.pageWidth} ${style.pageHeight};
+            margin: 0;
+          }
+          * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+          }
           body { 
             font-family: Arial, sans-serif;
             margin: 0;
             padding: 0;
           }
-          .labels-container {
+          .label {
+            width: ${style.width};
+            height: ${style.height};
+            padding: 1.5mm;
             display: flex;
-            flex-wrap: wrap;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            font-size: ${style.fontSize};
+            page-break-after: always;
+            overflow: hidden;
+          }
+          .label:last-child {
+            page-break-after: auto;
+          }
+          .name {
+            font-weight: bold;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            max-width: 100%;
+            line-height: 1.2;
+          }
+          .code {
+            color: #666;
+            font-size: 0.85em;
+            line-height: 1.2;
+          }
+          .barcode {
+            margin: 1mm 0;
+          }
+          .barcode svg {
+            max-width: 100%;
+            height: auto;
+            max-height: 10mm;
+          }
+          .price {
+            font-weight: bold;
+            font-size: 1.3em;
+            line-height: 1.2;
+          }
+          @media print {
+            body {
+              -webkit-print-color-adjust: exact;
+              print-color-adjust: exact;
+            }
           }
         </style>
       </head>
       <body>
-        <div class="labels-container">
-          ${labelsHtml}
-        </div>
+        ${labelsHtml}
         <script>
           window.onload = function() {
             window.print();
