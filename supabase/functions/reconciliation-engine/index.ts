@@ -426,23 +426,36 @@ serve(async (req) => {
             e.customer_id === entityMatch.entity.id
           );
           
-          // IMPORTANTE: Priorizar títulos com vencimento próximo à data da transação
-          // Foco em títulos JÁ VENCIDOS ou com vencimento até 7 dias DEPOIS da transação
+          // IMPORTANTE: Priorizar títulos VENCIDOS ou com vencimento até a data da transação
+          // Títulos com vencimento NO FUTURO não devem ser sugeridos (está pagando adiantado?)
           const txDate = new Date(tx.transaction_date);
-          const maxDueDate = new Date(txDate);
-          maxDueDate.setDate(maxDueDate.getDate() + 7); // tolerância de apenas 7 dias para o futuro
           
-          // Ordenar por proximidade da data da transação (priorizar vencidos e próximos)
-          const entityEntries = entityEntriesAll
-            .filter(e => new Date(e.due_date) <= maxDueDate)
+          // Filtrar: APENAS títulos com vencimento ATÉ 3 dias DEPOIS da transação
+          // Prioridade máxima para vencidos
+          const maxDueDate = new Date(txDate);
+          maxDueDate.setDate(maxDueDate.getDate() + 3); // tolerância mínima de 3 dias
+          
+          // Separar em vencidos e não vencidos
+          const overdueEntries = entityEntriesAll
+            .filter(e => new Date(e.due_date) <= txDate)
             .sort((a, b) => {
+              // Para vencidos: ordenar por proximidade da data da transação
               const dateA = new Date(a.due_date);
               const dateB = new Date(b.due_date);
-              // Calcular diferença absoluta da data da transação (mais próximo = melhor)
-              const diffA = Math.abs(dateA.getTime() - txDate.getTime());
-              const diffB = Math.abs(dateB.getTime() - txDate.getTime());
-              return diffA - diffB; // Ordenar por proximidade
+              const diffA = Math.abs(txDate.getTime() - dateA.getTime());
+              const diffB = Math.abs(txDate.getTime() - dateB.getTime());
+              return diffA - diffB;
             });
+          
+          const futureEntries = entityEntriesAll
+            .filter(e => {
+              const dueDate = new Date(e.due_date);
+              return dueDate > txDate && dueDate <= maxDueDate;
+            })
+            .sort((a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime());
+          
+          // Priorizar vencidos, depois futuros próximos
+          const entityEntries = [...overdueEntries, ...futureEntries];
           
           // 2a. Match 1:1 exato - priorizar títulos vencidos ou com vencimento próximo
           for (const entry of entityEntries) {
