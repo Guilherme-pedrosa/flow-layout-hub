@@ -261,13 +261,14 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const { company_id, max_suggestions = 100, date_tolerance_days = 5 } = await req.json();
+    const { company_id, max_suggestions = 100, date_tolerance_days = 5, transaction_type = 'all' } = await req.json();
 
     if (!company_id) {
       throw new Error("company_id é obrigatório");
     }
 
-    console.log(`[reconciliation-engine] Iniciando análise para company: ${company_id}`);
+    // transaction_type: 'payables' (só débitos), 'receivables' (só créditos), 'all' (todos)
+    console.log(`[reconciliation-engine] Iniciando análise para company: ${company_id}, type: ${transaction_type}`);
 
     // 1. Buscar configurações de conciliação
     const { data: settings } = await supabase
@@ -279,17 +280,28 @@ serve(async (req) => {
     const dateTolerance = settings?.date_tolerance_days || date_tolerance_days;
     const valueTolerance = settings?.value_tolerance_percent || 0;
 
-    // 2. Buscar transações não conciliadas
-    const { data: transactions, error: txError } = await supabase
+    // 2. Buscar transações não conciliadas (filtrar por tipo se especificado)
+    let transactionsQuery = supabase
       .from("bank_transactions")
       .select("*")
       .eq("company_id", company_id)
-      .eq("is_reconciled", false)
+      .eq("is_reconciled", false);
+    
+    // Filtrar por tipo de transação
+    if (transaction_type === 'payables') {
+      // Para contas a pagar, queremos transações de DÉBITO (valores negativos)
+      transactionsQuery = transactionsQuery.lt("amount", 0);
+    } else if (transaction_type === 'receivables') {
+      // Para contas a receber, queremos transações de CRÉDITO (valores positivos)
+      transactionsQuery = transactionsQuery.gt("amount", 0);
+    }
+    
+    const { data: transactions, error: txError } = await transactionsQuery
       .order("transaction_date", { ascending: false })
       .limit(500);
 
     if (txError) throw txError;
-    console.log(`[reconciliation-engine] ${transactions?.length || 0} transações não conciliadas`);
+    console.log(`[reconciliation-engine] ${transactions?.length || 0} transações não conciliadas (type: ${transaction_type})`);
 
     // 3. Buscar todas as entidades (fornecedores/clientes)
     const { data: pessoas } = await supabase

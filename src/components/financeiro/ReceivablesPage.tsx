@@ -452,7 +452,7 @@ export function ReceivablesPage() {
 
         {/* Conciliação Tab */}
         <TabsContent value="conciliacao" className="mt-4">
-          <ReconciliationPanel />
+          <ReconciliationPanel transactionType="receivables" />
         </TabsContent>
 
         {/* Extrato Tab */}

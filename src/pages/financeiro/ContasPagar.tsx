@@ -5,7 +5,7 @@ import { AIBannerEnhanced } from "@/components/shared/AIBannerEnhanced";
 import { useAiInsights } from "@/hooks/useAiInsights";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Receipt, FileText, CheckCircle, Wallet, X } from "lucide-react";
-import { DDABoletosList, ExtratoList, ReconciliationReview, PayablesPage, FinancialAIChat } from "@/components/financeiro";
+import { DDABoletosList, ExtratoList, PayablesPage, FinancialAIChat, ReconciliationPanel } from "@/components/financeiro";
 import { useCompany } from "@/contexts/CompanyContext";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -91,7 +91,7 @@ export default function ContasPagar() {
 
         <TabsContent value="conciliacao">
           {currentCompany?.id ? (
-            <ReconciliationReview companyId={currentCompany.id} />
+            <ReconciliationPanel transactionType="payables" />
           ) : (
             <div className="text-center py-12 text-muted-foreground">
               Selecione uma empresa para usar a conciliação.
