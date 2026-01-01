@@ -77,34 +77,84 @@ function buildFieldControlPayload(record: CustomerRecord) {
   };
 }
 
-// Buscar cliente existente no Field Control pelo CNPJ
-async function findExistingCustomerByDocument(
+// Buscar cliente existente no Field Control pelo CNPJ ou externalId
+async function findExistingCustomer(
   documentNumber: string,
+  externalId: string,
   apiKey: string
 ): Promise<string | null> {
-  if (!documentNumber || documentNumber.length < 11) return null;
+  const headers = { 'X-Api-Key': apiKey };
   
+  // Tentar buscar por externalId primeiro (mais preciso)
   try {
-    const response = await fetch(
-      `${FIELD_CONTROL_BASE_URL}/customers?documentNumber=${documentNumber}`,
-      {
-        method: 'GET',
-        headers: { 'X-Api-Key': apiKey }
-      }
+    const extResponse = await fetch(
+      `${FIELD_CONTROL_BASE_URL}/customers?externalId=${externalId}`,
+      { method: 'GET', headers }
     );
     
-    if (response.ok) {
-      const data = await response.json();
+    if (extResponse.ok) {
+      const data = await extResponse.json();
       if (data && data.length > 0) {
-        console.log(`[field-sync] Encontrado cliente existente no Field: ${data[0].id} para CNPJ ${documentNumber}`);
+        console.log(`[field-sync] Encontrado por externalId: ${data[0].id}`);
         return data[0].id;
       }
     }
-    return null;
   } catch (error) {
-    console.error(`[field-sync] Erro ao buscar cliente por CNPJ: ${error}`);
-    return null;
+    console.log(`[field-sync] Erro buscando por externalId: ${error}`);
   }
+  
+  // Tentar buscar por documento
+  if (documentNumber && documentNumber.length >= 11) {
+    try {
+      const docResponse = await fetch(
+        `${FIELD_CONTROL_BASE_URL}/customers?documentNumber=${documentNumber}`,
+        { method: 'GET', headers }
+      );
+      
+      if (docResponse.ok) {
+        const data = await docResponse.json();
+        if (data && data.length > 0) {
+          console.log(`[field-sync] Encontrado por CNPJ: ${data[0].id}`);
+          return data[0].id;
+        }
+      }
+    } catch (error) {
+      console.log(`[field-sync] Erro buscando por CNPJ: ${error}`);
+    }
+  }
+  
+  // Buscar todos e filtrar localmente (último recurso, limitado)
+  try {
+    const allResponse = await fetch(
+      `${FIELD_CONTROL_BASE_URL}/customers?limit=1000`,
+      { method: 'GET', headers }
+    );
+    
+    if (allResponse.ok) {
+      const data = await allResponse.json();
+      if (data && data.length > 0) {
+        // Buscar por externalId
+        const byExternal = data.find((c: any) => c.externalId === externalId);
+        if (byExternal) {
+          console.log(`[field-sync] Encontrado na lista por externalId: ${byExternal.id}`);
+          return byExternal.id;
+        }
+        
+        // Buscar por documento
+        if (documentNumber) {
+          const byDoc = data.find((c: any) => c.documentNumber === documentNumber);
+          if (byDoc) {
+            console.log(`[field-sync] Encontrado na lista por CNPJ: ${byDoc.id}`);
+            return byDoc.id;
+          }
+        }
+      }
+    }
+  } catch (error) {
+    console.log(`[field-sync] Erro buscando lista: ${error}`);
+  }
+  
+  return null;
 }
 
 async function syncCustomerToField(
@@ -174,7 +224,7 @@ async function syncCustomerToField(
         const errorBody = await response.text();
         if (errorBody.includes('document number already exists')) {
           console.log(`[field-sync] CNPJ já existe no Field, buscando cliente existente...`);
-          const existingFieldId = await findExistingCustomerByDocument(payload.documentNumber, apiKey);
+          const existingFieldId = await findExistingCustomer(payload.documentNumber, record.id, apiKey);
           if (existingFieldId) {
             // Salvar o link e tentar atualizar
             await supabase.from('field_control_sync').insert({
@@ -272,31 +322,67 @@ serve(async (req) => {
       return new Response(JSON.stringify(result), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
-    // Modo 2: Sincronizar por IDs específicos
-    if (payload.customer_ids && payload.customer_ids.length > 0) {
-      console.log(`[field-sync] Sincronizando ${payload.customer_ids.length} IDs específicos`);
+    // Modo 2: Linkar clientes existentes no Field Control com o ERP
+    if (payload.link_existing && payload.company_id) {
+      console.log(`[field-sync] Buscando todos clientes do Field Control para linkar...`);
       
-      const { data: pessoas, error: fetchError } = await supabase
+      const allFieldResponse = await fetch(
+        `${FIELD_CONTROL_BASE_URL}/customers?limit=2000`,
+        { method: 'GET', headers: { 'X-Api-Key': apiKey } }
+      );
+      
+      if (!allFieldResponse.ok) {
+        return new Response(JSON.stringify({ success: false, error: 'Erro ao buscar clientes do Field' }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+      
+      const fieldCustomers = await allFieldResponse.json();
+      console.log(`[field-sync] ${fieldCustomers.length} clientes encontrados no Field Control`);
+      
+      // Buscar pessoas do ERP
+      const { data: pessoas } = await supabase
         .from('pessoas')
-        .select('id, razao_social, nome_fantasia, cpf_cnpj, email, telefone, cep, logradouro, numero, bairro, complemento, cidade, estado, company_id')
-        .in('id', payload.customer_ids);
-
-      if (fetchError) {
-        return new Response(JSON.stringify({ success: false, error: fetchError.message }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        .select('id, cpf_cnpj')
+        .eq('company_id', payload.company_id);
+      
+      // Criar mapa CNPJ -> pessoa
+      const cnpjMap = new Map<string, string>();
+      for (const p of pessoas || []) {
+        const cleanCnpj = cleanDocument(p.cpf_cnpj);
+        if (cleanCnpj) cnpjMap.set(cleanCnpj, p.id);
       }
-
-      const results = { total: pessoas?.length || 0, created: 0, updated: 0, errors: 0, skipped: 0 };
-
-      for (const pessoa of pessoas || []) {
-        const result = await syncCustomerToField(pessoa, apiKey, supabase);
-        if (result.success) {
-          if (result.action === 'create') results.created++;
-          else results.updated++;
-        } else {
-          results.errors++;
+      
+      let linked = 0;
+      for (const fc of fieldCustomers) {
+        const cleanDoc = cleanDocument(fc.documentNumber);
+        const pessoaId = cnpjMap.get(cleanDoc);
+        
+        if (pessoaId) {
+          // Verificar se já tem link
+          const { data: existing } = await supabase
+            .from('field_control_sync')
+            .select('id')
+            .eq('wai_id', pessoaId)
+            .eq('entity_type', 'customer')
+            .maybeSingle();
+          
+          if (!existing) {
+            await supabase.from('field_control_sync').insert({
+              company_id: payload.company_id,
+              entity_type: 'customer',
+              wai_id: pessoaId,
+              field_id: fc.id,
+              last_sync: new Date().toISOString()
+            });
+            linked++;
+            console.log(`[field-sync] Linked: ${pessoaId} -> ${fc.id}`);
+          }
         }
-        await new Promise(resolve => setTimeout(resolve, 150));
       }
+      
+      return new Response(JSON.stringify({ success: true, field_total: fieldCustomers.length, linked }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+
+    // Modo 3: Sincronizar por IDs específicos
 
       return new Response(JSON.stringify({ success: true, ...results }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
