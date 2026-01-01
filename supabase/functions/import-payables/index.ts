@@ -14,11 +14,8 @@ interface PayableRow {
   cpf_cnpj: string;
   historico: string;
   documento: string;
-  categoria: string;
   forma_pagamento: string;
   previsao: boolean;
-  parcela: number;
-  total_parcelas: number;
 }
 
 serve(async (req) => {
@@ -109,7 +106,6 @@ serve(async (req) => {
           return null;
         };
 
-        const issueDate = parseDate(row.emissao);
         const dueDate = parseDate(row.vencimento);
 
         if (!dueDate) {
@@ -120,6 +116,11 @@ serve(async (req) => {
         // Converter valor (pode vir negativo do GC)
         const amount = Math.abs(parseFloat(String(row.valor).replace(",", ".")) || 0);
 
+        if (amount === 0) {
+          results.errors.push(`Valor inválido: ${row.valor}`);
+          continue;
+        }
+
         // Mapear forma de pagamento
         let paymentMethod = "pix";
         const formaPag = (row.forma_pagamento || "").toLowerCase();
@@ -128,23 +129,19 @@ serve(async (req) => {
         else if (formaPag.includes("dinheiro")) paymentMethod = "dinheiro";
         else if (formaPag.includes("transferencia") || formaPag.includes("ted") || formaPag.includes("doc")) paymentMethod = "transferencia";
 
-        // Inserir conta a pagar
+        // Inserir conta a pagar - apenas campos que existem na tabela
         const { error: payableError } = await supabase
           .from("payables")
           .insert({
             supplier_id: supplierId,
             amount: amount,
             due_date: dueDate,
-            issue_date: issueDate,
             description: row.historico || "",
             document_number: row.documento || "",
             document_type: "manual",
-            status: "pending",
             payment_method: paymentMethod,
-            category: row.categoria || "Outros",
-            installment_number: row.parcela || 1,
-            total_installments: row.total_parcelas || 1,
-            is_forecast: row.previsao || false,
+            is_forecast: false,
+            is_paid: false,
           });
 
         if (payableError) {
