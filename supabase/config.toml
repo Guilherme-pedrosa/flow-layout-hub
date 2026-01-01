@@ -116,3 +116,18 @@ verify_jwt = false
 
 [functions.field-sync-equipment]
 verify_jwt = false
+
+[functions.import-products]
+verify_jwt = false
+
+[functions.reconciliation-reverse]
+verify_jwt = false
+
+[functions.import-payables]
+verify_jwt = false
+
+[functions.inter-mtls]
+verify_jwt = false
+
+[functions.nfe-focus]
+verify_jwt = false
