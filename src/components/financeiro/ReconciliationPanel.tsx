@@ -143,14 +143,14 @@ export function ReconciliationPanel() {
     if (!companyId) return;
     
     try {
-      const { data, error } = await supabase
-        .from('extract_rules')
+      const { data, error } = await (supabase
+        .from('extract_rules' as any)
         .select('*')
         .eq('company_id', companyId)
-        .order('times_used', { ascending: false });
+        .order('times_used', { ascending: false }));
 
       if (!error && data) {
-        setRules(data);
+        setRules(data as unknown as ExtractRule[]);
       }
     } catch (error) {
       console.error('Erro ao carregar regras:', error);
@@ -226,7 +226,7 @@ export function ReconciliationPanel() {
 
       // 3. Se foi match por regra, incrementar contador
       if (suggestion.rule_id) {
-        await supabase.rpc('increment_rule_usage', { rule_id: suggestion.rule_id });
+        await supabase.rpc('increment_rule_usage' as any, { rule_id: suggestion.rule_id });
       }
 
       toast.success("Conciliação confirmada!");
@@ -291,15 +291,15 @@ export function ReconciliationPanel() {
     }
 
     try {
-      const { error } = await supabase
-        .from('extract_rules')
+      const { error } = await (supabase
+        .from('extract_rules' as any)
         .insert({
           company_id: companyId,
           search_text: newRule.search_text.trim(),
           description: newRule.description.trim() || null,
           is_active: true,
           times_used: 0
-        });
+        }));
 
       if (error) {
         if (error.code === '23505') {
@@ -329,9 +329,9 @@ export function ReconciliationPanel() {
   // Deletar regra
   const deleteRule = async (ruleId: string) => {
     try {
-      await supabase
-        .from('extract_rules')
-        .delete()
+      await (supabase
+        .from('extract_rules' as any)
+        .delete())
         .eq('id', ruleId);
 
       toast.success("Regra removida");

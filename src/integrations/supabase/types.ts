@@ -1287,6 +1287,67 @@ export type Database = {
           },
         ]
       }
+      extract_rules: {
+        Row: {
+          category_id: string | null
+          company_id: string
+          created_at: string
+          description: string | null
+          id: string
+          is_active: boolean
+          search_text: string
+          supplier_id: string | null
+          times_used: number
+          updated_at: string
+        }
+        Insert: {
+          category_id?: string | null
+          company_id: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          search_text: string
+          supplier_id?: string | null
+          times_used?: number
+          updated_at?: string
+        }
+        Update: {
+          category_id?: string | null
+          company_id?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          search_text?: string
+          supplier_id?: string | null
+          times_used?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "extract_rules_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "chart_of_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "extract_rules_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "extract_rules_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "pessoas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       financial_situations: {
         Row: {
           allows_editing: boolean
@@ -6449,6 +6510,7 @@ export type Database = {
       }
       get_user_companies: { Args: never; Returns: string[] }
       get_user_company_id: { Args: never; Returns: string }
+      increment_rule_usage: { Args: { rule_id: string }; Returns: undefined }
       is_admin: { Args: never; Returns: boolean }
       user_belongs_to_company: {
         Args: { _company_id: string; _user_id: string }
