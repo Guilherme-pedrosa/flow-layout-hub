@@ -36,6 +36,7 @@ import {
   X,
   LogOut,
   ChevronDown,
+  Upload,
   CircleDot,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -150,6 +151,7 @@ const menuGroups: MenuGroup[] = [
       { title: "Clientes", icon: Users, href: "/clientes" },
       { title: "Serviços", icon: Wrench, href: "/servicos" },
       { title: "Fornecedores", icon: Building2, href: "/fornecedores" },
+      { title: "Importar Pessoas", icon: Upload, href: "/cadastros/importar-pessoas" },
     ],
   },
   {

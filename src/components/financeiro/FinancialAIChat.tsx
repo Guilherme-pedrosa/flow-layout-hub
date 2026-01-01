@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { useCompany } from "@/contexts/CompanyContext";
 
 interface Message {
   role: "user" | "assistant";
@@ -19,13 +20,12 @@ interface Insight {
   color: "red" | "orange" | "green" | "blue" | "purple" | "yellow";
 }
 
-const COMPANY_ID = "e7b9c8a5-6d4f-4e3b-8c2a-1b5d9f7e6a3c";
-
 interface FinancialAIChatProps {
   onClose?: () => void;
 }
 
 export function FinancialAIChat({ onClose }: FinancialAIChatProps = {}) {
+  const { currentCompany } = useCompany();
   const [isOpen, setIsOpen] = useState(!onClose);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -34,6 +34,8 @@ export function FinancialAIChat({ onClose }: FinancialAIChatProps = {}) {
   const [isLoadingInsights, setIsLoadingInsights] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
+  const companyId = currentCompany?.id;
+
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -41,10 +43,10 @@ export function FinancialAIChat({ onClose }: FinancialAIChatProps = {}) {
   }, [messages]);
 
   useEffect(() => {
-    if (isOpen && insights.length === 0 && !isLoadingInsights) {
+    if ((isOpen || onClose) && insights.length === 0 && !isLoadingInsights && companyId) {
       loadInitialInsights();
     }
-  }, [isOpen]);
+  }, [isOpen, onClose, companyId]);
 
   const loadInitialInsights = async () => {
     setIsLoadingInsights(true);
@@ -74,7 +76,7 @@ Foque em:
 6. Oportunidades de economia
 
 Responda APENAS com o JSON array, sem markdown ou explicações.` }],
-            companyId: COMPANY_ID
+            companyId: companyId
           }),
         }
       );
@@ -165,7 +167,7 @@ Responda APENAS com o JSON array, sem markdown ou explicações.` }],
       },
       body: JSON.stringify({ 
         messages: userMessages,
-        companyId: COMPANY_ID 
+        companyId: companyId 
       }),
     });
 

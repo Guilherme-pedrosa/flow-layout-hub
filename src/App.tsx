@@ -60,6 +60,7 @@ import Clientes from "./pages/cadastros/Clientes";
 import Servicos from "./pages/cadastros/Servicos";
 import Fornecedores from "./pages/cadastros/Fornecedores";
 import Usuarios from "./pages/cadastros/Usuarios";
+import ImportarPessoas from "./pages/cadastros/ImportarPessoas";
 
 // Produtos
 import GerenciarProdutos from "./pages/produtos/GerenciarProdutos";
@@ -156,6 +157,7 @@ const App = () => (
             <Route path="/clientes" element={<Clientes />} />
             <Route path="/clientes/:id" element={<Clientes />} />
             <Route path="/clientes/:id/:action" element={<Clientes />} />
+            <Route path="/cadastros/importar-pessoas" element={<ImportarPessoas />} />
             
             {/* Produtos */}
             <Route path="/produtos" element={<GerenciarProdutos />} />
