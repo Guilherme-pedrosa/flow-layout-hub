@@ -415,8 +415,8 @@ export const ExtratoList = ({ transactionTypeFilter }: ExtratoListProps = {}) =>
                     <TableCell className="font-medium">
                       {formatDate(tx.transaction_date)}
                     </TableCell>
-                    <TableCell className="max-w-[250px] truncate">
-                      {tx.description}
+                    <TableCell className="min-w-[200px]">
+                      <span className="text-sm break-words whitespace-normal">{tx.description || '-'}</span>
                     </TableCell>
                     <TableCell className="text-right">
                       <span
