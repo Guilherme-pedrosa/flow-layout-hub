@@ -6,7 +6,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSub, DropdownMenuSubTrigger, DropdownMenuSubContent } from "@/components/ui/dropdown-menu";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Search, Eye, Edit, Trash2, MoreVertical, DollarSign, FileText, Printer, Link, Share2, Wrench, Package, CircleDollarSign, CheckCircle } from "lucide-react";
+import { Search, Eye, Edit, Trash2, MoreVertical, DollarSign, FileText, Printer, Link, Share2, Wrench, Package, CircleDollarSign, CheckCircle, Users, RefreshCw } from "lucide-react";
 import { useServiceOrders, useServiceOrderStatuses, ServiceOrder } from "@/hooks/useServiceOrders";
 import { useDocumentPdf } from "@/hooks/useDocumentPdf";
 import { formatCurrency } from "@/lib/formatters";
@@ -14,6 +14,8 @@ import { toast } from "sonner";
 import { useSortableData } from "@/hooks/useSortableData";
 import { useSelectionSum } from "@/hooks/useSelectionSum";
 import { SortableTableHeader, SelectionSummaryBar } from "@/components/shared";
+import { supabase } from "@/integrations/supabase/client";
+import { useCompany } from "@/contexts/CompanyContext";
 
 interface ServiceOrdersListProps {
   onEdit: (order: ServiceOrder) => void;
@@ -24,7 +26,9 @@ export function ServiceOrdersList({ onEdit, onView }: ServiceOrdersListProps) {
   const { orders, isLoading, updateOrder, deleteOrder, refetch } = useServiceOrders();
   const { statuses, getActiveStatuses } = useServiceOrderStatuses();
   const { printDocument, printSummary, isGenerating } = useDocumentPdf();
+  const { currentCompany } = useCompany();
   const [search, setSearch] = useState("");
+  const [isSyncingTechnicians, setIsSyncingTechnicians] = useState(false);
 
   const activeStatuses = getActiveStatuses();
 
@@ -94,6 +98,67 @@ export function ServiceOrdersList({ onEdit, onView }: ServiceOrdersListProps) {
     }
   };
 
+  // Sincronizar técnicos do Field Control para todas as OS sincronizadas
+  const handleSyncAllTechnicians = async () => {
+    if (!currentCompany?.id) {
+      toast.error("Empresa não selecionada");
+      return;
+    }
+
+    // Filtrar apenas OS que já estão sincronizadas com Field Control
+    const syncedOrders = orders.filter(o => o.field_order_id);
+    
+    if (syncedOrders.length === 0) {
+      toast.info("Nenhuma OS sincronizada com Field Control");
+      return;
+    }
+
+    setIsSyncingTechnicians(true);
+    let successCount = 0;
+    let errorCount = 0;
+
+    toast.info(`Sincronizando técnicos de ${syncedOrders.length} OS...`);
+
+    // Processar em lotes de 3 com delay de 500ms para evitar rate limit
+    for (let i = 0; i < syncedOrders.length; i++) {
+      const order = syncedOrders[i];
+      
+      try {
+        const { error } = await supabase.functions.invoke('field-fetch-technicians', {
+          body: { 
+            service_order_id: order.id, 
+            company_id: currentCompany.id,
+            field_order_id: order.field_order_id
+          }
+        });
+
+        if (error) {
+          console.error(`Erro ao sincronizar OS ${order.order_number}:`, error);
+          errorCount++;
+        } else {
+          successCount++;
+        }
+      } catch (err) {
+        console.error(`Erro ao sincronizar OS ${order.order_number}:`, err);
+        errorCount++;
+      }
+
+      // Delay entre requisições para evitar rate limit
+      if (i < syncedOrders.length - 1) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+    }
+
+    setIsSyncingTechnicians(false);
+    refetch();
+
+    if (errorCount === 0) {
+      toast.success(`${successCount} OS sincronizada(s) com sucesso!`);
+    } else {
+      toast.warning(`${successCount} sucesso, ${errorCount} erro(s)`);
+    }
+  };
+
   const getStatusBadge = (order: ServiceOrder) => {
     if (order.status) {
       return (
@@ -114,11 +179,25 @@ export function ServiceOrdersList({ onEdit, onView }: ServiceOrdersListProps) {
 
   return (
     <div className="space-y-4">
-      <div className="flex gap-4">
+      <div className="flex gap-4 items-center justify-between">
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input placeholder="Buscar ordens..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
         </div>
+        
+        <Button 
+          variant="outline" 
+          size="sm"
+          onClick={handleSyncAllTechnicians}
+          disabled={isSyncingTechnicians}
+        >
+          {isSyncingTechnicians ? (
+            <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+          ) : (
+            <Users className="h-4 w-4 mr-2" />
+          )}
+          {isSyncingTechnicians ? "Sincronizando..." : "Atualizar Técnicos Field"}
+        </Button>
       </div>
 
       <div className="border rounded-lg">
