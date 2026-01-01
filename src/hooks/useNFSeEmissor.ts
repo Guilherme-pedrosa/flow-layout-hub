@@ -115,33 +115,35 @@ export function useNFSeEmissor() {
         .from('certificados_digitais')
         .select('*')
         .eq('company_id', currentCompany.id)
-        .eq('ativo', true)
-        .single();
+        .maybeSingle();
 
       if (certError || !certData) {
         setError('Certificado digital não encontrado. Faça o upload em Configurações > Certificado Digital');
         return null;
       }
 
+      const ambiente = configData.ambiente === 'producao' ? 'producao' : 'homologacao';
+      const serieNfse = typeof configData.serie_nfse === 'number' ? configData.serie_nfse : parseInt(String(configData.serie_nfse)) || 1;
+
       return {
         cnpj: currentCompany.cnpj || '',
-        inscricaoMunicipal: configData.inscricao_municipal,
+        inscricaoMunicipal: configData.inscricao_municipal || '',
         razaoSocial: currentCompany.razao_social || currentCompany.name,
         nomeFantasia: currentCompany.name,
-        logradouro: currentCompany.endereco || '',
-        numero: currentCompany.numero || '',
-        complemento: currentCompany.complemento,
-        bairro: currentCompany.bairro || '',
-        codigoMunicipio: configData.codigo_municipio,
+        logradouro: (currentCompany as any).endereco || '',
+        numero: '',
+        complemento: '',
+        bairro: '',
+        codigoMunicipio: configData.codigo_municipio || '',
         municipio: currentCompany.cidade || '',
-        uf: currentCompany.uf || '',
-        cep: currentCompany.cep || '',
-        telefone: currentCompany.telefone,
-        email: currentCompany.email,
-        certificadoBase64: certData.certificado_base64,
-        certificadoSenha: certData.senha,
-        ambiente: configData.ambiente || 'homologacao',
-        serieNFSe: configData.serie_nfse || 1
+        uf: currentCompany.estado || '',
+        cep: (currentCompany as any).cep || '',
+        telefone: (currentCompany as any).telefone || '',
+        email: (currentCompany as any).email || '',
+        certificadoBase64: certData.certificado_base64 || '',
+        certificadoSenha: certData.senha || '',
+        ambiente,
+        serieNFSe: serieNfse
       };
     } catch (err: any) {
       setError(err.message);
@@ -169,9 +171,10 @@ export function useNFSeEmissor() {
         .eq('company_id', currentCompany?.id)
         .order('numero', { ascending: false })
         .limit(1)
-        .single();
+        .maybeSingle();
 
-      const proximoNumero = (ultimoNumero?.numero || 0) + 1;
+      const numeroAtual = typeof ultimoNumero?.numero === 'number' ? ultimoNumero.numero : 0;
+      const proximoNumero = numeroAtual + 1;
 
       // Chamar API do microserviço
       const response = await fetch(`${NFE_SERVICE_URL}/nfse/emitir`, {
@@ -184,10 +187,10 @@ export function useNFSeEmissor() {
 
       if (resultado.sucesso) {
         // Salvar no banco
-        await supabase.from('nfse_emitidas').insert({
+        await supabase.from('nfse_emitidas').insert([{
           company_id: currentCompany?.id,
-          numero: proximoNumero,
-          serie: config.serieNFSe,
+          numero: String(proximoNumero),
+          serie: String(config.serieNFSe),
           chave_acesso: resultado.codigoVerificacao,
           tomador_cpf_cnpj: dados.tomador.cpfCnpj,
           tomador_nome: dados.tomador.razaoSocial,
@@ -197,8 +200,8 @@ export function useNFSeEmissor() {
           discriminacao: dados.servico.discriminacao,
           status: 'AUTORIZADA',
           data_emissao: new Date().toISOString(),
-          xml: resultado.xml
-        });
+          xml_url: resultado.xml
+        }]);
 
         toast({
           title: 'NFS-e emitida com sucesso!',
@@ -243,7 +246,6 @@ export function useNFSeEmissor() {
       const response = await fetch(`${NFE_SERVICE_URL}/nfse/consultar/${chaveAcesso}`, {
         method: 'GET',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ config })
       });
 
       return await response.json();

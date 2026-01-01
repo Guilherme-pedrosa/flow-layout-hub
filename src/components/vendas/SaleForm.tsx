@@ -525,7 +525,7 @@ export function SaleForm({ onClose, initialData }: SaleFormProps) {
         </Button>
         {isEditing && initialData?.id && (
           <>
-          <DropdownMenu>
+            <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" disabled={isGenerating}>
                 <Printer className="h-4 w-4 mr-2" />
@@ -540,15 +540,15 @@ export function SaleForm({ onClose, initialData }: SaleFormProps) {
                 <FileText className="h-4 w-4 mr-2" />Resumido
               </DropdownMenuItem>
             </DropdownMenuContent>
-          </DropdownMenu>
-          <Button 
-            variant="outline" 
-            className="bg-blue-50 text-blue-700 hover:bg-blue-100"
-            onClick={() => navigate(`/notas-fiscais/adicionar?venda=${initialData.id}`)}
-          >
-            <Send className="h-4 w-4 mr-2" />
-            Emitir NF-e
-          </Button>
+            </DropdownMenu>
+            <Button 
+              variant="outline" 
+              className="bg-blue-50 text-blue-700 hover:bg-blue-100"
+              onClick={() => navigate(`/notas-fiscais/adicionar?venda=${initialData.id}`)}
+            >
+              <Send className="h-4 w-4 mr-2" />
+              Emitir NF-e
+            </Button>
           </>
         )}
         <Button variant="destructive" onClick={onClose}>

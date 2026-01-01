@@ -665,6 +665,53 @@ export type Database = {
           },
         ]
       }
+      certificados_digitais: {
+        Row: {
+          certificado_base64: string | null
+          cnpj: string | null
+          company_id: string
+          created_at: string
+          file_path: string | null
+          id: string
+          razao_social: string | null
+          senha: string | null
+          updated_at: string
+          validade: string | null
+        }
+        Insert: {
+          certificado_base64?: string | null
+          cnpj?: string | null
+          company_id: string
+          created_at?: string
+          file_path?: string | null
+          id?: string
+          razao_social?: string | null
+          senha?: string | null
+          updated_at?: string
+          validade?: string | null
+        }
+        Update: {
+          certificado_base64?: string | null
+          cnpj?: string | null
+          company_id?: string
+          created_at?: string
+          file_path?: string | null
+          id?: string
+          razao_social?: string | null
+          senha?: string | null
+          updated_at?: string
+          validade?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "certificados_digitais_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: true
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       cfo_vigilant_alerts: {
         Row: {
           action_taken: string | null
@@ -1676,6 +1723,273 @@ export type Database = {
           },
         ]
       }
+      nfe_config: {
+        Row: {
+          ambiente: string
+          cfop_padrao: string | null
+          company_id: string
+          created_at: string
+          csc_id: string | null
+          csc_token: string | null
+          focus_token: string | null
+          id: string
+          inscricao_estadual: string | null
+          natureza_operacao_padrao: string | null
+          proximo_numero: number
+          regime_tributario: string | null
+          serie_nfe: string
+          updated_at: string
+        }
+        Insert: {
+          ambiente?: string
+          cfop_padrao?: string | null
+          company_id: string
+          created_at?: string
+          csc_id?: string | null
+          csc_token?: string | null
+          focus_token?: string | null
+          id?: string
+          inscricao_estadual?: string | null
+          natureza_operacao_padrao?: string | null
+          proximo_numero?: number
+          regime_tributario?: string | null
+          serie_nfe?: string
+          updated_at?: string
+        }
+        Update: {
+          ambiente?: string
+          cfop_padrao?: string | null
+          company_id?: string
+          created_at?: string
+          csc_id?: string | null
+          csc_token?: string | null
+          focus_token?: string | null
+          id?: string
+          inscricao_estadual?: string | null
+          natureza_operacao_padrao?: string | null
+          proximo_numero?: number
+          regime_tributario?: string | null
+          serie_nfe?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nfe_config_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: true
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      nfe_emitidas: {
+        Row: {
+          carta_correcao_data: string | null
+          carta_correcao_sequencia: number | null
+          carta_correcao_texto: string | null
+          cfop: string | null
+          chave_acesso: string | null
+          company_id: string
+          created_at: string
+          data_autorizacao: string | null
+          data_cancelamento: string | null
+          data_emissao: string | null
+          destinatario_cpf_cnpj: string | null
+          destinatario_id: string | null
+          destinatario_nome: string | null
+          id: string
+          mensagem_sefaz: string | null
+          natureza_operacao: string | null
+          numero: string | null
+          payload_envio: Json | null
+          payload_retorno: Json | null
+          pdf_url: string | null
+          protocolo: string | null
+          referencia: string
+          sale_id: string | null
+          serie: string | null
+          status: string
+          status_sefaz: string | null
+          updated_at: string
+          valor_cofins: number | null
+          valor_desconto: number | null
+          valor_frete: number | null
+          valor_icms: number | null
+          valor_pis: number | null
+          valor_produtos: number | null
+          valor_total: number | null
+          xml_url: string | null
+        }
+        Insert: {
+          carta_correcao_data?: string | null
+          carta_correcao_sequencia?: number | null
+          carta_correcao_texto?: string | null
+          cfop?: string | null
+          chave_acesso?: string | null
+          company_id: string
+          created_at?: string
+          data_autorizacao?: string | null
+          data_cancelamento?: string | null
+          data_emissao?: string | null
+          destinatario_cpf_cnpj?: string | null
+          destinatario_id?: string | null
+          destinatario_nome?: string | null
+          id?: string
+          mensagem_sefaz?: string | null
+          natureza_operacao?: string | null
+          numero?: string | null
+          payload_envio?: Json | null
+          payload_retorno?: Json | null
+          pdf_url?: string | null
+          protocolo?: string | null
+          referencia: string
+          sale_id?: string | null
+          serie?: string | null
+          status?: string
+          status_sefaz?: string | null
+          updated_at?: string
+          valor_cofins?: number | null
+          valor_desconto?: number | null
+          valor_frete?: number | null
+          valor_icms?: number | null
+          valor_pis?: number | null
+          valor_produtos?: number | null
+          valor_total?: number | null
+          xml_url?: string | null
+        }
+        Update: {
+          carta_correcao_data?: string | null
+          carta_correcao_sequencia?: number | null
+          carta_correcao_texto?: string | null
+          cfop?: string | null
+          chave_acesso?: string | null
+          company_id?: string
+          created_at?: string
+          data_autorizacao?: string | null
+          data_cancelamento?: string | null
+          data_emissao?: string | null
+          destinatario_cpf_cnpj?: string | null
+          destinatario_id?: string | null
+          destinatario_nome?: string | null
+          id?: string
+          mensagem_sefaz?: string | null
+          natureza_operacao?: string | null
+          numero?: string | null
+          payload_envio?: Json | null
+          payload_retorno?: Json | null
+          pdf_url?: string | null
+          protocolo?: string | null
+          referencia?: string
+          sale_id?: string | null
+          serie?: string | null
+          status?: string
+          status_sefaz?: string | null
+          updated_at?: string
+          valor_cofins?: number | null
+          valor_desconto?: number | null
+          valor_frete?: number | null
+          valor_icms?: number | null
+          valor_pis?: number | null
+          valor_produtos?: number | null
+          valor_total?: number | null
+          xml_url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nfe_emitidas_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nfe_emitidas_destinatario_id_fkey"
+            columns: ["destinatario_id"]
+            isOneToOne: false
+            referencedRelation: "pessoas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nfe_emitidas_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "sales"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      nfe_emitidas_itens: {
+        Row: {
+          cfop: string | null
+          codigo: string | null
+          created_at: string
+          descricao: string
+          icms_aliquota: number | null
+          icms_base_calculo: number | null
+          icms_valor: number | null
+          id: string
+          ncm: string | null
+          nfe_id: string
+          numero_item: number
+          produto_id: string | null
+          quantidade: number
+          unidade: string | null
+          valor_total: number
+          valor_unitario: number
+        }
+        Insert: {
+          cfop?: string | null
+          codigo?: string | null
+          created_at?: string
+          descricao: string
+          icms_aliquota?: number | null
+          icms_base_calculo?: number | null
+          icms_valor?: number | null
+          id?: string
+          ncm?: string | null
+          nfe_id: string
+          numero_item: number
+          produto_id?: string | null
+          quantidade: number
+          unidade?: string | null
+          valor_total: number
+          valor_unitario: number
+        }
+        Update: {
+          cfop?: string | null
+          codigo?: string | null
+          created_at?: string
+          descricao?: string
+          icms_aliquota?: number | null
+          icms_base_calculo?: number | null
+          icms_valor?: number | null
+          id?: string
+          ncm?: string | null
+          nfe_id?: string
+          numero_item?: number
+          produto_id?: string | null
+          quantidade?: number
+          unidade?: string | null
+          valor_total?: number
+          valor_unitario?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nfe_emitidas_itens_nfe_id_fkey"
+            columns: ["nfe_id"]
+            isOneToOne: false
+            referencedRelation: "nfe_emitidas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nfe_emitidas_itens_produto_id_fkey"
+            columns: ["produto_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       nfe_itens: {
         Row: {
           cest: string | null
@@ -1834,6 +2148,180 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      nfse_config: {
+        Row: {
+          ambiente: string
+          codigo_municipio: string | null
+          company_id: string
+          created_at: string
+          id: string
+          inscricao_municipal: string | null
+          optante_simples: boolean | null
+          proximo_numero: number
+          regime_tributacao: string | null
+          serie_nfse: string
+          updated_at: string
+        }
+        Insert: {
+          ambiente?: string
+          codigo_municipio?: string | null
+          company_id: string
+          created_at?: string
+          id?: string
+          inscricao_municipal?: string | null
+          optante_simples?: boolean | null
+          proximo_numero?: number
+          regime_tributacao?: string | null
+          serie_nfse?: string
+          updated_at?: string
+        }
+        Update: {
+          ambiente?: string
+          codigo_municipio?: string | null
+          company_id?: string
+          created_at?: string
+          id?: string
+          inscricao_municipal?: string | null
+          optante_simples?: boolean | null
+          proximo_numero?: number
+          regime_tributacao?: string | null
+          serie_nfse?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nfse_config_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: true
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      nfse_emitidas: {
+        Row: {
+          aliquota_iss: number | null
+          chave_acesso: string | null
+          cnae: string | null
+          codigo_servico: string | null
+          codigo_verificacao: string | null
+          company_id: string
+          created_at: string
+          data_autorizacao: string | null
+          data_cancelamento: string | null
+          data_emissao: string | null
+          discriminacao_servicos: string | null
+          id: string
+          mensagem_prefeitura: string | null
+          numero: string | null
+          payload_envio: Json | null
+          payload_retorno: Json | null
+          pdf_url: string | null
+          referencia: string
+          serie: string | null
+          service_order_id: string | null
+          status: string
+          status_prefeitura: string | null
+          tomador_cpf_cnpj: string | null
+          tomador_id: string | null
+          tomador_nome: string | null
+          updated_at: string
+          valor_deducoes: number | null
+          valor_iss: number | null
+          valor_servicos: number | null
+          valor_total: number | null
+          xml_url: string | null
+        }
+        Insert: {
+          aliquota_iss?: number | null
+          chave_acesso?: string | null
+          cnae?: string | null
+          codigo_servico?: string | null
+          codigo_verificacao?: string | null
+          company_id: string
+          created_at?: string
+          data_autorizacao?: string | null
+          data_cancelamento?: string | null
+          data_emissao?: string | null
+          discriminacao_servicos?: string | null
+          id?: string
+          mensagem_prefeitura?: string | null
+          numero?: string | null
+          payload_envio?: Json | null
+          payload_retorno?: Json | null
+          pdf_url?: string | null
+          referencia: string
+          serie?: string | null
+          service_order_id?: string | null
+          status?: string
+          status_prefeitura?: string | null
+          tomador_cpf_cnpj?: string | null
+          tomador_id?: string | null
+          tomador_nome?: string | null
+          updated_at?: string
+          valor_deducoes?: number | null
+          valor_iss?: number | null
+          valor_servicos?: number | null
+          valor_total?: number | null
+          xml_url?: string | null
+        }
+        Update: {
+          aliquota_iss?: number | null
+          chave_acesso?: string | null
+          cnae?: string | null
+          codigo_servico?: string | null
+          codigo_verificacao?: string | null
+          company_id?: string
+          created_at?: string
+          data_autorizacao?: string | null
+          data_cancelamento?: string | null
+          data_emissao?: string | null
+          discriminacao_servicos?: string | null
+          id?: string
+          mensagem_prefeitura?: string | null
+          numero?: string | null
+          payload_envio?: Json | null
+          payload_retorno?: Json | null
+          pdf_url?: string | null
+          referencia?: string
+          serie?: string | null
+          service_order_id?: string | null
+          status?: string
+          status_prefeitura?: string | null
+          tomador_cpf_cnpj?: string | null
+          tomador_id?: string | null
+          tomador_nome?: string | null
+          updated_at?: string
+          valor_deducoes?: number | null
+          valor_iss?: number | null
+          valor_servicos?: number | null
+          valor_total?: number | null
+          xml_url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nfse_emitidas_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nfse_emitidas_service_order_id_fkey"
+            columns: ["service_order_id"]
+            isOneToOne: false
+            referencedRelation: "service_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nfse_emitidas_tomador_id_fkey"
+            columns: ["tomador_id"]
+            isOneToOne: false
+            referencedRelation: "pessoas"
             referencedColumns: ["id"]
           },
         ]

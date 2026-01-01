@@ -280,7 +280,7 @@ export function ServiceOrderForm({ onClose, initialData }: ServiceOrderFormProps
         </Button>
         {isEditing && initialData?.id && (
           <>
-          <DropdownMenu>
+            <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" disabled={isGenerating}>
                 <Printer className="h-4 w-4 mr-2" />
@@ -295,15 +295,15 @@ export function ServiceOrderForm({ onClose, initialData }: ServiceOrderFormProps
                 <FileText className="h-4 w-4 mr-2" />Resumido
               </DropdownMenuItem>
             </DropdownMenuContent>
-          </DropdownMenu>
-          <Button 
-            variant="outline" 
-            className="bg-green-50 text-green-700 hover:bg-green-100"
-            onClick={() => navigate(`/notas-fiscais-servico/adicionar?os=${initialData.id}`)}
-          >
-            <Send className="h-4 w-4 mr-2" />
-            Emitir NFS-e
-          </Button>
+            </DropdownMenu>
+            <Button 
+              variant="outline" 
+              className="bg-green-50 text-green-700 hover:bg-green-100"
+              onClick={() => navigate(`/notas-fiscais-servico/adicionar?os=${initialData.id}`)}
+            >
+              <Send className="h-4 w-4 mr-2" />
+              Emitir NFS-e
+            </Button>
           </>
         )}
         <Button variant="destructive" onClick={onClose}>
