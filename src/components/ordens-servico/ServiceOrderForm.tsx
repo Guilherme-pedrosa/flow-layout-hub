@@ -279,6 +279,7 @@ export function ServiceOrderForm({ onClose, initialData }: ServiceOrderFormProps
           {isEditing ? 'Salvar Alterações' : 'Cadastrar'}
         </Button>
         {isEditing && initialData?.id && (
+          <>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" disabled={isGenerating}>
@@ -303,6 +304,7 @@ export function ServiceOrderForm({ onClose, initialData }: ServiceOrderFormProps
             <Send className="h-4 w-4 mr-2" />
             Emitir NFS-e
           </Button>
+          </>
         )}
         <Button variant="destructive" onClick={onClose}>
           <X className="h-4 w-4 mr-2" />

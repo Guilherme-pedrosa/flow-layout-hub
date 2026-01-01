@@ -524,6 +524,7 @@ export function SaleForm({ onClose, initialData }: SaleFormProps) {
           {isEditing ? 'Salvar Alterações' : 'Cadastrar'}
         </Button>
         {isEditing && initialData?.id && (
+          <>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" disabled={isGenerating}>
@@ -548,6 +549,7 @@ export function SaleForm({ onClose, initialData }: SaleFormProps) {
             <Send className="h-4 w-4 mr-2" />
             Emitir NF-e
           </Button>
+          </>
         )}
         <Button variant="destructive" onClick={onClose}>
           <X className="h-4 w-4 mr-2" />
