@@ -77,6 +77,36 @@ function buildFieldControlPayload(record: CustomerRecord) {
   };
 }
 
+// Buscar cliente existente no Field Control pelo CNPJ
+async function findExistingCustomerByDocument(
+  documentNumber: string,
+  apiKey: string
+): Promise<string | null> {
+  if (!documentNumber || documentNumber.length < 11) return null;
+  
+  try {
+    const response = await fetch(
+      `${FIELD_CONTROL_BASE_URL}/customers?documentNumber=${documentNumber}`,
+      {
+        method: 'GET',
+        headers: { 'X-Api-Key': apiKey }
+      }
+    );
+    
+    if (response.ok) {
+      const data = await response.json();
+      if (data && data.length > 0) {
+        console.log(`[field-sync] Encontrado cliente existente no Field: ${data[0].id} para CNPJ ${documentNumber}`);
+        return data[0].id;
+      }
+    }
+    return null;
+  } catch (error) {
+    console.error(`[field-sync] Erro ao buscar cliente por CNPJ: ${error}`);
+    return null;
+  }
+}
+
 async function syncCustomerToField(
   record: CustomerRecord,
   apiKey: string,
@@ -118,16 +148,19 @@ async function syncCustomerToField(
 
     let response: Response;
     let action: string;
+    let fieldId = existingSync?.field_id;
 
-    if (existingSync?.field_id) {
-      console.log(`[field-sync] Atualizando ${record.id} -> ${existingSync.field_id}`);
-      response = await fetch(`${FIELD_CONTROL_BASE_URL}/customers/${existingSync.field_id}`, {
+    if (fieldId) {
+      // Já tem sync, apenas atualiza
+      console.log(`[field-sync] Atualizando ${record.id} -> ${fieldId}`);
+      response = await fetch(`${FIELD_CONTROL_BASE_URL}/customers/${fieldId}`, {
         method: 'PUT',
         headers,
         body: JSON.stringify(payload)
       });
       action = 'update';
     } else {
+      // Tentar criar
       console.log(`[field-sync] Criando ${record.id}: ${payload.name}`);
       response = await fetch(`${FIELD_CONTROL_BASE_URL}/customers`, {
         method: 'POST',
@@ -135,6 +168,42 @@ async function syncCustomerToField(
         body: JSON.stringify(payload)
       });
       action = 'create';
+      
+      // Se deu erro de CNPJ duplicado, buscar o existente e linkar
+      if (response.status === 422) {
+        const errorBody = await response.text();
+        if (errorBody.includes('document number already exists')) {
+          console.log(`[field-sync] CNPJ já existe no Field, buscando cliente existente...`);
+          const existingFieldId = await findExistingCustomerByDocument(payload.documentNumber, apiKey);
+          if (existingFieldId) {
+            // Salvar o link e tentar atualizar
+            await supabase.from('field_control_sync').insert({
+              company_id: companyId,
+              entity_type: 'customer',
+              wai_id: record.id,
+              field_id: existingFieldId,
+              last_sync: new Date().toISOString()
+            });
+            
+            // Agora atualizar o registro existente
+            const updateResponse = await fetch(`${FIELD_CONTROL_BASE_URL}/customers/${existingFieldId}`, {
+              method: 'PUT',
+              headers,
+              body: JSON.stringify(payload)
+            });
+            
+            if (updateResponse.ok) {
+              console.log(`[field-sync] OK: linked e atualizado ${record.id} -> ${existingFieldId}`);
+              return { success: true, field_id: existingFieldId, action: 'linked' };
+            } else {
+              console.log(`[field-sync] OK: linked ${record.id} -> ${existingFieldId} (sem update)`);
+              return { success: true, field_id: existingFieldId, action: 'linked' };
+            }
+          }
+        }
+        console.error(`[field-sync] Erro 422: ${errorBody}`);
+        return { success: false, error: `HTTP 422: ${errorBody}`, action };
+      }
     }
 
     if (!response.ok) {
@@ -144,7 +213,7 @@ async function syncCustomerToField(
     }
 
     const result = await response.json();
-    const fieldId = result.id || existingSync?.field_id;
+    fieldId = result.id || fieldId;
 
     if (!fieldId) {
       return { success: false, error: 'Field Control não retornou ID', action };
