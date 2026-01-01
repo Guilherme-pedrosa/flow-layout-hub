@@ -101,3 +101,6 @@ verify_jwt = false
 
 [functions.update-pessoas-from-auvo]
 verify_jwt = false
+
+[functions.import-auvo-customers]
+verify_jwt = false
