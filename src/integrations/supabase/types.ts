@@ -1348,6 +1348,44 @@ export type Database = {
           },
         ]
       }
+      field_control_sync: {
+        Row: {
+          company_id: string
+          created_at: string
+          entity_type: string
+          field_id: string
+          id: string
+          last_sync: string
+          wai_id: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          entity_type: string
+          field_id: string
+          id?: string
+          last_sync?: string
+          wai_id: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          entity_type?: string
+          field_id?: string
+          id?: string
+          last_sync?: string
+          wai_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "field_control_sync_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       financial_situations: {
         Row: {
           allows_editing: boolean
