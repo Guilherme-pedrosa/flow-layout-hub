@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { 
   Wallet, 
@@ -15,6 +16,7 @@ import {
   Building2,
   Landmark
 } from "lucide-react";
+import { FinancialAIChat } from "@/components/financeiro/FinancialAIChat";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -101,6 +103,7 @@ const formatCurrency = (value: number) => {
 
 const DashboardFinanceiro = () => {
   const navigate = useNavigate();
+  const [showAIChat, setShowAIChat] = useState(false);
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -219,7 +222,12 @@ const DashboardFinanceiro = () => {
                 <p className="text-sm text-white/80">Sugestão: Considere antecipar recebíveis</p>
               </div>
             </div>
-            <Button variant="secondary" size="sm" className="bg-white text-primary hover:bg-white/90">
+            <Button 
+              variant="secondary" 
+              size="sm" 
+              className="bg-white text-primary hover:bg-white/90"
+              onClick={() => setShowAIChat(true)}
+            >
               Ver análise completa
               <ArrowRight className="h-4 w-4 ml-2" />
             </Button>
@@ -501,6 +509,9 @@ const DashboardFinanceiro = () => {
           </div>
         </CardContent>
       </Card>
+
+      {/* AI Chat Panel */}
+      {showAIChat && <FinancialAIChat onClose={() => setShowAIChat(false)} />}
     </div>
   );
 };

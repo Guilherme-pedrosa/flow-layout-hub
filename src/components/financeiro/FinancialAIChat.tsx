@@ -21,8 +21,12 @@ interface Insight {
 
 const COMPANY_ID = "e7b9c8a5-6d4f-4e3b-8c2a-1b5d9f7e6a3c";
 
-export function FinancialAIChat() {
-  const [isOpen, setIsOpen] = useState(false);
+interface FinancialAIChatProps {
+  onClose?: () => void;
+}
+
+export function FinancialAIChat({ onClose }: FinancialAIChatProps = {}) {
+  const [isOpen, setIsOpen] = useState(!onClose);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -316,7 +320,15 @@ Responda APENAS com o JSON array, sem markdown ou explicações.` }],
     sendMessage(prompts[insight.icon] || `Detalhe sobre: ${insight.title}`);
   };
 
-  if (!isOpen) {
+  const handleClose = () => {
+    if (onClose) {
+      onClose();
+    } else {
+      setIsOpen(false);
+    }
+  };
+
+  if (!isOpen && !onClose) {
     return (
       <Button
         onClick={() => setIsOpen(true)}
@@ -337,7 +349,7 @@ Responda APENAS com o JSON array, sem markdown ou explicações.` }],
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => setIsOpen(false)}
+            onClick={handleClose}
             className="h-8 w-8 text-white hover:bg-white/20"
           >
             <X className="h-4 w-4" />
