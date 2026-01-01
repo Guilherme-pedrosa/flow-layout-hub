@@ -1,28 +1,25 @@
-import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { PageHeader } from "@/components/shared";
 import { AIBannerEnhanced } from "@/components/shared/AIBannerEnhanced";
 import { useAiInsights } from "@/hooks/useAiInsights";
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
-import { SalesList, SaleForm } from "@/components/vendas";
+import { SalesList } from "@/components/vendas";
 import { Sale } from "@/hooks/useSales";
 
 const Vendas = () => {
-  const [showForm, setShowForm] = useState(false);
-  const [editingSale, setEditingSale] = useState<Sale | null>(null);
+  const navigate = useNavigate();
 
   const handleEdit = (sale: Sale) => {
-    setEditingSale(sale);
-    setShowForm(true);
+    navigate(`/vendas/${sale.id}`);
   };
 
   const handleView = (sale: Sale) => {
-    // TODO: abrir visualização
+    navigate(`/vendas/${sale.id}`);
   };
 
-  const handleClose = () => {
-    setShowForm(false);
-    setEditingSale(null);
+  const handleAddNew = () => {
+    navigate("/vendas/nova");
   };
 
   const { insights, dismiss, markAsRead } = useAiInsights('sales');
@@ -34,12 +31,10 @@ const Vendas = () => {
         description="Gerencie suas vendas e pedidos"
         breadcrumbs={[{ label: "Operação" }, { label: "Vendas" }]}
         actions={
-          !showForm && (
-            <Button onClick={() => setShowForm(true)}>
-              <Plus className="h-4 w-4" />
-              Nova Venda
-            </Button>
-          )
+          <Button onClick={handleAddNew}>
+            <Plus className="h-4 w-4 mr-2" />
+            Nova Venda
+          </Button>
         }
       />
 
@@ -50,11 +45,7 @@ const Vendas = () => {
         defaultMessage="IA monitorando vendas, margens e oportunidades"
       />
 
-      {showForm ? (
-        <SaleForm onClose={handleClose} initialData={editingSale} />
-      ) : (
-        <SalesList onEdit={handleEdit} onView={handleView} />
-      )}
+      <SalesList onEdit={handleEdit} onView={handleView} />
     </div>
   );
 };

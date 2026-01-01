@@ -17,7 +17,9 @@ import ConfiguracoesVendas from "./pages/receber/ConfiguracoesVendas";
 import Checkout from "./pages/operacao/Checkout";
 import ItensSeparados from "./pages/operacao/ItensSeparados";
 import OrdensServico from "./pages/servicos/OrdensServico";
+import OrdemServicoFormPage from "./pages/servicos/OrdemServicoFormPage";
 import ConfiguracoesOS from "./pages/servicos/ConfiguracoesOS";
+import VendaFormPage from "./pages/receber/VendaFormPage";
 import Comissoes from "./pages/vendas/Comissoes";
 
 // Páginas públicas
@@ -103,11 +105,15 @@ const App = () => (
             
             {/* Operação */}
             <Route path="/vendas" element={<Vendas />} />
+            <Route path="/vendas/nova" element={<VendaFormPage />} />
+            <Route path="/vendas/:id" element={<VendaFormPage />} />
             <Route path="/vendas-config" element={<ConfiguracoesVendas />} />
             <Route path="/comissoes" element={<Comissoes />} />
             <Route path="/checkout" element={<Checkout />} />
             <Route path="/itens-separados" element={<ItensSeparados />} />
             <Route path="/ordens-servico" element={<OrdensServico />} />
+            <Route path="/ordens-servico/nova" element={<OrdemServicoFormPage />} />
+            <Route path="/ordens-servico/:id" element={<OrdemServicoFormPage />} />
             <Route path="/ordens-servico-config" element={<ConfiguracoesOS />} />
             
             {/* Compras */}
