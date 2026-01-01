@@ -195,6 +195,59 @@ export function SupplierFormDadosGerais({ form }: SupplierFormDadosGeraisProps) 
 
       <Card>
         <CardHeader>
+          <CardTitle className="text-lg">Endereço Principal</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="space-y-2">
+              <Label>CEP</Label>
+              <Input {...register("cep")} placeholder="00000-000" />
+            </div>
+            <div className="space-y-2 md:col-span-2">
+              <Label>Logradouro</Label>
+              <Input {...register("logradouro")} placeholder="Rua, Avenida, etc." />
+            </div>
+            <div className="space-y-2">
+              <Label>Número</Label>
+              <Input {...register("numero")} placeholder="123" />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="space-y-2">
+              <Label>Complemento</Label>
+              <Input {...register("complemento")} placeholder="Sala, Andar, etc." />
+            </div>
+            <div className="space-y-2">
+              <Label>Bairro</Label>
+              <Input {...register("bairro")} />
+            </div>
+            <div className="space-y-2">
+              <Label>Cidade</Label>
+              <Input {...register("cidade")} />
+            </div>
+            <div className="space-y-2">
+              <Label>Estado</Label>
+              <Select
+                value={watch("estado") || ""}
+                onValueChange={(value) => setValue("estado", value)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="UF" />
+                </SelectTrigger>
+                <SelectContent>
+                  {["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG","PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"].map(uf => (
+                    <SelectItem key={uf} value={uf}>{uf}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
           <CardTitle className="text-lg">Condições Comerciais</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
