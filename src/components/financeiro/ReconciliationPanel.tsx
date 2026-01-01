@@ -85,7 +85,7 @@ interface FinancialEntry {
 
 export function ReconciliationPanel() {
   const { toast } = useToast();
-  const { selectedCompany } = useCompany();
+  const { currentCompany: selectedCompany } = useCompany();
   
   const [loading, setLoading] = useState(false);
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
