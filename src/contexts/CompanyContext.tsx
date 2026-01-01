@@ -102,15 +102,20 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
 
       if (error) throw error;
 
-      // Mapear para estrutura correta
-      const mapped: UserCompany[] = (userCompanies || []).map((uc: any) => ({
-        id: uc.id,
-        company_id: uc.company_id,
-        role: uc.role,
-        is_default: uc.is_default,
-        company: uc.company as Company,
-      }));
+      console.log('User companies from DB:', userCompanies);
 
+      // Mapear para estrutura correta, filtrando empresas que podem ser null
+      const mapped: UserCompany[] = (userCompanies || [])
+        .filter((uc: any) => uc.company !== null)
+        .map((uc: any) => ({
+          id: uc.id,
+          company_id: uc.company_id,
+          role: uc.role,
+          is_default: uc.is_default,
+          company: uc.company as Company,
+        }));
+
+      console.log('Mapped companies:', mapped);
       setCompanies(mapped);
 
       // Restaurar última empresa selecionada ou usar padrão
