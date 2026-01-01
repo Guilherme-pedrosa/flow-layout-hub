@@ -1,28 +1,25 @@
-import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { PageHeader } from "@/components/shared";
 import { AIBannerEnhanced } from "@/components/shared/AIBannerEnhanced";
 import { useAiInsights } from "@/hooks/useAiInsights";
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
-import { ServiceOrdersList, ServiceOrderForm } from "@/components/ordens-servico";
+import { ServiceOrdersList } from "@/components/ordens-servico";
 import { ServiceOrder } from "@/hooks/useServiceOrders";
 
 const OrdensServico = () => {
-  const [showForm, setShowForm] = useState(false);
-  const [editingOrder, setEditingOrder] = useState<ServiceOrder | null>(null);
+  const navigate = useNavigate();
 
   const handleEdit = (order: ServiceOrder) => {
-    setEditingOrder(order);
-    setShowForm(true);
+    navigate(`/ordens-servico/${order.id}`);
   };
 
   const handleView = (order: ServiceOrder) => {
-    // TODO: abrir visualização
+    navigate(`/ordens-servico/${order.id}`);
   };
 
-  const handleClose = () => {
-    setShowForm(false);
-    setEditingOrder(null);
+  const handleAddNew = () => {
+    navigate("/ordens-servico/nova");
   };
 
   const { insights, dismiss, markAsRead } = useAiInsights('services');
@@ -34,12 +31,10 @@ const OrdensServico = () => {
         description="Gerencie suas ordens de serviço"
         breadcrumbs={[{ label: "Serviços" }, { label: "Ordens de Serviço" }]}
         actions={
-          !showForm && (
-            <Button onClick={() => setShowForm(true)}>
-              <Plus className="mr-2 h-4 w-4" />
-              Nova OS
-            </Button>
-          )
+          <Button onClick={handleAddNew}>
+            <Plus className="mr-2 h-4 w-4" />
+            Nova OS
+          </Button>
         }
       />
 
@@ -50,11 +45,7 @@ const OrdensServico = () => {
         defaultMessage="IA monitorando ordens de serviço e prazos"
       />
 
-      {showForm ? (
-        <ServiceOrderForm onClose={handleClose} initialData={editingOrder} />
-      ) : (
-        <ServiceOrdersList onEdit={handleEdit} onView={handleView} />
-      )}
+      <ServiceOrdersList onEdit={handleEdit} onView={handleView} />
     </div>
   );
 };

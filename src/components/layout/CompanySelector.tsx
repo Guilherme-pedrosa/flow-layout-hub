@@ -115,7 +115,7 @@ export function CompanySelector() {
             <ChevronDown className="h-3.5 w-3.5 md:h-4 md:w-4 text-muted-foreground flex-shrink-0" />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" className="w-72">
+        <DropdownMenuContent align="start" className="w-72 z-[100] bg-popover border shadow-lg">
           <DropdownMenuLabel className="flex items-center gap-2">
             <Building2 className="h-4 w-4" />
             Trocar Empresa

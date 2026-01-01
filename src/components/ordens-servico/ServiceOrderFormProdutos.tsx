@@ -479,14 +479,14 @@ export function ServiceOrderFormProdutos({ items, onChange }: ServiceOrderFormPr
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="min-w-[200px]">Produto <span className="text-destructive">*</span></TableHead>
-                <TableHead className="w-[100px]">Tabela</TableHead>
-                <TableHead className="min-w-[120px]">Detalhes</TableHead>
-                <TableHead className="w-[80px]">Qtd.</TableHead>
-                <TableHead className="w-[100px]">Valor</TableHead>
+                <TableHead className="min-w-[250px]">Produto <span className="text-destructive">*</span></TableHead>
+                <TableHead className="w-[120px]">Tabela</TableHead>
+                <TableHead className="min-w-[180px]">Detalhes</TableHead>
+                <TableHead className="w-[100px]">Quant.</TableHead>
+                <TableHead className="w-[120px]">Valor</TableHead>
                 <TableHead className="w-[100px]">Custo</TableHead>
-                <TableHead className="w-[130px]">Desconto</TableHead>
-                <TableHead className="w-[100px]">Subtotal</TableHead>
+                <TableHead className="w-[160px]">Desconto</TableHead>
+                <TableHead className="w-[110px]">Subtotal</TableHead>
                 <TableHead className="w-[50px]"></TableHead>
               </TableRow>
             </TableHeader>
@@ -537,7 +537,7 @@ export function ServiceOrderFormProdutos({ items, onChange }: ServiceOrderFormPr
                         value={item.details ?? ''}
                         onChange={(e) => updateItem(index, 'details', e.target.value)}
                         placeholder="Detalhes..."
-                        className="text-xs"
+                        className="text-sm min-w-[150px]"
                       />
                     </TableCell>
                     <TableCell>
@@ -545,7 +545,7 @@ export function ServiceOrderFormProdutos({ items, onChange }: ServiceOrderFormPr
                         value={item.quantity}
                         onChange={(val) => updateItem(index, 'quantity', val)}
                         step={0.001}
-                        className={cn("text-xs", isOutOfStock && 'border-destructive bg-destructive/10')}
+                        className={cn("text-sm min-w-[80px]", isOutOfStock && 'border-destructive bg-destructive/10')}
                       />
                     </TableCell>
                     <TableCell>
@@ -553,11 +553,11 @@ export function ServiceOrderFormProdutos({ items, onChange }: ServiceOrderFormPr
                         value={item.unit_price}
                         onChange={(val) => updateItem(index, 'unit_price', val)}
                         step={0.01}
-                        className="text-xs"
+                        className="text-sm min-w-[90px]"
                       />
                     </TableCell>
                     <TableCell>
-                      <div className="text-xs text-muted-foreground px-2 py-1 bg-muted rounded">
+                      <div className="text-sm text-muted-foreground px-3 py-2 bg-muted rounded min-w-[80px]">
                         {formatCurrency(item.purchase_price)}
                       </div>
                     </TableCell>
@@ -567,13 +567,13 @@ export function ServiceOrderFormProdutos({ items, onChange }: ServiceOrderFormPr
                           value={item.discount_value}
                           onChange={(val) => updateItem(index, 'discount_value', val)}
                           step={0.01}
-                          className="w-16 text-xs"
+                          className="w-20 text-sm"
                         />
                         <Select
                           value={item.discount_type}
                           onValueChange={(value) => updateItem(index, 'discount_type', value)}
                         >
-                          <SelectTrigger className="w-14 text-xs">
+                          <SelectTrigger className="w-16 text-sm">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
@@ -583,7 +583,7 @@ export function ServiceOrderFormProdutos({ items, onChange }: ServiceOrderFormPr
                         </Select>
                       </div>
                     </TableCell>
-                    <TableCell className="font-medium text-xs">
+                    <TableCell className="font-medium text-sm">
                       {formatCurrency(item.subtotal)}
                     </TableCell>
                     <TableCell>
