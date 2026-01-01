@@ -1,10 +1,36 @@
+import { useState } from "react";
 import { PageHeader } from "@/components/shared";
 import { AIBannerEnhanced } from "@/components/shared/AIBannerEnhanced";
 import { useAiInsights } from "@/hooks/useAiInsights";
-import { Wrench } from "lucide-react";
+import { ServicesList, ServiceForm } from "@/components/servicos";
+import { Service } from "@/hooks/useServices";
+
+type ViewMode = "list" | "form";
 
 export default function Servicos() {
   const { insights, dismiss, markAsRead } = useAiInsights('services');
+  const [viewMode, setViewMode] = useState<ViewMode>("list");
+  const [selectedService, setSelectedService] = useState<Service | null>(null);
+
+  const handleEdit = (service: Service) => {
+    setSelectedService(service);
+    setViewMode("form");
+  };
+
+  const handleNew = () => {
+    setSelectedService(null);
+    setViewMode("form");
+  };
+
+  const handleCancel = () => {
+    setSelectedService(null);
+    setViewMode("list");
+  };
+
+  const handleSuccess = () => {
+    setSelectedService(null);
+    setViewMode("list");
+  };
 
   return (
     <div className="space-y-6">
@@ -24,13 +50,15 @@ export default function Servicos() {
         defaultMessage="IA monitorando serviços e sugerindo melhorias"
       />
 
-      <div className="rounded-lg border border-border bg-card p-8 text-center">
-        <Wrench className="mx-auto h-12 w-12 text-muted-foreground" />
-        <h3 className="mt-4 text-lg font-medium">Serviços</h3>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Área para cadastro e gestão de serviços.
-        </p>
-      </div>
+      {viewMode === "list" ? (
+        <ServicesList onEdit={handleEdit} onNew={handleNew} />
+      ) : (
+        <ServiceForm
+          service={selectedService}
+          onCancel={handleCancel}
+          onSuccess={handleSuccess}
+        />
+      )}
     </div>
   );
 }
