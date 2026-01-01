@@ -17,7 +17,9 @@ import {
   AlertCircle,
   Calendar,
   FileText,
-  Check
+  Check,
+  Search,
+  DollarSign
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -73,12 +75,38 @@ export const ExtratoList = ({ transactionTypeFilter }: ExtratoListProps = {}) =>
   
   const [dateFrom, setDateFrom] = useState(thirtyDaysAgo.toISOString().split("T")[0]);
   const [dateTo, setDateTo] = useState(today.toISOString().split("T")[0]);
+  
+  // Filtros de pesquisa
+  const [searchTerm, setSearchTerm] = useState("");
+  const [searchValue, setSearchValue] = useState("");
 
-  // Filter transactions by type if specified
+  // Filter transactions by type and search terms
   const transactions = useMemo(() => {
-    if (!transactionTypeFilter) return allTransactions;
-    return allTransactions.filter(t => t.type === transactionTypeFilter);
-  }, [allTransactions, transactionTypeFilter]);
+    let filtered = transactionTypeFilter 
+      ? allTransactions.filter(t => t.type === transactionTypeFilter)
+      : allTransactions;
+    
+    // Filtro por descrição/nome
+    if (searchTerm.trim()) {
+      const term = searchTerm.toLowerCase().trim();
+      filtered = filtered.filter(t => 
+        t.description?.toLowerCase().includes(term)
+      );
+    }
+    
+    // Filtro por valor
+    if (searchValue.trim()) {
+      const valueSearch = parseFloat(searchValue.replace(',', '.'));
+      if (!isNaN(valueSearch)) {
+        filtered = filtered.filter(t => 
+          Math.abs(t.amount).toFixed(2).includes(valueSearch.toFixed(2)) ||
+          Math.abs(t.amount) === valueSearch
+        );
+      }
+    }
+    
+    return filtered;
+  }, [allTransactions, transactionTypeFilter, searchTerm, searchValue]);
 
   useEffect(() => {
     if (companyId) {
@@ -251,10 +279,36 @@ export const ExtratoList = ({ transactionTypeFilter }: ExtratoListProps = {}) =>
         </Card>
       )}
 
-      {/* Filtros e Resumo */}
-      <div className="grid gap-4 md:grid-cols-4">
-        <Card>
-          <CardContent className="pt-4 pb-4">
+      {/* Filtros de Pesquisa */}
+      <Card>
+        <CardContent className="pt-4 pb-4">
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+            <div className="space-y-2">
+              <Label className="flex items-center gap-2 text-xs">
+                <Search className="h-3 w-3" />
+                Pesquisar descrição
+              </Label>
+              <Input
+                placeholder="Digite para buscar..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="h-9"
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label className="flex items-center gap-2 text-xs">
+                <DollarSign className="h-3 w-3" />
+                Pesquisar valor
+              </Label>
+              <Input
+                placeholder="Ex: 150.00"
+                value={searchValue}
+                onChange={(e) => setSearchValue(e.target.value)}
+                className="h-9"
+              />
+            </div>
+            
             <div className="space-y-2">
               <Label className="flex items-center gap-2 text-xs">
                 <Calendar className="h-3 w-3" />
@@ -267,11 +321,7 @@ export const ExtratoList = ({ transactionTypeFilter }: ExtratoListProps = {}) =>
                 className="h-9"
               />
             </div>
-          </CardContent>
-        </Card>
 
-        <Card>
-          <CardContent className="pt-4 pb-4">
             <div className="space-y-2">
               <Label className="flex items-center gap-2 text-xs">
                 <Calendar className="h-3 w-3" />
@@ -284,9 +334,12 @@ export const ExtratoList = ({ transactionTypeFilter }: ExtratoListProps = {}) =>
                 className="h-9"
               />
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </CardContent>
+      </Card>
 
+      {/* Resumo */}
+      <div className="grid gap-4 md:grid-cols-2">
         <Card>
           <CardContent className="pt-4 pb-4">
             <div className="flex items-center gap-3">
