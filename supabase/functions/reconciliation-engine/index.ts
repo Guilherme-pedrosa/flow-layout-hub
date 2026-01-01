@@ -426,15 +426,23 @@ serve(async (req) => {
             e.customer_id === entityMatch.entity.id
           );
           
-          // IMPORTANTE: Priorizar títulos com vencimento <= data da transação
-          // Só considerar títulos que venceram até 30 dias DEPOIS da transação (margem de tolerância)
+          // IMPORTANTE: Priorizar títulos com vencimento próximo à data da transação
+          // Foco em títulos JÁ VENCIDOS ou com vencimento até 7 dias DEPOIS da transação
           const txDate = new Date(tx.transaction_date);
           const maxDueDate = new Date(txDate);
-          maxDueDate.setDate(maxDueDate.getDate() + 30); // tolerância de 30 dias para o futuro
+          maxDueDate.setDate(maxDueDate.getDate() + 7); // tolerância de apenas 7 dias para o futuro
           
+          // Ordenar por proximidade da data da transação (priorizar vencidos e próximos)
           const entityEntries = entityEntriesAll
             .filter(e => new Date(e.due_date) <= maxDueDate)
-            .sort((a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime()); // Ordenar por vencimento mais antigo primeiro
+            .sort((a, b) => {
+              const dateA = new Date(a.due_date);
+              const dateB = new Date(b.due_date);
+              // Calcular diferença absoluta da data da transação (mais próximo = melhor)
+              const diffA = Math.abs(dateA.getTime() - txDate.getTime());
+              const diffB = Math.abs(dateB.getTime() - txDate.getTime());
+              return diffA - diffB; // Ordenar por proximidade
+            });
           
           // 2a. Match 1:1 exato - priorizar títulos vencidos ou com vencimento próximo
           for (const entry of entityEntries) {
