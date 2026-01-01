@@ -35,10 +35,16 @@ export function ServiceOrderForm({ onClose, initialData }: ServiceOrderFormProps
     status_id: initialData?.status_id ?? '',
     order_date: initialData?.order_date ?? new Date().toISOString().split('T')[0],
     delivery_date: initialData?.delivery_date ?? '',
+    scheduled_time: initialData?.scheduled_time ?? '',
+    estimated_duration: initialData?.estimated_duration?.toString() ?? '60',
     sales_channel: initialData?.sales_channel ?? 'presencial',
     cost_center_id: initialData?.cost_center_id ?? '',
     
-    // Equipamento
+    // Tipo de serviço e equipamento
+    service_type_id: initialData?.service_type_id ?? '',
+    equipment_id: initialData?.equipment_id ?? '',
+    
+    // Equipamento (campos manuais)
     equipment_type: initialData?.equipment_type ?? '',
     equipment_brand: initialData?.equipment_brand ?? '',
     equipment_model: initialData?.equipment_model ?? '',
@@ -109,10 +115,16 @@ export function ServiceOrderForm({ onClose, initialData }: ServiceOrderFormProps
       status_id: formData.status_id || null,
       order_date: formData.order_date,
       delivery_date: formData.delivery_date || null,
+      scheduled_time: formData.scheduled_time || null,
+      estimated_duration: parseInt(formData.estimated_duration) || 60,
       sales_channel: formData.sales_channel,
       cost_center_id: formData.cost_center_id || null,
       
-      // Equipamento
+      // Tipo de serviço e equipamento
+      service_type_id: formData.service_type_id || null,
+      equipment_id: formData.equipment_id || null,
+      
+      // Equipamento (campos manuais)
       equipment_type: formData.equipment_type || null,
       equipment_brand: formData.equipment_brand || null,
       equipment_model: formData.equipment_model || null,

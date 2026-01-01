@@ -92,6 +92,20 @@ serve(async (req) => {
           id,
           name,
           field_employee_id
+        ),
+        service_type:service_type_id (
+          id,
+          name,
+          field_service_id,
+          default_duration
+        ),
+        equipment:equipment_id (
+          id,
+          serial_number,
+          brand,
+          model,
+          equipment_type,
+          location_description
         )
       `)
       .eq('id', service_order_id)
@@ -153,12 +167,25 @@ serve(async (req) => {
     const descriptionParts = [];
     descriptionParts.push(`OS #${order.order_number}`);
     
-    if (order.equipment_type || order.equipment_brand || order.equipment_model) {
+    // Adicionar tipo de serviço se disponível
+    if (order.service_type?.name) {
+      descriptionParts.push(`\n🏷️ TIPO: ${order.service_type.name}`);
+    }
+    
+    // Usar dados do equipamento cadastrado se disponível, senão usar campos manuais
+    const equipType = order.equipment?.equipment_type || order.equipment_type;
+    const equipBrand = order.equipment?.brand || order.equipment_brand;
+    const equipModel = order.equipment?.model || order.equipment_model;
+    const equipSerial = order.equipment?.serial_number || order.equipment_serial;
+    const equipLocation = order.equipment?.location_description;
+    
+    if (equipType || equipBrand || equipModel) {
       descriptionParts.push(`\n\n📦 EQUIPAMENTO:`);
-      if (order.equipment_type) descriptionParts.push(`Tipo: ${order.equipment_type}`);
-      if (order.equipment_brand) descriptionParts.push(`Marca: ${order.equipment_brand}`);
-      if (order.equipment_model) descriptionParts.push(`Modelo: ${order.equipment_model}`);
-      if (order.equipment_serial) descriptionParts.push(`Série: ${order.equipment_serial}`);
+      if (equipType) descriptionParts.push(`Tipo: ${equipType}`);
+      if (equipBrand) descriptionParts.push(`Marca: ${equipBrand}`);
+      if (equipModel) descriptionParts.push(`Modelo: ${equipModel}`);
+      if (equipSerial) descriptionParts.push(`Série: ${equipSerial}`);
+      if (equipLocation) descriptionParts.push(`Local: ${equipLocation}`);
     }
 
     if (order.reported_issue) {
@@ -185,6 +212,11 @@ serve(async (req) => {
       duration: duration,
       externalId: order.id
     };
+
+    // Adicionar service_id do Field se o tipo de serviço tiver mapeamento
+    if (order.service_type?.field_service_id) {
+      activityPayload.serviceId = order.service_type.field_service_id;
+    }
 
     // Se tiver técnico com field_employee_id, atribuir
     if (order.technician?.field_employee_id) {
