@@ -130,6 +130,16 @@ export interface ServiceOrder {
   checkout_status: string;
   tracking_token: string;
   
+  // Field Control Integration
+  scheduled_time?: string;
+  estimated_duration?: number;
+  field_order_id?: string;
+  field_task_id?: string;
+  field_synced_at?: string;
+  field_sync_status?: 'pending' | 'synced' | 'error';
+  service_type_id?: string;
+  equipment_id?: string;
+  
   created_by?: string;
   created_at: string;
   updated_at: string;
@@ -337,12 +347,90 @@ export function useServiceOrders() {
     },
   });
 
+  // Sincronizar OS com Field Control
+  const syncWithField = useMutation({
+    mutationFn: async ({ serviceOrderId, companyId }: { serviceOrderId: string; companyId: string }) => {
+      const { data, error } = await supabase.functions.invoke('field-sync-activity', {
+        body: { service_order_id: serviceOrderId, company_id: companyId }
+      });
+
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      return data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["service_orders"] });
+      toast.success(data?.message || "OS sincronizada com Field Control!");
+    },
+    onError: (error) => {
+      toast.error(`Erro ao sincronizar com Field: ${error.message}`);
+    },
+  });
+
+  // Atualizar status e sincronizar automaticamente se for "aprovado"
+  const updateStatusWithFieldSync = useMutation({
+    mutationFn: async ({ 
+      id, 
+      statusId, 
+      statusName,
+      companyId 
+    }: { 
+      id: string; 
+      statusId: string;
+      statusName: string;
+      companyId: string;
+    }) => {
+      // Atualizar o status
+      const { data, error } = await supabase
+        .from("service_orders")
+        .update({ status_id: statusId, updated_at: new Date().toISOString() })
+        .eq("id", id)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      // Se o status for "aprovado", sincronizar com Field
+      const isApproved = statusName.toLowerCase().includes('aprovad');
+      if (isApproved) {
+        try {
+          const { data: syncResult, error: syncError } = await supabase.functions.invoke('field-sync-activity', {
+            body: { service_order_id: id, company_id: companyId }
+          });
+          
+          if (syncError) {
+            console.error('Erro ao sincronizar com Field:', syncError);
+            toast.warning('Status atualizado, mas houve erro na sincronização com Field Control');
+          } else if (syncResult?.error) {
+            console.error('Erro ao sincronizar com Field:', syncResult.error);
+            toast.warning(`Status atualizado. Field: ${syncResult.error}`);
+          } else {
+            toast.success('Status atualizado e OS enviada para o Field Control!');
+          }
+        } catch (syncErr) {
+          console.error('Erro ao sincronizar com Field:', syncErr);
+          toast.warning('Status atualizado, mas houve erro na sincronização com Field Control');
+        }
+      }
+
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["service_orders"] });
+    },
+    onError: (error) => {
+      toast.error(`Erro ao atualizar status: ${error.message}`);
+    },
+  });
+
   return {
     orders: ordersQuery.data ?? [],
     isLoading: ordersQuery.isLoading,
     createOrder,
     updateOrder,
     deleteOrder,
+    syncWithField,
+    updateStatusWithFieldSync,
     refetch: ordersQuery.refetch,
   };
 }
