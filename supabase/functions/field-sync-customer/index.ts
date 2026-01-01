@@ -323,61 +323,54 @@ serve(async (req) => {
       return new Response(JSON.stringify(result), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
-    // Modo 2: Linkar clientes existentes no Field Control com o ERP
+    // Modo 2: Linkar clientes existentes no Field Control com o ERP (OTIMIZADO)
     if (payload.link_existing && payload.company_id) {
-      console.log(`[field-sync] Buscando todos clientes do Field Control para linkar...`);
+      const batchPage = payload.offset || 0; // Página do Field Control a processar
+      console.log(`[field-sync] link_existing: buscando página ${batchPage + 1} do Field Control...`);
       
-      // Buscar clientes do Field com paginação
-      let allFieldCustomers: any[] = [];
-      let page = 1;
+      // Buscar UMA página do Field Control por vez
       const pageSize = 100;
+      const response = await fetch(
+        `${FIELD_CONTROL_BASE_URL}/customers?page=${batchPage + 1}&limit=${pageSize}`,
+        { method: 'GET', headers: { 'X-Api-Key': apiKey } }
+      );
       
-      while (page <= 20) { // Limitar a 20 páginas (2000 clientes)
-        try {
-          const response = await fetch(
-            `${FIELD_CONTROL_BASE_URL}/customers?page=${page}&limit=${pageSize}`,
-            { method: 'GET', headers: { 'X-Api-Key': apiKey } }
-          );
-          
-          if (!response.ok) {
-            console.log(`[field-sync] Erro buscando página ${page}: ${response.status}`);
-            break;
-          }
-          
-          const data = await response.json();
-          
-          // A resposta pode ser um objeto com customers ou diretamente um array
-          const customers = Array.isArray(data) ? data : (data?.customers || data?.items || data?.data || []);
-          
-          if (!customers || customers.length === 0) {
-            console.log(`[field-sync] Página ${page}: sem dados, parando`);
-            break;
-          }
-          
-          allFieldCustomers = allFieldCustomers.concat(customers);
-          console.log(`[field-sync] Página ${page}: ${customers.length} clientes (total: ${allFieldCustomers.length})`);
-          
-          if (customers.length < pageSize) break;
-          page++;
-          
-          await new Promise(resolve => setTimeout(resolve, 50));
-        } catch (error) {
-          console.log(`[field-sync] Erro na paginação: ${error}`);
-          break;
-        }
+      if (!response.ok) {
+        return new Response(JSON.stringify({ 
+          success: false, 
+          error: `Erro buscando Field: ${response.status}` 
+        }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       }
       
-      console.log(`[field-sync] ${allFieldCustomers.length} clientes encontrados no Field Control`);
+      const data = await response.json();
+      const fieldCustomers = Array.isArray(data) ? data : (data?.customers || data?.items || data?.data || []);
       
-      if (allFieldCustomers.length === 0) {
-        return new Response(JSON.stringify({ success: false, error: 'Nenhum cliente encontrado no Field Control' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      console.log(`[field-sync] Página ${batchPage + 1}: ${fieldCustomers.length} clientes do Field`);
+      
+      if (fieldCustomers.length === 0) {
+        return new Response(JSON.stringify({ 
+          success: true, 
+          message: 'Fim das páginas do Field Control',
+          page: batchPage,
+          linked: 0,
+          has_more: false
+        }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       }
       
-      // Buscar pessoas do ERP
+      // Buscar pessoas do ERP (uma vez só - cache)
       const { data: pessoas } = await supabase
         .from('pessoas')
         .select('id, cpf_cnpj')
         .eq('company_id', payload.company_id);
+      
+      // Buscar todos os links existentes
+      const { data: existingLinks } = await supabase
+        .from('field_control_sync')
+        .select('wai_id')
+        .eq('company_id', payload.company_id)
+        .eq('entity_type', 'customer');
+      
+      const existingSet = new Set((existingLinks || []).map(l => l.wai_id));
       
       // Criar mapa CNPJ -> pessoa
       const cnpjMap = new Map<string, string>();
@@ -386,44 +379,48 @@ serve(async (req) => {
         if (cleanCnpj) cnpjMap.set(cleanCnpj, p.id);
       }
       
-      let linked = 0;
-      let alreadyLinked = 0;
+      // Preparar inserts em batch
+      const toInsert: any[] = [];
       
-      for (const fc of allFieldCustomers) {
+      for (const fc of fieldCustomers) {
         const cleanDoc = cleanDocument(fc.documentNumber);
         const pessoaId = cnpjMap.get(cleanDoc);
         
-        if (pessoaId) {
-          // Verificar se já tem link
-          const { data: existing } = await supabase
-            .from('field_control_sync')
-            .select('id')
-            .eq('wai_id', pessoaId)
-            .eq('entity_type', 'customer')
-            .maybeSingle();
-          
-          if (!existing) {
-            await supabase.from('field_control_sync').insert({
-              company_id: payload.company_id,
-              entity_type: 'customer',
-              wai_id: pessoaId,
-              field_id: fc.id,
-              last_sync: new Date().toISOString()
-            });
-            linked++;
-            console.log(`[field-sync] Linked: ${pessoaId} -> ${fc.id}`);
-          } else {
-            alreadyLinked++;
-          }
+        if (pessoaId && !existingSet.has(pessoaId)) {
+          toInsert.push({
+            company_id: payload.company_id,
+            entity_type: 'customer',
+            wai_id: pessoaId,
+            field_id: fc.id,
+            last_sync: new Date().toISOString()
+          });
+          existingSet.add(pessoaId); // Evitar duplicatas neste batch
         }
       }
       
+      // Insert em batch
+      if (toInsert.length > 0) {
+        const { error: insertError } = await supabase
+          .from('field_control_sync')
+          .upsert(toInsert, { onConflict: 'wai_id,entity_type' });
+        
+        if (insertError) {
+          console.error(`[field-sync] Erro insert: ${insertError.message}`);
+        } else {
+          console.log(`[field-sync] Linked ${toInsert.length} clientes na página ${batchPage + 1}`);
+        }
+      }
+      
+      const hasMore = fieldCustomers.length >= pageSize;
+      
       return new Response(JSON.stringify({ 
         success: true, 
-        field_total: allFieldCustomers.length, 
+        page: batchPage,
+        field_in_page: fieldCustomers.length,
         erp_total: pessoas?.length || 0,
-        linked,
-        already_linked: alreadyLinked
+        linked: toInsert.length,
+        has_more: hasMore,
+        next_offset: hasMore ? batchPage + 1 : null
       }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
