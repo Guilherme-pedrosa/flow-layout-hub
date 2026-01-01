@@ -16,18 +16,22 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Plus, Search, Edit, Power } from "lucide-react";
+import { Plus, Search, Edit, Power, Upload } from "lucide-react";
 import { formatCurrency } from "@/lib/formatters";
 import { ProductForm, ProductFormData } from "./ProductForm";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useSortableData } from "@/hooks/useSortableData";
 import { SortableTableHeader } from "@/components/shared";
+import { ImportProductsCIGAMModal } from "./ImportProductsCIGAMModal";
+import { useQueryClient } from "@tanstack/react-query";
 
 export function ProdutosList() {
+  const queryClient = useQueryClient();
   const { products, isLoading, createProduct, updateProduct, toggleProductStatus } = useProducts();
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [importModalOpen, setImportModalOpen] = useState(false);
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -219,10 +223,16 @@ export function ProdutosList() {
             className="pl-9"
           />
         </div>
-        <Button onClick={handleOpenNew}>
-          <Plus className="mr-2 h-4 w-4" />
-          Novo Produto
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={() => setImportModalOpen(true)}>
+            <Upload className="mr-2 h-4 w-4" />
+            Importar CIGAM
+          </Button>
+          <Button onClick={handleOpenNew}>
+            <Plus className="mr-2 h-4 w-4" />
+            Novo Produto
+          </Button>
+        </div>
       </div>
 
       <div className="rounded-lg border">
@@ -368,6 +378,15 @@ export function ProdutosList() {
           />
         </DialogContent>
       </Dialog>
+
+      {/* Modal de Importação CIGAM */}
+      <ImportProductsCIGAMModal
+        open={importModalOpen}
+        onOpenChange={setImportModalOpen}
+        onImportComplete={() => {
+          queryClient.invalidateQueries({ queryKey: ["products"] });
+        }}
+      />
     </div>
   );
 }
