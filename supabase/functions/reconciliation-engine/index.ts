@@ -7,14 +7,16 @@ const corsHeaders = {
 };
 
 /**
- * Motor de Conciliação Inteligente - WeDo ERP
+ * Motor de Conciliação - WeDo ERP
+ * Baseado na lógica da Kamino
  * 
- * Níveis de Confiança (conforme spec):
- * - ≥95%: Sugestão de alta confiança (ainda requer confirmação humana)
- * - 70-94%: Sugestão de média confiança
- * - <70%: Sugestão de baixa confiança (requer revisão manual)
+ * PRINCÍPIOS:
+ * 1. Regras de Extrato - usuário define regras baseadas em texto
+ * 2. Matching por Regra - se existe regra, concilia automaticamente
+ * 3. Matching por Título - APENAS se valor EXATO e nome do fornecedor na descrição
+ * 4. Exceções - tudo que não casa fica como exceção para revisão manual
  * 
- * IMPORTANTE: NUNCA executa conciliação automática sem confirmação humana
+ * NUNCA sugere match quando nomes são diferentes!
  */
 
 interface BankTransaction {
@@ -26,7 +28,6 @@ interface BankTransaction {
   nsu: string | null;
   is_reconciled: boolean;
   external_id: string | null;
-  raw_data: Record<string, unknown> | null;
 }
 
 interface FinancialEntry {
@@ -40,22 +41,37 @@ interface FinancialEntry {
   entity_name: string | null;
   entity_document: string | null;
   inter_nosso_numero: string | null;
-  inter_boleto_id: string | null;
-  pix_key: string | null;
+}
+
+interface ExtractRule {
+  id: string;
+  search_text: string;
+  supplier_id: string | null;
+  supplier_name: string | null;
+  category_id: string | null;
+  category_name: string | null;
+  description: string | null;
+  is_active: boolean;
 }
 
 interface ReconciliationSuggestion {
   transaction_id: string;
+  transaction: BankTransaction;
   entries: {
     id: string;
     type: 'receivable' | 'payable';
-    amount_used: number;
+    amount: number;
+    entity_name: string | null;
+    due_date: string;
   }[];
   confidence_score: number;
+  confidence_level: 'high' | 'medium' | 'low';
   match_reasons: string[];
-  match_type: 'exact' | 'aggregation' | 'partial' | 'nsu' | 'document';
+  match_type: 'rule' | 'exact_value_name' | 'exact_value_only' | 'nosso_numero';
   total_matched: number;
   difference: number;
+  rule_id?: string;
+  requires_review: boolean;
 }
 
 // Normalização de texto para matching
@@ -69,197 +85,63 @@ function normalizeText(text: string | null): string {
     .trim();
 }
 
-// Normalização de documento (CPF/CNPJ)
-function normalizeDocument(doc: string | null): string {
-  return doc?.replace(/\D/g, '') || '';
+// Extrair nome de pessoa/empresa da descrição do PIX
+function extractNameFromDescription(description: string | null): string | null {
+  if (!description) return null;
+  
+  // Padrões comuns de PIX
+  const patterns = [
+    /pix\s+(?:enviado|recebido)\s*-?\s*(?:cp\s*:?\s*\d+\s*-?\s*)?(.+)/i,
+    /transferencia\s+(?:pix|ted|doc)\s*-?\s*(.+)/i,
+    /pagamento\s+(?:pix|boleto)\s*-?\s*(.+)/i,
+    /pix\s+de\s+(.+)/i,
+    /pix\s+para\s+(.+)/i,
+  ];
+  
+  for (const pattern of patterns) {
+    const match = description.match(pattern);
+    if (match && match[1]) {
+      return match[1].trim();
+    }
+  }
+  
+  return null;
 }
 
-// Calcular score de proximidade de data
-function dateProximityScore(txDate: string, entryDate: string): number {
-  const d1 = new Date(txDate);
-  const d2 = new Date(entryDate);
-  const diffDays = Math.abs((d1.getTime() - d2.getTime()) / (1000 * 60 * 60 * 24));
+// Verificar se o nome do fornecedor está contido na descrição
+function nameMatchesDescription(entityName: string | null, description: string | null): boolean {
+  if (!entityName || !description) return false;
   
-  if (diffDays === 0) return 100;
-  if (diffDays <= 1) return 95;
-  if (diffDays <= 3) return 85;
-  if (diffDays <= 7) return 70;
-  if (diffDays <= 14) return 50;
-  if (diffDays <= 30) return 30;
-  return 10;
-}
-
-// Calcular score de similaridade de texto
-function textSimilarityScore(text1: string | null, text2: string | null): number {
-  const n1 = normalizeText(text1);
-  const n2 = normalizeText(text2);
+  const normalizedEntity = normalizeText(entityName);
+  const normalizedDesc = normalizeText(description);
   
-  if (!n1 || !n2) return 0;
-  if (n1 === n2) return 100;
+  // Match exato
+  if (normalizedDesc.includes(normalizedEntity)) return true;
   
-  const tokens1 = n1.split(/\s+/);
-  const tokens2 = n2.split(/\s+/);
+  // Match por tokens (pelo menos 2 palavras significativas)
+  const entityTokens = normalizedEntity.split(/\s+/).filter(t => t.length > 2);
+  const descTokens = normalizedDesc.split(/\s+/);
   
   let matchCount = 0;
-  for (const token of tokens1) {
-    if (token.length > 2 && tokens2.some(t => t.includes(token) || token.includes(t))) {
+  for (const token of entityTokens) {
+    if (descTokens.some(dt => dt.includes(token) || token.includes(dt))) {
       matchCount++;
     }
   }
   
-  return Math.round((matchCount / Math.max(tokens1.length, 1)) * 100);
+  // Precisa ter pelo menos 2 tokens ou 50% dos tokens do nome
+  const minMatches = Math.max(2, Math.ceil(entityTokens.length * 0.5));
+  return matchCount >= minMatches;
 }
 
-// Motor principal de matching - CORRIGIDO
-// CORREÇÕES APLICADAS:
-// 1. Filtro de proporção de valor - rejeita matches com diferença > 20% ou > R$ 100
-// 2. Peso do valor aumentado para 60%
-// 3. Verificação de destinatário/entidade
-function calculateMatchScore(
-  tx: BankTransaction,
-  entry: FinancialEntry
-): { score: number; reasons: string[]; valueScore: number } {
-  const reasons: string[] = [];
-  let score = 0;
-  let valueScore = 0;
-
-  const txAmount = Math.abs(tx.amount);
-  const entryAmount = entry.amount;
-  const amountDiff = Math.abs(txAmount - entryAmount);
-  const percentDiff = amountDiff / Math.max(entryAmount, 1);
-
-  // CORREÇÃO 1: Filtro de proporção de valor
-  // Rejeitar se diferença > 20% OU diferença absoluta > R$ 100
-  if (percentDiff > 0.20 || amountDiff > 100) {
-    console.log(`[reconciliation-engine] REJEITADO: tx=${txAmount.toFixed(2)}, entry=${entryAmount.toFixed(2)}, diff=${amountDiff.toFixed(2)} (${(percentDiff*100).toFixed(1)}%)`);
-    return { score: 0, reasons: ['Valores muito diferentes - rejeitado'], valueScore: 0 };
-  }
-
-  // 1. Match por valor (PRINCIPAL - até 60 pontos) - PESO AUMENTADO
-  if (amountDiff < 0.01) {
-    score += 60;
-    valueScore = 60;
-    reasons.push('✓ Valor exato');
-  } else if (amountDiff < 1) {
-    score += 55;
-    valueScore = 55;
-    reasons.push('✓ Valor muito próximo (centavos)');
-  } else if (percentDiff < 0.01) {
-    score += 50;
-    valueScore = 50;
-    reasons.push('✓ Valor <1% diferença');
-  } else if (percentDiff < 0.05) {
-    score += 40;
-    valueScore = 40;
-    reasons.push('~ Valor <5% diferença');
-  } else if (percentDiff < 0.10) {
-    score += 30;
-    valueScore = 30;
-    reasons.push('~ Valor <10% diferença');
-  } else if (percentDiff < 0.20) {
-    score += 20;
-    valueScore = 20;
-    reasons.push('? Valor com diferença moderada');
-  }
-
-  // CORREÇÃO: Exigir match de valor mínimo
-  if (valueScore === 0) {
-    console.log(`[reconciliation-engine] REJEITADO por falta de match de valor: tx=${txAmount.toFixed(2)}, entry=${entryAmount.toFixed(2)}`);
-    return { score: 0, reasons: ['Sem correspondência de valor'], valueScore: 0 };
-  }
-
-  // 2. Match por data (até 25 pontos)
-  const dateScore = dateProximityScore(tx.transaction_date, entry.due_date);
-  score += Math.round(dateScore * 0.25);
-  if (dateScore >= 85) {
-    reasons.push('✓ Data próxima');
-  } else if (dateScore >= 50) {
-    reasons.push('~ Data similar');
-  }
-
-  // 3. Match por nome na descrição (até 20 pontos)
-  const txDesc = normalizeText(tx.description);
-  const entityName = normalizeText(entry.entity_name);
-  const entryDesc = normalizeText(entry.description);
+// Verificar se a regra de extrato casa com a transação
+function ruleMatchesTransaction(rule: ExtractRule, description: string | null): boolean {
+  if (!description || !rule.search_text) return false;
   
-  if (entityName && txDesc.includes(entityName)) {
-    score += 20;
-    reasons.push('✓ Nome encontrado');
-  } else if (entityName) {
-    // Tentar tokens do nome
-    const nameTokens = entityName.split(/\s+/).filter(t => t.length > 3);
-    const matchedTokens = nameTokens.filter(t => txDesc.includes(t));
-    if (matchedTokens.length > 0) {
-      score += Math.min(15, matchedTokens.length * 5);
-      reasons.push(`~ ${matchedTokens.length} palavra(s) do nome`);
-    }
-  }
+  const normalizedDesc = normalizeText(description);
+  const normalizedSearch = normalizeText(rule.search_text);
   
-  // 4. Match por descrição similar (até 5 pontos)
-  if (entryDesc && txDesc) {
-    const descTokens = entryDesc.split(/\s+/).filter(t => t.length > 3);
-    const matchedDesc = descTokens.filter(t => txDesc.includes(t));
-    if (matchedDesc.length > 0) {
-      score += Math.min(5, matchedDesc.length * 2);
-    }
-  }
-
-  // 5. Match por NSU/nosso número (bônus de 15 pontos)
-  if (tx.nsu && entry.inter_nosso_numero) {
-    if (tx.nsu.includes(entry.inter_nosso_numero) || 
-        entry.inter_nosso_numero.includes(tx.nsu)) {
-      score += 15;
-      reasons.push('✓ Nosso número');
-    }
-  }
-  if (tx.description && entry.inter_nosso_numero) {
-    if (tx.description.includes(entry.inter_nosso_numero)) {
-      score += 10;
-      reasons.push('✓ Nosso número na descrição');
-    }
-  }
-
-  // 6. Match por documento (bônus de 10 pontos)  
-  if (entry.document_number && tx.description) {
-    if (tx.description.includes(entry.document_number)) {
-      score += 10;
-      reasons.push('✓ Documento na descrição');
-    }
-  }
-
-  // Limitar a 100
-  const finalScore = Math.min(100, score);
-  
-  console.log(`[reconciliation-engine] Match: tx=${tx.id.slice(0,8)} entry=${entry.id.slice(0,8)} valor_tx=${txAmount.toFixed(2)} valor_entry=${entryAmount.toFixed(2)} score=${finalScore} valueScore=${valueScore} reasons=${reasons.join(', ')}`);
-  
-  return { score: finalScore, reasons, valueScore };
-}
-
-// Encontrar combinações de títulos que somam o valor
-function findCombinations(
-  target: number, 
-  entries: FinancialEntry[], 
-  maxItems: number = 10,
-  tolerance: number = 0.01
-): FinancialEntry[][] {
-  const results: FinancialEntry[][] = [];
-  
-  const backtrack = (start: number, remaining: number, current: FinancialEntry[]) => {
-    if (Math.abs(remaining) <= tolerance && current.length > 0) {
-      results.push([...current]);
-      return;
-    }
-    if (remaining < -tolerance || current.length >= maxItems) return;
-    
-    for (let i = start; i < entries.length && results.length < 20; i++) {
-      current.push(entries[i]);
-      backtrack(i + 1, remaining - entries[i].amount, current);
-      current.pop();
-    }
-  };
-  
-  backtrack(0, target, []);
-  return results;
+  return normalizedDesc.includes(normalizedSearch);
 }
 
 serve(async (req) => {
@@ -268,13 +150,7 @@ serve(async (req) => {
   }
 
   try {
-    const { 
-      company_id, 
-      tolerance_days = 7, 
-      tolerance_amount = 0.01,
-      max_suggestions = 50,
-      include_low_confidence = true
-    } = await req.json();
+    const { company_id, max_suggestions = 100 } = await req.json();
 
     if (!company_id) {
       throw new Error("company_id é obrigatório");
@@ -293,33 +169,38 @@ serve(async (req) => {
       .eq("company_id", company_id)
       .eq("is_reconciled", false)
       .order("transaction_date", { ascending: false })
-      .limit(1000);
+      .limit(500);
 
     if (txError) throw txError;
 
     console.log(`[reconciliation-engine] ${transactions?.length || 0} transações não conciliadas`);
 
-    // 2. Buscar títulos a receber não pagos
-    const { data: receivables, error: recError } = await supabase
+    // 2. Buscar regras de extrato ativas
+    const { data: rules } = await supabase
+      .from("extract_rules")
+      .select("*")
+      .eq("company_id", company_id)
+      .eq("is_active", true);
+
+    console.log(`[reconciliation-engine] ${rules?.length || 0} regras de extrato ativas`);
+
+    // 3. Buscar títulos a receber não pagos
+    const { data: receivables } = await supabase
       .from("accounts_receivable")
       .select("*, clientes(razao_social, nome_fantasia, cpf_cnpj)")
       .eq("company_id", company_id)
       .eq("is_paid", false)
       .is("reconciliation_id", null);
 
-    if (recError) throw recError;
-
-    // 3. Buscar títulos a pagar não pagos
-    const { data: payables, error: payError } = await supabase
+    // 4. Buscar títulos a pagar não pagos
+    const { data: payables } = await supabase
       .from("payables")
       .select("*, pessoas:supplier_id(razao_social, nome_fantasia, cpf_cnpj)")
       .eq("company_id", company_id)
       .eq("is_paid", false)
       .is("reconciliation_id", null);
 
-    if (payError) throw payError;
-
-    // Mapear para formato uniforme
+    // Mapear títulos financeiros
     const financialEntries: FinancialEntry[] = [
       ...(receivables || []).map(r => ({
         id: r.id,
@@ -329,11 +210,10 @@ serve(async (req) => {
         document_number: r.document_number,
         is_paid: r.is_paid || false,
         type: 'receivable' as const,
-        entity_name: (r.clientes as Record<string, string>)?.nome_fantasia || (r.clientes as Record<string, string>)?.razao_social || null,
+        entity_name: (r.clientes as Record<string, string>)?.nome_fantasia || 
+                     (r.clientes as Record<string, string>)?.razao_social || null,
         entity_document: (r.clientes as Record<string, string>)?.cpf_cnpj || null,
         inter_nosso_numero: r.inter_nosso_numero,
-        inter_boleto_id: r.inter_boleto_id,
-        pix_key: null
       })),
       ...(payables || []).map(p => ({
         id: p.id,
@@ -343,157 +223,249 @@ serve(async (req) => {
         document_number: p.document_number,
         is_paid: p.is_paid || false,
         type: 'payable' as const,
-        entity_name: (p.pessoas as Record<string, string>)?.nome_fantasia || (p.pessoas as Record<string, string>)?.razao_social || null,
+        entity_name: (p.pessoas as Record<string, string>)?.nome_fantasia || 
+                     (p.pessoas as Record<string, string>)?.razao_social || null,
         entity_document: (p.pessoas as Record<string, string>)?.cpf_cnpj || null,
         inter_nosso_numero: null,
-        inter_boleto_id: null,
-        pix_key: p.pix_key
       }))
     ];
 
     console.log(`[reconciliation-engine] ${financialEntries.length} títulos financeiros em aberto`);
 
     const suggestions: ReconciliationSuggestion[] = [];
+    const unmatchedTransactions: BankTransaction[] = [];
+    const ruleMatches: { transaction_id: string; rule_id: string }[] = [];
 
-    // 4. Analisar cada transação
+    // 5. Analisar cada transação
     for (const tx of transactions || []) {
       const isCredit = tx.type === "CREDIT" || tx.amount > 0;
       const txAmount = Math.abs(tx.amount);
+      let matched = false;
 
-      // Log para debug
-      console.log(`[reconciliation-engine] Analisando tx: ${tx.id}, valor: ${tx.amount}, tipo: ${tx.type}, isCredit: ${isCredit}`);
-
-      // Para débitos (saídas), buscar payables
-      // Para créditos (entradas), buscar receivables
-      // MAS também tentar match geral se não houver específico
-      let relevantEntries = financialEntries.filter(e => 
-        isCredit ? e.type === 'receivable' : e.type === 'payable'
-      );
-
-      // Se não encontrar do tipo correto, tenta com todos (pode ser lançamento manual)
-      if (relevantEntries.length === 0) {
-        console.log(`[reconciliation-engine] Nenhum título do tipo esperado, tentando todos`);
-        relevantEntries = financialEntries;
-      }
-
-      if (relevantEntries.length === 0) continue;
-
-      // 4.1 Tentar match exato (1:1)
-      const exactMatches: { entry: FinancialEntry; score: number; reasons: string[] }[] = [];
-      
-      for (const entry of relevantEntries) {
-        const { score, reasons, valueScore } = calculateMatchScore(tx, entry);
-        // CORREÇÃO: Score mínimo aumentado de 30 para 50
-        // E exige que valueScore seja > 0 (match de valor obrigatório)
-        const minScore = include_low_confidence ? 50 : 70;
-        if (score >= minScore && valueScore > 0) {
-          exactMatches.push({ entry, score, reasons });
-        }
-      }
-
-      // Ordenar por score
-      exactMatches.sort((a, b) => b.score - a.score);
-
-      // Adicionar melhor match exato
-      if (exactMatches.length > 0) {
-        const best = exactMatches[0];
-        const amountDiff = Math.abs(txAmount - best.entry.amount);
-        
-        suggestions.push({
-          transaction_id: tx.id,
-          entries: [{
-            id: best.entry.id,
-            type: best.entry.type,
-            amount_used: best.entry.amount
-          }],
-          confidence_score: best.score,
-          match_reasons: best.reasons,
-          match_type: amountDiff < 0.01 ? 'exact' : 'partial',
-          total_matched: best.entry.amount,
-          difference: txAmount - best.entry.amount
-        });
-      }
-
-      // 4.2 Tentar aglutinação por cliente/fornecedor
-      const groupedByEntity = new Map<string, FinancialEntry[]>();
-      
-      for (const entry of relevantEntries) {
-        const key = entry.entity_name || 'unknown';
-        if (!groupedByEntity.has(key)) {
-          groupedByEntity.set(key, []);
-        }
-        groupedByEntity.get(key)!.push(entry);
-      }
-
-      for (const [entityName, group] of groupedByEntity) {
-        if (entityName === 'unknown' || group.length < 2) continue;
-
-        const combinations = findCombinations(txAmount, group, 10, tolerance_amount);
-        
-        for (const combo of combinations) {
-          const total = combo.reduce((sum, e) => sum + e.amount, 0);
-          
-          // Calcular score médio da combinação
-          const scores = combo.map(e => calculateMatchScore(tx, e));
-          const avgScore = Math.round(scores.reduce((sum, s) => sum + s.score, 0) / scores.length);
-          
-          // Boost para aglutinação exata
-          const finalScore = Math.abs(total - txAmount) < 0.01 
-            ? Math.min(avgScore + 10, 100) 
-            : avgScore;
-
-          // CORREÇÃO: Score mínimo aumentado de 30 para 50
-          const minScore = include_low_confidence ? 50 : 70;
-          if (finalScore >= minScore) {
+      // 5.1 PRIMEIRO: Tentar match por REGRA DE EXTRATO
+      if (rules && rules.length > 0) {
+        for (const rule of rules) {
+          if (ruleMatchesTransaction(rule, tx.description)) {
+            console.log(`[reconciliation-engine] Regra "${rule.search_text}" casou com tx ${tx.id}`);
+            
+            // Regra casou - marcar para conciliação automática
+            ruleMatches.push({ transaction_id: tx.id, rule_id: rule.id });
+            
             suggestions.push({
               transaction_id: tx.id,
-              entries: combo.map(e => ({
-                id: e.id,
-                type: e.type,
-                amount_used: e.amount
-              })),
-              confidence_score: finalScore,
-              match_reasons: [`Aglutinação: ${combo.length} títulos de "${entityName}"`],
-              match_type: 'aggregation',
-              total_matched: total,
-              difference: txAmount - total
+              transaction: tx,
+              entries: [],
+              confidence_score: 100,
+              confidence_level: 'high',
+              match_reasons: [`✓ Regra de extrato: "${rule.search_text}"`],
+              match_type: 'rule',
+              total_matched: txAmount,
+              difference: 0,
+              rule_id: rule.id,
+              requires_review: false
             });
+            
+            matched = true;
+            break;
           }
         }
       }
+
+      if (matched) continue;
+
+      // 5.2 SEGUNDO: Tentar match por NOSSO NÚMERO (boletos Inter)
+      if (tx.nsu || tx.description) {
+        for (const entry of financialEntries) {
+          if (entry.inter_nosso_numero) {
+            const searchIn = `${tx.nsu || ''} ${tx.description || ''}`;
+            if (searchIn.includes(entry.inter_nosso_numero)) {
+              console.log(`[reconciliation-engine] Nosso número ${entry.inter_nosso_numero} encontrado em tx ${tx.id}`);
+              
+              suggestions.push({
+                transaction_id: tx.id,
+                transaction: tx,
+                entries: [{
+                  id: entry.id,
+                  type: entry.type,
+                  amount: entry.amount,
+                  entity_name: entry.entity_name,
+                  due_date: entry.due_date
+                }],
+                confidence_score: 98,
+                confidence_level: 'high',
+                match_reasons: [`✓ Nosso número: ${entry.inter_nosso_numero}`],
+                match_type: 'nosso_numero',
+                total_matched: entry.amount,
+                difference: txAmount - entry.amount,
+                requires_review: false
+              });
+              
+              matched = true;
+              break;
+            }
+          }
+        }
+      }
+
+      if (matched) continue;
+
+      // 5.3 TERCEIRO: Tentar match por VALOR EXATO + NOME NA DESCRIÇÃO
+      // Para débitos (saídas), buscar payables
+      // Para créditos (entradas), buscar receivables
+      const relevantEntries = financialEntries.filter(e => 
+        isCredit ? e.type === 'receivable' : e.type === 'payable'
+      );
+
+      for (const entry of relevantEntries) {
+        const amountDiff = Math.abs(txAmount - entry.amount);
+        
+        // Só considera se valor for EXATO (diferença < R$ 0.01)
+        if (amountDiff >= 0.01) continue;
+        
+        // Verificar se o nome do fornecedor está na descrição
+        const nameMatches = nameMatchesDescription(entry.entity_name, tx.description);
+        
+        if (nameMatches) {
+          console.log(`[reconciliation-engine] Match exato com nome: tx ${tx.id} -> entry ${entry.id} (${entry.entity_name})`);
+          
+          suggestions.push({
+            transaction_id: tx.id,
+            transaction: tx,
+            entries: [{
+              id: entry.id,
+              type: entry.type,
+              amount: entry.amount,
+              entity_name: entry.entity_name,
+              due_date: entry.due_date
+            }],
+            confidence_score: 95,
+            confidence_level: 'high',
+            match_reasons: [
+              '✓ Valor exato',
+              `✓ Nome "${entry.entity_name}" encontrado na descrição`
+            ],
+            match_type: 'exact_value_name',
+            total_matched: entry.amount,
+            difference: 0,
+            requires_review: false
+          });
+          
+          matched = true;
+          break;
+        }
+      }
+
+      if (matched) continue;
+
+      // 5.4 QUARTO: Match por VALOR EXATO apenas (baixa confiança)
+      // Só sugere se não tem nome diferente na descrição
+      const extractedName = extractNameFromDescription(tx.description);
+      
+      for (const entry of relevantEntries) {
+        const amountDiff = Math.abs(txAmount - entry.amount);
+        
+        // Só considera se valor for EXATO
+        if (amountDiff >= 0.01) continue;
+        
+        // Se extraiu um nome da descrição e é diferente do fornecedor, REJEITAR
+        if (extractedName && entry.entity_name) {
+          const normalizedExtracted = normalizeText(extractedName);
+          const normalizedEntity = normalizeText(entry.entity_name);
+          
+          // Verificar se os nomes são completamente diferentes
+          const entityTokens = normalizedEntity.split(/\s+/).filter(t => t.length > 2);
+          const extractedTokens = normalizedExtracted.split(/\s+/).filter(t => t.length > 2);
+          
+          let anyMatch = false;
+          for (const et of entityTokens) {
+            for (const xt of extractedTokens) {
+              if (et.includes(xt) || xt.includes(et)) {
+                anyMatch = true;
+                break;
+              }
+            }
+            if (anyMatch) break;
+          }
+          
+          if (!anyMatch) {
+            // Nomes são completamente diferentes - NÃO SUGERIR
+            console.log(`[reconciliation-engine] REJEITADO: Nome "${extractedName}" diferente de "${entry.entity_name}"`);
+            continue;
+          }
+        }
+        
+        // Valor exato sem nome identificado - baixa confiança
+        console.log(`[reconciliation-engine] Match por valor exato apenas: tx ${tx.id} -> entry ${entry.id}`);
+        
+        suggestions.push({
+          transaction_id: tx.id,
+          transaction: tx,
+          entries: [{
+            id: entry.id,
+            type: entry.type,
+            amount: entry.amount,
+            entity_name: entry.entity_name,
+            due_date: entry.due_date
+          }],
+          confidence_score: 60,
+          confidence_level: 'low',
+          match_reasons: [
+            '✓ Valor exato',
+            '? Nome não identificado na descrição'
+          ],
+          match_type: 'exact_value_only',
+          total_matched: entry.amount,
+          difference: 0,
+          requires_review: true
+        });
+        
+        matched = true;
+        break;
+      }
+
+      // 5.5 Se não encontrou match, adicionar como exceção
+      if (!matched) {
+        unmatchedTransactions.push(tx);
+      }
     }
 
-    // 5. Ordenar e limitar sugestões
+    // 6. Ordenar sugestões por confiança
     suggestions.sort((a, b) => b.confidence_score - a.confidence_score);
     const limitedSuggestions = suggestions.slice(0, max_suggestions);
 
-    // 6. Categorizar por nível de confiança
-    const highConfidence = limitedSuggestions.filter(s => s.confidence_score >= 95);
-    const mediumConfidence = limitedSuggestions.filter(s => s.confidence_score >= 70 && s.confidence_score < 95);
-    const lowConfidence = limitedSuggestions.filter(s => s.confidence_score < 70);
+    // 7. Categorizar por nível de confiança
+    const highConfidence = limitedSuggestions.filter(s => s.confidence_level === 'high');
+    const mediumConfidence = limitedSuggestions.filter(s => s.confidence_level === 'medium');
+    const lowConfidence = limitedSuggestions.filter(s => s.confidence_level === 'low');
 
-    console.log(`[reconciliation-engine] Sugestões geradas: ${limitedSuggestions.length}`);
-    console.log(`  - Alta confiança (≥95%): ${highConfidence.length}`);
-    console.log(`  - Média confiança (70-94%): ${mediumConfidence.length}`);
-    console.log(`  - Baixa confiança (<70%): ${lowConfidence.length}`);
+    console.log(`[reconciliation-engine] Resultado:`);
+    console.log(`  - Alta confiança: ${highConfidence.length}`);
+    console.log(`  - Média confiança: ${mediumConfidence.length}`);
+    console.log(`  - Baixa confiança: ${lowConfidence.length}`);
+    console.log(`  - Sem match (exceções): ${unmatchedTransactions.length}`);
 
     return new Response(
       JSON.stringify({
         success: true,
         data: {
           suggestions: limitedSuggestions,
+          unmatched_transactions: unmatchedTransactions.map(tx => ({
+            id: tx.id,
+            date: tx.transaction_date,
+            description: tx.description,
+            amount: tx.amount,
+            type: tx.type
+          })),
+          rule_matches: ruleMatches,
           summary: {
             total_suggestions: limitedSuggestions.length,
             high_confidence: highConfidence.length,
             medium_confidence: mediumConfidence.length,
             low_confidence: lowConfidence.length,
+            unmatched: unmatchedTransactions.length,
             transactions_analyzed: transactions?.length || 0,
-            financial_entries_analyzed: financialEntries.length
-          },
-          // IMPORTANTE: Lista de sugestões para confirmação humana
-          // A IA NÃO executa nenhuma conciliação automaticamente
-          pending_human_review: limitedSuggestions.length,
-          auto_executed: 0 // Sempre zero - conciliação requer confirmação
+            rules_active: rules?.length || 0
+          }
         }
       }),
       {
