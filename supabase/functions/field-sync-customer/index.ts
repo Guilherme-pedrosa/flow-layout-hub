@@ -50,8 +50,12 @@ function buildFieldControlPayload(record: CustomerRecord) {
     return phone.replace(/\D/g, '');
   };
 
+  // Prioriza nome_fantasia para diferenciar unidades do mesmo CNPJ
+  // Se não tiver nome_fantasia, usa razao_social
+  const displayName = record.nome_fantasia?.trim() || record.razao_social?.trim() || 'Cliente sem nome';
+  
   return {
-    name: record.razao_social || record.nome_fantasia || 'Cliente sem nome',
+    name: displayName,
     documentNumber: cleanDocument(record.cpf_cnpj),
     externalId: record.id,
     contact: {
