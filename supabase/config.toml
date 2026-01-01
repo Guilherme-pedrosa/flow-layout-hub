@@ -1,5 +1,8 @@
 project_id = "qxxhwzxxneciskhemqmi"
 
+[functions.sync-auvo-erp-field]
+verify_jwt = false
+
 [functions.analyze-and-generate-insights]
 verify_jwt = false
 
