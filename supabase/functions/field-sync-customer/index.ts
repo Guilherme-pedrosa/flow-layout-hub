@@ -186,16 +186,16 @@ serve(async (req) => {
       );
     }
 
-    // Modo 2: Sincronizar todos os clientes de uma empresa
+    // Modo 2: Sincronizar todas as pessoas de uma empresa (clientes, fornecedores, etc.)
     if (payload.sync_all && payload.company_id) {
       console.log(`[field-sync] Iniciando sync_all para company_id: ${payload.company_id}`);
       
-      // Buscar todos os clientes da empresa (tabela pessoas com is_cliente = true)
-      const { data: clientes, error: fetchError } = await supabase
+      // Buscar TODAS as pessoas ativas da empresa (clientes, fornecedores, transportadoras, etc.)
+      // Muitas vezes clientes são fornecedores e vice-versa
+      const { data: pessoas, error: fetchError } = await supabase
         .from('pessoas')
         .select('id, razao_social, nome_fantasia, cpf_cnpj, email, telefone, cep, logradouro, numero, bairro, complemento, cidade, estado, company_id')
         .eq('company_id', payload.company_id)
-        .eq('is_cliente', true)
         .eq('is_active', true);
 
       if (fetchError) {
@@ -205,25 +205,25 @@ serve(async (req) => {
         );
       }
 
-      if (!clientes || clientes.length === 0) {
+      if (!pessoas || pessoas.length === 0) {
         return new Response(
-          JSON.stringify({ success: true, message: 'Nenhum cliente encontrado', synced: 0 }),
+          JSON.stringify({ success: true, message: 'Nenhuma pessoa encontrada', synced: 0 }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
 
-      console.log(`[field-sync] Encontrados ${clientes.length} clientes para sincronizar`);
+      console.log(`[field-sync] Encontradas ${pessoas.length} pessoas para sincronizar`);
 
       const results = {
-        total: clientes.length,
+        total: pessoas.length,
         created: 0,
         updated: 0,
         errors: 0,
         details: [] as any[]
       };
 
-      for (const cliente of clientes) {
-        const result = await syncCustomerToField(cliente, apiKey, supabase);
+      for (const pessoa of pessoas) {
+        const result = await syncCustomerToField(pessoa, apiKey, supabase);
         
         if (result.success) {
           if (result.action === 'create') results.created++;
@@ -233,8 +233,8 @@ serve(async (req) => {
         }
         
         results.details.push({
-          wai_id: cliente.id,
-          nome: cliente.razao_social || cliente.nome_fantasia,
+          wai_id: pessoa.id,
+          nome: pessoa.razao_social || pessoa.nome_fantasia,
           ...result
         });
 
