@@ -40,6 +40,7 @@ interface StatusItem {
   financial_behavior: string;
   checkout_behavior: string;
   display_order: number;
+  opens_field_activity?: boolean;
 }
 
 interface StatusConfigListProps {
@@ -197,6 +198,7 @@ export function StatusConfigList({
                   <TableHead>Checkout</TableHead>
                   <TableHead>Reserva Estoque</TableHead>
                   <TableHead>Financeiro</TableHead>
+                  <TableHead>Field</TableHead>
                   <TableHead>Ativo</TableHead>
                   <TableHead className="w-8"></TableHead>
                 </TableRow>
@@ -230,6 +232,15 @@ export function StatusConfigList({
                     </TableCell>
                     <TableCell className="text-muted-foreground">
                       {FINANCIAL_LABELS[status.financial_behavior] || status.financial_behavior}
+                    </TableCell>
+                    <TableCell>
+                      {status.opens_field_activity ? (
+                        <Badge variant="default" className="bg-green-600">
+                          Abre OS
+                        </Badge>
+                      ) : (
+                        <span className="text-muted-foreground">-</span>
+                      )}
                     </TableCell>
                     <TableCell>
                       <Badge variant={status.is_active ? "default" : "secondary"}>

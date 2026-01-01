@@ -5972,6 +5972,7 @@ export type Database = {
           is_active: boolean
           is_default: boolean | null
           name: string
+          opens_field_activity: boolean | null
           stock_behavior: string
           updated_at: string
         }
@@ -5986,6 +5987,7 @@ export type Database = {
           is_active?: boolean
           is_default?: boolean | null
           name: string
+          opens_field_activity?: boolean | null
           stock_behavior?: string
           updated_at?: string
         }
@@ -6000,6 +6002,7 @@ export type Database = {
           is_active?: boolean
           is_default?: boolean | null
           name?: string
+          opens_field_activity?: boolean | null
           stock_behavior?: string
           updated_at?: string
         }
