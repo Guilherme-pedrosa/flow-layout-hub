@@ -29,12 +29,13 @@ interface CustomerRecord {
 interface SyncRequest {
   record?: CustomerRecord;
   sync_all?: boolean;
-  sync_pending?: boolean; // NOVO: só sincronizar os que ainda não foram
+  sync_pending?: boolean;
+  link_existing?: boolean; // Linkar clientes existentes no Field com ERP
   company_id?: string;
   customer_ids?: string[];
   filter_name?: string;
-  offset?: number; // Para paginação
-  limit?: number; // Limite por chamada
+  offset?: number;
+  limit?: number;
 }
 
 function cleanDocument(doc: string | undefined): string {
@@ -326,17 +327,51 @@ serve(async (req) => {
     if (payload.link_existing && payload.company_id) {
       console.log(`[field-sync] Buscando todos clientes do Field Control para linkar...`);
       
-      const allFieldResponse = await fetch(
-        `${FIELD_CONTROL_BASE_URL}/customers?limit=2000`,
-        { method: 'GET', headers: { 'X-Api-Key': apiKey } }
-      );
+      // Buscar clientes do Field com paginação
+      let allFieldCustomers: any[] = [];
+      let page = 1;
+      const pageSize = 100;
       
-      if (!allFieldResponse.ok) {
-        return new Response(JSON.stringify({ success: false, error: 'Erro ao buscar clientes do Field' }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      while (page <= 20) { // Limitar a 20 páginas (2000 clientes)
+        try {
+          const response = await fetch(
+            `${FIELD_CONTROL_BASE_URL}/customers?page=${page}&limit=${pageSize}`,
+            { method: 'GET', headers: { 'X-Api-Key': apiKey } }
+          );
+          
+          if (!response.ok) {
+            console.log(`[field-sync] Erro buscando página ${page}: ${response.status}`);
+            break;
+          }
+          
+          const data = await response.json();
+          
+          // A resposta pode ser um objeto com customers ou diretamente um array
+          const customers = Array.isArray(data) ? data : (data?.customers || data?.items || data?.data || []);
+          
+          if (!customers || customers.length === 0) {
+            console.log(`[field-sync] Página ${page}: sem dados, parando`);
+            break;
+          }
+          
+          allFieldCustomers = allFieldCustomers.concat(customers);
+          console.log(`[field-sync] Página ${page}: ${customers.length} clientes (total: ${allFieldCustomers.length})`);
+          
+          if (customers.length < pageSize) break;
+          page++;
+          
+          await new Promise(resolve => setTimeout(resolve, 50));
+        } catch (error) {
+          console.log(`[field-sync] Erro na paginação: ${error}`);
+          break;
+        }
       }
       
-      const fieldCustomers = await allFieldResponse.json();
-      console.log(`[field-sync] ${fieldCustomers.length} clientes encontrados no Field Control`);
+      console.log(`[field-sync] ${allFieldCustomers.length} clientes encontrados no Field Control`);
+      
+      if (allFieldCustomers.length === 0) {
+        return new Response(JSON.stringify({ success: false, error: 'Nenhum cliente encontrado no Field Control' }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
       
       // Buscar pessoas do ERP
       const { data: pessoas } = await supabase
@@ -352,7 +387,9 @@ serve(async (req) => {
       }
       
       let linked = 0;
-      for (const fc of fieldCustomers) {
+      let alreadyLinked = 0;
+      
+      for (const fc of allFieldCustomers) {
         const cleanDoc = cleanDocument(fc.documentNumber);
         const pessoaId = cnpjMap.get(cleanDoc);
         
@@ -375,16 +412,19 @@ serve(async (req) => {
             });
             linked++;
             console.log(`[field-sync] Linked: ${pessoaId} -> ${fc.id}`);
+          } else {
+            alreadyLinked++;
           }
         }
       }
       
-      return new Response(JSON.stringify({ success: true, field_total: fieldCustomers.length, linked }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-    }
-
-    // Modo 3: Sincronizar por IDs específicos
-
-      return new Response(JSON.stringify({ success: true, ...results }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      return new Response(JSON.stringify({ 
+        success: true, 
+        field_total: allFieldCustomers.length, 
+        erp_total: pessoas?.length || 0,
+        linked,
+        already_linked: alreadyLinked
+      }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
     // Modo 3: Sincronizar por filtro de nome
