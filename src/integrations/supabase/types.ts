@@ -4799,6 +4799,68 @@ export type Database = {
           },
         ]
       }
+      reconciliation_audit_log: {
+        Row: {
+          bank_transaction_id: string | null
+          company_id: string
+          created_at: string
+          event_data: Json | null
+          event_type: string
+          id: string
+          reconciliation_id: string | null
+          user_id: string | null
+        }
+        Insert: {
+          bank_transaction_id?: string | null
+          company_id: string
+          created_at?: string
+          event_data?: Json | null
+          event_type: string
+          id?: string
+          reconciliation_id?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          bank_transaction_id?: string | null
+          company_id?: string
+          created_at?: string
+          event_data?: Json | null
+          event_type?: string
+          id?: string
+          reconciliation_id?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reconciliation_audit_log_bank_transaction_id_fkey"
+            columns: ["bank_transaction_id"]
+            isOneToOne: false
+            referencedRelation: "bank_transactions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reconciliation_audit_log_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reconciliation_audit_log_reconciliation_id_fkey"
+            columns: ["reconciliation_id"]
+            isOneToOne: false
+            referencedRelation: "bank_reconciliations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reconciliation_audit_log_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       reconciliation_suggestions: {
         Row: {
           bank_transaction_id: string | null
