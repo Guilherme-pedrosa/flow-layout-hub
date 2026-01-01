@@ -3,83 +3,56 @@ import { useToast } from '@/hooks/use-toast';
 import { useCompany } from '@/contexts/CompanyContext';
 import { supabase } from '@/integrations/supabase/client';
 
-// URL do microserviço de NF-e (configurar no .env)
-const NFE_SERVICE_URL = import.meta.env.VITE_NFE_SERVICE_URL || 'http://localhost:3001';
-
-// Tipos
-export interface ConfigNFSe {
-  cnpj: string;
-  inscricaoMunicipal: string;
-  razaoSocial: string;
-  nomeFantasia?: string;
-  logradouro: string;
-  numero: string;
-  complemento?: string;
-  bairro: string;
-  codigoMunicipio: string;
-  municipio: string;
-  uf: string;
-  cep: string;
-  telefone?: string;
-  email?: string;
-  certificadoBase64: string;
-  certificadoSenha: string;
-  ambiente: 'producao' | 'homologacao';
-  serieNFSe: number;
-}
-
+// Tipos exportados para uso nas páginas
 export interface TomadorNFSe {
-  cpfCnpj: string;
-  inscricaoMunicipal?: string;
-  razaoSocial: string;
+  cpf?: string;
+  cnpj?: string;
+  razao_social: string;
   email?: string;
   telefone?: string;
   logradouro: string;
   numero: string;
   complemento?: string;
   bairro: string;
-  codigoMunicipio: string;
-  municipio: string;
+  codigo_municipio: string;
   uf: string;
   cep: string;
 }
 
 export interface ServicoNFSe {
-  codigoServico: string;
   discriminacao: string;
-  valorServicos: number;
-  valorDeducoes?: number;
-  valorPis?: number;
-  valorCofins?: number;
-  valorInss?: number;
-  valorIr?: number;
-  valorCsll?: number;
-  valorIss?: number;
-  aliquotaIss?: number;
-  issRetido: boolean;
-  codigoMunicipioIncidencia?: string;
+  valor_servicos: number;
+  aliquota?: number;
+  item_lista_servico?: string;
+  codigo_tributario_municipio?: string;
+  codigo_cnae?: string;
+  iss_retido?: boolean;
+  valor_deducoes?: number;
+  valor_pis?: number;
+  valor_cofins?: number;
+  valor_inss?: number;
+  valor_ir?: number;
+  valor_csll?: number;
 }
 
 export interface DadosNFSe {
   tomador: TomadorNFSe;
   servico: ServicoNFSe;
-  naturezaOperacao: number;
-  regimeEspecialTributacao?: number;
-  optanteSimplesNacional: boolean;
-  incentivadorCultural: boolean;
-  informacoesComplementares?: string;
+  natureza_operacao?: number;
+  natureza_operacao_texto?: string;
+  data_emissao?: string;
 }
 
 export interface RespostaNFSe {
-  sucesso: boolean;
-  status: string;
-  motivo?: string;
-  numeroNfse?: string;
-  codigoVerificacao?: string;
-  dataEmissao?: string;
-  linkNfse?: string;
-  xml?: string;
-  erros?: string[];
+  success: boolean;
+  nfse_id?: string;
+  referencia?: string;
+  status?: string;
+  numero?: string;
+  codigo_verificacao?: string;
+  url?: string;
+  error?: string;
+  erros?: any[];
 }
 
 export function useNFSeEmissor() {
@@ -89,134 +62,61 @@ export function useNFSeEmissor() {
   const { currentCompany } = useCompany();
 
   /**
-   * Busca a configuração de NFS-e da empresa atual
-   */
-  const getConfig = async (): Promise<ConfigNFSe | null> => {
-    if (!currentCompany?.id) {
-      setError('Empresa não selecionada');
-      return null;
-    }
-
-    try {
-      // Buscar configuração da empresa
-      const { data: configData, error: configError } = await supabase
-        .from('nfse_config')
-        .select('*')
-        .eq('company_id', currentCompany.id)
-        .single();
-
-      if (configError || !configData) {
-        setError('Configuração de NFS-e não encontrada. Configure primeiro em Configurações > NFS-e');
-        return null;
-      }
-
-      // Buscar certificado
-      const { data: certData, error: certError } = await supabase
-        .from('certificados_digitais')
-        .select('*')
-        .eq('company_id', currentCompany.id)
-        .maybeSingle();
-
-      if (certError || !certData) {
-        setError('Certificado digital não encontrado. Faça o upload em Configurações > Certificado Digital');
-        return null;
-      }
-
-      const ambiente = configData.ambiente === 'producao' ? 'producao' : 'homologacao';
-      const serieNfse = typeof configData.serie_nfse === 'number' ? configData.serie_nfse : parseInt(String(configData.serie_nfse)) || 1;
-
-      return {
-        cnpj: currentCompany.cnpj || '',
-        inscricaoMunicipal: configData.inscricao_municipal || '',
-        razaoSocial: currentCompany.razao_social || currentCompany.name,
-        nomeFantasia: currentCompany.name,
-        logradouro: (currentCompany as any).endereco || '',
-        numero: '',
-        complemento: '',
-        bairro: '',
-        codigoMunicipio: configData.codigo_municipio || '',
-        municipio: currentCompany.cidade || '',
-        uf: currentCompany.estado || '',
-        cep: (currentCompany as any).cep || '',
-        telefone: (currentCompany as any).telefone || '',
-        email: (currentCompany as any).email || '',
-        certificadoBase64: certData.certificado_base64 || '',
-        certificadoSenha: certData.senha || '',
-        ambiente,
-        serieNFSe: serieNfse
-      };
-    } catch (err: any) {
-      setError(err.message);
-      return null;
-    }
-  };
-
-  /**
-   * Emite uma NFS-e
+   * Emite uma NFS-e via Edge Function
    */
   const emitir = async (dados: DadosNFSe): Promise<RespostaNFSe> => {
+    if (!currentCompany?.id) {
+      const errorMsg = 'Empresa não selecionada';
+      setError(errorMsg);
+      toast({
+        title: 'Erro',
+        description: errorMsg,
+        variant: 'destructive'
+      });
+      return { success: false, error: errorMsg };
+    }
+
     setLoading(true);
     setError(null);
 
     try {
-      const config = await getConfig();
-      if (!config) {
-        return { sucesso: false, status: 'ERRO', motivo: error || 'Configuração não encontrada' };
-      }
-
-      // Buscar próximo número
-      const { data: ultimoNumero } = await supabase
-        .from('nfse_emitidas')
-        .select('numero')
-        .eq('company_id', currentCompany?.id)
-        .order('numero', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      const numeroAtual = typeof ultimoNumero?.numero === 'number' ? ultimoNumero.numero : 0;
-      const proximoNumero = numeroAtual + 1;
-
-      // Chamar API do microserviço
-      const response = await fetch(`${NFE_SERVICE_URL}/nfse/emitir`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ config, dados, numero: proximoNumero })
+      // Chamar Edge Function nfse-focus
+      const { data, error: fnError } = await supabase.functions.invoke('nfse-focus', {
+        body: {
+          action: 'emitir',
+          company_id: currentCompany.id,
+          data: {
+            tomador: dados.tomador,
+            servico: dados.servico,
+            natureza_operacao: dados.natureza_operacao || 1,
+            natureza_operacao_texto: dados.natureza_operacao_texto || 'Prestação de serviços',
+            data_emissao: dados.data_emissao || new Date().toISOString(),
+          }
+        }
       });
 
-      const resultado: RespostaNFSe = await response.json();
-
-      if (resultado.sucesso) {
-        // Salvar no banco
-        await supabase.from('nfse_emitidas').insert([{
-          company_id: currentCompany?.id,
-          referencia: `NFSE-${Date.now()}`,
-          numero: String(proximoNumero),
-          serie: String(config.serieNFSe),
-          chave_acesso: resultado.codigoVerificacao,
-          tomador_cpf_cnpj: dados.tomador.cpfCnpj,
-          tomador_nome: dados.tomador.razaoSocial,
-          valor_servicos: dados.servico.valorServicos,
-          valor_iss: dados.servico.valorIss,
-          codigo_servico: dados.servico.codigoServico,
-          discriminacao_servicos: dados.servico.discriminacao,
-          status: 'AUTORIZADA',
-          data_emissao: new Date().toISOString(),
-          xml_url: resultado.xml
-        }]);
-
-        toast({
-          title: 'NFS-e emitida com sucesso!',
-          description: `Número: ${resultado.numeroNfse}`,
-        });
-      } else {
-        toast({
-          title: 'Erro ao emitir NFS-e',
-          description: resultado.motivo,
-          variant: 'destructive'
-        });
+      if (fnError) {
+        throw new Error(fnError.message);
       }
 
-      return resultado;
+      if (data?.success) {
+        toast({
+          title: 'NFS-e processada!',
+          description: data.status === 'autorizado' 
+            ? `Número: ${data.data?.numero}` 
+            : 'Aguardando autorização da prefeitura...',
+        });
+      } else {
+        const errorMsg = data?.error || 'Erro ao emitir NFS-e';
+        toast({
+          title: 'Erro ao emitir NFS-e',
+          description: errorMsg,
+          variant: 'destructive'
+        });
+        setError(errorMsg);
+      }
+
+      return data as RespostaNFSe;
     } catch (err: any) {
       const errorMsg = err.message || 'Erro ao emitir NFS-e';
       setError(errorMsg);
@@ -225,34 +125,41 @@ export function useNFSeEmissor() {
         description: errorMsg,
         variant: 'destructive'
       });
-      return { sucesso: false, status: 'ERRO', motivo: errorMsg };
+      return { success: false, error: errorMsg };
     } finally {
       setLoading(false);
     }
   };
 
   /**
-   * Consulta uma NFS-e
+   * Consulta status de uma NFS-e
    */
-  const consultar = async (chaveAcesso: string): Promise<RespostaNFSe> => {
+  const consultar = async (referencia: string): Promise<RespostaNFSe> => {
+    if (!currentCompany?.id) {
+      return { success: false, error: 'Empresa não selecionada' };
+    }
+
     setLoading(true);
     setError(null);
 
     try {
-      const config = await getConfig();
-      if (!config) {
-        return { sucesso: false, status: 'ERRO', motivo: error || 'Configuração não encontrada' };
-      }
-
-      const response = await fetch(`${NFE_SERVICE_URL}/nfse/consultar/${chaveAcesso}`, {
-        method: 'GET',
-        headers: { 'Content-Type': 'application/json' },
+      const { data, error: fnError } = await supabase.functions.invoke('nfse-focus', {
+        body: {
+          action: 'consultar',
+          company_id: currentCompany.id,
+          referencia
+        }
       });
 
-      return await response.json();
+      if (fnError) {
+        throw new Error(fnError.message);
+      }
+
+      return data as RespostaNFSe;
     } catch (err: any) {
-      setError(err.message);
-      return { sucesso: false, status: 'ERRO', motivo: err.message };
+      const errorMsg = err.message || 'Erro ao consultar NFS-e';
+      setError(errorMsg);
+      return { success: false, error: errorMsg };
     } finally {
       setLoading(false);
     }
@@ -261,110 +168,99 @@ export function useNFSeEmissor() {
   /**
    * Cancela uma NFS-e
    */
-  const cancelar = async (chaveAcesso: string, justificativa: string): Promise<RespostaNFSe> => {
+  const cancelar = async (referencia: string, justificativa: string): Promise<RespostaNFSe> => {
+    if (!currentCompany?.id) {
+      return { success: false, error: 'Empresa não selecionada' };
+    }
+
+    if (!justificativa || justificativa.length < 15) {
+      const errorMsg = 'Justificativa deve ter no mínimo 15 caracteres';
+      toast({
+        title: 'Erro',
+        description: errorMsg,
+        variant: 'destructive'
+      });
+      return { success: false, error: errorMsg };
+    }
+
     setLoading(true);
     setError(null);
 
     try {
-      const config = await getConfig();
-      if (!config) {
-        return { sucesso: false, status: 'ERRO', motivo: error || 'Configuração não encontrada' };
-      }
-
-      if (justificativa.length < 15) {
-        return { sucesso: false, status: 'ERRO', motivo: 'Justificativa deve ter no mínimo 15 caracteres' };
-      }
-
-      const response = await fetch(`${NFE_SERVICE_URL}/nfse/cancelar`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ config, chaveAcesso, justificativa })
+      const { data, error: fnError } = await supabase.functions.invoke('nfse-focus', {
+        body: {
+          action: 'cancelar',
+          company_id: currentCompany.id,
+          referencia,
+          data: { justificativa }
+        }
       });
 
-      const resultado: RespostaNFSe = await response.json();
+      if (fnError) {
+        throw new Error(fnError.message);
+      }
 
-      if (resultado.sucesso) {
-        // Atualizar status no banco
-        await supabase
-          .from('nfse_emitidas')
-          .update({ status: 'CANCELADA', data_cancelamento: new Date().toISOString() })
-          .eq('chave_acesso', chaveAcesso);
-
+      if (data?.success) {
         toast({
-          title: 'NFS-e cancelada com sucesso!',
-        });
-      } else {
-        toast({
-          title: 'Erro ao cancelar NFS-e',
-          description: resultado.motivo,
-          variant: 'destructive'
+          title: 'NFS-e cancelada',
+          description: 'A nota foi cancelada com sucesso.',
         });
       }
 
-      return resultado;
+      return data as RespostaNFSe;
     } catch (err: any) {
-      setError(err.message);
-      return { sucesso: false, status: 'ERRO', motivo: err.message };
+      const errorMsg = err.message || 'Erro ao cancelar NFS-e';
+      setError(errorMsg);
+      toast({
+        title: 'Erro',
+        description: errorMsg,
+        variant: 'destructive'
+      });
+      return { success: false, error: errorMsg };
     } finally {
       setLoading(false);
     }
   };
 
   /**
-   * Valida dados antes de emitir
+   * Salva configuração de NFS-e
    */
-  const validar = async (dados: DadosNFSe): Promise<{ valido: boolean; erros: string[] }> => {
-    try {
-      const config = await getConfig();
-      if (!config) {
-        return { valido: false, erros: [error || 'Configuração não encontrada'] };
-      }
+  const salvarConfig = async (config: any): Promise<boolean> => {
+    if (!currentCompany?.id) {
+      toast({
+        title: 'Erro',
+        description: 'Empresa não selecionada',
+        variant: 'destructive'
+      });
+      return false;
+    }
 
-      const response = await fetch(`${NFE_SERVICE_URL}/nfse/validar`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ config, dados })
+    try {
+      const { data, error: fnError } = await supabase.functions.invoke('nfse-focus', {
+        body: {
+          action: 'config',
+          company_id: currentCompany.id,
+          data: config
+        }
       });
 
-      const resultado = await response.json();
-      return { valido: resultado.valido, erros: resultado.erros || [] };
+      if (fnError) {
+        throw new Error(fnError.message);
+      }
+
+      toast({
+        title: 'Configuração salva',
+        description: 'Configurações de NFS-e atualizadas com sucesso.',
+      });
+
+      return true;
     } catch (err: any) {
-      return { valido: false, erros: [err.message] };
-    }
-  };
-
-  /**
-   * Lista NFS-e emitidas
-   */
-  const listar = async (filtros?: { dataInicio?: string; dataFim?: string; status?: string }) => {
-    setLoading(true);
-
-    try {
-      let query = supabase
-        .from('nfse_emitidas')
-        .select('*')
-        .eq('company_id', currentCompany?.id)
-        .order('data_emissao', { ascending: false });
-
-      if (filtros?.dataInicio) {
-        query = query.gte('data_emissao', filtros.dataInicio);
-      }
-      if (filtros?.dataFim) {
-        query = query.lte('data_emissao', filtros.dataFim);
-      }
-      if (filtros?.status) {
-        query = query.eq('status', filtros.status);
-      }
-
-      const { data, error: queryError } = await query;
-
-      if (queryError) throw queryError;
-      return data || [];
-    } catch (err: any) {
-      setError(err.message);
-      return [];
-    } finally {
-      setLoading(false);
+      toast({
+        title: 'Erro',
+        description: err.message || 'Erro ao salvar configuração',
+        variant: 'destructive'
+      });
+      return false;
     }
   };
 
@@ -374,7 +270,6 @@ export function useNFSeEmissor() {
     emitir,
     consultar,
     cancelar,
-    validar,
-    listar
+    salvarConfig,
   };
 }

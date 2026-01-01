@@ -1,235 +1,197 @@
 import { useState } from 'react';
 import { useToast } from '@/hooks/use-toast';
+import { useCompany } from '@/contexts/CompanyContext';
+import { supabase } from '@/integrations/supabase/client';
 
-// Tipos
-export interface EmpresaConfigNFe {
-  cnpj: string;
-  razaoSocial: string;
-  nomeFantasia?: string;
-  inscricaoEstadual: string;
-  inscricaoMunicipal?: string;
-  cnae?: string;
-  regimeTributario: 1 | 2 | 3;
-  logradouro: string;
-  numero: string;
-  complemento?: string;
-  bairro: string;
-  codigoMunicipio: string;
-  municipio: string;
-  uf: string;
-  cep: string;
-  telefone?: string;
-  certificadoBase64: string;
-  certificadoSenha: string;
-  ambiente: 1 | 2;
-  serieNFe: number;
-  serieNFCe: number;
-}
-
+// Tipos exportados para uso nas páginas
 export interface DestinatarioNFe {
-  cpfCnpj: string;
+  cpf?: string;
+  cnpj?: string;
   nome: string;
-  inscricaoEstadual?: string;
+  inscricao_estadual?: string;
   email?: string;
   telefone?: string;
   logradouro: string;
   numero: string;
   complemento?: string;
   bairro: string;
-  codigoMunicipio: string;
+  codigo_municipio: string;
   municipio: string;
   uf: string;
   cep: string;
-  indIEDest: 1 | 2 | 9;
+  indicador_ie?: number; // 1=Contribuinte, 2=Isento, 9=Não contribuinte
 }
 
 export interface ItemNFe {
-  codigo: string;
+  numero_item: number;
+  codigo_produto: string;
   descricao: string;
   ncm: string;
   cfop: string;
-  unidade: string;
-  quantidade: number;
-  valorUnitario: number;
-  valorTotal: number;
-  valorDesconto?: number;
-  origem: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
-  cstIcms: string;
-  aliquotaIcms?: number;
-  baseCalculoIcms?: number;
-  valorIcms?: number;
-  cstPis: string;
-  cstCofins: string;
+  unidade_comercial: string;
+  quantidade_comercial: number;
+  valor_unitario_comercial: number;
+  valor_bruto: number;
+  valor_desconto?: number;
+  icms_origem: string; // 0=Nacional, 1=Estrangeira importação direta, etc
+  icms_situacao_tributaria: string; // CST ou CSOSN
+  icms_aliquota?: number;
+  icms_base_calculo?: number;
+  icms_valor?: number;
+  pis_situacao_tributaria: string;
+  cofins_situacao_tributaria: string;
 }
 
 export interface DadosNFe {
-  naturezaOperacao: string;
-  tipoOperacao: 0 | 1;
-  finalidade: 1 | 2 | 3 | 4;
-  consumidorFinal: 0 | 1;
-  presencaComprador: 0 | 1 | 2 | 3 | 4 | 5 | 9;
+  natureza_operacao: string;
+  tipo_documento?: number; // 0=Entrada, 1=Saída
+  finalidade_emissao?: number; // 1=Normal, 2=Complementar, 3=Ajuste, 4=Devolução
+  consumidor_final?: number; // 0=Normal, 1=Consumidor final
+  presenca_comprador?: number; // 0=Não se aplica, 1=Presencial, etc
   destinatario: DestinatarioNFe;
   itens: ItemNFe[];
-  valorProdutos: number;
-  valorFrete?: number;
-  valorSeguro?: number;
-  valorDesconto?: number;
-  valorOutrasDespesas?: number;
-  valorTotal: number;
-  transporte: {
-    modalidadeFrete: 0 | 1 | 2 | 3 | 4 | 9;
-    transportadora?: {
-      cnpjCpf?: string;
-      nome?: string;
-      inscricaoEstadual?: string;
-      endereco?: string;
-      municipio?: string;
-      uf?: string;
-    };
-  };
-  pagamentos: {
-    indicadorPagamento: 0 | 1;
-    formaPagamento: string;
-    valor: number;
-  }[];
-  informacoesComplementares?: string;
-  nfeReferenciada?: string[];
+  valor_produtos: number;
+  valor_frete?: number;
+  valor_seguro?: number;
+  valor_desconto?: number;
+  valor_outras_despesas?: number;
+  valor_total: number;
+  modalidade_frete?: number; // 0=Emitente, 1=Destinatário, 2=Terceiros, 9=Sem frete
+  informacoes_complementares?: string;
+  data_emissao?: string;
 }
 
-export interface RespostaEmissao {
-  sucesso: boolean;
-  status: string;
-  motivo?: string;
-  chaveAcesso?: string;
+export interface RespostaNFe {
+  success: boolean;
+  nfe_id?: string;
+  referencia?: string;
+  status?: string;
+  chave_acesso?: string;
   protocolo?: string;
   numero?: number;
   serie?: number;
-  dataEmissao?: string;
-  dataAutorizacao?: string;
-  xml?: string;
-  xmlBase64?: string;
-  erros?: string[];
+  danfe_url?: string;
+  xml_url?: string;
+  error?: string;
+  erros?: any[];
 }
-
-// URL do serviço de NF-e (configurar no .env)
-const NFE_SERVICE_URL = import.meta.env.VITE_NFE_SERVICE_URL || 'http://localhost:3001';
-const NFE_API_KEY = import.meta.env.VITE_NFE_API_KEY || '';
 
 export function useNFeEmissor() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
-
-  const makeRequest = async (endpoint: string, data: any) => {
-    const response = await fetch(`${NFE_SERVICE_URL}${endpoint}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-API-Key': NFE_API_KEY
-      },
-      body: JSON.stringify(data)
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.error || 'Erro na requisição');
-    }
-
-    return response.json();
-  };
+  const { currentCompany } = useCompany();
 
   /**
-   * Consulta status do serviço SEFAZ
+   * Emite uma NF-e via Edge Function
    */
-  const consultarStatusServico = async (config: EmpresaConfigNFe) => {
-    setLoading(true);
-    setError(null);
-    
-    try {
-      const resultado = await makeRequest('/nfe/status', { config });
-      
-      if (resultado.online) {
-        toast({
-          title: 'SEFAZ Online',
-          description: resultado.motivo,
-        });
-      } else {
-        toast({
-          title: 'SEFAZ Offline',
-          description: resultado.motivo,
-          variant: 'destructive'
-        });
-      }
-      
-      return resultado;
-    } catch (err: any) {
-      setError(err.message);
+  const emitirNFe = async (dados: DadosNFe): Promise<RespostaNFe> => {
+    if (!currentCompany?.id) {
+      const errorMsg = 'Empresa não selecionada';
+      setError(errorMsg);
       toast({
         title: 'Erro',
-        description: err.message,
+        description: errorMsg,
         variant: 'destructive'
       });
-      throw err;
+      return { success: false, error: errorMsg };
+    }
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      // Chamar Edge Function nfe-focus
+      const { data, error: fnError } = await supabase.functions.invoke('nfe-focus', {
+        body: {
+          action: 'emitir',
+          company_id: currentCompany.id,
+          data: {
+            natureza_operacao: dados.natureza_operacao,
+            tipo_documento: dados.tipo_documento ?? 1,
+            finalidade_emissao: dados.finalidade_emissao ?? 1,
+            consumidor_final: dados.consumidor_final ?? 1,
+            presenca_comprador: dados.presenca_comprador ?? 1,
+            destinatario: dados.destinatario,
+            itens: dados.itens,
+            valor_produtos: dados.valor_produtos,
+            valor_frete: dados.valor_frete || 0,
+            valor_seguro: dados.valor_seguro || 0,
+            valor_desconto: dados.valor_desconto || 0,
+            valor_outras_despesas: dados.valor_outras_despesas || 0,
+            valor_total: dados.valor_total,
+            modalidade_frete: dados.modalidade_frete ?? 9,
+            informacoes_complementares: dados.informacoes_complementares,
+            data_emissao: dados.data_emissao || new Date().toISOString(),
+          }
+        }
+      });
+
+      if (fnError) {
+        throw new Error(fnError.message);
+      }
+
+      if (data?.success) {
+        toast({
+          title: 'NF-e processada!',
+          description: data.chave_acesso 
+            ? `Chave: ${data.chave_acesso}` 
+            : 'Aguardando autorização da SEFAZ...',
+        });
+      } else {
+        const errorMsg = data?.error || 'Erro ao emitir NF-e';
+        toast({
+          title: 'Erro ao emitir NF-e',
+          description: errorMsg,
+          variant: 'destructive'
+        });
+        setError(errorMsg);
+      }
+
+      return data as RespostaNFe;
+    } catch (err: any) {
+      const errorMsg = err.message || 'Erro ao emitir NF-e';
+      setError(errorMsg);
+      toast({
+        title: 'Erro',
+        description: errorMsg,
+        variant: 'destructive'
+      });
+      return { success: false, error: errorMsg };
     } finally {
       setLoading(false);
     }
   };
 
   /**
-   * Emite uma NF-e
+   * Consulta status de uma NF-e
    */
-  const emitirNFe = async (config: EmpresaConfigNFe, dados: DadosNFe, numero: number, serie?: number): Promise<RespostaEmissao> => {
-    setLoading(true);
-    setError(null);
-    
-    try {
-      const resultado = await makeRequest('/nfe/emitir', { config, dados, numero, serie });
-      
-      if (resultado.sucesso) {
-        toast({
-          title: 'NF-e Emitida',
-          description: `Nota ${numero} autorizada. Chave: ${resultado.chaveAcesso}`,
-        });
-      } else {
-        toast({
-          title: 'Erro na Emissão',
-          description: resultado.motivo || 'Erro desconhecido',
-          variant: 'destructive'
-        });
-      }
-      
-      return resultado;
-    } catch (err: any) {
-      setError(err.message);
-      toast({
-        title: 'Erro',
-        description: err.message,
-        variant: 'destructive'
-      });
-      throw err;
-    } finally {
-      setLoading(false);
+  const consultarNFe = async (referencia: string): Promise<RespostaNFe> => {
+    if (!currentCompany?.id) {
+      return { success: false, error: 'Empresa não selecionada' };
     }
-  };
 
-  /**
-   * Consulta uma NF-e pela chave de acesso
-   */
-  const consultarNFe = async (config: EmpresaConfigNFe, chaveAcesso: string) => {
     setLoading(true);
     setError(null);
-    
+
     try {
-      const resultado = await makeRequest('/nfe/consultar', { config, chaveAcesso });
-      return resultado;
-    } catch (err: any) {
-      setError(err.message);
-      toast({
-        title: 'Erro',
-        description: err.message,
-        variant: 'destructive'
+      const { data, error: fnError } = await supabase.functions.invoke('nfe-focus', {
+        body: {
+          action: 'consultar',
+          company_id: currentCompany.id,
+          referencia
+        }
       });
-      throw err;
+
+      if (fnError) {
+        throw new Error(fnError.message);
+      }
+
+      return data as RespostaNFe;
+    } catch (err: any) {
+      const errorMsg = err.message || 'Erro ao consultar NF-e';
+      setError(errorMsg);
+      return { success: false, error: errorMsg };
     } finally {
       setLoading(false);
     }
@@ -238,35 +200,55 @@ export function useNFeEmissor() {
   /**
    * Cancela uma NF-e
    */
-  const cancelarNFe = async (config: EmpresaConfigNFe, chaveAcesso: string, justificativa: string, protocolo: string) => {
-    setLoading(true);
-    setError(null);
-    
-    try {
-      const resultado = await makeRequest('/nfe/cancelar', { config, chaveAcesso, justificativa, protocolo });
-      
-      if (resultado.sucesso) {
-        toast({
-          title: 'NF-e Cancelada',
-          description: `Nota cancelada com sucesso. Protocolo: ${resultado.protocolo}`,
-        });
-      } else {
-        toast({
-          title: 'Erro no Cancelamento',
-          description: resultado.motivo || 'Erro desconhecido',
-          variant: 'destructive'
-        });
-      }
-      
-      return resultado;
-    } catch (err: any) {
-      setError(err.message);
+  const cancelarNFe = async (referencia: string, justificativa: string): Promise<RespostaNFe> => {
+    if (!currentCompany?.id) {
+      return { success: false, error: 'Empresa não selecionada' };
+    }
+
+    if (!justificativa || justificativa.length < 15) {
+      const errorMsg = 'Justificativa deve ter no mínimo 15 caracteres';
       toast({
         title: 'Erro',
-        description: err.message,
+        description: errorMsg,
         variant: 'destructive'
       });
-      throw err;
+      return { success: false, error: errorMsg };
+    }
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      const { data, error: fnError } = await supabase.functions.invoke('nfe-focus', {
+        body: {
+          action: 'cancelar',
+          company_id: currentCompany.id,
+          referencia,
+          data: { justificativa }
+        }
+      });
+
+      if (fnError) {
+        throw new Error(fnError.message);
+      }
+
+      if (data?.success) {
+        toast({
+          title: 'NF-e cancelada',
+          description: 'A nota foi cancelada com sucesso.',
+        });
+      }
+
+      return data as RespostaNFe;
+    } catch (err: any) {
+      const errorMsg = err.message || 'Erro ao cancelar NF-e';
+      setError(errorMsg);
+      toast({
+        title: 'Erro',
+        description: errorMsg,
+        variant: 'destructive'
+      });
+      return { success: false, error: errorMsg };
     } finally {
       setLoading(false);
     }
@@ -275,180 +257,109 @@ export function useNFeEmissor() {
   /**
    * Emite carta de correção
    */
-  const emitirCartaCorrecao = async (config: EmpresaConfigNFe, chaveAcesso: string, correcao: string, sequencia?: number) => {
-    setLoading(true);
-    setError(null);
-    
-    try {
-      const resultado = await makeRequest('/nfe/carta-correcao', { config, chaveAcesso, correcao, sequencia });
-      
-      if (resultado.sucesso) {
-        toast({
-          title: 'Carta de Correção Emitida',
-          description: `Correção registrada. Protocolo: ${resultado.protocolo}`,
-        });
-      } else {
-        toast({
-          title: 'Erro na Carta de Correção',
-          description: resultado.motivo || 'Erro desconhecido',
-          variant: 'destructive'
-        });
-      }
-      
-      return resultado;
-    } catch (err: any) {
-      setError(err.message);
+  const cartaCorrecao = async (referencia: string, correcao: string): Promise<RespostaNFe> => {
+    if (!currentCompany?.id) {
+      return { success: false, error: 'Empresa não selecionada' };
+    }
+
+    if (!correcao || correcao.length < 15) {
+      const errorMsg = 'Correção deve ter no mínimo 15 caracteres';
       toast({
         title: 'Erro',
-        description: err.message,
+        description: errorMsg,
         variant: 'destructive'
       });
-      throw err;
-    } finally {
-      setLoading(false);
+      return { success: false, error: errorMsg };
     }
-  };
 
-  /**
-   * Inutiliza numeração
-   */
-  const inutilizarNumeracao = async (config: EmpresaConfigNFe, serie: number, numeroInicial: number, numeroFinal: number, justificativa: string) => {
     setLoading(true);
     setError(null);
-    
-    try {
-      const resultado = await makeRequest('/nfe/inutilizar', { config, serie, numeroInicial, numeroFinal, justificativa });
-      
-      if (resultado.sucesso) {
-        toast({
-          title: 'Numeração Inutilizada',
-          description: `Números ${numeroInicial} a ${numeroFinal} inutilizados.`,
-        });
-      } else {
-        toast({
-          title: 'Erro na Inutilização',
-          description: resultado.motivo || 'Erro desconhecido',
-          variant: 'destructive'
-        });
-      }
-      
-      return resultado;
-    } catch (err: any) {
-      setError(err.message);
-      toast({
-        title: 'Erro',
-        description: err.message,
-        variant: 'destructive'
-      });
-      throw err;
-    } finally {
-      setLoading(false);
-    }
-  };
 
-  /**
-   * Gera DANFE (PDF)
-   */
-  const gerarDanfe = async (chaveAcesso: string): Promise<string> => {
-    setLoading(true);
-    setError(null);
-    
     try {
-      const response = await fetch(`${NFE_SERVICE_URL}/danfe/${chaveAcesso}/base64`, {
-        headers: {
-          'X-API-Key': NFE_API_KEY
+      const { data, error: fnError } = await supabase.functions.invoke('nfe-focus', {
+        body: {
+          action: 'carta_correcao',
+          company_id: currentCompany.id,
+          referencia,
+          data: { correcao }
         }
       });
 
-      if (!response.ok) {
-        throw new Error('Erro ao gerar DANFE');
+      if (fnError) {
+        throw new Error(fnError.message);
       }
 
-      const resultado = await response.json();
-      return resultado.pdfBase64;
+      if (data?.success) {
+        toast({
+          title: 'Carta de correção emitida',
+          description: 'A carta de correção foi registrada com sucesso.',
+        });
+      }
+
+      return data as RespostaNFe;
     } catch (err: any) {
-      setError(err.message);
+      const errorMsg = err.message || 'Erro ao emitir carta de correção';
+      setError(errorMsg);
       toast({
         title: 'Erro',
-        description: err.message,
+        description: errorMsg,
         variant: 'destructive'
       });
-      throw err;
+      return { success: false, error: errorMsg };
     } finally {
       setLoading(false);
     }
   };
 
   /**
-   * Abre DANFE em nova aba
+   * Salva configuração de NF-e
    */
-  const abrirDanfe = (chaveAcesso: string) => {
-    window.open(`${NFE_SERVICE_URL}/danfe/${chaveAcesso}?api_key=${NFE_API_KEY}`, '_blank');
-  };
-
-  /**
-   * Download do XML
-   */
-  const downloadXml = (chaveAcesso: string) => {
-    window.open(`${NFE_SERVICE_URL}/nfe/xml/${chaveAcesso}?api_key=${NFE_API_KEY}`, '_blank');
-  };
-
-  /**
-   * Upload de certificado digital
-   */
-  const uploadCertificado = async (file: File): Promise<{ certificadoBase64: string; nomeArquivo: string }> => {
-    setLoading(true);
-    setError(null);
-    
-    try {
-      const formData = new FormData();
-      formData.append('certificado', file);
-
-      const response = await fetch(`${NFE_SERVICE_URL}/nfe/upload-certificado`, {
-        method: 'POST',
-        headers: {
-          'X-API-Key': NFE_API_KEY
-        },
-        body: formData
-      });
-
-      if (!response.ok) {
-        throw new Error('Erro ao fazer upload do certificado');
-      }
-
-      const resultado = await response.json();
-      
-      toast({
-        title: 'Certificado Carregado',
-        description: `Arquivo ${resultado.nomeArquivo} carregado com sucesso.`,
-      });
-      
-      return resultado;
-    } catch (err: any) {
-      setError(err.message);
+  const salvarConfig = async (config: any): Promise<boolean> => {
+    if (!currentCompany?.id) {
       toast({
         title: 'Erro',
-        description: err.message,
+        description: 'Empresa não selecionada',
         variant: 'destructive'
       });
-      throw err;
-    } finally {
-      setLoading(false);
+      return false;
+    }
+
+    try {
+      const { data, error: fnError } = await supabase.functions.invoke('nfe-focus', {
+        body: {
+          action: 'config',
+          company_id: currentCompany.id,
+          data: config
+        }
+      });
+
+      if (fnError) {
+        throw new Error(fnError.message);
+      }
+
+      toast({
+        title: 'Configuração salva',
+        description: 'Configurações de NF-e atualizadas com sucesso.',
+      });
+
+      return true;
+    } catch (err: any) {
+      toast({
+        title: 'Erro',
+        description: err.message || 'Erro ao salvar configuração',
+        variant: 'destructive'
+      });
+      return false;
     }
   };
 
   return {
     loading,
     error,
-    consultarStatusServico,
     emitirNFe,
     consultarNFe,
     cancelarNFe,
-    emitirCartaCorrecao,
-    inutilizarNumeracao,
-    gerarDanfe,
-    abrirDanfe,
-    downloadXml,
-    uploadCertificado
+    cartaCorrecao,
+    salvarConfig,
   };
 }
