@@ -68,6 +68,13 @@ import Etiquetas from "./pages/produtos/Etiquetas";
 import Categorias from "./pages/produtos/Categorias";
 import Localizacoes from "./pages/produtos/Localizacoes";
 
+// Notas Fiscais
+import NotasFiscaisPage from "./pages/notas-fiscais/NotasFiscaisPage";
+import EmitirNFePage from "./pages/notas-fiscais/EmitirNFePage";
+import NotasFiscaisServicoPage from "./pages/notas-fiscais/NotasFiscaisServicoPage";
+import EmitirNFSePage from "./pages/notas-fiscais/EmitirNFSePage";
+import ConfiguracaoNFe from "./pages/configuracoes/ConfiguracaoNFe";
+
 // Configurações
 import Empresa from "./pages/configuracoes/Empresa";
 import Permissoes from "./pages/configuracoes/Permissoes";
@@ -119,6 +126,15 @@ const App = () => (
             
             {/* Faturamento */}
             <Route path="/faturar-os" element={<FaturarOS />} />
+            
+            {/* Notas Fiscais */}
+            <Route path="/notas-fiscais" element={<NotasFiscaisPage />} />
+            <Route path="/notas-fiscais/adicionar" element={<EmitirNFePage />} />
+            <Route path="/notas-fiscais/:id" element={<EmitirNFePage />} />
+            <Route path="/notas-fiscais-servico" element={<NotasFiscaisServicoPage />} />
+            <Route path="/notas-fiscais-servico/adicionar" element={<EmitirNFSePage />} />
+            <Route path="/notas-fiscais-servico/:id" element={<EmitirNFSePage />} />
+            <Route path="/configuracoes/nfe" element={<ConfiguracaoNFe />} />
             
             {/* Financeiro */}
             <Route path="/financeiro" element={<DashboardFinanceiro />} />

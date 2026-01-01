@@ -106,6 +106,14 @@ const menuGroups: MenuGroup[] = [
     ],
   },
   {
+    label: "Notas Fiscais",
+    items: [
+      { title: "NF-e (Produtos)", icon: FileText, href: "/notas-fiscais" },
+      { title: "NFS-e (Serviços)", icon: FileText, href: "/notas-fiscais-servico" },
+      { title: "Configurações NF", icon: UserCog, href: "/configuracoes/nfe" },
+    ],
+  },
+  {
     label: "Compras",
     items: [
       { title: "Pedidos de Compra", icon: FileSpreadsheet, href: "/pedidos-compra" },
