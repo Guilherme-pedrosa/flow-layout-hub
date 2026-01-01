@@ -9,15 +9,13 @@ import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
 import { useCompany } from '@/contexts/CompanyContext';
 import { supabase } from '@/integrations/supabase/client';
-import { Settings, FileText, CheckCircle, XCircle, Loader2, Key } from 'lucide-react';
+import { Settings, FileText, CheckCircle, XCircle, Loader2, Key, AlertTriangle } from 'lucide-react';
 import { PageHeader } from '@/components/shared';
 
 export default function ConfiguracaoNFe() {
   const { toast } = useToast();
   const { currentCompany } = useCompany();
   const [loading, setLoading] = useState(false);
-  const [focusToken, setFocusToken] = useState('');
-  const [tokenValido, setTokenValido] = useState(false);
   
   const [configNfe, setConfigNfe] = useState({
     ambiente: 'homologacao',
@@ -27,6 +25,8 @@ export default function ConfiguracaoNFe() {
     regime_tributario: 'simples_nacional',
     natureza_operacao_padrao: 'Venda de mercadoria',
     cfop_padrao: '5102',
+    csc_id: '',
+    csc_token: '',
   });
 
   const [configNfse, setConfigNfse] = useState({
@@ -37,12 +37,16 @@ export default function ConfiguracaoNFe() {
     codigo_municipio: '5201108',
     regime_tributacao: '6',
     optante_simples: true,
+    cnae: '',
+    item_lista_servico: '',
+    aliquota_iss: 5,
   });
 
   const [certificadoInfo, setCertificadoInfo] = useState<{
     validade?: string;
     razao_social?: string;
-  } | null>(null);
+    configurado: boolean;
+  }>({ configurado: false });
 
   useEffect(() => {
     if (currentCompany?.id) {
@@ -60,7 +64,6 @@ export default function ConfiguracaoNFe() {
         .maybeSingle();
 
       if (nfeData) {
-        setFocusToken(nfeData.focus_token || '');
         setConfigNfe({
           ambiente: nfeData.ambiente || 'homologacao',
           serie_nfe: parseInt(String(nfeData.serie_nfe)) || 1,
@@ -69,10 +72,9 @@ export default function ConfiguracaoNFe() {
           regime_tributario: nfeData.regime_tributario || 'simples_nacional',
           natureza_operacao_padrao: nfeData.natureza_operacao_padrao || 'Venda de mercadoria',
           cfop_padrao: nfeData.cfop_padrao || '5102',
+          csc_id: nfeData.csc_id || '',
+          csc_token: nfeData.csc_token || '',
         });
-        if (nfeData.focus_token) {
-          setTokenValido(true);
-        }
       }
 
       // Carregar config NFS-e
@@ -91,6 +93,9 @@ export default function ConfiguracaoNFe() {
           codigo_municipio: nfseData.codigo_municipio || '5201108',
           regime_tributacao: nfseData.regime_tributacao || '6',
           optante_simples: nfseData.optante_simples ?? true,
+          cnae: nfseData.cnae || '',
+          item_lista_servico: nfseData.item_lista_servico || '',
+          aliquota_iss: nfseData.aliquota_iss || 5,
         });
       }
 
@@ -101,10 +106,11 @@ export default function ConfiguracaoNFe() {
         .eq('company_id', currentCompany?.id)
         .maybeSingle();
 
-      if (certData?.validade) {
+      if (certData) {
         setCertificadoInfo({
-          validade: certData.validade,
+          validade: certData.validade || undefined,
           razao_social: certData.razao_social || undefined,
+          configurado: true,
         });
       }
     } catch (error) {
@@ -112,11 +118,11 @@ export default function ConfiguracaoNFe() {
     }
   };
 
-  const validarToken = async () => {
-    if (!focusToken) {
+  const salvarConfigNfe = async () => {
+    if (!configNfe.inscricao_estadual) {
       toast({
         title: 'Erro',
-        description: 'Informe o token Focus NFe',
+        description: 'Inscrição Estadual é obrigatória para NF-e',
         variant: 'destructive',
       });
       return;
@@ -124,46 +130,10 @@ export default function ConfiguracaoNFe() {
 
     setLoading(true);
     try {
-      const response = await supabase.functions.invoke('focusnfe', {
-        body: {
-          action: 'validar_token',
-          token: focusToken,
-        },
-      });
-
-      if (response.data?.success) {
-        setTokenValido(true);
-        toast({
-          title: 'Token válido',
-          description: 'O token Focus NFe foi validado com sucesso.',
-        });
-      } else {
-        setTokenValido(false);
-        toast({
-          title: 'Token inválido',
-          description: response.data?.error || 'Não foi possível validar o token.',
-          variant: 'destructive',
-        });
-      }
-    } catch (error: any) {
-      toast({
-        title: 'Erro',
-        description: error.message,
-        variant: 'destructive',
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const salvarConfigNfe = async () => {
-    setLoading(true);
-    try {
       const { error } = await supabase
         .from('nfe_config')
         .upsert({
           company_id: currentCompany?.id,
-          focus_token: focusToken,
           ambiente: configNfe.ambiente,
           serie_nfe: String(configNfe.serie_nfe),
           proximo_numero: configNfe.proximo_numero,
@@ -171,6 +141,8 @@ export default function ConfiguracaoNFe() {
           regime_tributario: configNfe.regime_tributario,
           natureza_operacao_padrao: configNfe.natureza_operacao_padrao,
           cfop_padrao: configNfe.cfop_padrao,
+          csc_id: configNfe.csc_id,
+          csc_token: configNfe.csc_token,
           updated_at: new Date().toISOString(),
         }, { onConflict: 'company_id' });
 
@@ -214,6 +186,9 @@ export default function ConfiguracaoNFe() {
           codigo_municipio: configNfse.codigo_municipio,
           regime_tributacao: configNfse.regime_tributacao,
           optante_simples: configNfse.optante_simples,
+          cnae: configNfse.cnae,
+          item_lista_servico: configNfse.item_lista_servico,
+          aliquota_iss: configNfse.aliquota_iss,
           updated_at: new Date().toISOString(),
         }, { onConflict: 'company_id' });
 
@@ -302,8 +277,21 @@ export default function ConfiguracaoNFe() {
     <div className="space-y-6">
       <PageHeader
         title="Configuração Fiscal"
-        description="Configure a emissão de NF-e e NFS-e"
+        description="Configure a emissão de NF-e e NFS-e - Comunicação direta com SEFAZ e Prefeitura"
       />
+
+      {/* Aviso sobre certificado */}
+      {!certificadoInfo.configurado && (
+        <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg flex items-start gap-3">
+          <AlertTriangle className="h-5 w-5 text-yellow-600 mt-0.5" />
+          <div>
+            <p className="font-medium text-yellow-800">Certificado Digital não configurado</p>
+            <p className="text-sm text-yellow-700">
+              Para emitir NF-e e NFS-e, você precisa fazer upload do certificado digital A1 na aba "Certificado".
+            </p>
+          </div>
+        </div>
+      )}
 
       <Tabs defaultValue="nfe" className="space-y-6">
         <TabsList className="grid w-full grid-cols-3">
@@ -325,31 +313,10 @@ export default function ConfiguracaoNFe() {
           <Card>
             <CardHeader>
               <CardTitle>Configurações NF-e</CardTitle>
-              <CardDescription>Nota Fiscal Eletrônica de Produto</CardDescription>
+              <CardDescription>Nota Fiscal Eletrônica de Produto - Comunicação direta com SEFAZ-GO</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Token Focus NFe</Label>
-                  <div className="flex gap-2">
-                    <Input
-                      type="password"
-                      value={focusToken}
-                      onChange={(e) => setFocusToken(e.target.value)}
-                      placeholder="Token da API Focus NFe"
-                    />
-                    <Button variant="outline" onClick={validarToken} disabled={loading}>
-                      {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Validar'}
-                    </Button>
-                  </div>
-                  {tokenValido && (
-                    <div className="flex items-center gap-1 text-green-600 text-sm">
-                      <CheckCircle className="h-4 w-4" />
-                      Token válido
-                    </div>
-                  )}
-                </div>
-
                 <div className="space-y-2">
                   <Label>Ambiente</Label>
                   <Select
@@ -360,10 +327,18 @@ export default function ConfiguracaoNFe() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="homologacao">Homologação</SelectItem>
+                      <SelectItem value="homologacao">Homologação (Testes)</SelectItem>
                       <SelectItem value="producao">Produção</SelectItem>
                     </SelectContent>
                   </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Inscrição Estadual *</Label>
+                  <Input
+                    value={configNfe.inscricao_estadual}
+                    onChange={(e) => setConfigNfe({ ...configNfe, inscricao_estadual: e.target.value })}
+                    placeholder="Obrigatório"
+                  />
                 </div>
               </div>
 
@@ -385,16 +360,6 @@ export default function ConfiguracaoNFe() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Inscrição Estadual</Label>
-                  <Input
-                    value={configNfe.inscricao_estadual}
-                    onChange={(e) => setConfigNfe({ ...configNfe, inscricao_estadual: e.target.value })}
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
                   <Label>Regime Tributário</Label>
                   <Select
                     value={configNfe.regime_tributario}
@@ -410,6 +375,9 @@ export default function ConfiguracaoNFe() {
                     </SelectContent>
                   </Select>
                 </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>CFOP Padrão</Label>
                   <Input
@@ -418,15 +386,34 @@ export default function ConfiguracaoNFe() {
                     placeholder="Ex: 5102"
                   />
                 </div>
+                <div className="space-y-2">
+                  <Label>Natureza da Operação Padrão</Label>
+                  <Input
+                    value={configNfe.natureza_operacao_padrao}
+                    onChange={(e) => setConfigNfe({ ...configNfe, natureza_operacao_padrao: e.target.value })}
+                    placeholder="Ex: Venda de mercadoria"
+                  />
+                </div>
               </div>
 
-              <div className="space-y-2">
-                <Label>Natureza da Operação Padrão</Label>
-                <Input
-                  value={configNfe.natureza_operacao_padrao}
-                  onChange={(e) => setConfigNfe({ ...configNfe, natureza_operacao_padrao: e.target.value })}
-                  placeholder="Ex: Venda de mercadoria"
-                />
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>CSC ID (NFC-e)</Label>
+                  <Input
+                    value={configNfe.csc_id}
+                    onChange={(e) => setConfigNfe({ ...configNfe, csc_id: e.target.value })}
+                    placeholder="Código de Segurança do Contribuinte"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>CSC Token (NFC-e)</Label>
+                  <Input
+                    type="password"
+                    value={configNfe.csc_token}
+                    onChange={(e) => setConfigNfe({ ...configNfe, csc_token: e.target.value })}
+                    placeholder="Token do CSC"
+                  />
+                </div>
               </div>
 
               <Button onClick={salvarConfigNfe} disabled={loading} className="w-full">
@@ -441,7 +428,7 @@ export default function ConfiguracaoNFe() {
           <Card>
             <CardHeader>
               <CardTitle>Configurações NFS-e</CardTitle>
-              <CardDescription>Nota Fiscal de Serviço Eletrônica</CardDescription>
+              <CardDescription>Nota Fiscal de Serviço Eletrônica - Prefeitura de Anápolis/GO (IssNet)</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="grid grid-cols-2 gap-4">
@@ -455,7 +442,7 @@ export default function ConfiguracaoNFe() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="homologacao">Homologação</SelectItem>
+                      <SelectItem value="homologacao">Homologação (Testes)</SelectItem>
                       <SelectItem value="producao">Produção</SelectItem>
                     </SelectContent>
                   </Select>
@@ -492,7 +479,36 @@ export default function ConfiguracaoNFe() {
                   <Input
                     value={configNfse.codigo_municipio}
                     onChange={(e) => setConfigNfse({ ...configNfse, codigo_municipio: e.target.value })}
-                    placeholder="Ex: 5201108"
+                    placeholder="5201108 (Anápolis)"
+                    disabled
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label>CNAE Principal</Label>
+                  <Input
+                    value={configNfse.cnae}
+                    onChange={(e) => setConfigNfse({ ...configNfse, cnae: e.target.value })}
+                    placeholder="Ex: 4930202"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Item Lista Serviço</Label>
+                  <Input
+                    value={configNfse.item_lista_servico}
+                    onChange={(e) => setConfigNfse({ ...configNfse, item_lista_servico: e.target.value })}
+                    placeholder="Ex: 16.01"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Alíquota ISS (%)</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={configNfse.aliquota_iss}
+                    onChange={(e) => setConfigNfse({ ...configNfse, aliquota_iss: parseFloat(e.target.value) || 5 })}
                   />
                 </div>
               </div>
@@ -538,10 +554,10 @@ export default function ConfiguracaoNFe() {
           <Card>
             <CardHeader>
               <CardTitle>Certificado Digital A1</CardTitle>
-              <CardDescription>Necessário para emissão direta sem API intermediária</CardDescription>
+              <CardDescription>Necessário para emissão direta na SEFAZ e Prefeitura (sem API intermediária)</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              {certificadoInfo ? (
+              {certificadoInfo.configurado ? (
                 <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
                   <div className="flex items-center gap-2 mb-2">
                     <CheckCircle className="h-5 w-5 text-green-600" />
@@ -563,7 +579,7 @@ export default function ConfiguracaoNFe() {
                     <span className="font-medium text-yellow-800">Certificado não configurado</span>
                   </div>
                   <p className="text-sm text-yellow-700">
-                    Faça upload do certificado digital A1 (.pfx ou .p12) para emissão direta na SEFAZ.
+                    Faça upload do certificado digital A1 (.pfx ou .p12) para emissão direta na SEFAZ e Prefeitura.
                   </p>
                 </div>
               )}
@@ -577,7 +593,14 @@ export default function ConfiguracaoNFe() {
                   disabled={loading}
                 />
                 <p className="text-xs text-muted-foreground">
-                  O certificado será armazenado de forma segura e criptografada.
+                  O certificado será armazenado de forma segura e criptografada. A senha será solicitada no momento do upload.
+                </p>
+              </div>
+
+              <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <p className="text-sm text-blue-800">
+                  <strong>Emissão Direta:</strong> O WAI ERP comunica diretamente com a SEFAZ-GO (NF-e) e Prefeitura de Anápolis/IssNet (NFS-e), 
+                  sem passar por APIs intermediárias como Focus NFe ou similares.
                 </p>
               </div>
             </CardContent>
