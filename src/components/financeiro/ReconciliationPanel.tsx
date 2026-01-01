@@ -83,9 +83,13 @@ interface FinancialEntry {
   description?: string;
 }
 
-export function ReconciliationPanel() {
+interface ReconciliationPanelProps {
+  transactionType?: 'payables' | 'receivables' | 'all';
+}
+
+export function ReconciliationPanel({ transactionType = 'all' }: ReconciliationPanelProps) {
   const { toast } = useToast();
-  const { selectedCompany } = useCompany();
+  const { currentCompany: selectedCompany } = useCompany();
   
   const [loading, setLoading] = useState(false);
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
@@ -112,7 +116,7 @@ export function ReconciliationPanel() {
     setLoading(true);
     try {
       const { data, error } = await supabase.functions.invoke('reconciliation-engine', {
-        body: { company_id: selectedCompany.id }
+        body: { company_id: selectedCompany.id, transaction_type: transactionType }
       });
       
       if (error) throw error;
@@ -137,20 +141,28 @@ export function ReconciliationPanel() {
     if (selectedCompany?.id) {
       loadSuggestions();
     }
-  }, [selectedCompany?.id]);
+  }, [selectedCompany?.id, transactionType]);
 
   const confirmSuggestion = async (suggestion: Suggestion) => {
     try {
+      // Buscar situação "Conciliado" (Manual ou Automático)
+      const { data: situacaoConciliado } = await supabase
+        .from('financial_situations')
+        .select('id')
+        .eq('company_id', selectedCompany?.id)
+        .ilike('name', '%conciliado%')
+        .eq('confirms_payment', true)
+        .limit(1)
+        .single();
+      
       const { data: reconciliation, error: recError } = await supabase
         .from('bank_reconciliations')
         .insert({
           company_id: selectedCompany?.id,
           bank_transaction_id: suggestion.transaction_id,
           total_reconciled_amount: suggestion.total_matched,
-          difference: suggestion.difference,
           method: 'suggested',
-          confidence_score: suggestion.confidence_score,
-          match_type: suggestion.match_type
+          notes: `Match: ${suggestion.match_type}, Confiança: ${suggestion.confidence_score}%`
         })
         .select()
         .single();
@@ -164,10 +176,7 @@ export function ReconciliationPanel() {
             reconciliation_id: reconciliation.id,
             financial_id: entry.id,
             financial_type: entry.type,
-            amount_used: entry.amount_used,
-            original_amount: entry.amount,
-            entity_name: entry.entity_name,
-            due_date: entry.due_date
+            amount_used: entry.amount_used
           });
         
         const table = entry.type === 'receivable' ? 'accounts_receivable' : 'payables';
@@ -176,7 +185,8 @@ export function ReconciliationPanel() {
           .update({
             is_paid: true,
             paid_at: new Date().toISOString(),
-            reconciliation_id: reconciliation.id
+            reconciliation_id: reconciliation.id,
+            financial_situation_id: situacaoConciliado?.id || null
           })
           .eq('id', entry.id);
       }
@@ -320,15 +330,24 @@ export function ReconciliationPanel() {
     try {
       const entries = availableEntries.filter(e => selectedEntries.has(e.id));
       
+      // Buscar situação "Conciliado Manual"
+      const { data: situacaoConciliado } = await supabase
+        .from('financial_situations')
+        .select('id')
+        .eq('company_id', selectedCompany?.id)
+        .ilike('name', '%conciliado%')
+        .eq('confirms_payment', true)
+        .limit(1)
+        .single();
+      
       const { data: reconciliation, error: recError } = await supabase
         .from('bank_reconciliations')
         .insert({
           company_id: selectedCompany?.id,
           bank_transaction_id: selectedTransaction.id,
           total_reconciled_amount: selectedTotal,
-          difference: difference,
           method: 'manual',
-          match_type: entries.length > 1 ? 'aggregation_1_n' : 'exact_1_1'
+          notes: `Conciliação manual: ${entries.length} título(s)`
         })
         .select()
         .single();
@@ -342,10 +361,7 @@ export function ReconciliationPanel() {
             reconciliation_id: reconciliation.id,
             financial_id: entry.id,
             financial_type: entry.type,
-            amount_used: entry.amount,
-            original_amount: entry.amount,
-            entity_name: entry.entity_name,
-            due_date: entry.due_date
+            amount_used: entry.amount
           });
         
         const table = entry.type === 'receivable' ? 'accounts_receivable' : 'payables';
@@ -354,7 +370,8 @@ export function ReconciliationPanel() {
           .update({
             is_paid: true,
             paid_at: new Date().toISOString(),
-            reconciliation_id: reconciliation.id
+            reconciliation_id: reconciliation.id,
+            financial_situation_id: situacaoConciliado?.id || null
           })
           .eq('id', entry.id);
       }

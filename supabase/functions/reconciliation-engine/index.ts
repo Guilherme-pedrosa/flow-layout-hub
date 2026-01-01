@@ -261,13 +261,14 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const { company_id, max_suggestions = 100, date_tolerance_days = 5 } = await req.json();
+    const { company_id, max_suggestions = 100, date_tolerance_days = 5, transaction_type = 'all' } = await req.json();
 
     if (!company_id) {
       throw new Error("company_id é obrigatório");
     }
 
-    console.log(`[reconciliation-engine] Iniciando análise para company: ${company_id}`);
+    // transaction_type: 'payables' (só débitos), 'receivables' (só créditos), 'all' (todos)
+    console.log(`[reconciliation-engine] Iniciando análise para company: ${company_id}, type: ${transaction_type}`);
 
     // 1. Buscar configurações de conciliação
     const { data: settings } = await supabase
@@ -279,17 +280,28 @@ serve(async (req) => {
     const dateTolerance = settings?.date_tolerance_days || date_tolerance_days;
     const valueTolerance = settings?.value_tolerance_percent || 0;
 
-    // 2. Buscar transações não conciliadas
-    const { data: transactions, error: txError } = await supabase
+    // 2. Buscar transações não conciliadas (filtrar por tipo se especificado)
+    let transactionsQuery = supabase
       .from("bank_transactions")
       .select("*")
       .eq("company_id", company_id)
-      .eq("is_reconciled", false)
+      .eq("is_reconciled", false);
+    
+    // Filtrar por tipo de transação
+    if (transaction_type === 'payables') {
+      // Para contas a pagar, queremos transações de DÉBITO (valores negativos)
+      transactionsQuery = transactionsQuery.lt("amount", 0);
+    } else if (transaction_type === 'receivables') {
+      // Para contas a receber, queremos transações de CRÉDITO (valores positivos)
+      transactionsQuery = transactionsQuery.gt("amount", 0);
+    }
+    
+    const { data: transactions, error: txError } = await transactionsQuery
       .order("transaction_date", { ascending: false })
       .limit(500);
 
     if (txError) throw txError;
-    console.log(`[reconciliation-engine] ${transactions?.length || 0} transações não conciliadas`);
+    console.log(`[reconciliation-engine] ${transactions?.length || 0} transações não conciliadas (type: ${transaction_type})`);
 
     // 3. Buscar todas as entidades (fornecedores/clientes)
     const { data: pessoas } = await supabase
@@ -409,16 +421,64 @@ serve(async (req) => {
         
         if (entityMatch && entityMatch.similarity >= 0.5) {
           // Buscar títulos dessa entidade
-          const entityEntries = availableEntries.filter(e => 
+          const entityEntriesAll = availableEntries.filter(e => 
             e.supplier_id === entityMatch.entity.id ||
             e.customer_id === entityMatch.entity.id
           );
           
-          // 2a. Match 1:1 exato
+          // IMPORTANTE: Priorizar títulos VENCIDOS ou com vencimento até a data da transação
+          // Títulos com vencimento NO FUTURO não devem ser sugeridos (está pagando adiantado?)
+          const txDate = new Date(tx.transaction_date);
+          
+          // Filtrar: APENAS títulos com vencimento ATÉ 3 dias DEPOIS da transação
+          // Prioridade máxima para vencidos
+          const maxDueDate = new Date(txDate);
+          maxDueDate.setDate(maxDueDate.getDate() + 3); // tolerância mínima de 3 dias
+          
+          // Separar em vencidos e não vencidos
+          const overdueEntries = entityEntriesAll
+            .filter(e => new Date(e.due_date) <= txDate)
+            .sort((a, b) => {
+              // Para vencidos: ordenar por proximidade da data da transação
+              const dateA = new Date(a.due_date);
+              const dateB = new Date(b.due_date);
+              const diffA = Math.abs(txDate.getTime() - dateA.getTime());
+              const diffB = Math.abs(txDate.getTime() - dateB.getTime());
+              return diffA - diffB;
+            });
+          
+          const futureEntries = entityEntriesAll
+            .filter(e => {
+              const dueDate = new Date(e.due_date);
+              return dueDate > txDate && dueDate <= maxDueDate;
+            })
+            .sort((a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime());
+          
+          // Priorizar vencidos, depois futuros próximos
+          const entityEntries = [...overdueEntries, ...futureEntries];
+          
+          // 2a. Match 1:1 exato - priorizar títulos vencidos ou com vencimento próximo
           for (const entry of entityEntries) {
             const valueDiff = Math.abs(entry.amount - txAmount);
             if (valueDiff < 0.01) {
-              const score = entityMatch.similarity >= 0.9 ? 98 : entityMatch.similarity >= 0.7 ? 92 : 85;
+              // Calcular penalidade por vencimento futuro
+              const dueDate = new Date(entry.due_date);
+              const daysDiff = Math.floor((dueDate.getTime() - txDate.getTime()) / (1000 * 60 * 60 * 24));
+              
+              let baseScore = entityMatch.similarity >= 0.9 ? 98 : entityMatch.similarity >= 0.7 ? 92 : 85;
+              let dateReason = '✓ Valor exato';
+              
+              // Se vencimento é DEPOIS da transação, reduzir score
+              if (daysDiff > 0) {
+                baseScore = Math.max(40, baseScore - (daysDiff * 2)); // -2 pontos por dia no futuro
+                dateReason = `⚠ Vencimento ${daysDiff} dias após transação`;
+              } else if (daysDiff < 0) {
+                // Se já venceu, aumentar ligeiramente a confiança (título atrasado sendo pago)
+                dateReason = `✓ Título vencido há ${Math.abs(daysDiff)} dias`;
+              }
+              
+              const confidenceLevel = baseScore >= 80 ? 'high' : baseScore >= 60 ? 'medium' : 'low';
+              
               const suggestion: Suggestion = {
                 transaction_id: tx.id,
                 transaction: tx,
@@ -431,17 +491,17 @@ serve(async (req) => {
                   due_date: entry.due_date,
                   document_number: entry.document_number
                 }],
-                confidence_score: score,
-                confidence_level: 'high',
+                confidence_score: baseScore,
+                confidence_level: confidenceLevel,
                 match_reasons: [
                   `✓ Nome: "${extractedName}" → "${entityMatch.matchedName}"`,
                   `Similaridade: ${Math.round(entityMatch.similarity * 100)}%`,
-                  '✓ Valor exato'
+                  dateReason
                 ],
                 match_type: 'exact_1_1',
                 total_matched: entry.amount,
                 difference: 0,
-                requires_review: false,
+                requires_review: daysDiff > 7, // Revisão se vencimento muito no futuro
                 extracted_name: extractedName,
                 matched_entity: entityMatch.matchedName
               };
@@ -642,12 +702,12 @@ serve(async (req) => {
       }
     );
 
-  } catch (error) {
+  } catch (error: unknown) {
     console.error("[reconciliation-engine] Erro:", error);
     return new Response(
       JSON.stringify({
         success: false,
-        error: error.message
+        error: error instanceof Error ? error.message : 'Unknown error'
       }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
