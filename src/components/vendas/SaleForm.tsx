@@ -5,7 +5,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Save, X, DollarSign, FileText, Printer } from "lucide-react";
+import { Save, X, DollarSign, FileText, Printer, Send } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { useDocumentPdf } from "@/hooks/useDocumentPdf";
 import { SaleFormDadosGerais } from "./SaleFormDadosGerais";
 import { SaleFormProdutos } from "./SaleFormProdutos";
@@ -29,6 +30,7 @@ const TEMP_COMPANY_ID = "7875af52-18d0-434e-8ae9-97981bd668e7";
 
 export function SaleForm({ onClose, initialData }: SaleFormProps) {
   const { createSale, updateSale } = useSales();
+  const navigate = useNavigate();
   const { printDocument, printSummary, isGenerating } = useDocumentPdf();
   const { auditSale, loading: auditLoading } = useAiAuditora();
   const isEditing = !!initialData?.id;
@@ -538,6 +540,14 @@ export function SaleForm({ onClose, initialData }: SaleFormProps) {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+          <Button 
+            variant="outline" 
+            className="bg-blue-50 text-blue-700 hover:bg-blue-100"
+            onClick={() => navigate(`/notas-fiscais/adicionar?venda=${initialData.id}`)}
+          >
+            <Send className="h-4 w-4 mr-2" />
+            Emitir NF-e
+          </Button>
         )}
         <Button variant="destructive" onClick={onClose}>
           <X className="h-4 w-4 mr-2" />

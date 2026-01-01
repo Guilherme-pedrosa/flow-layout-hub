@@ -5,7 +5,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Save, X, DollarSign, FileText, Truck, Printer } from "lucide-react";
+import { Save, X, DollarSign, FileText, Truck, Printer, Send } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { useDocumentPdf } from "@/hooks/useDocumentPdf";
 import { ServiceOrderFormDadosGerais } from "./ServiceOrderFormDadosGerais";
 import { ServiceOrderFormProdutos } from "./ServiceOrderFormProdutos";
@@ -24,6 +25,7 @@ interface ServiceOrderFormProps {
 
 export function ServiceOrderForm({ onClose, initialData }: ServiceOrderFormProps) {
   const { createOrder } = useServiceOrders();
+  const navigate = useNavigate();
   const { printDocument, printSummary, isGenerating } = useDocumentPdf();
   const isEditing = !!initialData?.id;
   const [formData, setFormData] = useState({
@@ -293,6 +295,14 @@ export function ServiceOrderForm({ onClose, initialData }: ServiceOrderFormProps
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+          <Button 
+            variant="outline" 
+            className="bg-green-50 text-green-700 hover:bg-green-100"
+            onClick={() => navigate(`/notas-fiscais-servico/adicionar?os=${initialData.id}`)}
+          >
+            <Send className="h-4 w-4 mr-2" />
+            Emitir NFS-e
+          </Button>
         )}
         <Button variant="destructive" onClick={onClose}>
           <X className="h-4 w-4 mr-2" />
