@@ -98,3 +98,6 @@ verify_jwt = false
 
 [functions.field-sync-customer]
 verify_jwt = false
+
+[functions.update-pessoas-from-auvo]
+verify_jwt = false
