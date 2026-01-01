@@ -28,59 +28,31 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { 
   Plus, 
   MoreHorizontal, 
   Eye, 
-  Pencil, 
-  Trash2, 
   FileText, 
   Send, 
   Copy,
   Download,
   Search,
-  Filter,
-  Settings2,
-  Calendar
+  Calendar,
+  XCircle
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { format, startOfMonth, endOfMonth, subMonths, addMonths, startOfWeek, endOfWeek } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { toast } from "sonner";
 
-type NotaFiscal = {
-  id: string;
-  numero: number;
-  serie: number;
-  pedido_id: string | null;
-  pedido_numero: string | null;
-  tipo: "entrada" | "saida";
-  data_emissao: string;
-  destinatario_nome: string;
-  destinatario_documento: string;
-  natureza_operacao: string;
-  valor_total: number;
-  situacao: "em_aberto" | "autorizada" | "cancelada" | "rejeitada" | "denegada" | "inutilizada";
-  chave_acesso: string | null;
-  xml_url: string | null;
-  danfe_url: string | null;
-};
+type PeriodoFiltro = "hoje" | "esta_semana" | "mes_passado" | "este_mes" | "proximo_mes" | "todo_periodo";
 
-type PeriodoFiltro = "hoje" | "esta_semana" | "mes_passado" | "este_mes" | "proximo_mes" | "todo_periodo" | "personalizado";
-
-const situacaoConfig: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
-  em_aberto: { label: "Em aberto", variant: "secondary" },
+const statusConfig: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
+  rascunho: { label: "Rascunho", variant: "secondary" },
+  processando: { label: "Processando", variant: "outline" },
   autorizada: { label: "Autorizada", variant: "default" },
   cancelada: { label: "Cancelada", variant: "destructive" },
-  rejeitada: { label: "Rejeitada", variant: "destructive" },
-  denegada: { label: "Denegada", variant: "outline" },
-  inutilizada: { label: "Inutilizada", variant: "outline" },
+  erro: { label: "Erro", variant: "destructive" },
 };
 
 export default function NotasFiscaisPage() {
@@ -88,18 +60,6 @@ export default function NotasFiscaisPage() {
   const navigate = useNavigate();
   const [periodo, setPeriodo] = useState<PeriodoFiltro>("este_mes");
   const [busca, setBusca] = useState("");
-  const [buscaAvancadaOpen, setBuscaAvancadaOpen] = useState(false);
-  const [colunasVisiveis, setColunasVisiveis] = useState({
-    numero: true,
-    serie: true,
-    pedido: true,
-    tipo: false,
-    data: true,
-    destinatario: true,
-    natureza: true,
-    valor: true,
-    situacao: true,
-  });
 
   const getDateRange = () => {
     const hoje = new Date();
@@ -132,6 +92,7 @@ export default function NotasFiscaisPage() {
         .from("notas_fiscais")
         .select("*")
         .eq("company_id", currentCompany.id)
+        .eq("tipo", "nfe")
         .order("data_emissao", { ascending: false });
 
       const { inicio, fim } = getDateRange();
@@ -142,28 +103,28 @@ export default function NotasFiscaisPage() {
       }
 
       if (busca) {
-        query = query.or(`destinatario_nome.ilike.%${busca}%,numero.eq.${parseInt(busca) || 0}`);
+        query = query.or(`destinatario_nome.ilike.%${busca}%,numero.ilike.%${busca}%`);
       }
 
       const { data, error } = await query;
       if (error) throw error;
-      return data as NotaFiscal[];
+      return data || [];
     },
     enabled: !!currentCompany?.id,
   });
 
-  const handleEmitir = async (nota: NotaFiscal) => {
+  const handleEmitir = async (notaId: string) => {
     toast.info("Emitindo NF-e...");
-    // Chamar API de emissão
+    // TODO: Chamar API de emissão
   };
 
-  const handleCancelar = async (nota: NotaFiscal) => {
+  const handleCancelar = async (notaId: string) => {
     toast.info("Cancelando NF-e...");
-    // Chamar API de cancelamento
+    // TODO: Chamar API de cancelamento
   };
 
-  const handleDuplicar = (nota: NotaFiscal) => {
-    navigate(`/notas-fiscais/adicionar?duplicar=${nota.id}`);
+  const handleDuplicar = (notaId: string) => {
+    navigate(`/notas-fiscais/adicionar?duplicar=${notaId}`);
   };
 
   const getPeriodoLabel = () => {
@@ -177,6 +138,14 @@ export default function NotasFiscaisPage() {
       case "todo_periodo": return "Todo o período";
       default: return "Selecione";
     }
+  };
+
+  // Calcular totais
+  const totais = {
+    quantidade: notas?.length || 0,
+    valor: notas?.reduce((acc, n) => acc + (n.valor_total || 0), 0) || 0,
+    autorizadas: notas?.filter(n => n.status === "autorizada").length || 0,
+    pendentes: notas?.filter(n => n.status === "rascunho" || n.status === "processando").length || 0,
   };
 
   return (
@@ -199,67 +168,72 @@ export default function NotasFiscaisPage() {
           </Link>
         </Button>
 
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline">
-              <MoreHorizontal className="h-4 w-4 mr-2" />
-              Mais ações
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent>
-            <DropdownMenuItem>Exportar XML</DropdownMenuItem>
-            <DropdownMenuItem>Exportar Excel</DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem>Inutilizar numeração</DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="icon">
-              <Settings2 className="h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-48">
-            <div className="p-2 font-medium text-sm">Gerenciar colunas</div>
-            <DropdownMenuSeparator />
-            {Object.entries(colunasVisiveis).map(([key, visible]) => (
-              <DropdownMenuItem
-                key={key}
-                onClick={() => setColunasVisiveis(prev => ({ ...prev, [key]: !prev[key as keyof typeof prev] }))}
-              >
-                <input type="checkbox" checked={visible} readOnly className="mr-2" />
-                {key.charAt(0).toUpperCase() + key.slice(1)}
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <div className="flex items-center gap-2">
+          <Select value={periodo} onValueChange={(v: PeriodoFiltro) => setPeriodo(v)}>
+            <SelectTrigger className="w-[200px]">
+              <Calendar className="h-4 w-4 mr-2" />
+              <SelectValue>{getPeriodoLabel()}</SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="hoje">Hoje</SelectItem>
+              <SelectItem value="esta_semana">Esta semana</SelectItem>
+              <SelectItem value="mes_passado">Mês passado</SelectItem>
+              <SelectItem value="este_mes">Este mês</SelectItem>
+              <SelectItem value="proximo_mes">Próximo mês</SelectItem>
+              <SelectItem value="todo_periodo">Todo o período</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
 
         <div className="flex-1" />
 
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline">
-              <Calendar className="h-4 w-4 mr-2" />
-              {getPeriodoLabel()}
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent>
-            <DropdownMenuItem onClick={() => setPeriodo("hoje")}>Hoje</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => setPeriodo("esta_semana")}>Esta semana</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => setPeriodo("mes_passado")}>Mês passado</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => setPeriodo("este_mes")}>Este mês</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => setPeriodo("proximo_mes")}>Próximo mês</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => setPeriodo("todo_periodo")}>Todo o período</DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => setBuscaAvancadaOpen(true)}>Escolha o período</DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Buscar por número ou destinatário..."
+            value={busca}
+            onChange={(e) => setBusca(e.target.value)}
+            className="pl-10 w-[300px]"
+          />
+        </div>
+      </div>
 
-        <Button variant="outline" onClick={() => setBuscaAvancadaOpen(true)}>
-          <Filter className="h-4 w-4 mr-2" />
-          Busca avançada
-        </Button>
+      {/* Cards de resumo */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Total de Notas</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{totais.quantidade}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Valor Total</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {totais.valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Autorizadas</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-green-600">{totais.autorizadas}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Pendentes</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-yellow-600">{totais.pendentes}</div>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Tabela */}
@@ -268,130 +242,98 @@ export default function NotasFiscaisPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                {colunasVisiveis.numero && <TableHead>Nº</TableHead>}
-                {colunasVisiveis.serie && <TableHead>Série</TableHead>}
-                {colunasVisiveis.pedido && <TableHead>Pedido</TableHead>}
-                {colunasVisiveis.tipo && <TableHead>Tipo</TableHead>}
-                {colunasVisiveis.data && <TableHead>Data</TableHead>}
-                {colunasVisiveis.destinatario && <TableHead>Destinatário</TableHead>}
-                {colunasVisiveis.natureza && <TableHead>Natureza da operação</TableHead>}
-                {colunasVisiveis.valor && <TableHead className="text-right">Valor</TableHead>}
-                {colunasVisiveis.situacao && <TableHead>Situação</TableHead>}
-                <TableHead className="text-right">Ações</TableHead>
+                <TableHead>Número</TableHead>
+                <TableHead>Série</TableHead>
+                <TableHead>Data</TableHead>
+                <TableHead>Destinatário</TableHead>
+                <TableHead>Natureza</TableHead>
+                <TableHead className="text-right">Valor</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="w-[50px]"></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={10} className="text-center py-8">
+                  <TableCell colSpan={8} className="text-center py-8">
                     Carregando...
                   </TableCell>
                 </TableRow>
               ) : notas?.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                     Nenhuma nota fiscal encontrada
                   </TableCell>
                 </TableRow>
               ) : (
-                notas?.map((nota) => (
+                notas?.map((nota: any) => (
                   <TableRow key={nota.id}>
-                    {colunasVisiveis.numero && <TableCell>{nota.numero}</TableCell>}
-                    {colunasVisiveis.serie && <TableCell>{nota.serie}</TableCell>}
-                    {colunasVisiveis.pedido && (
-                      <TableCell>
-                        {nota.pedido_numero ? (
-                          <Link to={`/vendas/${nota.pedido_id}`} className="text-blue-600 hover:underline">
-                            #{nota.pedido_numero}
-                          </Link>
-                        ) : "-"}
-                      </TableCell>
-                    )}
-                    {colunasVisiveis.tipo && (
-                      <TableCell>{nota.tipo === "entrada" ? "Entrada" : "Saída"}</TableCell>
-                    )}
-                    {colunasVisiveis.data && (
-                      <TableCell>{format(new Date(nota.data_emissao), "dd/MM/yyyy")}</TableCell>
-                    )}
-                    {colunasVisiveis.destinatario && (
-                      <TableCell>
-                        <Link to={`/cadastros/pessoas/${nota.destinatario_documento}`} className="text-blue-600 hover:underline">
-                          {nota.destinatario_nome}
-                        </Link>
-                      </TableCell>
-                    )}
-                    {colunasVisiveis.natureza && <TableCell>{nota.natureza_operacao}</TableCell>}
-                    {colunasVisiveis.valor && (
-                      <TableCell className="text-right">
-                        {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(nota.valor_total)}
-                      </TableCell>
-                    )}
-                    {colunasVisiveis.situacao && (
-                      <TableCell>
-                        <Badge variant={situacaoConfig[nota.situacao]?.variant || "secondary"}>
-                          {situacaoConfig[nota.situacao]?.label || nota.situacao}
-                        </Badge>
-                      </TableCell>
-                    )}
+                    <TableCell className="font-medium">{nota.numero || '-'}</TableCell>
+                    <TableCell>{nota.serie || '1'}</TableCell>
+                    <TableCell>
+                      {nota.data_emissao ? format(new Date(nota.data_emissao), "dd/MM/yyyy") : '-'}
+                    </TableCell>
+                    <TableCell>{nota.destinatario_nome || '-'}</TableCell>
+                    <TableCell>{nota.natureza_operacao || '-'}</TableCell>
                     <TableCell className="text-right">
-                      <div className="flex items-center justify-end gap-1">
-                        <Button variant="ghost" size="icon" asChild>
-                          <Link to={`/notas-fiscais/${nota.id}`}>
-                            <Eye className="h-4 w-4" />
-                          </Link>
-                        </Button>
-                        <Button variant="ghost" size="icon" asChild>
-                          <Link to={`/notas-fiscais/${nota.id}/editar`}>
-                            <Pencil className="h-4 w-4" />
-                          </Link>
-                        </Button>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon">
-                              <MoreHorizontal className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            {nota.situacao === "em_aberto" && (
-                              <DropdownMenuItem onClick={() => handleEmitir(nota)}>
-                                <Send className="h-4 w-4 mr-2" />
-                                Emitir NF-e
-                              </DropdownMenuItem>
-                            )}
-                            {nota.danfe_url && (
-                              <DropdownMenuItem asChild>
-                                <a href={nota.danfe_url} target="_blank" rel="noopener noreferrer">
-                                  <FileText className="h-4 w-4 mr-2" />
-                                  Imprimir DANFE
-                                </a>
-                              </DropdownMenuItem>
-                            )}
-                            {nota.xml_url && (
-                              <DropdownMenuItem asChild>
-                                <a href={nota.xml_url} download>
-                                  <Download className="h-4 w-4 mr-2" />
-                                  Baixar XML
-                                </a>
-                              </DropdownMenuItem>
-                            )}
-                            <DropdownMenuItem>
+                      {(nota.valor_total || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={statusConfig[nota.status]?.variant || "secondary"}>
+                        {statusConfig[nota.status]?.label || nota.status}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon">
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => navigate(`/notas-fiscais/${nota.id}`)}>
+                            <Eye className="h-4 w-4 mr-2" />
+                            Visualizar
+                          </DropdownMenuItem>
+                          
+                          {nota.status === "rascunho" && (
+                            <DropdownMenuItem onClick={() => handleEmitir(nota.id)}>
                               <Send className="h-4 w-4 mr-2" />
-                              Compartilhar
+                              Emitir
                             </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem onClick={() => handleDuplicar(nota)}>
-                              <Copy className="h-4 w-4 mr-2" />
-                              Duplicar NF-e
-                            </DropdownMenuItem>
-                            {nota.situacao === "autorizada" && (
-                              <DropdownMenuItem onClick={() => handleCancelar(nota)} className="text-red-600">
-                                <Trash2 className="h-4 w-4 mr-2" />
-                                Cancelar NF-e
+                          )}
+                          
+                          {nota.status === "autorizada" && (
+                            <>
+                              <DropdownMenuItem onClick={() => window.open(nota.danfe_url, '_blank')}>
+                                <FileText className="h-4 w-4 mr-2" />
+                                DANFE
                               </DropdownMenuItem>
-                            )}
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </div>
+                              <DropdownMenuItem onClick={() => window.open(nota.xml_url, '_blank')}>
+                                <Download className="h-4 w-4 mr-2" />
+                                XML
+                              </DropdownMenuItem>
+                            </>
+                          )}
+                          
+                          <DropdownMenuItem onClick={() => handleDuplicar(nota.id)}>
+                            <Copy className="h-4 w-4 mr-2" />
+                            Duplicar
+                          </DropdownMenuItem>
+                          
+                          <DropdownMenuSeparator />
+                          
+                          {nota.status === "autorizada" && (
+                            <DropdownMenuItem 
+                              onClick={() => handleCancelar(nota.id)}
+                              className="text-destructive"
+                            >
+                              <XCircle className="h-4 w-4 mr-2" />
+                              Cancelar
+                            </DropdownMenuItem>
+                          )}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </TableCell>
                   </TableRow>
                 ))
@@ -400,59 +342,6 @@ export default function NotasFiscaisPage() {
           </Table>
         </CardContent>
       </Card>
-
-      {/* Paginação */}
-      <div className="flex items-center justify-between text-sm text-muted-foreground">
-        <span>Mostrando {notas?.length || 0} registros</span>
-      </div>
-
-      {/* Dialog de Busca Avançada */}
-      <Dialog open={buscaAvancadaOpen} onOpenChange={setBuscaAvancadaOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Busca Avançada</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <label className="text-sm font-medium">Número da nota</label>
-              <Input placeholder="Digite o número" />
-            </div>
-            <div>
-              <label className="text-sm font-medium">Destinatário</label>
-              <Input placeholder="Nome ou CNPJ/CPF" />
-            </div>
-            <div>
-              <label className="text-sm font-medium">Situação</label>
-              <Select>
-                <SelectTrigger>
-                  <SelectValue placeholder="Todas" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="todas">Todas</SelectItem>
-                  <SelectItem value="em_aberto">Em aberto</SelectItem>
-                  <SelectItem value="autorizada">Autorizada</SelectItem>
-                  <SelectItem value="cancelada">Cancelada</SelectItem>
-                  <SelectItem value="rejeitada">Rejeitada</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex gap-4">
-              <div className="flex-1">
-                <label className="text-sm font-medium">Data inicial</label>
-                <Input type="date" />
-              </div>
-              <div className="flex-1">
-                <label className="text-sm font-medium">Data final</label>
-                <Input type="date" />
-              </div>
-            </div>
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setBuscaAvancadaOpen(false)}>Cancelar</Button>
-              <Button>Buscar</Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
