@@ -84,7 +84,7 @@ async function sha1Digest(data: string): Promise<string> {
   const encoder = new TextEncoder();
   const dataBuffer = encoder.encode(data);
   const hashBuffer = await crypto.subtle.digest("SHA-1", dataBuffer);
-  return base64Encode(new Uint8Array(hashBuffer));
+  return base64Encode(hashBuffer);
 }
 
 // Função para canonicalizar XML (C14N)
@@ -143,7 +143,7 @@ async function signXml(
     privateKey,
     signedInfoBytes
   );
-  const signatureValue = base64Encode(new Uint8Array(signatureBytes));
+  const signatureValue = base64Encode(signatureBytes);
   
   // Montar elemento Signature completo
   const signature = `<Signature xmlns="http://www.w3.org/2000/09/xmldsig#">${signedInfo}<SignatureValue>${signatureValue}</SignatureValue><KeyInfo><X509Data><X509Certificate>${certificate}</X509Certificate></X509Data></KeyInfo></Signature>`;
