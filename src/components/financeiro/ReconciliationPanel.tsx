@@ -780,9 +780,9 @@ export function ReconciliationPanel() {
                           </div>
                         ) : null;
                       })()}
-                      <div className="flex justify-between">
+                      <div className="flex flex-col gap-1">
                         <span className="text-muted-foreground text-sm">Descrição</span>
-                        <span className="font-medium text-right max-w-[200px] truncate text-sm">
+                        <span className="font-medium text-sm break-words">
                           {suggestion.transaction.description || '-'}
                         </span>
                       </div>
@@ -810,9 +810,9 @@ export function ReconciliationPanel() {
                             <span className="font-bold text-lg">{formatCurrency(entry.amount)}</span>
                           </div>
                           {entry.entity_name && (
-                            <div className="flex justify-between">
+                            <div className="flex flex-col gap-1">
                               <span className="text-muted-foreground text-sm">Cliente/Fornecedor</span>
-                              <span className="font-medium text-sm text-right max-w-[180px] truncate">{entry.entity_name}</span>
+                              <span className="font-medium text-sm break-words">{entry.entity_name}</span>
                             </div>
                           )}
                           <div className="flex justify-between">
