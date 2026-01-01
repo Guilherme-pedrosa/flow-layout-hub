@@ -189,6 +189,7 @@ export function useNFSeEmissor() {
         // Salvar no banco
         await supabase.from('nfse_emitidas').insert([{
           company_id: currentCompany?.id,
+          referencia: `NFSE-${Date.now()}`,
           numero: String(proximoNumero),
           serie: String(config.serieNFSe),
           chave_acesso: resultado.codigoVerificacao,
@@ -197,7 +198,7 @@ export function useNFSeEmissor() {
           valor_servicos: dados.servico.valorServicos,
           valor_iss: dados.servico.valorIss,
           codigo_servico: dados.servico.codigoServico,
-          discriminacao: dados.servico.discriminacao,
+          discriminacao_servicos: dados.servico.discriminacao,
           status: 'AUTORIZADA',
           data_emissao: new Date().toISOString(),
           xml_url: resultado.xml

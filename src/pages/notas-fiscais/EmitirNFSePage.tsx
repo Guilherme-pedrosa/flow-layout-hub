@@ -453,7 +453,7 @@ export default function EmitirNFSePage() {
                   sublabel: p.cpf_cnpj || "",
                 }))}
                 value={formData.tomador_id}
-                onValueChange={handleTomadorChange}
+                onChange={handleTomadorChange}
                 placeholder="Digite para buscar"
               />
             </div>
