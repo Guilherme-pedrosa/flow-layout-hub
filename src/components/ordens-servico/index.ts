@@ -5,3 +5,4 @@ export { ServiceOrderFormProdutos } from "./ServiceOrderFormProdutos";
 export { ServiceOrderFormServicos } from "./ServiceOrderFormServicos";
 export { ServiceOrderFormTecnico } from "./ServiceOrderFormTecnico";
 export { ServiceOrderFieldControl } from "./ServiceOrderFieldControl";
+export { ServiceOrderFieldTechnicians } from "./ServiceOrderFieldTechnicians";

@@ -138,6 +138,12 @@ export interface ServiceOrder {
   field_task_id?: string;
   field_synced_at?: string;
   field_sync_status?: 'pending' | 'synced' | 'error';
+  field_technicians?: Array<{
+    id: string | number;
+    name: string;
+    email?: string;
+    phone?: string;
+  }>;
   service_type_id?: string;
   equipment_id?: string;
   
