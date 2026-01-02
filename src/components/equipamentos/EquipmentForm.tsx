@@ -23,6 +23,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, Info, QrCode, MapPin, Wrench, Calendar, Building2 } from "lucide-react";
 import { Equipment } from "@/hooks/useEquipments";
+import { supabase } from "@/integrations/supabase/client";
 
 interface EquipmentFormData {
   serial_number: string;
@@ -39,11 +40,17 @@ interface EquipmentFormData {
   notes: string;
 }
 
+interface EquipmentType {
+  id: string;
+  name: string;
+}
+
 interface EquipmentFormProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   equipment: Equipment | null;
   clientes: Array<{ id: string; razao_social?: string; nome_fantasia?: string }>;
+  companyId: string | undefined;
   onSave: (data: EquipmentFormData) => Promise<void>;
   isSaving: boolean;
 }
@@ -63,68 +70,44 @@ const initialFormData: EquipmentFormData = {
   notes: "",
 };
 
-// Tipos de equipamento comuns
-const EQUIPMENT_TYPES = [
-  "Ar Condicionado",
-  "Split",
-  "Multi Split",
-  "VRF/VRV",
-  "Chiller",
-  "Fancoil",
-  "Self Contained",
-  "Rooftop",
-  "Condensadora",
-  "Evaporadora",
-  "Câmara Fria",
-  "Balcão Refrigerado",
-  "Geladeira Industrial",
-  "Freezer",
-  "Expositor",
-  "Máquina de Gelo",
-  "Bomba de Calor",
-  "Aquecedor",
-  "Ventilador",
-  "Exaustor",
-  "Outro",
-];
-
-// Tipos de equipamento para cozinha industrial
-const EQUIPMENT_TYPES_KITCHEN = [
-  "Fogão Industrial",
-  "Forno Combinado",
-  "Forno Elétrico",
-  "Forno a Gás",
-  "Fritadeira",
-  "Chapa",
-  "Grelha",
-  "Banho Maria",
-  "Estufa",
-  "Pass Through",
-  "Refrigerador Industrial",
-  "Freezer Industrial",
-  "Câmara Fria",
-  "Balcão Refrigerado",
-  "Mesa Refrigerada",
-  "Ultracongelador",
-  "Máquina de Gelo",
-  "Coifa",
-  "Exaustor",
-  "Ar Condicionado",
-  "Cortina de Ar",
-  "Outro",
-];
-
 export function EquipmentForm({
   open,
   onOpenChange,
   equipment,
   clientes,
+  companyId,
   onSave,
   isSaving,
 }: EquipmentFormProps) {
   const [formData, setFormData] = useState<EquipmentFormData>(initialFormData);
   const [activeTab, setActiveTab] = useState("dados");
+  const [equipmentTypes, setEquipmentTypes] = useState<EquipmentType[]>([]);
+  const [loadingTypes, setLoadingTypes] = useState(false);
   const [customType, setCustomType] = useState("");
+
+  // Buscar tipos do Field Control
+  useEffect(() => {
+    const fetchTypes = async () => {
+      if (!companyId || !open) return;
+      
+      setLoadingTypes(true);
+      try {
+        const { data, error } = await supabase.functions.invoke('field-equipment-types', {
+          body: { company_id: companyId }
+        });
+        
+        if (data?.types && Array.isArray(data.types)) {
+          setEquipmentTypes(data.types);
+        }
+      } catch (err) {
+        console.error("Erro ao buscar tipos:", err);
+      } finally {
+        setLoadingTypes(false);
+      }
+    };
+    
+    fetchTypes();
+  }, [companyId, open]);
 
   useEffect(() => {
     if (equipment) {
@@ -142,10 +125,7 @@ export function EquipmentForm({
         warranty_end: equipment.warranty_end || "",
         notes: equipment.notes || "",
       });
-      // Check if type is custom
-      if (equipment.equipment_type && !EQUIPMENT_TYPES_KITCHEN.includes(equipment.equipment_type)) {
-        setCustomType(equipment.equipment_type);
-      }
+      setCustomType("");
     } else {
       setFormData(initialFormData);
       setCustomType("");
@@ -158,16 +138,21 @@ export function EquipmentForm({
       return;
     }
     
-    // Apply custom type if "Outro" is selected
+    // Apply custom type if selected "outro"
     const finalData = {
       ...formData,
-      equipment_type: formData.equipment_type === "Outro" ? customType : formData.equipment_type,
+      equipment_type: formData.equipment_type === "__custom__" ? customType : formData.equipment_type,
     };
     
     await onSave(finalData);
   };
 
   const isEditing = !!equipment;
+  
+  // Verifica se o tipo atual está na lista ou é customizado
+  const isTypeInList = equipmentTypes.some(t => t.name === formData.equipment_type);
+  const showCustomInput = formData.equipment_type === "__custom__" || 
+    (formData.equipment_type && !isTypeInList && equipmentTypes.length > 0);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -260,35 +245,60 @@ export function EquipmentForm({
 
                 <div className="grid gap-2">
                   <Label htmlFor="equipment_type">Tipo de Equipamento</Label>
-                  <Select
-                    value={EQUIPMENT_TYPES_KITCHEN.includes(formData.equipment_type) ? formData.equipment_type : (formData.equipment_type ? "Outro" : "")}
-                    onValueChange={(value) => {
-                      if (value === "Outro") {
-                        setFormData({ ...formData, equipment_type: "Outro" });
-                      } else {
-                        setFormData({ ...formData, equipment_type: value });
-                        setCustomType("");
-                      }
-                    }}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecione o tipo" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {EQUIPMENT_TYPES_KITCHEN.map((type) => (
-                        <SelectItem key={type} value={type}>
-                          {type}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {(formData.equipment_type === "Outro" || (formData.equipment_type && !EQUIPMENT_TYPES_KITCHEN.includes(formData.equipment_type))) && (
+                  {loadingTypes ? (
+                    <div className="flex items-center gap-2 h-10 px-3 border rounded-md bg-muted">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span className="text-sm text-muted-foreground">Carregando tipos...</span>
+                    </div>
+                  ) : equipmentTypes.length > 0 ? (
+                    <>
+                      <Select
+                        value={isTypeInList ? formData.equipment_type : (formData.equipment_type ? "__custom__" : "")}
+                        onValueChange={(value) => {
+                          if (value === "__custom__") {
+                            setFormData({ ...formData, equipment_type: "__custom__" });
+                            setCustomType(formData.equipment_type !== "__custom__" ? formData.equipment_type : "");
+                          } else {
+                            setFormData({ ...formData, equipment_type: value });
+                            setCustomType("");
+                          }
+                        }}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecione o tipo" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {equipmentTypes.map((type) => (
+                            <SelectItem key={type.id} value={type.name}>
+                              {type.name}
+                            </SelectItem>
+                          ))}
+                          <SelectItem value="__custom__">Outro...</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      {showCustomInput && (
+                        <Input
+                          placeholder="Digite o tipo"
+                          value={customType || (formData.equipment_type !== "__custom__" ? formData.equipment_type : "")}
+                          onChange={(e) => setCustomType(e.target.value)}
+                        />
+                      )}
+                    </>
+                  ) : (
                     <Input
-                      placeholder="Digite o tipo"
-                      value={customType || (formData.equipment_type !== "Outro" ? formData.equipment_type : "")}
-                      onChange={(e) => setCustomType(e.target.value)}
+                      id="equipment_type"
+                      placeholder="Ex: Fogão Industrial, Forno Combinado"
+                      value={formData.equipment_type}
+                      onChange={(e) =>
+                        setFormData({ ...formData, equipment_type: e.target.value })
+                      }
                     />
                   )}
+                  <p className="text-xs text-muted-foreground">
+                    {equipmentTypes.length > 0 
+                      ? "Tipos carregados do Field Control" 
+                      : "Configure a API do Field Control para carregar os tipos"}
+                  </p>
                 </div>
 
                 <div className="grid gap-2">
@@ -343,14 +353,16 @@ export function EquipmentForm({
                     </SelectContent>
                   </Select>
                   <p className="text-xs text-muted-foreground">
-                    Vincule o equipamento a um cliente para facilitar ordens de serviço
+                    {clientes.length > 0 
+                      ? `${clientes.length} clientes sincronizados com Field Control`
+                      : "Sincronize clientes com o Field Control primeiro"}
                   </p>
                 </div>
 
                 {formData.client_id && (
                   <div className="p-3 bg-muted rounded-lg">
                     <p className="text-sm text-muted-foreground">
-                      ✓ O equipamento será sincronizado com o cliente no Field Control
+                      ✓ O equipamento será vinculado ao cliente no Field Control
                     </p>
                   </div>
                 )}
@@ -370,14 +382,14 @@ export function EquipmentForm({
                     <Label htmlFor="sector">Setor</Label>
                     <Input
                       id="sector"
-                      placeholder="Ex: Produção, Administrativo"
+                      placeholder="Ex: Cozinha, Produção"
                       value={formData.sector}
                       onChange={(e) =>
                         setFormData({ ...formData, sector: e.target.value })
                       }
                     />
                     <p className="text-xs text-muted-foreground">
-                      Setor ou departamento onde está instalado
+                      Setor ou departamento
                     </p>
                   </div>
 
@@ -385,14 +397,14 @@ export function EquipmentForm({
                     <Label htmlFor="environment">Ambiente</Label>
                     <Input
                       id="environment"
-                      placeholder="Ex: Sala de Reunião, CPD"
+                      placeholder="Ex: Preparo, Cocção"
                       value={formData.environment}
                       onChange={(e) =>
                         setFormData({ ...formData, environment: e.target.value })
                       }
                     />
                     <p className="text-xs text-muted-foreground">
-                      Ambiente específico de instalação
+                      Ambiente específico
                     </p>
                   </div>
                 </div>
@@ -401,7 +413,7 @@ export function EquipmentForm({
                   <Label htmlFor="location_description">Descrição da Localização</Label>
                   <Textarea
                     id="location_description"
-                    placeholder="Ex: 2º andar, próximo à escada, lado esquerdo"
+                    placeholder="Ex: Próximo à área de lavagem, lado esquerdo"
                     value={formData.location_description}
                     onChange={(e) =>
                       setFormData({
@@ -412,7 +424,7 @@ export function EquipmentForm({
                     rows={2}
                   />
                   <p className="text-xs text-muted-foreground">
-                    Detalhes para facilitar a localização do equipamento pelo técnico
+                    Detalhes para facilitar a localização pelo técnico
                   </p>
                 </div>
               </CardContent>
