@@ -81,47 +81,58 @@ serve(async (req) => {
       .eq("company_id", companyId);
 
     // ========== BUILD ANALYSIS CONTEXT ==========
+    // NOTA: Usando campos corretos da tabela products:
+    // - quantity (não current_stock)
+    // - final_cost ou purchase_price (não cost_price)
+    // - sale_price pode não existir em todos os produtos
     const activeProducts = products?.filter(p => p.is_active) || [];
-    const negativeStock = activeProducts.filter(p => (p.current_stock || 0) < 0);
-    const lowStock = activeProducts.filter(p => p.min_stock && (p.current_stock || 0) <= p.min_stock && (p.current_stock || 0) >= 0);
-    const overStock = activeProducts.filter(p => p.max_stock && (p.current_stock || 0) > p.max_stock);
-    const negativeMargin = activeProducts.filter(p => p.cost_price && p.sale_price && p.sale_price < p.cost_price);
     
-    // Produtos sem custo cadastrado
-    const noCostProducts = activeProducts.filter(p => !p.cost_price || p.cost_price <= 0);
+    // Helper: obter custo efetivo do produto
+    const getCost = (p: any) => p.final_cost || p.purchase_price || 0;
+    
+    const negativeStock = activeProducts.filter(p => (p.quantity || 0) < 0);
+    const lowStock = activeProducts.filter(p => p.min_stock && (p.quantity || 0) <= p.min_stock && (p.quantity || 0) >= 0);
+    const overStock = activeProducts.filter(p => p.max_stock && (p.quantity || 0) > p.max_stock);
+    const negativeMargin = activeProducts.filter(p => getCost(p) > 0 && p.sale_price && p.sale_price < getCost(p));
+    
+    // Produtos sem custo cadastrado (final_cost = 0 OU purchase_price = 0)
+    const noCostProducts = activeProducts.filter(p => getCost(p) <= 0);
     
     // Produtos sem preço de venda
     const noSalePriceProducts = activeProducts.filter(p => !p.sale_price || p.sale_price <= 0);
     
     // Análise de margem
-    const productsWithMargin = activeProducts.filter(p => p.cost_price && p.sale_price && p.cost_price > 0);
+    const productsWithMargin = activeProducts.filter(p => getCost(p) > 0 && p.sale_price && p.sale_price > 0);
     const avgMarginPercent = productsWithMargin.length > 0
       ? productsWithMargin.reduce((sum, p) => {
-          const margin = ((p.sale_price - p.cost_price) / p.cost_price) * 100;
+          const cost = getCost(p);
+          const margin = ((p.sale_price - cost) / cost) * 100;
           return sum + margin;
         }, 0) / productsWithMargin.length
       : 0;
     
     // Produtos com margem muito baixa (< 10%)
     const lowMarginProducts = productsWithMargin.filter(p => {
-      const margin = ((p.sale_price - p.cost_price) / p.cost_price) * 100;
+      const cost = getCost(p);
+      const margin = ((p.sale_price - cost) / cost) * 100;
       return margin < 10 && margin >= 0;
     });
     
     // Produtos com margem muito alta (> 100%)
     const highMarginProducts = productsWithMargin.filter(p => {
-      const margin = ((p.sale_price - p.cost_price) / p.cost_price) * 100;
+      const cost = getCost(p);
+      const margin = ((p.sale_price - cost) / cost) * 100;
       return margin > 100;
     });
     
     // Custo médio do estoque
     const totalStockValue = activeProducts.reduce((sum, p) => {
-      return sum + ((p.current_stock || 0) * (p.cost_price || 0));
+      return sum + ((p.quantity || 0) * getCost(p));
     }, 0);
     
     // Valor de venda potencial do estoque
     const totalStockSaleValue = activeProducts.reduce((sum, p) => {
-      return sum + ((p.current_stock || 0) * (p.sale_price || 0));
+      return sum + ((p.quantity || 0) * (p.sale_price || 0));
     }, 0);
     
     // Produtos sem giro (90 dias)
@@ -133,19 +144,19 @@ serve(async (req) => {
         .map(m => m.product_id)
     );
     const stagnantProducts = activeProducts.filter(p => 
-      !recentMovementProductIds.has(p.id) && (p.current_stock || 0) > 0
+      !recentMovementProductIds.has(p.id) && (p.quantity || 0) > 0
     );
     
     // Valor empatado em produtos sem giro
     const stagnantValue = stagnantProducts.reduce((sum, p) => {
-      return sum + ((p.current_stock || 0) * (p.cost_price || 0));
+      return sum + ((p.quantity || 0) * getCost(p));
     }, 0);
     
     // Curva ABC por valor de estoque
     const productsByValue = activeProducts
       .map(p => ({
         ...p,
-        stockValue: (p.current_stock || 0) * (p.cost_price || 0)
+        stockValue: (p.quantity || 0) * getCost(p)
       }))
       .filter(p => p.stockValue > 0)
       .sort((a, b) => b.stockValue - a.stockValue);
@@ -174,7 +185,7 @@ serve(async (req) => {
     // Histórico de variação de custo (produtos com custo zerado mas com movimentação)
     const productsNeedingCostUpdate = activeProducts.filter(p => {
       const hasMovement = recentMovementProductIds.has(p.id);
-      const noCost = !p.cost_price || p.cost_price <= 0;
+      const noCost = getCost(p) <= 0;
       return hasMovement && noCost;
     });
 
@@ -217,10 +228,10 @@ serve(async (req) => {
 - Produtos sem giro (90 dias): ${stagnantProducts.length} (R$ ${stagnantValue.toFixed(2)} empatado)
 
 Detalhes estoque negativo:
-${negativeStock.slice(0, 10).map(p => `- ${p.code || 'S/C'} ${p.description}: ${p.current_stock} unidades`).join('\n') || 'Nenhum'}
+${negativeStock.slice(0, 10).map(p => `- ${p.code || 'S/C'} ${p.description}: ${p.quantity} unidades`).join('\n') || 'Nenhum'}
 
 Detalhes estoque baixo:
-${lowStock.slice(0, 10).map(p => `- ${p.code || 'S/C'} ${p.description}: ${p.current_stock}/${p.min_stock} (mín)`).join('\n') || 'Nenhum'}
+${lowStock.slice(0, 10).map(p => `- ${p.code || 'S/C'} ${p.description}: ${p.quantity}/${p.min_stock} (mín)`).join('\n') || 'Nenhum'}
 
 ### PROBLEMAS DE PRECIFICAÇÃO E CUSTO
 - Produtos SEM custo cadastrado: ${noCostProducts.length}
@@ -230,10 +241,10 @@ ${lowStock.slice(0, 10).map(p => `- ${p.code || 'S/C'} ${p.description}: ${p.cur
 - Produtos com movimentação mas sem custo: ${productsNeedingCostUpdate.length}
 
 Produtos com margem negativa:
-${negativeMargin.slice(0, 10).map(p => `- ${p.code || 'S/C'} ${p.description}: custo R$${p.cost_price?.toFixed(2)} > venda R$${p.sale_price?.toFixed(2)}`).join('\n') || 'Nenhum'}
+${negativeMargin.slice(0, 10).map(p => `- ${p.code || 'S/C'} ${p.description}: custo R$${getCost(p).toFixed(2)} > venda R$${p.sale_price?.toFixed(2)}`).join('\n') || 'Nenhum'}
 
-Produtos sem custo cadastrado (amostra):
-${noCostProducts.slice(0, 5).map(p => `- ${p.code || 'S/C'} ${p.description}`).join('\n') || 'Nenhum'}
+Produtos sem custo cadastrado (amostra com IDs para deep-link):
+${noCostProducts.slice(0, 5).map(p => `- [ID:${p.id}] ${p.code || 'S/C'} ${p.description}`).join('\n') || 'Nenhum'}
 
 ### CURVA ABC (por valor em estoque)
 - Curva A (80% do valor): ${curveA.length} produtos
@@ -241,7 +252,7 @@ ${noCostProducts.slice(0, 5).map(p => `- ${p.code || 'S/C'} ${p.description}`).j
 - Curva C (5% do valor): ${curveC.length} produtos
 
 Top 5 produtos por valor em estoque:
-${productsByValue.slice(0, 5).map(p => `- ${p.code || 'S/C'} ${p.description}: R$ ${p.stockValue.toFixed(2)} (${p.current_stock} un × R$ ${(p.cost_price || 0).toFixed(2)})`).join('\n')}
+${productsByValue.slice(0, 5).map(p => `- ${p.code || 'S/C'} ${p.description}: R$ ${p.stockValue.toFixed(2)} (${p.quantity} un × R$ ${getCost(p).toFixed(2)})`).join('\n')}
 
 ### MOVIMENTAÇÃO DE ESTOQUE (últimos 30 dias)
 - Total de movimentações: ${recentMovements.length}
