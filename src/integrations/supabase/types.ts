@@ -235,6 +235,108 @@ export type Database = {
           },
         ]
       }
+      ai_observer_alerts: {
+        Row: {
+          action_taken: string | null
+          actioned_at: string | null
+          actioned_by: string | null
+          alert_hash: string
+          company_id: string
+          context_data: Json | null
+          created_at: string
+          economic_reason: string
+          event_source_id: string | null
+          event_source_type: string | null
+          event_type: string
+          id: string
+          impacted_entities: Json | null
+          is_actioned: boolean | null
+          is_dismissed: boolean | null
+          is_read: boolean | null
+          margin_after: number | null
+          margin_before: number | null
+          margin_change_percent: number | null
+          mode: string
+          potential_loss: number | null
+          raw_ai_response: Json | null
+          recommendation: string | null
+          requires_human_decision: boolean | null
+          severity: string
+          updated_at: string
+        }
+        Insert: {
+          action_taken?: string | null
+          actioned_at?: string | null
+          actioned_by?: string | null
+          alert_hash: string
+          company_id: string
+          context_data?: Json | null
+          created_at?: string
+          economic_reason: string
+          event_source_id?: string | null
+          event_source_type?: string | null
+          event_type: string
+          id?: string
+          impacted_entities?: Json | null
+          is_actioned?: boolean | null
+          is_dismissed?: boolean | null
+          is_read?: boolean | null
+          margin_after?: number | null
+          margin_before?: number | null
+          margin_change_percent?: number | null
+          mode: string
+          potential_loss?: number | null
+          raw_ai_response?: Json | null
+          recommendation?: string | null
+          requires_human_decision?: boolean | null
+          severity: string
+          updated_at?: string
+        }
+        Update: {
+          action_taken?: string | null
+          actioned_at?: string | null
+          actioned_by?: string | null
+          alert_hash?: string
+          company_id?: string
+          context_data?: Json | null
+          created_at?: string
+          economic_reason?: string
+          event_source_id?: string | null
+          event_source_type?: string | null
+          event_type?: string
+          id?: string
+          impacted_entities?: Json | null
+          is_actioned?: boolean | null
+          is_dismissed?: boolean | null
+          is_read?: boolean | null
+          margin_after?: number | null
+          margin_before?: number | null
+          margin_change_percent?: number | null
+          mode?: string
+          potential_loss?: number | null
+          raw_ai_response?: Json | null
+          recommendation?: string | null
+          requires_human_decision?: boolean | null
+          severity?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_observer_alerts_actioned_by_fkey"
+            columns: ["actioned_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_observer_alerts_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ai_reconciliation_rules: {
         Row: {
           category: string | null
@@ -6757,6 +6859,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      ai_check_duplicate_alert: {
+        Args: { p_alert_hash: string; p_company_id: string }
+        Returns: boolean
+      }
       ai_get_clientes_analysis: {
         Args: { p_company_id: string }
         Returns: Json
@@ -6764,6 +6870,14 @@ export type Database = {
       ai_get_compras_analysis: { Args: { p_company_id: string }; Returns: Json }
       ai_get_contratos_analysis: {
         Args: { p_company_id: string }
+        Returns: Json
+      }
+      ai_get_economic_context: {
+        Args: {
+          p_company_id: string
+          p_event_source_id?: string
+          p_event_type?: string
+        }
         Returns: Json
       }
       ai_get_financial_dashboard: {
