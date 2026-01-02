@@ -1,17 +1,57 @@
-import { AiInsight } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
-import { Sparkles, ArrowRight, RefreshCw, X } from 'lucide-react';
+import { Sparkles, ArrowRight, RefreshCw, X, AlertTriangle, AlertCircle, Lightbulb } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useState } from 'react';
+import { cn } from '@/lib/utils';
+import { WaiInsight } from '@/hooks/useWaiInsights';
 
-interface AiInsightCardProps {
-  insight?: AiInsight | null;
-  isLoading?: boolean;
-  onRefresh?: () => void;
+// Backward compatibility with old AiInsight type
+interface LegacyAiInsight {
+  id: string;
+  type: 'opportunity' | 'warning' | 'info';
+  title: string;
+  description: string;
+  confidence: number;
+  action: { label: string; href: string };
+  createdAt: string;
 }
 
-export function AiInsightCard({ insight, isLoading, onRefresh }: AiInsightCardProps) {
+interface AiInsightCardProps {
+  insight?: WaiInsight | LegacyAiInsight | null;
+  isLoading?: boolean;
+  onRefresh?: () => void;
+  onDismiss?: (id: string, source?: 'ai_insights' | 'ai_observer_alerts') => void;
+}
+
+const typeConfig = {
+  critical: {
+    bg: 'bg-gradient-to-r from-destructive to-destructive/80',
+    icon: AlertTriangle,
+    iconBg: 'bg-white/20',
+    textColor: 'text-white',
+  },
+  warning: {
+    bg: 'bg-gradient-to-r from-yellow-500 to-yellow-600',
+    icon: AlertCircle,
+    iconBg: 'bg-white/20',
+    textColor: 'text-white',
+  },
+  opportunity: {
+    bg: 'bg-gradient-to-r from-primary to-primary/80',
+    icon: Lightbulb,
+    iconBg: 'bg-white/20',
+    textColor: 'text-white',
+  },
+  info: {
+    bg: 'bg-gradient-to-r from-primary to-primary/80',
+    icon: Sparkles,
+    iconBg: 'bg-white/20',
+    textColor: 'text-white',
+  },
+};
+
+export function AiInsightCard({ insight, isLoading, onRefresh, onDismiss }: AiInsightCardProps) {
   const navigate = useNavigate();
   const [dismissed, setDismissed] = useState(false);
 
@@ -31,51 +71,64 @@ export function AiInsightCard({ insight, isLoading, onRefresh }: AiInsightCardPr
 
   if (!insight) return null;
 
+  const config = typeConfig[insight.type] || typeConfig.info;
+  const Icon = config.icon;
+  const source = 'source' in insight ? insight.source : undefined;
+
+  const handleDismiss = () => {
+    setDismissed(true);
+    if (onDismiss && source) {
+      onDismiss(insight.id, source);
+    }
+  };
+
   return (
-    <div className="ai-banner animate-slide-down">
-      {/* Icon */}
-      <div className="ai-banner-icon">
-        <Sparkles className="h-5 w-5" />
+    <div className={cn(
+      "rounded-lg border-0 p-4 animate-slide-down",
+      config.bg
+    )}>
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex items-center gap-4">
+          <div className={cn("flex h-10 w-10 items-center justify-center rounded-full", config.iconBg)}>
+            <Icon className={cn("h-5 w-5", config.textColor)} />
+          </div>
+          <div>
+            <p className={cn("font-medium", config.textColor)}>{insight.title}</p>
+            <p className={cn("text-sm opacity-80", config.textColor)}>{insight.description}</p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <Button
+            variant="secondary"
+            size="sm"
+            className="bg-white text-primary hover:bg-white/90"
+            onClick={() => navigate(insight.action.href)}
+          >
+            {insight.action.label}
+            <ArrowRight className="h-4 w-4 ml-2" />
+          </Button>
+
+          {onRefresh && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={onRefresh}
+              className="h-8 w-8 text-white/60 hover:text-white hover:bg-white/10"
+            >
+              <RefreshCw className="h-4 w-4" />
+            </Button>
+          )}
+
+          <button
+            onClick={handleDismiss}
+            className="h-8 w-8 flex items-center justify-center rounded-full text-white/60 hover:text-white hover:bg-white/10"
+            aria-label="Dispensar"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
       </div>
-
-      {/* Content */}
-      <div className="ai-banner-content">
-        <p className="ai-banner-text">
-          <strong className="font-semibold">{insight.title}:</strong>{' '}
-          {insight.description}
-        </p>
-      </div>
-
-      {/* Action button */}
-      <Button
-        size="sm"
-        onClick={() => navigate(insight.action.href)}
-        className="ai-banner-action flex-shrink-0"
-      >
-        {insight.action.label}
-        <ArrowRight className="h-4 w-4 ml-1" />
-      </Button>
-
-      {/* Refresh button */}
-      {onRefresh && (
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={onRefresh}
-          className="h-8 w-8 text-primary/60 hover:text-primary hover:bg-primary/10 flex-shrink-0"
-        >
-          <RefreshCw className="h-4 w-4" />
-        </Button>
-      )}
-
-      {/* Dismiss button */}
-      <button
-        onClick={() => setDismissed(true)}
-        className="ai-banner-dismiss flex-shrink-0"
-        aria-label="Dispensar"
-      >
-        <X className="h-4 w-4" />
-      </button>
     </div>
   );
 }
