@@ -417,13 +417,27 @@ export function usePurchaseReceipt() {
   // Finalizar recebimento
   const finalizeReceipt = useMutation({
     mutationFn: async (source: ReceiptSource) => {
-      if (!source.receipt_id) throw new Error("Recebimento não iniciado");
+      let receiptId = source.receipt_id;
+
+      // Se não há receipt_id no state, buscar do banco de dados
+      if (!receiptId) {
+        const { data: existingReceipt } = await supabase
+          .from("purchase_order_receipts")
+          .select("id")
+          .eq("purchase_order_id", source.id)
+          .neq("status", "complete")
+          .maybeSingle();
+        
+        receiptId = existingReceipt?.id || null;
+      }
+
+      if (!receiptId) throw new Error("Recebimento não iniciado");
 
       // Verificar itens recebidos
       const { data: items } = await supabase
         .from("purchase_order_receipt_items")
         .select("quantity_expected, quantity_received")
-        .eq("receipt_id", source.receipt_id);
+        .eq("receipt_id", receiptId);
 
       const allComplete = items?.every(i => i.quantity_received >= i.quantity_expected);
       const hasPartial = items?.some(i => i.quantity_received > 0 && i.quantity_received < i.quantity_expected);
@@ -442,7 +456,7 @@ export function usePurchaseReceipt() {
           status: newStatus,
           completed_at: allComplete ? new Date().toISOString() : null,
         })
-        .eq("id", source.receipt_id);
+        .eq("id", receiptId);
 
       // Atualizar status do pedido
       await supabase
@@ -452,7 +466,7 @@ export function usePurchaseReceipt() {
 
       // Log
       await supabase.from("purchase_order_receipt_logs").insert({
-        receipt_id: source.receipt_id,
+        receipt_id: receiptId,
         action: allComplete ? 'receipt_completed' : 'receipt_saved_partial',
         user_name: 'Usuário',
       });
