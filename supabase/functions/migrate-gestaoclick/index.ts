@@ -164,10 +164,10 @@ serve(async (req) => {
           external_id: gcId,
         };
 
-        // Verificar se já existe - regra: CPF/CNPJ + nome_fantasia define unicidade
+        // Verificar se já existe APENAS por external_id (GC ID)
+        // Cada registro no GC é único - se não tem external_id, é um registro novo
         let existingPessoa = null;
         
-        // Busca 1: por external_id (GC ID) - prioridade máxima
         if (gcId) {
           const { data } = await supabase
             .from('pessoas')
@@ -177,40 +177,13 @@ serve(async (req) => {
             .maybeSingle();
           existingPessoa = data;
         }
-        
-        // Busca 2: por CPF/CNPJ + nome_fantasia (chave de unicidade do sistema)
-        if (!existingPessoa && cpfCnpj && nomeFantasia) {
-          const { data } = await supabase
-            .from('pessoas')
-            .select('id, is_cliente, is_fornecedor, is_transportadora, external_id')
-            .eq('company_id', company_id)
-            .eq('cpf_cnpj', cpfCnpj)
-            .eq('nome_fantasia', nomeFantasia)
-            .maybeSingle();
-          existingPessoa = data;
-        }
-        
-        // Busca 3: fallback por CPF/CNPJ + razão social (para registros sem nome_fantasia)
-        if (!existingPessoa && cpfCnpj && razaoSocial && !nomeFantasia) {
-          const { data } = await supabase
-            .from('pessoas')
-            .select('id, is_cliente, is_fornecedor, is_transportadora, external_id')
-            .eq('company_id', company_id)
-            .eq('cpf_cnpj', cpfCnpj)
-            .eq('razao_social', razaoSocial)
-            .is('nome_fantasia', null)
-            .maybeSingle();
-          existingPessoa = data;
-        }
 
         if (existingPessoa) {
+          // Atualizar registro existente (já veio do GC antes)
           const updateData: any = { ...pessoaData };
-          // Preservar flags existentes
           if (existingPessoa.is_cliente) updateData.is_cliente = true;
           if (existingPessoa.is_fornecedor) updateData.is_fornecedor = true;
           if (existingPessoa.is_transportadora) updateData.is_transportadora = true;
-          // Sempre atualizar o external_id se veio do GC
-          if (gcId) updateData.external_id = gcId;
 
           const { error } = await supabase
             .from('pessoas')
@@ -219,6 +192,7 @@ serve(async (req) => {
 
           return error ? 'erro' : 'atualizado';
         } else {
+          // Inserir novo registro - cada unidade do GC é um cliente separado
           const { error } = await supabase.from('pessoas').insert(pessoaData);
           return error ? 'erro' : 'importado';
         }
