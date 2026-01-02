@@ -60,18 +60,22 @@ export default function Integracoes() {
   };
 
   // ===== FIELD CONTROL =====
-  const executarFieldControl = async (action: 'status' | 'migrate' | 'reset') => {
+  const [autoMigrating, setAutoMigrating] = useState(false);
+  
+  const executarFieldControl = async (action: 'status' | 'migrate' | 'reset', autoMode = false) => {
     if (!currentCompany?.id) {
       toast.error("Selecione uma empresa primeiro");
       return;
     }
 
-    setLoading(`field-${action}`);
-    setFieldControlResult(null);
+    if (!autoMode) {
+      setLoading(`field-${action}`);
+      setFieldControlResult(null);
+    }
 
     try {
       const { data, error } = await supabase.functions.invoke('migrate-gc-field', {
-        body: { action, company_id: currentCompany.id, limit: 50 }
+        body: { action, company_id: currentCompany.id, limit: 200 }
       });
 
       if (error) throw error;
@@ -92,22 +96,43 @@ export default function Integracoes() {
           current_batch: data.summary.criados
         });
         
-        if (data.has_more) {
-          toast.success(`${data.summary.criados} clientes criados. Clique novamente para continuar.`);
+        if (data.has_more && autoMigrating) {
+          // Auto-continuar após 1 segundo
+          setTimeout(() => executarFieldControl('migrate', true), 1000);
+        } else if (data.has_more && !autoMigrating) {
+          toast.success(`${data.summary.criados} clientes criados. Clique novamente ou use "Migrar Tudo".`);
         } else {
+          setAutoMigrating(false);
+          setLoading(null);
           toast.success("Migração para Field Control concluída!");
         }
       } else if (action === 'reset' && data.success) {
         setMigrationProgress(null);
+        setAutoMigrating(false);
         toast.success("Migração resetada!");
       }
     } catch (err: any) {
       console.error("Erro Field Control:", err);
       toast.error(err.message || "Erro ao executar ação Field Control");
       setFieldControlResult({ success: false, error: err.message });
+      setAutoMigrating(false);
     } finally {
-      setLoading(null);
+      if (!autoMigrating || action !== 'migrate') {
+        setLoading(null);
+      }
     }
+  };
+
+  const iniciarMigracaoCompleta = () => {
+    setAutoMigrating(true);
+    setLoading('field-migrate');
+    executarFieldControl('migrate', true);
+  };
+
+  const pararMigracao = () => {
+    setAutoMigrating(false);
+    setLoading(null);
+    toast.info("Migração pausada");
   };
 
   // ===== MATCHING FIELD CONTROL =====
@@ -390,22 +415,43 @@ export default function Integracoes() {
 
             <Button
               onClick={() => executarFieldControl('migrate')}
-              disabled={!!loading}
-              className="bg-blue-600 hover:bg-blue-700"
+              disabled={!!loading || autoMigrating}
+              variant="outline"
             >
-              {loading === 'field-migrate' ? (
+              {loading === 'field-migrate' && !autoMigrating ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               ) : (
                 <ArrowRight className="mr-2 h-4 w-4" />
               )}
-              {migrationProgress && migrationProgress.migrated > 0 
-                ? 'Continuar Migração' 
-                : 'Iniciar Migração'}
+              +200 Clientes
             </Button>
+
+            {!autoMigrating ? (
+              <Button
+                onClick={iniciarMigracaoCompleta}
+                disabled={!!loading}
+                className="bg-blue-600 hover:bg-blue-700"
+              >
+                {loading === 'field-migrate' ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <ArrowRight className="mr-2 h-4 w-4" />
+                )}
+                Migrar Tudo Automático
+              </Button>
+            ) : (
+              <Button
+                onClick={pararMigracao}
+                variant="secondary"
+              >
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Pausar Migração
+              </Button>
+            )}
 
             <Button
               onClick={() => executarFieldControl('reset')}
-              disabled={!!loading}
+              disabled={!!loading || autoMigrating}
               variant="destructive"
               size="sm"
             >
