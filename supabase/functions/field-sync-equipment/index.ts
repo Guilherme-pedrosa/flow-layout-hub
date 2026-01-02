@@ -15,6 +15,11 @@ interface FieldEquipment {
   notes?: string;
   customer?: { id: string };
   type?: { id: string; name?: string };
+  location?: string;
+  locationSector?: string;
+  locationEnvironment?: string;
+  qrCode?: string;
+  archived?: boolean;
 }
 
 serve(async (req) => {
@@ -125,13 +130,21 @@ async function syncCompanyEquipments(supabaseClient: any, company_id: string, ap
         }
       }
 
+      // Mapear campos corretamente:
+      // - name: nome do equipamento (ex: "AR CONDICIONADO ELGIN HW ECO INV F 12K R32")
+      // - number: número/código do equipamento
+      // - type.name: tipo do equipamento
       const equipmentData: any = {
         company_id,
-        serial_number: equipment.number || equipment.name || `FIELD-${fieldEquipmentId}`,
-        equipment_type: equipment.type?.name || equipment.type?.id || null,
+        serial_number: equipment.number || `FIELD-${fieldEquipmentId}`,
+        model: equipment.name || null, // Nome do equipamento vai para model
+        equipment_type: equipment.type?.name || null, // Tipo vai como texto
         notes: equipment.notes || null,
         field_equipment_id: fieldEquipmentId,
         is_active: true,
+        sector: equipment.locationSector || null,
+        environment: equipment.locationEnvironment || null,
+        location_description: equipment.location || null,
       };
 
       if (clientId) {

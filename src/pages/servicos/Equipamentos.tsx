@@ -399,14 +399,14 @@ export default function Equipamentos() {
             <div className="grid gap-2">
               <Label htmlFor="client_id">Cliente</Label>
               <Select
-                value={formData.client_id}
-                onValueChange={(value) => setFormData({ ...formData, client_id: value })}
+                value={formData.client_id || "none"}
+                onValueChange={(value) => setFormData({ ...formData, client_id: value === "none" ? "" : value })}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Selecione um cliente" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Sem cliente</SelectItem>
+                  <SelectItem value="none">Sem cliente</SelectItem>
                   {clientes.map((c) => (
                     <SelectItem key={c.id} value={c.id}>
                       {c.razao_social || c.nome_fantasia}
