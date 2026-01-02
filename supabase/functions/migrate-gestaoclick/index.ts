@@ -129,7 +129,8 @@ serve(async (req) => {
     ): Promise<'importado' | 'atualizado' | 'erro'> {
       try {
         const cpfCnpj = normalizeCpfCnpj(pessoa.cnpj || pessoa.cpf);
-        const nomeFantasia = pessoa.nome?.trim() || null;
+        // API GC: nome_fantasia é o campo correto, "nome" é fallback
+        const nomeFantasia = pessoa.nome_fantasia?.trim() || pessoa.nome?.trim() || null;
         const razaoSocial = pessoa.razao_social?.trim() || nomeFantasia;
         const gcId = pessoa.id?.toString() || null;
 
