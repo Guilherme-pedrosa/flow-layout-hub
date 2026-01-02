@@ -164,23 +164,52 @@ serve(async (req) => {
           external_id: gcId,
         };
 
-        // Verificar se já existe
+        // Verificar se já existe - primeiro por external_id, depois por CPF/CNPJ + nome
         let existingPessoa = null;
+        
+        // Busca 1: por external_id (GC ID)
         if (gcId) {
           const { data } = await supabase
             .from('pessoas')
-            .select('id, is_cliente, is_fornecedor, is_transportadora')
+            .select('id, is_cliente, is_fornecedor, is_transportadora, external_id')
             .eq('company_id', company_id)
             .eq('external_id', gcId)
+            .maybeSingle();
+          existingPessoa = data;
+        }
+        
+        // Busca 2: se não achou por GC ID, buscar por CPF/CNPJ + razão social (para registros pré-existentes)
+        if (!existingPessoa && cpfCnpj && razaoSocial) {
+          const { data } = await supabase
+            .from('pessoas')
+            .select('id, is_cliente, is_fornecedor, is_transportadora, external_id')
+            .eq('company_id', company_id)
+            .eq('cpf_cnpj', cpfCnpj)
+            .eq('razao_social', razaoSocial)
+            .maybeSingle();
+          existingPessoa = data;
+        }
+        
+        // Busca 3: se não achou por razão social, tentar por CPF/CNPJ + nome fantasia
+        if (!existingPessoa && cpfCnpj && nomeFantasia) {
+          const { data } = await supabase
+            .from('pessoas')
+            .select('id, is_cliente, is_fornecedor, is_transportadora, external_id')
+            .eq('company_id', company_id)
+            .eq('cpf_cnpj', cpfCnpj)
+            .eq('nome_fantasia', nomeFantasia)
             .maybeSingle();
           existingPessoa = data;
         }
 
         if (existingPessoa) {
           const updateData: any = { ...pessoaData };
+          // Preservar flags existentes
           if (existingPessoa.is_cliente) updateData.is_cliente = true;
           if (existingPessoa.is_fornecedor) updateData.is_fornecedor = true;
           if (existingPessoa.is_transportadora) updateData.is_transportadora = true;
+          // Sempre atualizar o external_id se veio do GC
+          if (gcId) updateData.external_id = gcId;
 
           const { error } = await supabase
             .from('pessoas')
