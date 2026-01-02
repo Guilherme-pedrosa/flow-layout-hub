@@ -328,28 +328,8 @@ serve(async (req) => {
           continue;
         }
 
-        // 2. Verificar se já existe no Field pelo CNPJ/CPF (evita duplicatas com códigos diferentes)
-        if (cnpjLimpo) {
-          const existingByDoc = await buscarClientePorDocumento(apiKey, cnpjLimpo);
-          if (existingByDoc) {
-            console.log(`[migrate-gc-field] Cliente com doc ${formatCnpj(cnpjLimpo)} já existe no Field: ${existingByDoc.id} (number: ${existingByDoc.number})`);
-            
-            // Salvar mapeamento com o ID existente
-            await supabase.from('field_control_sync').upsert({
-              company_id,
-              entity_type: 'customer_gc',
-              wai_id: cliente.id,
-              field_id: existingByDoc.id,
-              last_sync: new Date().toISOString()
-            }, { onConflict: 'wai_id,entity_type' });
-            
-            // Marcar CNPJ como já utilizado
-            cnpjsJaUtilizados.add(cnpjLimpo);
-            
-            skipped++;
-            continue;
-          }
-        }
+        // NOTA: NÃO verificamos por CNPJ porque o cliente pode ter múltiplas unidades
+        // com o mesmo CNPJ mas locais/gestões diferentes. Cada registro no WAI = 1 cliente no Field.
 
         // Montar payload com address obrigatório (incluindo coords)
         const fieldPayload: {
