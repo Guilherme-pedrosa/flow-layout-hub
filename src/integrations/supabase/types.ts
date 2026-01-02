@@ -151,6 +151,139 @@ export type Database = {
           },
         ]
       }
+      ai_decision_log: {
+        Row: {
+          alert_id: string | null
+          company_id: string
+          created_at: string
+          decided_at: string
+          decided_by: string | null
+          decision_data: Json | null
+          decision_label: string
+          decision_type: string
+          id: string
+          notes: string | null
+        }
+        Insert: {
+          alert_id?: string | null
+          company_id: string
+          created_at?: string
+          decided_at?: string
+          decided_by?: string | null
+          decision_data?: Json | null
+          decision_label: string
+          decision_type: string
+          id?: string
+          notes?: string | null
+        }
+        Update: {
+          alert_id?: string | null
+          company_id?: string
+          created_at?: string
+          decided_at?: string
+          decided_by?: string | null
+          decision_data?: Json | null
+          decision_label?: string
+          decision_type?: string
+          id?: string
+          notes?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_decision_log_alert_id_fkey"
+            columns: ["alert_id"]
+            isOneToOne: false
+            referencedRelation: "ai_alerts_ranked"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_decision_log_alert_id_fkey"
+            columns: ["alert_id"]
+            isOneToOne: false
+            referencedRelation: "ai_observer_alerts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_decision_log_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_decision_log_decided_by_fkey"
+            columns: ["decided_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ai_economic_memory: {
+        Row: {
+          avg_margin_impact: number | null
+          company_id: string
+          created_at: string
+          critical_alerts: number | null
+          entity_id: string
+          entity_name: string | null
+          entity_type: string
+          first_alert_at: string | null
+          id: string
+          last_alert_at: string | null
+          last_alert_types: string[] | null
+          recurring_issues: Json | null
+          total_alerts: number | null
+          total_potential_loss: number | null
+          updated_at: string
+          warning_alerts: number | null
+        }
+        Insert: {
+          avg_margin_impact?: number | null
+          company_id: string
+          created_at?: string
+          critical_alerts?: number | null
+          entity_id: string
+          entity_name?: string | null
+          entity_type: string
+          first_alert_at?: string | null
+          id?: string
+          last_alert_at?: string | null
+          last_alert_types?: string[] | null
+          recurring_issues?: Json | null
+          total_alerts?: number | null
+          total_potential_loss?: number | null
+          updated_at?: string
+          warning_alerts?: number | null
+        }
+        Update: {
+          avg_margin_impact?: number | null
+          company_id?: string
+          created_at?: string
+          critical_alerts?: number | null
+          entity_id?: string
+          entity_name?: string | null
+          entity_type?: string
+          first_alert_at?: string | null
+          id?: string
+          last_alert_at?: string | null
+          last_alert_types?: string[] | null
+          recurring_issues?: Json | null
+          total_alerts?: number | null
+          total_potential_loss?: number | null
+          updated_at?: string
+          warning_alerts?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_economic_memory_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ai_insights: {
         Row: {
           action_data: Json | null
@@ -162,8 +295,10 @@ export type Database = {
           created_at: string
           dismissed_at: string | null
           dismissed_by: string | null
+          economic_priority_score: number | null
           expires_at: string | null
           id: string
+          insight_category: string | null
           is_dismissed: boolean
           is_read: boolean
           message: string
@@ -184,8 +319,10 @@ export type Database = {
           created_at?: string
           dismissed_at?: string | null
           dismissed_by?: string | null
+          economic_priority_score?: number | null
           expires_at?: string | null
           id?: string
+          insight_category?: string | null
           is_dismissed?: boolean
           is_read?: boolean
           message: string
@@ -206,8 +343,10 @@ export type Database = {
           created_at?: string
           dismissed_at?: string | null
           dismissed_by?: string | null
+          economic_priority_score?: number | null
           expires_at?: string | null
           id?: string
+          insight_category?: string | null
           is_dismissed?: boolean
           is_read?: boolean
           message?: string
@@ -240,10 +379,14 @@ export type Database = {
           action_taken: string | null
           actioned_at: string | null
           actioned_by: string | null
+          alert_category: string | null
           alert_hash: string
           company_id: string
           context_data: Json | null
           created_at: string
+          decision_options: Json | null
+          downstream_entities: Json | null
+          economic_priority_score: number | null
           economic_reason: string
           event_source_id: string | null
           event_source_type: string | null
@@ -258,9 +401,11 @@ export type Database = {
           margin_change_percent: number | null
           mode: string
           potential_loss: number | null
+          projected_loss_30d: number | null
           raw_ai_response: Json | null
           recommendation: string | null
           requires_human_decision: boolean | null
+          root_cause: string | null
           severity: string
           updated_at: string
         }
@@ -268,10 +413,14 @@ export type Database = {
           action_taken?: string | null
           actioned_at?: string | null
           actioned_by?: string | null
+          alert_category?: string | null
           alert_hash: string
           company_id: string
           context_data?: Json | null
           created_at?: string
+          decision_options?: Json | null
+          downstream_entities?: Json | null
+          economic_priority_score?: number | null
           economic_reason: string
           event_source_id?: string | null
           event_source_type?: string | null
@@ -286,9 +435,11 @@ export type Database = {
           margin_change_percent?: number | null
           mode: string
           potential_loss?: number | null
+          projected_loss_30d?: number | null
           raw_ai_response?: Json | null
           recommendation?: string | null
           requires_human_decision?: boolean | null
+          root_cause?: string | null
           severity: string
           updated_at?: string
         }
@@ -296,10 +447,14 @@ export type Database = {
           action_taken?: string | null
           actioned_at?: string | null
           actioned_by?: string | null
+          alert_category?: string | null
           alert_hash?: string
           company_id?: string
           context_data?: Json | null
           created_at?: string
+          decision_options?: Json | null
+          downstream_entities?: Json | null
+          economic_priority_score?: number | null
           economic_reason?: string
           event_source_id?: string | null
           event_source_type?: string | null
@@ -314,9 +469,11 @@ export type Database = {
           margin_change_percent?: number | null
           mode?: string
           potential_loss?: number | null
+          projected_loss_30d?: number | null
           raw_ai_response?: Json | null
           recommendation?: string | null
           requires_human_decision?: boolean | null
+          root_cause?: string | null
           severity?: string
           updated_at?: string
         }
@@ -461,6 +618,50 @@ export type Database = {
             foreignKeyName: "ai_settings_company_id_fkey"
             columns: ["company_id"]
             isOneToOne: true
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ai_silence_rules: {
+        Row: {
+          company_id: string
+          cooldown_hours: number | null
+          created_at: string
+          event_type: string | null
+          id: string
+          is_active: boolean | null
+          min_margin_change: number | null
+          rule_type: string
+          updated_at: string
+        }
+        Insert: {
+          company_id: string
+          cooldown_hours?: number | null
+          created_at?: string
+          event_type?: string | null
+          id?: string
+          is_active?: boolean | null
+          min_margin_change?: number | null
+          rule_type: string
+          updated_at?: string
+        }
+        Update: {
+          company_id?: string
+          cooldown_hours?: number | null
+          created_at?: string
+          event_type?: string | null
+          id?: string
+          is_active?: boolean | null
+          min_margin_change?: number | null
+          rule_type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_silence_rules_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
             referencedRelation: "companies"
             referencedColumns: ["id"]
           },
@@ -6919,7 +7120,61 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      ai_alerts_ranked: {
+        Row: {
+          action_taken: string | null
+          actioned_at: string | null
+          actioned_by: string | null
+          alert_category: string | null
+          alert_hash: string | null
+          company_id: string | null
+          context_data: Json | null
+          created_at: string | null
+          decision_options: Json | null
+          downstream_entities: Json | null
+          economic_priority_score: number | null
+          economic_reason: string | null
+          entity_recurrence_count: number | null
+          entity_total_loss: number | null
+          event_source_id: string | null
+          event_source_type: string | null
+          event_type: string | null
+          id: string | null
+          impacted_entities: Json | null
+          is_actioned: boolean | null
+          is_dismissed: boolean | null
+          is_read: boolean | null
+          margin_after: number | null
+          margin_before: number | null
+          margin_change_percent: number | null
+          mode: string | null
+          potential_loss: number | null
+          priority_rank: number | null
+          projected_loss_30d: number | null
+          raw_ai_response: Json | null
+          recommendation: string | null
+          requires_human_decision: boolean | null
+          root_cause: string | null
+          severity: string | null
+          updated_at: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_observer_alerts_actioned_by_fkey"
+            columns: ["actioned_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_observer_alerts_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       ai_check_duplicate_alert: {
@@ -6971,6 +7226,25 @@ export type Database = {
       ai_get_vendas_analysis: {
         Args: { p_company_id: string; p_periodo_dias?: number }
         Returns: Json
+      }
+      ai_should_silence_alert: {
+        Args: {
+          p_alert_hash: string
+          p_company_id: string
+          p_event_type: string
+          p_margin_change: number
+        }
+        Returns: boolean
+      }
+      calculate_economic_priority: {
+        Args: {
+          p_impacted_count: number
+          p_margin_change_percent: number
+          p_potential_loss: number
+          p_recurrence_count: number
+          p_severity: string
+        }
+        Returns: number
       }
       get_user_companies: { Args: never; Returns: string[] }
       get_user_company_id: { Args: never; Returns: string }
