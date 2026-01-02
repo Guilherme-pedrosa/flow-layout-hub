@@ -78,7 +78,11 @@ export default function Equipamentos() {
   });
 
   const handleSync = async () => {
-    if (!currentCompany) return;
+    if (!currentCompany) {
+      toast.error('Selecione uma empresa primeiro');
+      return;
+    }
+    console.log('[handleSync] company_id:', currentCompany.id);
     setSyncing(true);
     try {
       const { data, error } = await supabase.functions.invoke('field-sync-equipment', {
