@@ -110,8 +110,15 @@ export function ClientesList() {
                   className="w-12"
                 />
                 <SortableTableHeader
-                  label="Razão Social / Nome"
+                  label="Razão Social"
                   sortKey="razao_social"
+                  currentSortKey={sortConfig.key}
+                  sortDirection={sortConfig.direction}
+                  onSort={requestSort}
+                />
+                <SortableTableHeader
+                  label="Nome Fantasia"
+                  sortKey="nome_fantasia"
                   currentSortKey={sortConfig.key}
                   sortDirection={sortConfig.direction}
                   onSort={requestSort}
@@ -164,13 +171,13 @@ export function ClientesList() {
             <TableBody>
               {isLoadingClientes ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
                     Carregando...
                   </TableCell>
                 </TableRow>
               ) : sortedClientes.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
                     {search ? 'Nenhum cliente encontrado' : 'Nenhum cliente cadastrado'}
                   </TableCell>
                 </TableRow>
@@ -181,12 +188,10 @@ export function ClientesList() {
                       {getTipoPessoaIcon(cliente.tipo_pessoa)}
                     </TableCell>
                     <TableCell>
-                      <div>
-                        <p className="font-medium">{cliente.razao_social || '-'}</p>
-                        {cliente.nome_fantasia && (
-                          <p className="text-sm text-muted-foreground">{cliente.nome_fantasia}</p>
-                        )}
-                      </div>
+                      <p className="font-medium">{cliente.razao_social || '-'}</p>
+                    </TableCell>
+                    <TableCell>
+                      <p className="text-sm text-muted-foreground">{cliente.nome_fantasia || '-'}</p>
                     </TableCell>
                     <TableCell className="font-mono text-sm">
                       {cliente.cpf_cnpj ? formatCpfCnpj(cliente.cpf_cnpj) : '-'}
