@@ -352,10 +352,19 @@ Cada insight deve ter:
 - title: título curto e direto (máx 50 caracteres)
 - message: mensagem explicativa com dados concretos (máx 200 caracteres)
 - action_label: texto do botão de ação (máx 20 caracteres)
-- action_url: uma das URLs: /ajustes, /solicitacoes, /contas-pagar, /contas-receber, /saldo-estoque, /vendas, /produtos
+- action_url: URL de ação COM DEEP-LINK quando aplicável
 - priority: 1-10 (10 = mais urgente)
 
-REGRAS:
+REGRAS PARA action_url:
+- Para produtos específicos SEM CUSTO: use "/produtos?edit={ID_DO_PRODUTO}&tab=valores" (substitua {ID_DO_PRODUTO} pelo ID real do produto que está no contexto com [ID:xxx])
+- Para estoque negativo/baixo: use "/ajustes" ou "/solicitacoes"
+- Para contas a pagar: use "/contas-pagar"
+- Para contas a receber: use "/contas-receber"
+- Para visão geral de estoque: use "/saldo-estoque"
+- Para vendas: use "/vendas"
+- SEMPRE use deep-link com ID quando o insight mencionar um produto específico
+
+REGRAS GERAIS:
 ${categoryRule}
 - Priorize problemas CRÍTICOS primeiro
 - Seja ESPECÍFICO com números reais dos dados
