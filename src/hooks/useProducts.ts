@@ -146,6 +146,11 @@ export function useProducts() {
     };
   };
 
+  // Função auxiliar para calcular custo final
+  const calculateFinalCost = (purchasePrice: number, accessoryExpenses: number, otherExpenses: number): number => {
+    return (purchasePrice || 0) + (accessoryExpenses || 0) + (otherExpenses || 0);
+  };
+
   const createProduct = useMutation({
     mutationFn: async (product: ProductInsert) => {
       if (!currentCompany) throw new Error("Nenhuma empresa selecionada");
@@ -161,9 +166,20 @@ export function useProducts() {
         throw new Error(`Código duplicado! O produto "${duplicateCheck.duplicateCodeProduct?.description}" já usa o código "${product.code}". Altere o código.`);
       }
       
+      // Garantir que final_cost seja calculado corretamente
+      const finalCost = calculateFinalCost(
+        product.purchase_price || 0,
+        product.accessory_expenses || 0,
+        product.other_expenses || 0
+      );
+      
       const { data, error } = await supabase
         .from("products")
-        .insert({ ...product, company_id: currentCompany.id })
+        .insert({ 
+          ...product, 
+          company_id: currentCompany.id,
+          final_cost: finalCost,
+        })
         .select()
         .single();
 
@@ -188,16 +204,19 @@ export function useProducts() {
 
   const updateProduct = useMutation({
     mutationFn: async ({ id, ...updates }: ProductUpdate & { id: string }) => {
+      // Buscar produto atual para calcular custo final
+      const { data: currentProduct, error: fetchError } = await supabase
+        .from("products")
+        .select("code, description, purchase_price, accessory_expenses, other_expenses")
+        .eq("id", id)
+        .single();
+      
+      if (fetchError) throw fetchError;
+      
       // Validar duplicidade antes de atualizar (excluindo o próprio produto)
       if (updates.code || updates.description) {
-        const currentProduct = await supabase
-          .from("products")
-          .select("code, description")
-          .eq("id", id)
-          .single();
-        
-        const codeToCheck = updates.code || currentProduct.data?.code || '';
-        const descriptionToCheck = updates.description || currentProduct.data?.description || '';
+        const codeToCheck = updates.code || currentProduct?.code || '';
+        const descriptionToCheck = updates.description || currentProduct?.description || '';
         
         const duplicateCheck = await checkDuplicates(codeToCheck, descriptionToCheck, id);
         
@@ -216,9 +235,16 @@ export function useProducts() {
         }
       }
       
+      // SEMPRE recalcular final_cost ao salvar
+      const purchasePrice = updates.purchase_price !== undefined ? updates.purchase_price : (currentProduct?.purchase_price || 0);
+      const accessoryExpenses = updates.accessory_expenses !== undefined ? updates.accessory_expenses : (currentProduct?.accessory_expenses || 0);
+      const otherExpenses = updates.other_expenses !== undefined ? updates.other_expenses : (currentProduct?.other_expenses || 0);
+      
+      const finalCost = calculateFinalCost(purchasePrice, accessoryExpenses, otherExpenses);
+      
       const { data, error } = await supabase
         .from("products")
-        .update(updates)
+        .update({ ...updates, final_cost: finalCost })
         .eq("id", id)
         .select()
         .single();
