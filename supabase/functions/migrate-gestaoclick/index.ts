@@ -124,6 +124,8 @@ serve(async (req) => {
     };
 
     // Função para processar uma pessoa
+    // IMPORTANTE: Cada registro do Gestão Click é importado individualmente,
+    // mesmo que tenha o mesmo CNPJ (filiais, unidades diferentes, etc.)
     async function processarPessoa(
       pessoa: any, 
       tipo: 'cliente' | 'fornecedor' | 'transportadora'
@@ -132,6 +134,7 @@ serve(async (req) => {
         const cpfCnpj = normalizeCpfCnpj(pessoa.cnpj || pessoa.cpf);
         const nomeFantasia = pessoa.nome?.trim() || null;
         const razaoSocial = pessoa.razao_social?.trim() || nomeFantasia;
+        const gcId = pessoa.id?.toString() || null; // ID do Gestão Click para identificar registro único
 
         // Validar dados mínimos
         if (!cpfCnpj) {
@@ -146,14 +149,6 @@ serve(async (req) => {
 
         // Buscar endereço principal
         const endereco = pessoa.enderecos?.[0]?.endereco || {};
-
-        // Verificar se já existe pelo CNPJ/CPF
-        const { data: existingPessoa } = await supabase
-          .from('pessoas')
-          .select('id, is_cliente, is_fornecedor, is_transportadora')
-          .eq('company_id', company_id)
-          .eq('cpf_cnpj', cpfCnpj)
-          .maybeSingle();
 
         // Determinar tipo_pessoa baseado no tamanho do documento
         const tipoPessoa = cpfCnpj.length === 11 ? 'PF' : 'PJ';
@@ -179,10 +174,23 @@ serve(async (req) => {
           is_cliente: tipo === 'cliente',
           is_fornecedor: tipo === 'fornecedor',
           is_transportadora: tipo === 'transportadora',
+          external_id: gcId, // Guardar o ID do Gestão Click para referência
         };
 
+        // Verificar se já existe pelo ID externo do Gestão Click (identificador único real)
+        let existingPessoa = null;
+        if (gcId) {
+          const { data } = await supabase
+            .from('pessoas')
+            .select('id, is_cliente, is_fornecedor, is_transportadora')
+            .eq('company_id', company_id)
+            .eq('external_id', gcId)
+            .maybeSingle();
+          existingPessoa = data;
+        }
+
         if (existingPessoa) {
-          // Atualizar: manter flags existentes + adicionar nova
+          // Atualizar registro existente (mesmo ID do GC)
           const updateData: any = { ...pessoaData };
           
           if (existingPessoa.is_cliente) updateData.is_cliente = true;
@@ -199,24 +207,24 @@ serve(async (req) => {
             .eq('id', existingPessoa.id);
 
           if (error) {
-            console.error(`[migrate-gestaoclick] Erro ao atualizar ${cpfCnpj}:`, error.message);
+            console.error(`[migrate-gestaoclick] Erro ao atualizar ${cpfCnpj} (GC ID: ${gcId}):`, error.message);
             return 'erro';
           }
           
-          console.log(`[migrate-gestaoclick] Atualizado: ${razaoSocial} (${cpfCnpj})`);
+          console.log(`[migrate-gestaoclick] Atualizado: ${razaoSocial} (${cpfCnpj}, GC ID: ${gcId})`);
           return 'atualizado';
         } else {
-          // Inserir novo
+          // Inserir novo - cada registro do GC vira um registro separado
           const { error } = await supabase
             .from('pessoas')
             .insert(pessoaData);
 
           if (error) {
-            console.error(`[migrate-gestaoclick] Erro ao inserir ${cpfCnpj}:`, error.message);
+            console.error(`[migrate-gestaoclick] Erro ao inserir ${cpfCnpj} (GC ID: ${gcId}):`, error.message);
             return 'erro';
           }
           
-          console.log(`[migrate-gestaoclick] Importado: ${razaoSocial} (${cpfCnpj})`);
+          console.log(`[migrate-gestaoclick] Importado: ${razaoSocial} (${cpfCnpj}, GC ID: ${gcId})`);
           return 'importado';
         }
       } catch (e) {
