@@ -6,7 +6,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const FIELD_CONTROL_BASE_URL = 'https://production.fieldcontrol.com.br';
+const FIELD_CONTROL_BASE_URL = 'https://carchost.fieldcontrol.com.br';
 
 interface ServiceOrderData {
   id: string;
