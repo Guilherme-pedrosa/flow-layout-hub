@@ -140,3 +140,9 @@ verify_jwt = false
 
 [functions.field-webhook]
 verify_jwt = false
+
+[functions.wai-observer]
+verify_jwt = false
+
+[functions.field-create-equipment]
+verify_jwt = false
