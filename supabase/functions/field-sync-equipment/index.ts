@@ -59,11 +59,14 @@ serve(async (req) => {
       return new Response(JSON.stringify({ success: false, error: 'company_id é obrigatório' }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 });
     }
 
-    const { data: settings } = await supabaseClient
+    const { data: settings, error: settingsError } = await supabaseClient
       .from('system_settings')
       .select('field_control_api_key')
       .eq('company_id', company_id)
-      .single();
+      .not('field_control_api_key', 'is', null)
+      .maybeSingle();
+
+    console.log('[field-sync-equipment] Settings:', settings, 'Error:', settingsError);
 
     if (!settings?.field_control_api_key) {
       return new Response(JSON.stringify({ success: false, error: 'API Key do Field Control não configurada' }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 });
