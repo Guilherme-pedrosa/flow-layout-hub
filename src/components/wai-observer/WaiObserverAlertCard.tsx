@@ -9,12 +9,15 @@ import {
   CheckCircle,
   ChevronDown,
   ChevronUp,
+  AlertCircle,
+  ThumbsDown,
 } from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
+import { useAiFeedback } from "@/hooks/useAiFeedback";
 import type { WaiObserverAlert } from "@/hooks/useWaiObserver";
 
 interface WaiObserverAlertCardProps {
@@ -22,6 +25,7 @@ interface WaiObserverAlertCardProps {
   onMarkRead: (id: string) => void;
   onDismiss: (id: string) => void;
   onRecordAction: (id: string, action: string) => void;
+  onAlertUpdated?: () => void;
 }
 
 export function WaiObserverAlertCard({
@@ -29,10 +33,13 @@ export function WaiObserverAlertCard({
   onMarkRead,
   onDismiss,
   onRecordAction,
+  onAlertUpdated,
 }: WaiObserverAlertCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [actionText, setActionText] = useState("");
   const [showActionInput, setShowActionInput] = useState(false);
+  
+  const { dismissAsFalsePositive, markAsActioned, escalateAlert, isLoading } = useAiFeedback();
 
   const severityConfig = {
     info: {
@@ -55,11 +62,30 @@ export function WaiObserverAlertCard({
   const config = severityConfig[alert.severity];
   const Icon = config.icon;
 
-  const handleRecordAction = () => {
+  const handleRecordAction = async () => {
     if (actionText.trim()) {
-      onRecordAction(alert.id, actionText);
-      setShowActionInput(false);
-      setActionText("");
+      const success = await markAsActioned(alert.id, actionText);
+      if (success) {
+        onRecordAction(alert.id, actionText);
+        setShowActionInput(false);
+        setActionText("");
+        onAlertUpdated?.();
+      }
+    }
+  };
+
+  const handleDismissAsFalsePositive = async () => {
+    const success = await dismissAsFalsePositive(alert.id);
+    if (success) {
+      onDismiss(alert.id);
+      onAlertUpdated?.();
+    }
+  };
+
+  const handleEscalate = async () => {
+    const success = await escalateAlert(alert.id, "Escalado pelo usuário");
+    if (success) {
+      onAlertUpdated?.();
     }
   };
 
@@ -109,16 +135,40 @@ export function WaiObserverAlertCard({
                 className="h-8 w-8"
                 onClick={() => onMarkRead(alert.id)}
                 title="Marcar como lido"
+                disabled={isLoading}
               >
                 <Eye className="h-4 w-4" />
               </Button>
             )}
+            {alert.severity !== "critical" && !alert.is_actioned && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-orange-600 hover:text-orange-700 hover:bg-orange-50"
+                onClick={handleEscalate}
+                title="Escalar para decisão crítica"
+                disabled={isLoading}
+              >
+                <AlertCircle className="h-4 w-4" />
+              </Button>
+            )}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 text-muted-foreground hover:text-destructive"
+              onClick={handleDismissAsFalsePositive}
+              title="Falso positivo"
+              disabled={isLoading}
+            >
+              <ThumbsDown className="h-4 w-4" />
+            </Button>
             <Button
               variant="ghost"
               size="icon"
               className="h-8 w-8"
               onClick={() => onDismiss(alert.id)}
               title="Dispensar"
+              disabled={isLoading}
             >
               <X className="h-4 w-4" />
             </Button>
@@ -244,10 +294,10 @@ export function WaiObserverAlertCard({
                   <Button
                     size="sm"
                     onClick={handleRecordAction}
-                    disabled={!actionText.trim()}
+                    disabled={!actionText.trim() || isLoading}
                   >
                     <CheckCircle className="h-4 w-4 mr-1" />
-                    Registrar
+                    {isLoading ? "Salvando..." : "Registrar"}
                   </Button>
                   <Button
                     variant="ghost"
