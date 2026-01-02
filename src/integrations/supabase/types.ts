@@ -4808,6 +4808,7 @@ export type Database = {
           quantity_pending: number | null
           quantity_received: number
           receipt_id: string
+          stock_updated: boolean | null
           updated_at: string
         }
         Insert: {
@@ -4820,6 +4821,7 @@ export type Database = {
           quantity_pending?: number | null
           quantity_received?: number
           receipt_id: string
+          stock_updated?: boolean | null
           updated_at?: string
         }
         Update: {
@@ -4832,6 +4834,7 @@ export type Database = {
           quantity_pending?: number | null
           quantity_received?: number
           receipt_id?: string
+          stock_updated?: boolean | null
           updated_at?: string
         }
         Relationships: [
