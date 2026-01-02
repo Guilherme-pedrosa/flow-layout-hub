@@ -95,9 +95,14 @@ async function syncCompanyEquipments(supabaseClient: any, company_id: string, ap
   }
 
   const equipmentsData = await equipmentsResponse.json();
+  console.log('[field-sync-equipment] Raw response keys:', Object.keys(equipmentsData));
+  console.log('[field-sync-equipment] First item sample:', JSON.stringify(equipmentsData[0] || equipmentsData.data?.[0] || equipmentsData.items?.[0] || 'empty'));
+  
   let equipments: FieldEquipment[] = Array.isArray(equipmentsData) ? equipmentsData : (equipmentsData.data || equipmentsData.items || equipmentsData.equipments || []);
+  console.log('[field-sync-equipment] Total equipments from API:', equipments.length);
 
   let created = 0, updated = 0, errors = 0;
+  const errorDetails: string[] = [];
 
   for (const equipment of equipments) {
     try {
@@ -134,17 +139,27 @@ async function syncCompanyEquipments(supabaseClient: any, company_id: string, ap
       }
 
       if (existing?.id) {
-        await supabaseClient.from('equipments').update({ ...equipmentData, updated_at: new Date().toISOString() }).eq('id', existing.id);
+        const { error: updateError } = await supabaseClient.from('equipments').update({ ...equipmentData, updated_at: new Date().toISOString() }).eq('id', existing.id);
+        if (updateError) {
+          console.error('[field-sync-equipment] Erro update:', updateError);
+          throw updateError;
+        }
         updated++;
       } else {
-        await supabaseClient.from('equipments').insert(equipmentData);
+        const { error: insertError } = await supabaseClient.from('equipments').insert(equipmentData);
+        if (insertError) {
+          console.error('[field-sync-equipment] Erro insert:', insertError, 'Data:', equipmentData);
+          throw insertError;
+        }
         created++;
       }
-    } catch (err) {
-      console.error('[field-sync-equipment] Erro ao processar equipamento:', err);
+    } catch (err: any) {
+      console.log('[field-sync-equipment] CATCH erro ao processar:', err?.message || err);
+      errorDetails.push(err?.message || String(err));
       errors++;
     }
   }
 
-  return { success: true, created, updated, errors, total: equipments.length };
+  console.log('[field-sync-equipment] Resultado final:', { created, updated, errors, total: equipments.length });
+  return { success: true, created, updated, errors, total: equipments.length, errorDetails: errorDetails.slice(0, 5) };
 }
