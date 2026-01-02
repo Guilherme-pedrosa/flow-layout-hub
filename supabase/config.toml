@@ -131,3 +131,12 @@ verify_jwt = false
 
 [functions.nfe-focus]
 verify_jwt = false
+
+[functions.field-equipment-types]
+verify_jwt = false
+
+[functions.field-create-task]
+verify_jwt = false
+
+[functions.field-webhook]
+verify_jwt = false

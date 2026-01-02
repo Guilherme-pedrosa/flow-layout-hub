@@ -6059,6 +6059,7 @@ export type Database = {
           products_total: number | null
           reported_issue: string | null
           sales_channel: string | null
+          scheduled_date: string | null
           scheduled_time: string | null
           seller_id: string | null
           service_type_id: string | null
@@ -6115,6 +6116,7 @@ export type Database = {
           products_total?: number | null
           reported_issue?: string | null
           sales_channel?: string | null
+          scheduled_date?: string | null
           scheduled_time?: string | null
           seller_id?: string | null
           service_type_id?: string | null
@@ -6171,6 +6173,7 @@ export type Database = {
           products_total?: number | null
           reported_issue?: string | null
           sales_channel?: string | null
+          scheduled_date?: string | null
           scheduled_time?: string | null
           seller_id?: string | null
           service_type_id?: string | null
