@@ -7,7 +7,7 @@ const corsHeaders = {
 };
 
 const FIELD_CONTROL_BASE_URL = 'https://carchost.fieldcontrol.com.br';
-const BATCH_SIZE = 50;
+const BATCH_SIZE = 200;
 
 interface MigrateRequest {
   company_id: string;
@@ -130,6 +130,37 @@ async function buscarClientePorNumber(apiKey: string, number: string): Promise<s
     }
   } catch (error) {
     console.log(`[migrate-gc-field] Erro buscando por number ${number}: ${error}`);
+  }
+  return null;
+}
+
+/**
+ * Busca cliente existente no Field Control pelo documento (CPF/CNPJ)
+ */
+async function buscarClientePorDocumento(apiKey: string, documento: string): Promise<{ id: string; number: string } | null> {
+  try {
+    const response = await fetch(`${FIELD_CONTROL_BASE_URL}/customers?document=${encodeURIComponent(documento)}`, {
+      method: 'GET',
+      headers: { 'X-Api-Key': apiKey }
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      const items = Array.isArray(data) ? data : (data?.items || []);
+      
+      // Buscar cliente com documento exatamente igual
+      const cleanDoc = documento.replace(/\D/g, '');
+      const exactMatch = items.find((item: any) => {
+        const itemDoc = (item.document || '').replace(/\D/g, '');
+        return itemDoc === cleanDoc;
+      });
+      
+      if (exactMatch) {
+        return { id: exactMatch.id, number: exactMatch.number || '' };
+      }
+    }
+  } catch (error) {
+    console.log(`[migrate-gc-field] Erro buscando por documento ${documento}: ${error}`);
   }
   return null;
 }
@@ -279,10 +310,10 @@ serve(async (req) => {
         const nomeCliente = cliente.nome_fantasia?.trim() || cliente.razao_social?.trim() || 'Cliente sem nome';
         const cnpjLimpo = cleanDocument(cliente.cpf_cnpj);
 
-        // Verificar se já existe no Field com este código
+        // 1. Verificar se já existe no Field com este código
         const existingId = await buscarClientePorNumber(apiKey, codigoUnico);
         if (existingId) {
-          console.log(`[migrate-gc-field] ${codigoUnico} já existe no Field: ${existingId}`);
+          console.log(`[migrate-gc-field] ${codigoUnico} já existe no Field (por código): ${existingId}`);
           
           // Salvar mapeamento
           await supabase.from('field_control_sync').upsert({
@@ -295,6 +326,29 @@ serve(async (req) => {
           
           skipped++;
           continue;
+        }
+
+        // 2. Verificar se já existe no Field pelo CNPJ/CPF (evita duplicatas com códigos diferentes)
+        if (cnpjLimpo) {
+          const existingByDoc = await buscarClientePorDocumento(apiKey, cnpjLimpo);
+          if (existingByDoc) {
+            console.log(`[migrate-gc-field] Cliente com doc ${formatCnpj(cnpjLimpo)} já existe no Field: ${existingByDoc.id} (number: ${existingByDoc.number})`);
+            
+            // Salvar mapeamento com o ID existente
+            await supabase.from('field_control_sync').upsert({
+              company_id,
+              entity_type: 'customer_gc',
+              wai_id: cliente.id,
+              field_id: existingByDoc.id,
+              last_sync: new Date().toISOString()
+            }, { onConflict: 'wai_id,entity_type' });
+            
+            // Marcar CNPJ como já utilizado
+            cnpjsJaUtilizados.add(cnpjLimpo);
+            
+            skipped++;
+            continue;
+          }
         }
 
         // Montar payload com address obrigatório (incluindo coords)
