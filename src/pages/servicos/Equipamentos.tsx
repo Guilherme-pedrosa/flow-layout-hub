@@ -85,12 +85,30 @@ export default function Equipamentos() {
         body: { company_id: currentCompany.id }
       });
       
-      if (error) throw error;
+      if (error) {
+        // Parse error message from edge function
+        const errorMsg = error.message || String(error);
+        if (errorMsg.includes('API Key do Field Control não configurada')) {
+          toast.error('Configure a API Key do Field Control nas configurações da empresa para sincronizar equipamentos.');
+          return;
+        }
+        throw error;
+      }
       
-      toast.success(`Sync concluído: ${data.created} novos, ${data.updated} atualizados`);
+      if (data?.success === false) {
+        toast.error(data.error || 'Erro ao sincronizar');
+        return;
+      }
+      
+      toast.success(`Sync concluído: ${data.created || 0} novos, ${data.updated || 0} atualizados`);
       refetch();
     } catch (err: any) {
-      toast.error(`Erro ao sincronizar: ${err.message}`);
+      const errorMsg = err.message || String(err);
+      if (errorMsg.includes('API Key do Field Control não configurada')) {
+        toast.error('Configure a API Key do Field Control nas configurações da empresa.');
+      } else {
+        toast.error(`Erro ao sincronizar: ${errorMsg}`);
+      }
     } finally {
       setSyncing(false);
     }
@@ -167,7 +185,7 @@ export default function Equipamentos() {
 
   const syncEquipmentToField = async (equipmentId: string) => {
     try {
-      const { error } = await supabase.functions.invoke('field-create-equipment', {
+      const { data, error } = await supabase.functions.invoke('field-create-equipment', {
         body: { 
           company_id: currentCompany?.id,
           equipment_id: equipmentId
@@ -175,9 +193,19 @@ export default function Equipamentos() {
       });
       
       if (error) {
-        console.error("Erro ao enviar para Field Control:", error);
+        // Silently ignore if API key not configured - equipment saved locally
+        const errorMsg = error.message || String(error);
+        if (!errorMsg.includes('API Key')) {
+          console.error("Erro ao enviar para Field Control:", error);
+        }
+        return;
+      }
+      
+      if (data?.success && data?.field_equipment_id) {
+        toast.success("Equipamento sincronizado com Field Control");
       }
     } catch (err) {
+      // Silent fail - equipment still saved locally
       console.error("Erro ao sincronizar com Field:", err);
     }
   };
