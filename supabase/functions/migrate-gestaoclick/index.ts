@@ -164,10 +164,10 @@ serve(async (req) => {
           external_id: gcId,
         };
 
-        // Verificar se já existe - primeiro por external_id, depois por CPF/CNPJ + nome
+        // Verificar se já existe - regra: CPF/CNPJ + nome_fantasia define unicidade
         let existingPessoa = null;
         
-        // Busca 1: por external_id (GC ID)
+        // Busca 1: por external_id (GC ID) - prioridade máxima
         if (gcId) {
           const { data } = await supabase
             .from('pessoas')
@@ -178,19 +178,7 @@ serve(async (req) => {
           existingPessoa = data;
         }
         
-        // Busca 2: se não achou por GC ID, buscar por CPF/CNPJ + razão social (para registros pré-existentes)
-        if (!existingPessoa && cpfCnpj && razaoSocial) {
-          const { data } = await supabase
-            .from('pessoas')
-            .select('id, is_cliente, is_fornecedor, is_transportadora, external_id')
-            .eq('company_id', company_id)
-            .eq('cpf_cnpj', cpfCnpj)
-            .eq('razao_social', razaoSocial)
-            .maybeSingle();
-          existingPessoa = data;
-        }
-        
-        // Busca 3: se não achou por razão social, tentar por CPF/CNPJ + nome fantasia
+        // Busca 2: por CPF/CNPJ + nome_fantasia (chave de unicidade do sistema)
         if (!existingPessoa && cpfCnpj && nomeFantasia) {
           const { data } = await supabase
             .from('pessoas')
@@ -198,6 +186,19 @@ serve(async (req) => {
             .eq('company_id', company_id)
             .eq('cpf_cnpj', cpfCnpj)
             .eq('nome_fantasia', nomeFantasia)
+            .maybeSingle();
+          existingPessoa = data;
+        }
+        
+        // Busca 3: fallback por CPF/CNPJ + razão social (para registros sem nome_fantasia)
+        if (!existingPessoa && cpfCnpj && razaoSocial && !nomeFantasia) {
+          const { data } = await supabase
+            .from('pessoas')
+            .select('id, is_cliente, is_fornecedor, is_transportadora, external_id')
+            .eq('company_id', company_id)
+            .eq('cpf_cnpj', cpfCnpj)
+            .eq('razao_social', razaoSocial)
+            .is('nome_fantasia', null)
             .maybeSingle();
           existingPessoa = data;
         }
