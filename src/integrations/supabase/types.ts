@@ -466,6 +466,69 @@ export type Database = {
           },
         ]
       }
+      audit_events: {
+        Row: {
+          actor_auth_id: string | null
+          actor_user_id: string | null
+          company_id: string
+          created_at: string
+          diff: Json | null
+          entity_id: string | null
+          entity_type: string
+          event_type: string
+          id: string
+          ip: string | null
+          payload: Json | null
+          source: string | null
+          user_agent: string | null
+        }
+        Insert: {
+          actor_auth_id?: string | null
+          actor_user_id?: string | null
+          company_id: string
+          created_at?: string
+          diff?: Json | null
+          entity_id?: string | null
+          entity_type: string
+          event_type: string
+          id?: string
+          ip?: string | null
+          payload?: Json | null
+          source?: string | null
+          user_agent?: string | null
+        }
+        Update: {
+          actor_auth_id?: string | null
+          actor_user_id?: string | null
+          company_id?: string
+          created_at?: string
+          diff?: Json | null
+          entity_id?: string | null
+          entity_type?: string
+          event_type?: string
+          id?: string
+          ip?: string | null
+          payload?: Json | null
+          source?: string | null
+          user_agent?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "audit_events_actor_user_id_fkey"
+            columns: ["actor_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "audit_events_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       audit_logs: {
         Row: {
           action: string
