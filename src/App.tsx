@@ -86,6 +86,7 @@ import Permissoes from "./pages/configuracoes/Permissoes";
 import Integracoes from "./pages/configuracoes/Integracoes";
 import Logs from "./pages/configuracoes/Logs";
 import SituacoesFinanceiras from "./pages/configuracoes/SituacoesFinanceiras";
+import CentralAlertas from "./pages/configuracoes/CentralAlertas";
 
 const queryClient = new QueryClient();
 
@@ -185,6 +186,7 @@ const App = () => (
             <Route path="/integracoes" element={<Integracoes />} />
             <Route path="/logs" element={<Logs />} />
             <Route path="/situacoes-financeiras" element={<SituacoesFinanceiras />} />
+            <Route path="/configuracoes/alertas" element={<CentralAlertas />} />
           </Route>
           <Route path="*" element={<NotFound />} />
         </Routes>
