@@ -6,7 +6,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const FIELD_CONTROL_BASE_URL = 'https://carchost.fieldcontrol.com.br/api';
+const FIELD_CONTROL_BASE_URL = 'https://carchost.fieldcontrol.com.br';
 
 interface FieldEquipment {
   id: string | number;
