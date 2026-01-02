@@ -58,13 +58,30 @@ export function useDashboardAiInsight() {
         "actionHref": "rota relativa (use apenas as rotas listadas acima)"
       }`;
 
+      // Get the session token for authenticated requests
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        setInsight({
+          id: 'no-session',
+          type: 'info',
+          title: 'Login necessário',
+          description: 'Faça login para receber insights de IA.',
+          confidence: 100,
+          action: { label: 'Login', href: '/auth' },
+          createdAt: new Date().toISOString(),
+        });
+        setIsLoading(false);
+        return;
+      }
+
       const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/financial-ai`,
         {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+            Authorization: `Bearer ${session.access_token}`,
+            apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
           },
           body: JSON.stringify({
             messages: [{ role: 'user', content: prompt }],
