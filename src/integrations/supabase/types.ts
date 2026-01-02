@@ -7177,9 +7177,38 @@ export type Database = {
       }
     }
     Functions: {
+      ai_calculate_priority_score: {
+        Args: {
+          p_is_recurring?: boolean
+          p_margin_change: number
+          p_potential_loss: number
+          p_severity: string
+        }
+        Returns: number
+      }
       ai_check_duplicate_alert: {
         Args: { p_alert_hash: string; p_company_id: string }
         Returns: boolean
+      }
+      ai_classify_alert_priority: {
+        Args: {
+          p_is_recurring: boolean
+          p_margin_change: number
+          p_potential_loss: number
+          p_requires_decision: boolean
+          p_severity: string
+        }
+        Returns: string
+      }
+      ai_compare_with_history: {
+        Args: {
+          p_company_id: string
+          p_current_value: number
+          p_entity_id: string
+          p_entity_type: string
+          p_metric_type: string
+        }
+        Returns: Json
       }
       ai_get_clientes_analysis: {
         Args: { p_company_id: string }
@@ -7223,6 +7252,49 @@ export type Database = {
         Args: { p_company_id: string }
         Returns: Json
       }
+      ai_get_top_alerts: {
+        Args: { p_company_id: string; p_max_alerts?: number }
+        Returns: {
+          action_taken: string | null
+          actioned_at: string | null
+          actioned_by: string | null
+          alert_category: string | null
+          alert_hash: string
+          company_id: string
+          context_data: Json | null
+          created_at: string
+          decision_options: Json | null
+          downstream_entities: Json | null
+          economic_priority_score: number | null
+          economic_reason: string
+          event_source_id: string | null
+          event_source_type: string | null
+          event_type: string
+          id: string
+          impacted_entities: Json | null
+          is_actioned: boolean | null
+          is_dismissed: boolean | null
+          is_read: boolean | null
+          margin_after: number | null
+          margin_before: number | null
+          margin_change_percent: number | null
+          mode: string
+          potential_loss: number | null
+          projected_loss_30d: number | null
+          raw_ai_response: Json | null
+          recommendation: string | null
+          requires_human_decision: boolean | null
+          root_cause: string | null
+          severity: string
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "ai_observer_alerts"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       ai_get_vendas_analysis: {
         Args: { p_company_id: string; p_periodo_dias?: number }
         Returns: Json
@@ -7235,6 +7307,20 @@ export type Database = {
           p_margin_change: number
         }
         Returns: boolean
+      }
+      ai_update_economic_memory: {
+        Args: {
+          p_alert_severity?: string
+          p_alert_type?: string
+          p_company_id: string
+          p_cost_variation?: number
+          p_entity_id: string
+          p_entity_name: string
+          p_entity_type: string
+          p_margin_impact?: number
+          p_potential_loss?: number
+        }
+        Returns: undefined
       }
       calculate_economic_priority: {
         Args: {
