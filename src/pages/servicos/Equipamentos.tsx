@@ -17,7 +17,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Plus, Pencil, Trash2, Search, Package, Cloud, Loader2, Calendar } from "lucide-react";
-import { useClientes } from "@/hooks/useClientes";
 import { EquipmentForm } from "@/components/equipamentos";
 import { format } from "date-fns";
 
@@ -25,7 +24,6 @@ export default function Equipamentos() {
   const { currentCompany } = useCompany();
   const { equipments, isLoading, refetch } = useAllEquipments();
   const { createEquipment, updateEquipment, deleteEquipment } = useEquipments();
-  const { fetchClientes } = useClientes();
   const [clientes, setClientes] = useState<any[]>([]);
   
   const [search, setSearch] = useState("");
@@ -34,11 +32,39 @@ export default function Equipamentos() {
   const [editingEquipment, setEditingEquipment] = useState<any>(null);
   const [saving, setSaving] = useState(false);
 
-  // Carregar clientes
+  // Carregar clientes sincronizados com Field Control
   useEffect(() => {
     const loadClientes = async () => {
-      const data = await fetchClientes();
-      setClientes(data);
+      if (!currentCompany) return;
+      
+      // Buscar clientes que têm sync com Field Control
+      const { data: syncData } = await supabase
+        .from("field_control_sync")
+        .select("wai_id")
+        .eq("company_id", currentCompany.id)
+        .eq("entity_type", "customer");
+      
+      if (syncData && syncData.length > 0) {
+        const clientIds = syncData.map(s => s.wai_id);
+        
+        const { data: clientesData } = await supabase
+          .from("clientes")
+          .select("id, razao_social, nome_fantasia")
+          .in("id", clientIds)
+          .order("razao_social");
+        
+        setClientes(clientesData || []);
+      } else {
+        // Se não houver sync, buscar todos os clientes ativos
+        const { data: allClientes } = await supabase
+          .from("clientes")
+          .select("id, razao_social, nome_fantasia")
+          .eq("company_id", currentCompany.id)
+          .eq("status", "ativo")
+          .order("razao_social");
+        
+        setClientes(allClientes || []);
+      }
     };
     loadClientes();
   }, [currentCompany]);
