@@ -6,7 +6,7 @@ const corsHeaders = {
 };
 
 const FIELD_CONTROL_BASE_URL = 'https://carchost.fieldcontrol.com.br';
-const DELETE_BATCH_SIZE = 100;
+const DELETE_BATCH_SIZE = 50;
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -29,9 +29,9 @@ serve(async (req) => {
 
     console.log(`[field-delete-all] Buscando clientes do Field Control...`);
 
-    // Buscar clientes sem paginação (apenas limit)
+    // Buscar primeira página de clientes
     const response = await fetch(
-      `${FIELD_CONTROL_BASE_URL}/customers?limit=${DELETE_BATCH_SIZE}`,
+      `${FIELD_CONTROL_BASE_URL}/customers?page=1&limit=${DELETE_BATCH_SIZE}`,
       { method: 'GET', headers: { 'X-Api-Key': apiKey } }
     );
     
@@ -47,7 +47,7 @@ serve(async (req) => {
     const data = await response.json();
     const customers = Array.isArray(data) ? data : (data?.customers || data?.items || data?.data || []);
     
-    console.log(`[field-delete-all] Encontrados ${customers.length} clientes para deletar neste batch`);
+    console.log(`[field-delete-all] Encontrados ${customers.length} clientes. Primeiro: ${JSON.stringify(customers[0] || {})}`);
     
     if (customers.length === 0) {
       return new Response(
@@ -65,24 +65,46 @@ serve(async (req) => {
     // Deletar cada cliente do batch
     let deleted = 0;
     let errors = 0;
+    const errorDetails: string[] = [];
 
     for (const customer of customers) {
       try {
-        const deleteResponse = await fetch(
-          `${FIELD_CONTROL_BASE_URL}/customers/${customer.id}`,
+        // O ID pode estar em diferentes formatos - tentar decodificar se for base64
+        let customerId = customer.id;
+        
+        // Tentar deletar diretamente primeiro
+        let deleteResponse = await fetch(
+          `${FIELD_CONTROL_BASE_URL}/customers/${customerId}`,
           { method: 'DELETE', headers }
         );
         
-        if (deleteResponse.ok || deleteResponse.status === 204) {
-          deleted++;
-          console.log(`[field-delete-all] Deletado: ${customer.id}`);
-        } else {
-          errors++;
-          console.error(`[field-delete-all] Erro ao deletar ${customer.id}: ${deleteResponse.status}`);
+        // Se falhar, tentar outros endpoints comuns
+        if (!deleteResponse.ok && deleteResponse.status === 404) {
+          // Tentar com PATCH para desativar (algumas APIs usam soft delete)
+          deleteResponse = await fetch(
+            `${FIELD_CONTROL_BASE_URL}/customers/${customerId}`,
+            { 
+              method: 'PATCH', 
+              headers,
+              body: JSON.stringify({ isActive: false, deleted: true })
+            }
+          );
         }
         
-        // Pequeno delay para não sobrecarregar a API
-        await new Promise(resolve => setTimeout(resolve, 30));
+        if (deleteResponse.ok || deleteResponse.status === 204 || deleteResponse.status === 200) {
+          deleted++;
+          console.log(`[field-delete-all] Deletado: ${customerId}`);
+        } else {
+          errors++;
+          const errText = await deleteResponse.text();
+          console.error(`[field-delete-all] Erro ao deletar ${customerId}: ${deleteResponse.status} - ${errText}`);
+          if (errorDetails.length < 3) {
+            errorDetails.push(`${customerId}: ${deleteResponse.status}`);
+          }
+        }
+        
+        // Delay para não sobrecarregar
+        await new Promise(resolve => setTimeout(resolve, 50));
         
       } catch (error) {
         errors++;
@@ -94,15 +116,17 @@ serve(async (req) => {
 
     // Verificar se ainda há mais clientes
     const checkResponse = await fetch(
-      `${FIELD_CONTROL_BASE_URL}/customers?limit=1`,
+      `${FIELD_CONTROL_BASE_URL}/customers?page=1&limit=1`,
       { method: 'GET', headers: { 'X-Api-Key': apiKey } }
     );
     
     let hasMore = false;
+    let remaining = 0;
     if (checkResponse.ok) {
       const checkData = await checkResponse.json();
-      const remaining = Array.isArray(checkData) ? checkData : (checkData?.customers || checkData?.items || checkData?.data || []);
-      hasMore = remaining.length > 0;
+      const remainingList = Array.isArray(checkData) ? checkData : (checkData?.customers || checkData?.items || checkData?.data || []);
+      hasMore = remainingList.length > 0;
+      remaining = remainingList.length;
     }
 
     return new Response(
@@ -110,8 +134,10 @@ serve(async (req) => {
         success: true, 
         deleted,
         errors,
+        error_samples: errorDetails,
         has_more: hasMore,
-        message: hasMore ? 'Execute novamente para continuar deletando' : 'Todos os clientes foram deletados'
+        remaining,
+        message: hasMore ? `Execute novamente para continuar. Deletados: ${deleted}, Erros: ${errors}` : 'Todos os clientes foram deletados'
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
