@@ -146,3 +146,6 @@ verify_jwt = false
 
 [functions.field-create-equipment]
 verify_jwt = false
+
+[functions.migrate-gc-field]
+verify_jwt = false
