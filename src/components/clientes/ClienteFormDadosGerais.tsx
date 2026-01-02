@@ -260,6 +260,29 @@ export function ClienteFormDadosGerais({ formData, setFormData, duplicateWarning
         </div>
       </div>
 
+      {/* Códigos de Integração */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label htmlFor="auvo_codigo">Código Auvo</Label>
+          <Input
+            id="auvo_codigo"
+            value={formData.auvo_codigo || ''}
+            onChange={(e) => handleChange('auvo_codigo', e.target.value)}
+            placeholder="Código do cliente no Auvo"
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="external_id">Código Externo (GC)</Label>
+          <Input
+            id="external_id"
+            value={formData.external_id || ''}
+            onChange={(e) => handleChange('external_id', e.target.value)}
+            placeholder="Código externo de integração"
+          />
+        </div>
+      </div>
+
       {/* Tipo de Cadastro */}
       <Card>
         <CardHeader className="pb-3">

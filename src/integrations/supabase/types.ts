@@ -3774,6 +3774,7 @@ export type Database = {
       pessoas: {
         Row: {
           auth_id: string | null
+          auvo_codigo: string | null
           bairro: string | null
           cargo: string | null
           cep: string | null
@@ -3830,6 +3831,7 @@ export type Database = {
         }
         Insert: {
           auth_id?: string | null
+          auvo_codigo?: string | null
           bairro?: string | null
           cargo?: string | null
           cep?: string | null
@@ -3886,6 +3888,7 @@ export type Database = {
         }
         Update: {
           auth_id?: string | null
+          auvo_codigo?: string | null
           bairro?: string | null
           cargo?: string | null
           cep?: string | null

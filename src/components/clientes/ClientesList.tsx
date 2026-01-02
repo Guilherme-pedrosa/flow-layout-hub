@@ -17,18 +17,26 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Card, CardContent } from "@/components/ui/card";
-import { Plus, Search, MoreHorizontal, Edit, Eye, Building2, User, Truck, Briefcase, Download } from "lucide-react";
-import { usePessoas } from "@/hooks/usePessoas";
+import { Plus, Search, MoreHorizontal, Edit, Eye, Building2, User, Truck, Briefcase, Download, Upload, Loader2 } from "lucide-react";
+import { usePessoas, Pessoa } from "@/hooks/usePessoas";
 import { formatCpfCnpj, formatTelefone } from "@/lib/formatters";
 import { useSortableData } from "@/hooks/useSortableData";
 import { SortableTableHeader } from "@/components/shared";
 import * as XLSX from "xlsx";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
+import { useCompany } from "@/contexts/CompanyContext";
+import { useRef } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 
 export function ClientesList() {
   const navigate = useNavigate();
-  const { clientes, isLoadingClientes } = usePessoas();
+  const { clientes, isLoadingClientes, refetch } = usePessoas();
+  const { currentCompany } = useCompany();
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
+  const [isImporting, setIsImporting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const filteredClientes = clientes.filter((cliente) => {
     const searchLower = search.toLowerCase();
@@ -78,6 +86,11 @@ export function ClientesList() {
     return badges;
   };
 
+  const cleanCnpj = (cnpj: string | null | undefined): string => {
+    if (!cnpj) return "";
+    return cnpj.replace(/\D/g, "");
+  };
+
   const exportToExcel = () => {
     try {
       const dataToExport = sortedClientes.map((cliente) => ({
@@ -100,7 +113,8 @@ export function ClientesList() {
         "Regime Tributário": cliente.regime_tributario || "",
         "É Fornecedor": cliente.is_fornecedor ? "Sim" : "Não",
         "É Transportadora": cliente.is_transportadora ? "Sim" : "Não",
-        "Código Externo (GC/Auvo)": (cliente as any).external_id || "",
+        "Código Auvo": cliente.auvo_codigo || "",
+        "Código GC": cliente.external_id || "",
         "ID WAI": cliente.id,
       }));
 
@@ -118,6 +132,87 @@ export function ClientesList() {
     }
   };
 
+  const handleImportAuvoCodes = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || !currentCompany) return;
+
+    setIsImporting(true);
+    try {
+      const data = await file.arrayBuffer();
+      const workbook = XLSX.read(data);
+      const sheet = workbook.Sheets[workbook.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json<Record<string, any>>(sheet);
+
+      let updated = 0;
+      let notFound = 0;
+      let errors: string[] = [];
+
+      for (const row of rows) {
+        const codigo = row["Código"]?.toString().trim();
+        const cnpjRaw = row["CPF ou CNPJ"]?.toString().trim();
+        const nome = row["Nome"]?.toString().trim();
+
+        if (!codigo || !cnpjRaw) continue;
+
+        const cnpjClean = cleanCnpj(cnpjRaw);
+
+        // Buscar cliente pelo CNPJ
+        const { data: matchingClientes, error } = await supabase
+          .from("pessoas")
+          .select("id, razao_social, nome_fantasia, auvo_codigo")
+          .eq("cpf_cnpj", cnpjClean)
+          .or(`company_id.eq.${currentCompany.id},company_id.is.null`)
+          .eq("is_cliente", true);
+
+        if (error) {
+          errors.push(`Erro ao buscar ${cnpjRaw}: ${error.message}`);
+          continue;
+        }
+
+        if (!matchingClientes || matchingClientes.length === 0) {
+          notFound++;
+          continue;
+        }
+
+        // Atualizar todos os clientes com esse CNPJ
+        for (const cliente of matchingClientes) {
+          if (cliente.auvo_codigo !== codigo) {
+            const { error: updateError } = await supabase
+              .from("pessoas")
+              .update({ auvo_codigo: codigo })
+              .eq("id", cliente.id);
+
+            if (updateError) {
+              errors.push(`Erro ao atualizar ${cliente.razao_social}: ${updateError.message}`);
+            } else {
+              updated++;
+            }
+          }
+        }
+      }
+
+      // Atualizar lista
+      queryClient.invalidateQueries({ queryKey: ["pessoas"] });
+      refetch();
+
+      toast.success(
+        `Importação concluída! ${updated} atualizados, ${notFound} não encontrados.`
+      );
+      
+      if (errors.length > 0) {
+        console.error("Erros na importação:", errors);
+      }
+    } catch (error) {
+      console.error("Erro ao importar:", error);
+      toast.error("Erro ao processar arquivo Excel");
+    } finally {
+      setIsImporting(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    }
+  };
+
   return (
     <div className="space-y-4">
       {/* Barra de ações */}
@@ -132,6 +227,26 @@ export function ClientesList() {
           />
         </div>
         <div className="flex gap-2">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".xlsx,.xls"
+            onChange={handleImportAuvoCodes}
+            className="hidden"
+            id="import-auvo-file"
+          />
+          <Button 
+            variant="outline" 
+            onClick={() => fileInputRef.current?.click()}
+            disabled={isImporting}
+          >
+            {isImporting ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <Upload className="h-4 w-4 mr-2" />
+            )}
+            Importar Códigos Auvo
+          </Button>
           <Button variant="outline" onClick={exportToExcel}>
             <Download className="h-4 w-4 mr-2" />
             Exportar Excel
