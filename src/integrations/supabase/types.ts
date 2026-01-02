@@ -1297,6 +1297,7 @@ export type Database = {
           equipment_type: string | null
           field_equipment_id: string | null
           id: string
+          image_url: string | null
           is_active: boolean | null
           location_description: string | null
           model: string | null
@@ -1317,6 +1318,7 @@ export type Database = {
           equipment_type?: string | null
           field_equipment_id?: string | null
           id?: string
+          image_url?: string | null
           is_active?: boolean | null
           location_description?: string | null
           model?: string | null
@@ -1337,6 +1339,7 @@ export type Database = {
           equipment_type?: string | null
           field_equipment_id?: string | null
           id?: string
+          image_url?: string | null
           is_active?: boolean | null
           location_description?: string | null
           model?: string | null

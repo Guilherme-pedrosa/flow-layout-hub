@@ -34,7 +34,8 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Info, QrCode, MapPin, Wrench, Calendar, Building2, Check, ChevronsUpDown, Search } from "lucide-react";
+import { Loader2, Info, QrCode, MapPin, Wrench, Calendar, Building2, Check, ChevronsUpDown, Search, Camera, Upload, X } from "lucide-react";
+import { toast } from "sonner";
 import { Equipment } from "@/hooks/useEquipments";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
@@ -143,6 +144,7 @@ interface EquipmentFormData {
   warranty_start: string;
   warranty_end: string;
   notes: string;
+  image_url: string;
 }
 
 interface EquipmentType {
@@ -173,6 +175,7 @@ const initialFormData: EquipmentFormData = {
   warranty_start: "",
   warranty_end: "",
   notes: "",
+  image_url: "",
 };
 
 export function EquipmentForm({
@@ -229,6 +232,7 @@ export function EquipmentForm({
         warranty_start: equipment.warranty_start || "",
         warranty_end: equipment.warranty_end || "",
         notes: equipment.notes || "",
+        image_url: (equipment as any).image_url || "",
       });
       setCustomType("");
     } else {
@@ -237,6 +241,51 @@ export function EquipmentForm({
     }
     setActiveTab("dados");
   }, [equipment, open]);
+
+  const [uploading, setUploading] = useState(false);
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !companyId) return;
+
+    if (!file.type.startsWith('image/')) {
+      toast.error('Selecione um arquivo de imagem');
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('A imagem deve ter no máximo 5MB');
+      return;
+    }
+
+    setUploading(true);
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${companyId}/${Date.now()}.${fileExt}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('equipment-images')
+        .upload(fileName, file);
+
+      if (uploadError) throw uploadError;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('equipment-images')
+        .getPublicUrl(fileName);
+
+      setFormData({ ...formData, image_url: publicUrl });
+      toast.success('Imagem enviada com sucesso');
+    } catch (err: any) {
+      console.error('Erro no upload:', err);
+      toast.error('Erro ao enviar imagem');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleRemoveImage = () => {
+    setFormData({ ...formData, image_url: "" });
+  };
 
   const handleSubmit = async () => {
     if (!formData.serial_number.trim()) {
@@ -421,6 +470,58 @@ export function EquipmentForm({
                   />
                   <p className="text-xs text-muted-foreground">
                     Código para leitura via QR Code no Field Control
+                  </p>
+                </div>
+
+                {/* Upload de Foto */}
+                <div className="grid gap-2">
+                  <Label className="flex items-center gap-1">
+                    <Camera className="h-3 w-3" />
+                    Foto do Equipamento
+                  </Label>
+                  
+                  {formData.image_url ? (
+                    <div className="relative w-full max-w-[200px]">
+                      <img 
+                        src={formData.image_url} 
+                        alt="Foto do equipamento" 
+                        className="w-full h-32 object-cover rounded-md border"
+                      />
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        size="icon"
+                        className="absolute -top-2 -right-2 h-6 w-6"
+                        onClick={handleRemoveImage}
+                      >
+                        <X className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <label className="cursor-pointer">
+                        <div className="flex items-center gap-2 px-4 py-2 border rounded-md hover:bg-muted transition-colors">
+                          {uploading ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Upload className="h-4 w-4" />
+                          )}
+                          <span className="text-sm">
+                            {uploading ? "Enviando..." : "Selecionar foto"}
+                          </span>
+                        </div>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={handleImageUpload}
+                          disabled={uploading}
+                        />
+                      </label>
+                    </div>
+                  )}
+                  <p className="text-xs text-muted-foreground">
+                    Foto do equipamento (máx. 5MB)
                   </p>
                 </div>
               </CardContent>
