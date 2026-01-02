@@ -297,7 +297,7 @@ serve(async (req) => {
           continue;
         }
 
-        // Montar payload com address obrigatório
+        // Montar payload com address obrigatório (incluindo coords)
         const fieldPayload: {
           name: string;
           number: string;
@@ -310,6 +310,10 @@ serve(async (req) => {
             neighborhood: string;
             city: string;
             state: string;
+            coords: {
+              latitude: number;
+              longitude: number;
+            };
           };
         } = {
           name: nomeCliente.length >= 6 ? nomeCliente : nomeCliente.padEnd(6, ' '),
@@ -321,7 +325,11 @@ serve(async (req) => {
             number: cliente.numero || 'S/N',
             neighborhood: cliente.bairro || 'Centro',
             city: cliente.cidade || 'São Paulo',
-            state: cliente.estado || 'SP'
+            state: cliente.estado || 'SP',
+            coords: {
+              latitude: -23.5505,
+              longitude: -46.6333
+            }
           }
         };
 
