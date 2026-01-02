@@ -10,7 +10,7 @@ export interface DecisionOption {
 }
 
 export function useAiDecisionLog() {
-  const { company } = useCompany();
+  const { currentCompany } = useCompany();
   const [isLoading, setIsLoading] = useState(false);
 
   const recordDecision = async (
@@ -19,7 +19,7 @@ export function useAiDecisionLog() {
     decisionLabel: string,
     notes?: string
   ): Promise<boolean> => {
-    if (!company) {
+    if (!currentCompany) {
       toast.error("Empresa não selecionada");
       return false;
     }
@@ -31,7 +31,7 @@ export function useAiDecisionLog() {
       const { error: insertError } = await supabase
         .from("ai_decision_log")
         .insert({
-          company_id: company.id,
+          company_id: currentCompany.id,
           alert_id: alertId,
           decision_type: decisionType,
           decision_label: decisionLabel,
