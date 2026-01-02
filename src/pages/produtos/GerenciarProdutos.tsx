@@ -1,4 +1,5 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useProducts, ProductInsert } from "@/hooks/useProducts";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -48,6 +49,7 @@ import { useAiInsights } from "@/hooks/useAiInsights";
 type StatusFilter = 'all' | 'active' | 'inactive' | 'low_stock' | 'zero_stock' | 'negative_stock';
 
 export default function GerenciarProdutos() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const { products, isLoading, createProduct, updateProduct, toggleProductStatus } = useProducts();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
@@ -55,9 +57,26 @@ export default function GerenciarProdutos() {
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [editingProductData, setEditingProductData] = useState<Partial<ProductFormData> | undefined>(undefined);
+  const [initialTab, setInitialTab] = useState<string | undefined>(undefined);
   
   // AI Insights - filtrar por categoria "stock" na tela de produtos
   const { insights, dismiss, markAsRead } = useAiInsights('stock');
+
+  // Abrir diretamente pelo query param (deep-link dos alertas)
+  useEffect(() => {
+    const editId = searchParams.get('edit');
+    const tab = searchParams.get('tab');
+    
+    if (editId && products.length > 0) {
+      const productExists = products.find(p => p.id === editId);
+      if (productExists) {
+        setInitialTab(tab || undefined);
+        handleOpenEdit(editId);
+        // Limpar params depois de abrir
+        setSearchParams({}, { replace: true });
+      }
+    }
+  }, [searchParams, products]);
 
   // Contagens para os cards
   const counts = useMemo(() => {
@@ -118,6 +137,7 @@ export default function GerenciarProdutos() {
   const handleOpenNew = () => {
     setEditingProductId(null);
     setEditingProductData(undefined);
+    setInitialTab(undefined);
     setDialogOpen(true);
   };
 
@@ -557,8 +577,12 @@ export default function GerenciarProdutos() {
           <ProductForm
             initialData={editingProductData}
             onSubmit={handleSubmit}
-            onCancel={() => setDialogOpen(false)}
+            onCancel={() => {
+              setDialogOpen(false);
+              setInitialTab(undefined);
+            }}
             isLoading={isSubmitting}
+            initialTab={initialTab}
           />
         </DialogContent>
       </Dialog>

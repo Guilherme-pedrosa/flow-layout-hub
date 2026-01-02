@@ -71,7 +71,7 @@ const menuGroups: MenuGroup[] = [
   {
     label: "",
     items: [
-      { title: "Dashboard", icon: LayoutDashboard, href: "/" },
+      { title: "Dashboard", icon: LayoutDashboard, href: "/dashboard" },
     ],
     defaultOpen: true,
   },

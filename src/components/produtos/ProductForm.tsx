@@ -160,6 +160,7 @@ interface ProductFormProps {
   onSubmit: (data: ProductFormData) => Promise<void>;
   onCancel: () => void;
   isLoading?: boolean;
+  initialTab?: string;
 }
 
 const tabs = [
@@ -172,12 +173,12 @@ const tabs = [
   { id: 'fornecedores', label: 'Fornecedores' },
 ];
 
-export function ProductForm({ initialData, onSubmit, onCancel, isLoading }: ProductFormProps) {
+export function ProductForm({ initialData, onSubmit, onCancel, isLoading, initialTab }: ProductFormProps) {
   const [formData, setFormData] = useState<ProductFormData>({
     ...initialFormData,
     ...initialData,
   });
-  const [activeTab, setActiveTab] = useState('dados');
+  const [activeTab, setActiveTab] = useState(initialTab || 'dados');
   const [isCodeLoading, setIsCodeLoading] = useState(false);
   const [isBarcodeLoading, setIsBarcodeLoading] = useState(false);
   const [auditResult, setAuditResult] = useState<AuditResult | null>(null);
