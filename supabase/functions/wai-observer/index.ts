@@ -535,7 +535,7 @@ async function callAI(
     ? "https://api.openai.com/v1/chat/completions"
     : "https://ai.gateway.lovable.dev/v1/chat/completions";
 
-  const model = useOpenAI ? "gpt-4o-mini" : "google/gemini-2.5-flash";
+  const model = useOpenAI ? "gpt-4.1-mini-2025-04-14" : "google/gemini-2.5-flash";
 
   const userPrompt = `Contexto real do sistema (JSON):
 ${context}
