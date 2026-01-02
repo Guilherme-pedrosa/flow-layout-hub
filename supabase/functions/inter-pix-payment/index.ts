@@ -6,6 +6,11 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// Input validation helpers
+const isValidUUID = (str: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
+const isValidPixKey = (str: string) => str.length >= 1 && str.length <= 77 && /^[a-zA-Z0-9@.+\-_]+$/.test(str);
+const isValidDocument = (str: string) => /^\d{11}$|^\d{14}$/.test(str.replace(/\D/g, ''));
+
 serve(async (req) => {
   console.log("[inter-pix-payment] ========== INICIANDO ==========");
   console.log("[inter-pix-payment] Method:", req.method);
@@ -14,14 +19,98 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  const supabase = createClient(
-    Deno.env.get("SUPABASE_URL") ?? "",
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
-  );
-
   try {
+    // === AUTHENTICATION CHECK ===
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) {
+      return new Response(JSON.stringify({ success: false, error: "Unauthorized - No token provided" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
+    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+
+    // Verify user authentication
+    const supabaseAuth = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } }
+    });
+
+    const { data: { user }, error: authError } = await supabaseAuth.auth.getUser();
+    if (authError || !user) {
+      console.error("[inter-pix-payment] Auth error:", authError?.message);
+      return new Response(JSON.stringify({ success: false, error: "Unauthorized - Invalid token" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    console.log("[inter-pix-payment] Authenticated user:", user.email);
+
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
     const payload = await req.json();
-    console.log("[inter-pix-payment] 1. Payload recebido:", JSON.stringify(payload));
+    console.log("[inter-pix-payment] 1. Payload recebido (sanitized):", JSON.stringify({
+      company_id: payload.company_id,
+      pix_key_type: payload.pix_key_type,
+      amount: payload.amount,
+      has_pix_key: !!payload.pix_key,
+      has_recipient_name: !!payload.recipient_name,
+      has_recipient_document: !!payload.recipient_document
+    }));
+
+    // === INPUT VALIDATION ===
+    if (payload.company_id && !isValidUUID(payload.company_id)) {
+      return new Response(JSON.stringify({ success: false, error: "Formato de company_id inválido" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    if (payload.pix_key && !isValidPixKey(payload.pix_key)) {
+      return new Response(JSON.stringify({ success: false, error: "Formato de chave PIX inválido" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    if (payload.recipient_document && !isValidDocument(payload.recipient_document)) {
+      return new Response(JSON.stringify({ success: false, error: "CPF/CNPJ do destinatário inválido" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    if (payload.amount !== undefined) {
+      const amount = Number(payload.amount);
+      if (isNaN(amount) || amount <= 0 || amount > 1000000) {
+        return new Response(JSON.stringify({ success: false, error: "Valor inválido (deve ser entre R$ 0,01 e R$ 1.000.000,00)" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
+    if (payload.recipient_name && (payload.recipient_name.length < 1 || payload.recipient_name.length > 140)) {
+      return new Response(JSON.stringify({ success: false, error: "Nome do destinatário inválido" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Verify user has access to the company
+    if (payload.company_id) {
+      const { data: userCompanies } = await supabaseAuth.rpc('get_user_companies');
+      if (!userCompanies?.includes(payload.company_id)) {
+        console.error("[inter-pix-payment] User does not have access to company:", payload.company_id);
+        return new Response(JSON.stringify({ success: false, error: "Sem permissão para esta empresa" }), {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
 
     // Get proxy URL and secret
     const proxyUrl = Deno.env.get("GCP_PIX_FUNCTION_URL");
