@@ -100,10 +100,12 @@ async function criarClienteFieldControl(
 
 /**
  * Busca cliente existente no Field Control pelo number (código único)
+ * IMPORTANTE: A API do Field retorna todos que CONTÊM o texto, não exatamente igual
+ * Por isso precisamos filtrar manualmente pelo number exato
  */
 async function buscarClientePorNumber(apiKey: string, number: string): Promise<string | null> {
   try {
-    const response = await fetch(`${FIELD_CONTROL_BASE_URL}/customers?number=${number}`, {
+    const response = await fetch(`${FIELD_CONTROL_BASE_URL}/customers?number=${encodeURIComponent(number)}`, {
       method: 'GET',
       headers: { 'X-Api-Key': apiKey }
     });
@@ -111,8 +113,11 @@ async function buscarClientePorNumber(apiKey: string, number: string): Promise<s
     if (response.ok) {
       const data = await response.json();
       const items = Array.isArray(data) ? data : (data?.items || []);
-      if (items.length > 0) {
-        return items[0].id;
+      
+      // Buscar cliente com number EXATAMENTE igual
+      const exactMatch = items.find((item: any) => item.number === number);
+      if (exactMatch) {
+        return exactMatch.id;
       }
     }
   } catch (error) {
