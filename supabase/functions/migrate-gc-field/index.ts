@@ -66,6 +66,14 @@ async function criarClienteFieldControl(
     number: string;
     status: string;
     document?: string;
+    address: {
+      zipCode: string;
+      street: string;
+      number: string;
+      neighborhood: string;
+      city: string;
+      state: string;
+    };
   }
 ): Promise<{ success: boolean; id?: string; error?: string }> {
   try {
@@ -197,7 +205,7 @@ serve(async (req) => {
       // 1. Buscar todos os clientes ordenados (para gerar código sequencial consistente)
       const { data: todosClientes, error: fetchError } = await supabase
         .from('pessoas')
-        .select('id, razao_social, nome_fantasia, cpf_cnpj')
+        .select('id, razao_social, nome_fantasia, cpf_cnpj, cep, logradouro, numero, bairro, cidade, estado')
         .eq('company_id', company_id)
         .eq('is_cliente', true)
         .eq('is_active', true)
@@ -289,16 +297,32 @@ serve(async (req) => {
           continue;
         }
 
-        // Montar payload base
+        // Montar payload com address obrigatório
         const fieldPayload: {
           name: string;
           number: string;
           status: string;
           document?: string;
+          address: {
+            zipCode: string;
+            street: string;
+            number: string;
+            neighborhood: string;
+            city: string;
+            state: string;
+          };
         } = {
           name: nomeCliente.length >= 6 ? nomeCliente : nomeCliente.padEnd(6, ' '),
           number: codigoUnico,
-          status: 'active'
+          status: 'active',
+          address: {
+            zipCode: cliente.cep?.replace(/\D/g, '') || '00000000',
+            street: cliente.logradouro || 'Endereço não informado',
+            number: cliente.numero || 'S/N',
+            neighborhood: cliente.bairro || 'Centro',
+            city: cliente.cidade || 'São Paulo',
+            state: cliente.estado || 'SP'
+          }
         };
 
         // Lógica anti-duplicação de CNPJ
