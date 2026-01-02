@@ -32,7 +32,7 @@ export default function Equipamentos() {
   const [editingEquipment, setEditingEquipment] = useState<any>(null);
   const [saving, setSaving] = useState(false);
 
-  // Carregar apenas clientes que têm amarração com Field Control
+  // Carregar clientes que têm amarração com Field Control (tabela pessoas)
   useEffect(() => {
     const loadClientes = async () => {
       if (!currentCompany) return;
@@ -47,6 +47,15 @@ export default function Equipamentos() {
       if (syncData && syncData.length > 0) {
         const clientIds = syncData.map(s => s.wai_id);
         
+        // Buscar na tabela pessoas (onde estão os clientes sincronizados)
+        const { data: pessoasData } = await supabase
+          .from("pessoas")
+          .select("id, razao_social, nome_fantasia, cpf_cnpj")
+          .in("id", clientIds)
+          .eq("is_active", true)
+          .order("razao_social");
+        
+        // Também buscar na tabela clientes (legado)
         const { data: clientesData } = await supabase
           .from("clientes")
           .select("id, razao_social, nome_fantasia, cpf_cnpj")
@@ -54,7 +63,13 @@ export default function Equipamentos() {
           .eq("status", "ativo")
           .order("razao_social");
         
-        setClientes(clientesData || []);
+        // Combinar ambas as listas, removendo duplicatas
+        const combined = [...(pessoasData || []), ...(clientesData || [])];
+        const unique = combined.filter((item, index, self) => 
+          index === self.findIndex(t => t.id === item.id)
+        );
+        
+        setClientes(unique);
       } else {
         setClientes([]);
       }
