@@ -6,7 +6,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
+const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -14,60 +14,23 @@ serve(async (req) => {
   }
 
   try {
-    // === AUTHENTICATION CHECK ===
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
-      return new Response(JSON.stringify({ error: "Unauthorized - No token provided" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-
-    // Create client with user's token to verify auth
-    const supabaseAuth = createClient(supabaseUrl, supabaseAnonKey, {
-      global: { headers: { Authorization: authHeader } }
-    });
-
-    const { data: { user }, error: authError } = await supabaseAuth.auth.getUser();
-    if (authError || !user) {
-      console.error("[financial-ai] Auth error:", authError?.message);
-      return new Response(JSON.stringify({ error: "Unauthorized - Invalid token" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    console.log("[financial-ai] Authenticated user:", user.email);
 
     const body = await req.json();
     const { type, companyId } = body;
     const messages = Array.isArray(body.messages) ? body.messages : [];
 
+    console.log("[financial-ai] Request received:", { type, messagesCount: messages.length, companyId });
+
     // === VALIDATE INPUT ===
-    if (companyId && typeof companyId !== 'string') {
-      return new Response(JSON.stringify({ error: "Invalid companyId format" }), {
+    if (!companyId || typeof companyId !== 'string') {
+      return new Response(JSON.stringify({ error: "companyId is required" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Verify user has access to the company
-    if (companyId) {
-      const { data: userCompanies } = await supabaseAuth.rpc('get_user_companies');
-      if (!userCompanies?.includes(companyId)) {
-        console.error("[financial-ai] User does not have access to company:", companyId);
-        return new Response(JSON.stringify({ error: "Forbidden - No access to this company" }), {
-          status: 403,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-    }
-
-    // Validate messages array
     if (messages.length > 50) {
       return new Response(JSON.stringify({ error: "Too many messages in conversation" }), {
         status: 400,
@@ -75,115 +38,91 @@ serve(async (req) => {
       });
     }
 
-    console.log("[financial-ai] Request received:", { type, messagesCount: messages.length, companyId });
-
-    if (!OPENAI_API_KEY) {
-      console.error("[financial-ai] OPENAI_API_KEY is not configured");
-      throw new Error("OPENAI_API_KEY is not configured");
+    if (!LOVABLE_API_KEY) {
+      console.error("[financial-ai] LOVABLE_API_KEY is not configured");
+      throw new Error("LOVABLE_API_KEY is not configured");
     }
 
-    // Use service role for data fetching (bypasses RLS, but we've already verified access)
+    // Use service role for data fetching
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Fetch ALL data using optimized SQL functions
+    // Verify company exists
+    const { data: company, error: companyError } = await supabase
+      .from("companies")
+      .select("id, name")
+      .eq("id", companyId)
+      .maybeSingle();
+
+    if (companyError || !company) {
+      console.error("[financial-ai] Company not found:", companyId);
+      return new Response(JSON.stringify({ error: "Company not found" }), {
+        status: 404,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    console.log("[financial-ai] Fetching data for company:", company.name);
+
+    // Fetch data for context
     let fullContext = "";
 
-    if (companyId) {
-      console.log("[financial-ai] Fetching data using AI SQL functions for company:", companyId);
-
-      // Use optimized SQL functions that bypass RLS but filter by company_id
+    try {
+      // Fetch financial data
       const [
-        { data: financeiro, error: finErr },
-        { data: clientes, error: cliErr },
-        { data: produtos, error: prodErr },
-        { data: os, error: osErr },
-        { data: vendas, error: venErr },
-        { data: compras, error: compErr },
-        { data: inadimplencia, error: inadErr }
+        { data: payables },
+        { data: receivables },
+        { data: transactions },
+        { data: lowStockProducts }
       ] = await Promise.all([
-        supabase.rpc('ai_get_financial_dashboard', { p_company_id: companyId }),
-        supabase.rpc('ai_get_clientes_analysis', { p_company_id: companyId }),
-        supabase.rpc('ai_get_produtos_analysis', { p_company_id: companyId }),
-        supabase.rpc('ai_get_os_analysis', { p_company_id: companyId }),
-        supabase.rpc('ai_get_vendas_analysis', { p_company_id: companyId, p_periodo_dias: 30 }),
-        supabase.rpc('ai_get_compras_analysis', { p_company_id: companyId }),
-        supabase.rpc('ai_get_inadimplencia_analysis', { p_company_id: companyId })
+        supabase
+          .from("payables")
+          .select("*, supplier:pessoas!payables_supplier_id_fkey(razao_social, nome_fantasia, cpf_cnpj)")
+          .eq("company_id", companyId)
+          .eq("is_paid", false)
+          .order("due_date", { ascending: true })
+          .limit(100),
+        supabase
+          .from("accounts_receivable")
+          .select("*, client:clientes(razao_social, nome_fantasia, cpf_cnpj)")
+          .eq("company_id", companyId)
+          .eq("is_paid", false)
+          .order("due_date", { ascending: true })
+          .limit(100),
+        supabase
+          .from("bank_transactions")
+          .select("*, bank_account:bank_accounts(name, bank_name)")
+          .eq("company_id", companyId)
+          .order("transaction_date", { ascending: false })
+          .limit(50),
+        supabase
+          .from("products")
+          .select("id, code, name, description, current_stock, minimum_stock, cost_price, sale_price")
+          .eq("company_id", companyId)
+          .eq("is_active", true)
+          .eq("stock_control", true)
+          .lte("current_stock", 10)
+          .limit(50)
       ]);
-
-      // Log any errors from RPC calls
-      if (finErr) console.error("[financial-ai] Error fetching financeiro:", finErr);
-      if (cliErr) console.error("[financial-ai] Error fetching clientes:", cliErr);
-      if (prodErr) console.error("[financial-ai] Error fetching produtos:", prodErr);
-      if (osErr) console.error("[financial-ai] Error fetching os:", osErr);
-      if (venErr) console.error("[financial-ai] Error fetching vendas:", venErr);
-      if (compErr) console.error("[financial-ai] Error fetching compras:", compErr);
-      if (inadErr) console.error("[financial-ai] Error fetching inadimplencia:", inadErr);
-
-      // Also fetch additional data for detailed analysis
-      const { data: payables } = await supabase
-        .from("payables")
-        .select("*, supplier:pessoas(razao_social, nome_fantasia, cpf_cnpj)")
-        .eq("company_id", companyId)
-        .eq("is_paid", false)
-        .order("due_date", { ascending: true })
-        .limit(100);
-
-      const { data: receivables } = await supabase
-        .from("accounts_receivable")
-        .select("*, client:pessoas(razao_social, nome_fantasia, cpf_cnpj)")
-        .eq("company_id", companyId)
-        .eq("is_paid", false)
-        .order("due_date", { ascending: true })
-        .limit(100);
-
-      const { data: transactions } = await supabase
-        .from("bank_transactions")
-        .select("*, bank_account:bank_accounts(name, bank_name)")
-        .eq("company_id", companyId)
-        .order("transaction_date", { ascending: false })
-        .limit(50);
-
-      const { data: lowStockProducts } = await supabase
-        .from("products")
-        .select("id, code, name, description, current_stock, minimum_stock, cost_price, sale_price")
-        .eq("company_id", companyId)
-        .eq("is_active", true)
-        .eq("stock_control", true)
-        .lte("current_stock", 10)
-        .limit(50);
 
       const today = new Date().toISOString().split('T')[0];
       const overduePayables = payables?.filter(p => p.due_date < today) || [];
       const overdueReceivables = receivables?.filter(r => r.due_date < today) || [];
 
-      // Build comprehensive context
+      // Calculate totals
+      const totalPayables = payables?.reduce((sum, p) => sum + (p.amount || 0), 0) || 0;
+      const totalReceivables = receivables?.reduce((sum, r) => sum + (r.amount || 0), 0) || 0;
+      const totalOverduePayables = overduePayables.reduce((sum, p) => sum + (p.amount || 0), 0);
+      const totalOverdueReceivables = overdueReceivables.reduce((sum, r) => sum + (r.amount || 0), 0);
+
       fullContext = `
-## 📊 CONTEXTO COMPLETO DO SISTEMA (${today})
+## 📊 CONTEXTO FINANCEIRO (${today})
 
-### 💰 RESUMO FINANCEIRO (via ai_get_financial_dashboard)
-${JSON.stringify(financeiro, null, 2)}
-
-### 👥 ANÁLISE DE CLIENTES (via ai_get_clientes_analysis)
-${JSON.stringify(clientes, null, 2)}
-
-### 📦 ANÁLISE DE PRODUTOS E ESTOQUE (via ai_get_produtos_analysis)
-${JSON.stringify(produtos, null, 2)}
-
-### 🔧 ANÁLISE DE ORDENS DE SERVIÇO (via ai_get_os_analysis)
-${JSON.stringify(os, null, 2)}
-
-### 🛒 ANÁLISE DE VENDAS - Últimos 30 dias (via ai_get_vendas_analysis)
-${JSON.stringify(vendas, null, 2)}
-
-### 🏭 ANÁLISE DE COMPRAS E FORNECEDORES (via ai_get_compras_analysis)
-${JSON.stringify(compras, null, 2)}
-
-### 🚨 INADIMPLÊNCIA (via ai_get_inadimplencia_analysis)
-${JSON.stringify(inadimplencia, null, 2)}
-
----
-
-## DADOS DETALHADOS PARA ANÁLISE ESPECÍFICA
+### 💰 RESUMO
+- Contas a Pagar Pendentes: ${payables?.length || 0} títulos (R$ ${totalPayables.toFixed(2)})
+- Contas a Pagar Vencidas: ${overduePayables.length} títulos (R$ ${totalOverduePayables.toFixed(2)})
+- Contas a Receber Pendentes: ${receivables?.length || 0} títulos (R$ ${totalReceivables.toFixed(2)})
+- Contas a Receber Vencidas: ${overdueReceivables.length} títulos (R$ ${totalOverdueReceivables.toFixed(2)})
+- Produtos com Estoque Baixo: ${lowStockProducts?.length || 0}
 
 ### Contas a Pagar Vencidas (${overduePayables.length} registros)
 ${JSON.stringify(overduePayables.slice(0, 20).map(p => ({
@@ -208,15 +147,12 @@ ${JSON.stringify(overdueReceivables.slice(0, 20).map(r => ({
 ${JSON.stringify(lowStockProducts?.map(p => ({
   codigo: p.code,
   nome: p.name,
-  descricao: p.description,
   estoque_atual: p.current_stock,
-  estoque_minimo: p.minimum_stock,
-  preco_custo: p.cost_price,
-  preco_venda: p.sale_price
+  estoque_minimo: p.minimum_stock
 })), null, 2)}
 
 ### Últimas Transações Bancárias
-${JSON.stringify(transactions?.slice(0, 20).map(t => ({
+${JSON.stringify(transactions?.slice(0, 15).map(t => ({
   data: t.transaction_date,
   descricao: t.description,
   valor: t.amount,
@@ -225,87 +161,51 @@ ${JSON.stringify(transactions?.slice(0, 20).map(t => ({
   conciliado: t.is_reconciled
 })), null, 2)}
 `;
+    } catch (dataError) {
+      console.error("[financial-ai] Error fetching data:", dataError);
+      fullContext = "## Dados não disponíveis\nNão foi possível carregar os dados financeiros.";
     }
 
-    const systemPrompt = `Você é um assistente de inteligência artificial com ACESSO COMPLETO a todos os dados do sistema ERP. Você pode analisar:
-
-## MÓDULOS DISPONÍVEIS
-1. **Financeiro**: Contas a pagar, contas a receber, transações bancárias, plano de contas, centros de custo
-2. **Compras**: Pedidos de compra, recebimento de mercadorias, fornecedores
-3. **Vendas**: Vendas, orçamentos, clientes, comissões
-4. **Estoque**: Produtos, movimentações, saldos, localizações
-5. **Fiscal**: Notas fiscais, impostos, CFOP
-6. **Serviços**: Ordens de serviço, atendimentos
+    const systemPrompt = `Você é um assistente de inteligência artificial financeira do ERP WAI. Você analisa dados financeiros e fornece insights práticos.
 
 ## SUAS CAPACIDADES
-1. **Detecção de Fraude e Anomalias**:
-   - Identificar pagamentos duplicados ou suspeitos
-   - Detectar padrões incomuns de gastos
-   - Alertar sobre fornecedores/clientes com comportamento atípico
-   - Identificar valores fora do padrão histórico
-
-2. **Auditoria de Lançamentos**:
-   - Verificar categorização no plano de contas
-   - Identificar lançamentos mal categorizados
-   - Verificar consistência de dados entre módulos
-
-3. **Análise de Fornecedores e Clientes**:
-   - Identificar concentração de gastos/receitas
-   - Detectar dependência excessiva
-   - Sugerir oportunidades de negociação
-   - Analisar histórico de pagamentos/recebimentos
-
-4. **Análise de Fluxo de Caixa**:
-   - Projetar saldo futuro
-   - Identificar períodos críticos
-   - Alertar sobre vencimentos importantes
-   - Sugerir priorização de pagamentos
-
-5. **Gestão de Estoque**:
-   - Identificar produtos com estoque baixo
-   - Detectar produtos com margem negativa
-   - Analisar giro de estoque
-   - Sugerir reposição
-
-6. **Análise de Vendas**:
-   - Identificar tendências
-   - Analisar performance por cliente/produto
-   - Detectar oportunidades de cross-sell/up-sell
+1. Análise de contas a pagar e receber
+2. Detecção de vencimentos e atrasos
+3. Projeção de fluxo de caixa
+4. Identificação de riscos financeiros
+5. Sugestões de priorização de pagamentos
 
 ## REGRAS DE RESPOSTA
 - Seja direto e objetivo
-- Use dados concretos dos contextos fornecidos
+- Use dados concretos do contexto fornecido
 - Destaque riscos (🚨 crítico, ⚠️ atenção) e oportunidades (✅ ok, 💡 sugestão)
 - Formate em Markdown para legibilidade
-- Quando relevante, sugira ações práticas
-- Foque no que o prompt/pergunta do usuário solicita
+- Sugira ações práticas quando relevante
 
 ${fullContext}`;
 
-    // For CFOP suggestions, don't use streaming (short response)
+    // Use streaming
     const useStreaming = type !== 'cfop_suggestion';
     
-    console.log("[financial-ai] Calling OpenAI, streaming:", useStreaming, "type:", type);
-    console.log("[financial-ai] Context size:", fullContext.length, "chars");
+    console.log("[financial-ai] Calling Lovable AI, streaming:", useStreaming);
 
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${OPENAI_API_KEY}`,
+        Authorization: `Bearer ${LOVABLE_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "gpt-4.1-mini-2025-04-14",
+        model: "google/gemini-2.5-flash",
         messages: [
           { role: "system", content: systemPrompt },
           ...messages,
         ],
         stream: useStreaming,
-        max_completion_tokens: 4096,
       }),
     });
     
-    console.log("[financial-ai] OpenAI response status:", response.status);
+    console.log("[financial-ai] Lovable AI response status:", response.status);
 
     if (!response.ok) {
       if (response.status === 429) {
@@ -321,7 +221,7 @@ ${fullContext}`;
         });
       }
       const t = await response.text();
-      console.error("AI gateway error:", response.status, t);
+      console.error("[financial-ai] AI gateway error:", response.status, t);
       return new Response(JSON.stringify({ error: "AI gateway error" }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -331,7 +231,7 @@ ${fullContext}`;
     // For non-streaming requests, return JSON directly
     if (!useStreaming) {
       const data = await response.json();
-      console.log("[financial-ai] Non-streaming response:", JSON.stringify(data).substring(0, 500));
+      console.log("[financial-ai] Non-streaming response received");
       return new Response(JSON.stringify(data), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -341,7 +241,7 @@ ${fullContext}`;
       headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
     });
   } catch (error) {
-    console.error("Error in financial-ai function:", error);
+    console.error("[financial-ai] Error:", error);
     const errorMessage = error instanceof Error ? error.message : "Unknown error";
     return new Response(JSON.stringify({ error: errorMessage }), {
       status: 500,
