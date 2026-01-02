@@ -417,6 +417,8 @@ export function usePurchaseReceipt() {
   // Finalizar recebimento
   const finalizeReceipt = useMutation({
     mutationFn: async (source: ReceiptSource) => {
+      if (!companyId) throw new Error("Empresa não selecionada");
+
       let receiptId = source.receipt_id;
 
       // Se não há receipt_id no state, buscar do banco de dados
@@ -433,21 +435,103 @@ export function usePurchaseReceipt() {
 
       if (!receiptId) throw new Error("Recebimento não iniciado");
 
-      // Verificar itens recebidos
+      // Buscar itens recebidos com dados do produto e preço do item do pedido
       const { data: items } = await supabase
-        .from("purchase_order_receipt_items")
-        .select("quantity_expected, quantity_received")
+        .from("purchase_order_receipt_items" as any)
+        .select(`
+          id, 
+          product_id, 
+          quantity_expected, 
+          quantity_received, 
+          stock_updated,
+          purchase_order_item_id
+        `)
         .eq("receipt_id", receiptId);
 
-      const allComplete = items?.every(i => i.quantity_received >= i.quantity_expected);
-      const hasPartial = items?.some(i => i.quantity_received > 0 && i.quantity_received < i.quantity_expected);
-      const hasReceived = items?.some(i => i.quantity_received > 0);
+      // Buscar preços dos itens do pedido de compra
+      const orderItemIds = (items || []).map((i: any) => i.purchase_order_item_id).filter(Boolean);
+      let orderItemsMap: Record<string, number> = {};
+      
+      if (orderItemIds.length > 0) {
+        const { data: orderItems } = await supabase
+          .from("purchase_order_items")
+          .select("id, unit_price")
+          .in("id", orderItemIds);
+        
+        orderItemsMap = (orderItems || []).reduce((acc: Record<string, number>, item: any) => {
+          acc[item.id] = item.unit_price || 0;
+          return acc;
+        }, {});
+      }
+
+      const allComplete = (items as any[])?.every((i: any) => i.quantity_received >= i.quantity_expected);
+      const hasReceived = (items as any[])?.some((i: any) => i.quantity_received > 0);
 
       if (!hasReceived) {
         throw new Error("Nenhum item foi recebido");
       }
 
       const newStatus = allComplete ? 'complete' : 'partial';
+
+      // CRIAR MOVIMENTAÇÕES DE ESTOQUE para itens que ainda não foram atualizados
+      for (const item of (items as any[]) || []) {
+        if (item.quantity_received > 0 && item.product_id && !item.stock_updated) {
+          const unitPrice = orderItemsMap[item.purchase_order_item_id] || 0;
+          
+          // Criar movimentação de entrada
+          const { error: movError } = await supabase
+            .from("stock_movements")
+            .insert({
+              company_id: companyId,
+              product_id: item.product_id,
+              type: "ENTRADA_COMPRA",
+              quantity: item.quantity_received,
+              unit_price: unitPrice,
+              total_value: unitPrice * item.quantity_received,
+              reason: `Recebimento Pedido #${source.order_number}`,
+              reference_type: "purchase_order_receipt",
+              reference_id: receiptId,
+            });
+
+          if (movError) {
+            console.error("Erro ao criar movimentação:", movError);
+            continue;
+          }
+
+          // Recalcular saldo do produto baseado em TODAS as movimentações
+          const { data: allMovements } = await supabase
+            .from("stock_movements")
+            .select("type, quantity")
+            .eq("product_id", item.product_id);
+
+          let totalQuantity = 0;
+          for (const mov of allMovements || []) {
+            const isEntry = mov.type.includes("ENTRADA");
+            const isExit = mov.type.includes("SAIDA");
+            const isReversal = mov.type.includes("ESTORNO");
+            
+            if (isEntry && !isReversal) {
+              totalQuantity += mov.quantity;
+            } else if (isExit || (isReversal && mov.type.includes("ENTRADA"))) {
+              totalQuantity -= mov.quantity;
+            } else if (isReversal && mov.type.includes("SAIDA")) {
+              totalQuantity += mov.quantity;
+            }
+          }
+
+          // Atualizar quantidade do produto
+          await supabase
+            .from("products")
+            .update({ quantity: totalQuantity })
+            .eq("id", item.product_id);
+
+          // Marcar item como atualizado no estoque
+          await supabase
+            .from("purchase_order_receipt_items")
+            .update({ stock_updated: true })
+            .eq("id", item.id);
+        }
+      }
 
       // Atualizar recebimento
       await supabase
@@ -476,6 +560,8 @@ export function usePurchaseReceipt() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["purchase_orders_pending_receipt"] });
       queryClient.invalidateQueries({ queryKey: ["purchase_orders"] });
+      queryClient.invalidateQueries({ queryKey: ["products"] });
+      queryClient.invalidateQueries({ queryKey: ["stock_movements"] });
     },
     onError: (error) => {
       toast.error(error.message || "Erro ao finalizar recebimento");
