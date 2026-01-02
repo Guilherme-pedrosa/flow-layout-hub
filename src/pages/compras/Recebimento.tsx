@@ -253,7 +253,7 @@ Responda APENAS com o texto do insight, sem JSON.`;
     }
 
     try {
-      await confirmItem.mutateAsync({
+      const result = await confirmItem.mutateAsync({
         source: selectedSource,
         item,
         quantity: finalQty,
@@ -263,7 +263,12 @@ Responda APENAS com o texto do insight, sem JSON.`;
       // Atualiza localmente
       const updatedItems = selectedSource.items.map(i => 
         i.id === item.id 
-          ? { ...i, quantity_received: i.quantity_received + finalQty, quantity_pending: i.quantity_pending - finalQty }
+          ? { 
+              ...i, 
+              quantity_received: i.quantity_received + finalQty, 
+              quantity_pending: i.quantity_pending - finalQty,
+              receipt_item_id: result?.receiptItemId || i.receipt_item_id,
+            }
           : i
       );
       
@@ -278,6 +283,8 @@ Responda APENAS com o texto do insight, sem JSON.`;
           ...prev,
           items: updatedItems,
           receipt_status: newStatus,
+          // IMPORTANTE: Atualizar o receipt_id criado pelo confirmItem
+          receipt_id: result?.receiptId || prev.receipt_id,
         };
       });
       
@@ -344,7 +351,7 @@ Responda APENAS com o texto do insight, sem JSON.`;
     }
     
     try {
-      await updateItemQuantity.mutateAsync({
+      const result = await updateItemQuantity.mutateAsync({
         source: selectedSource,
         item,
         newQuantity: newQty,
@@ -353,7 +360,12 @@ Responda APENAS com o texto do insight, sem JSON.`;
       // Atualiza localmente
       const updatedItems = selectedSource.items.map(i => 
         i.id === item.id 
-          ? { ...i, quantity_received: newQty, quantity_pending: i.quantity_total - newQty }
+          ? { 
+              ...i, 
+              quantity_received: newQty, 
+              quantity_pending: i.quantity_total - newQty,
+              receipt_item_id: result?.receiptItemId || i.receipt_item_id,
+            }
           : i
       );
       
@@ -368,6 +380,8 @@ Responda APENAS com o texto do insight, sem JSON.`;
           ...prev,
           items: updatedItems,
           receipt_status: newStatus,
+          // IMPORTANTE: Atualizar o receipt_id criado
+          receipt_id: result?.receiptId || prev.receipt_id,
         };
       });
       
