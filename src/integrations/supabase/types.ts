@@ -1926,6 +1926,141 @@ export type Database = {
           },
         ]
       }
+      field_customers_snapshot: {
+        Row: {
+          cep: string | null
+          city: string | null
+          company_id: string
+          complement: string | null
+          created_at: string
+          document: string | null
+          field_id: string
+          full_address: string | null
+          id: string
+          latitude: number | null
+          location_name: string | null
+          longitude: number | null
+          name: string | null
+          neighborhood: string | null
+          number: string | null
+          raw_data: Json | null
+          state: string | null
+          street: string | null
+        }
+        Insert: {
+          cep?: string | null
+          city?: string | null
+          company_id: string
+          complement?: string | null
+          created_at?: string
+          document?: string | null
+          field_id: string
+          full_address?: string | null
+          id?: string
+          latitude?: number | null
+          location_name?: string | null
+          longitude?: number | null
+          name?: string | null
+          neighborhood?: string | null
+          number?: string | null
+          raw_data?: Json | null
+          state?: string | null
+          street?: string | null
+        }
+        Update: {
+          cep?: string | null
+          city?: string | null
+          company_id?: string
+          complement?: string | null
+          created_at?: string
+          document?: string | null
+          field_id?: string
+          full_address?: string | null
+          id?: string
+          latitude?: number | null
+          location_name?: string | null
+          longitude?: number | null
+          name?: string | null
+          neighborhood?: string | null
+          number?: string | null
+          raw_data?: Json | null
+          state?: string | null
+          street?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "field_customers_snapshot_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      field_matching_results: {
+        Row: {
+          company_id: string
+          created_at: string
+          field_candidate_id: string | null
+          id: string
+          match_reason: string | null
+          match_score: number
+          match_status: string
+          reviewed_at: string | null
+          reviewed_by: string | null
+          updated_at: string
+          wai_customer_id: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          field_candidate_id?: string | null
+          id?: string
+          match_reason?: string | null
+          match_score?: number
+          match_status?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          updated_at?: string
+          wai_customer_id: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          field_candidate_id?: string | null
+          id?: string
+          match_reason?: string | null
+          match_score?: number
+          match_status?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          updated_at?: string
+          wai_customer_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "field_matching_results_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "field_matching_results_reviewed_by_fkey"
+            columns: ["reviewed_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "field_matching_results_wai_customer_id_fkey"
+            columns: ["wai_customer_id"]
+            isOneToOne: false
+            referencedRelation: "pessoas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       financial_situations: {
         Row: {
           allows_editing: boolean

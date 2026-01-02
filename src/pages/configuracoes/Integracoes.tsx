@@ -1,12 +1,15 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { PageHeader } from "@/components/shared";
-import { Plug, RefreshCw, CheckCircle, AlertCircle, Loader2, Upload, ArrowRight } from "lucide-react";
+import { Plug, RefreshCw, CheckCircle, AlertCircle, Loader2, Upload, ArrowRight, Link2, FileSpreadsheet, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/contexts/CompanyContext";
 import { toast } from "sonner";
 import { Progress } from "@/components/ui/progress";
+import { Badge } from "@/components/ui/badge";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import * as XLSX from 'xlsx';
 
 export default function Integracoes() {
   const { currentCompany } = useCompany();
@@ -18,6 +21,11 @@ export default function Integracoes() {
     migrated: number;
     current_batch: number;
   } | null>(null);
+  
+  // Matching state
+  const [matchingStatus, setMatchingStatus] = useState<any>(null);
+  const [matchingResults, setMatchingResults] = useState<any[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const executarMigracao = async (action: string) => {
     if (!currentCompany?.id) {
@@ -102,7 +110,126 @@ export default function Integracoes() {
     }
   };
 
-  const progressPercent = migrationProgress 
+  // ===== MATCHING FIELD CONTROL =====
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || !currentCompany?.id) return;
+
+    setLoading('import-xlsx');
+    
+    try {
+      const data = await file.arrayBuffer();
+      const workbook = XLSX.read(data);
+      const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+      const jsonData = XLSX.utils.sheet_to_json(worksheet);
+
+      console.log(`Importando ${jsonData.length} linhas do Excel...`);
+
+      const { data: result, error } = await supabase.functions.invoke('field-match-customers', {
+        body: { 
+          action: 'import_snapshot', 
+          company_id: currentCompany.id,
+          snapshot_data: jsonData
+        }
+      });
+
+      if (error) throw error;
+
+      if (result.success) {
+        toast.success(`${result.imported} clientes do Field importados!`);
+        await fetchMatchingStatus();
+      } else {
+        toast.error(result.error);
+      }
+    } catch (err: any) {
+      console.error("Erro importando Excel:", err);
+      toast.error(err.message || "Erro ao importar planilha");
+    } finally {
+      setLoading(null);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const fetchMatchingStatus = async () => {
+    if (!currentCompany?.id) return;
+
+    try {
+      const { data, error } = await supabase.functions.invoke('field-match-customers', {
+        body: { action: 'status', company_id: currentCompany.id }
+      });
+
+      if (error) throw error;
+      setMatchingStatus(data);
+    } catch (err) {
+      console.error("Erro buscando status:", err);
+    }
+  };
+
+  const runMatching = async () => {
+    if (!currentCompany?.id) return;
+
+    setLoading('run-matching');
+    
+    try {
+      const { data, error } = await supabase.functions.invoke('field-match-customers', {
+        body: { action: 'run_matching', company_id: currentCompany.id }
+      });
+
+      if (error) throw error;
+
+      if (data.success) {
+        toast.success(data.message);
+        setMatchingResults(data.results || []);
+        await fetchMatchingStatus();
+      } else {
+        toast.error(data.error);
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Erro ao executar matching");
+    } finally {
+      setLoading(null);
+    }
+  };
+
+  const applyMatches = async () => {
+    if (!currentCompany?.id) return;
+
+    setLoading('apply-matches');
+    
+    try {
+      const { data, error } = await supabase.functions.invoke('field-match-customers', {
+        body: { action: 'apply_matches', company_id: currentCompany.id }
+      });
+
+      if (error) throw error;
+
+      if (data.success) {
+        toast.success(data.message);
+        await fetchMatchingStatus();
+      } else {
+        toast.error(data.error);
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Erro ao aplicar matches");
+    } finally {
+      setLoading(null);
+    }
+  };
+
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'AUTO_LINK':
+        return <Badge className="bg-green-500">Automático</Badge>;
+      case 'REVIEW':
+        return <Badge className="bg-yellow-500">Revisar</Badge>;
+      case 'CREATE_NEW':
+        return <Badge className="bg-blue-500">Criar Novo</Badge>;
+      default:
+        return <Badge variant="secondary">{status}</Badge>;
+    }
+  };
+
+  const progressPercent = migrationProgress
     ? Math.round((migrationProgress.migrated / migrationProgress.total) * 100) 
     : 0;
 
@@ -358,6 +485,147 @@ export default function Integracoes() {
                     </div>
                   )}
                 </div>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Matching Inteligente */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Link2 className="h-5 w-5" />
+            Matching Inteligente WAI ↔ Field
+          </CardTitle>
+          <CardDescription>
+            Vincule clientes existentes no Field aos do WAI sem criar duplicatas. Ideal para quem já tem equipamentos cadastrados.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* Status */}
+          {matchingStatus && (
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-2 text-sm">
+              <div className="bg-muted rounded p-2 text-center">
+                <div className="font-bold text-lg">{matchingStatus.snapshot_count}</div>
+                <div className="text-xs text-muted-foreground">Clientes Field</div>
+              </div>
+              <div className="bg-green-100 dark:bg-green-900/30 rounded p-2 text-center">
+                <div className="font-bold text-lg text-green-600">{matchingStatus.matching_results?.AUTO_LINK || 0}</div>
+                <div className="text-xs text-muted-foreground">Automático</div>
+              </div>
+              <div className="bg-yellow-100 dark:bg-yellow-900/30 rounded p-2 text-center">
+                <div className="font-bold text-lg text-yellow-600">{matchingStatus.matching_results?.REVIEW || 0}</div>
+                <div className="text-xs text-muted-foreground">Revisar</div>
+              </div>
+              <div className="bg-blue-100 dark:bg-blue-900/30 rounded p-2 text-center">
+                <div className="font-bold text-lg text-blue-600">{matchingStatus.matching_results?.CREATE_NEW || 0}</div>
+                <div className="text-xs text-muted-foreground">Criar Novo</div>
+              </div>
+              <div className="bg-muted rounded p-2 text-center">
+                <div className="font-bold text-lg">{matchingStatus.synced_count}</div>
+                <div className="text-xs text-muted-foreground">Já Vinculados</div>
+              </div>
+            </div>
+          )}
+
+          {/* Ações */}
+          <div className="flex flex-wrap gap-3">
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={handleFileUpload}
+              accept=".xlsx,.xls"
+              className="hidden"
+            />
+            
+            <Button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={!!loading}
+              variant="outline"
+            >
+              {loading === 'import-xlsx' ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <FileSpreadsheet className="mr-2 h-4 w-4" />
+              )}
+              1. Importar Planilha Field
+            </Button>
+
+            <Button
+              onClick={runMatching}
+              disabled={!!loading || !matchingStatus?.snapshot_count}
+              variant="outline"
+            >
+              {loading === 'run-matching' ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Eye className="mr-2 h-4 w-4" />
+              )}
+              2. Executar Matching
+            </Button>
+
+            <Button
+              onClick={applyMatches}
+              disabled={!!loading || !matchingStatus?.matching_results?.AUTO_LINK}
+              className="bg-green-600 hover:bg-green-700"
+            >
+              {loading === 'apply-matches' ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Link2 className="mr-2 h-4 w-4" />
+              )}
+              3. Aplicar Vínculos
+            </Button>
+
+            <Button
+              onClick={fetchMatchingStatus}
+              disabled={!!loading}
+              variant="ghost"
+              size="sm"
+            >
+              <RefreshCw className="h-4 w-4" />
+            </Button>
+          </div>
+
+          {/* Resultados do Matching */}
+          {matchingResults.length > 0 && (
+            <div className="border rounded-lg overflow-hidden">
+              <div className="bg-muted px-4 py-2 text-sm font-medium">
+                Preview dos Matches (primeiros 50)
+              </div>
+              <div className="max-h-80 overflow-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Cliente WAI</TableHead>
+                      <TableHead>Candidato Field</TableHead>
+                      <TableHead className="w-20 text-center">Score</TableHead>
+                      <TableHead>Razão</TableHead>
+                      <TableHead className="w-24">Status</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {matchingResults.map((r, i) => (
+                      <TableRow key={i}>
+                        <TableCell className="font-medium">{r.wai_name}</TableCell>
+                        <TableCell>{r.field_candidate_name || '-'}</TableCell>
+                        <TableCell className="text-center">
+                          <span className={`font-mono font-bold ${
+                            r.match_score >= 80 ? 'text-green-600' :
+                            r.match_score >= 50 ? 'text-yellow-600' : 'text-gray-400'
+                          }`}>
+                            {r.match_score}
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-xs text-muted-foreground max-w-[200px] truncate">
+                          {r.match_reason}
+                        </TableCell>
+                        <TableCell>{getStatusBadge(r.match_status)}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
               </div>
             </div>
           )}
