@@ -3658,6 +3658,7 @@ export type Database = {
           departamento: string | null
           email: string | null
           estado: string | null
+          external_id: string | null
           id: string
           inscricao_estadual: string | null
           inscricao_municipal: string | null
@@ -3713,6 +3714,7 @@ export type Database = {
           departamento?: string | null
           email?: string | null
           estado?: string | null
+          external_id?: string | null
           id?: string
           inscricao_estadual?: string | null
           inscricao_municipal?: string | null
@@ -3768,6 +3770,7 @@ export type Database = {
           departamento?: string | null
           email?: string | null
           estado?: string | null
+          external_id?: string | null
           id?: string
           inscricao_estadual?: string | null
           inscricao_municipal?: string | null
