@@ -21,7 +21,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import logoWai from "@/assets/logo-wai-erp.png";
+import logoWai from "@/assets/logo-wai-completo.png";
 
 export default function LandingPage() {
   const navigate = useNavigate();
@@ -87,7 +87,7 @@ export default function LandingPage() {
         }`}
       >
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center">
             <img src={logoWai} alt="WAI ERP" className="h-10" />
           </div>
           <nav className="hidden md:flex items-center gap-8">

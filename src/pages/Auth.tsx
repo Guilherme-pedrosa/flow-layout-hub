@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { Loader2, Mail, Lock, User } from "lucide-react";
-import logoWaiErp from "@/assets/logo-wai-erp.png";
+import logoWaiErp from "@/assets/logo-wai-completo.png";
 
 export default function Auth() {
   const navigate = useNavigate();
@@ -53,7 +53,7 @@ export default function Auth() {
     }
 
     toast.success("Login realizado com sucesso!");
-    navigate("/");
+    navigate("/dashboard");
   };
 
   const handleSignup = async (e: React.FormEvent) => {
@@ -80,7 +80,7 @@ export default function Auth() {
       email: signupEmail,
       password: signupPassword,
       options: {
-        emailRedirectTo: `${window.location.origin}/`,
+        emailRedirectTo: `${window.location.origin}/dashboard`,
         data: {
           full_name: signupName,
         },
@@ -102,14 +102,14 @@ export default function Auth() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background to-muted p-4">
-      <Card className="w-full max-w-md">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-4">
+      <Card className="w-full max-w-md bg-slate-900/80 border-slate-700">
         <CardHeader className="text-center space-y-4">
           <div className="mx-auto">
-            <img src={logoWaiErp} alt="WAI ERP" className="h-12 mx-auto" />
+            <img src={logoWaiErp} alt="WAI ERP" className="h-16 mx-auto" />
           </div>
-          <CardTitle className="text-2xl">Bem-vindo ao WAI ERP</CardTitle>
-          <CardDescription>
+          <CardTitle className="text-2xl text-white">Bem-vindo ao WAI ERP</CardTitle>
+          <CardDescription className="text-slate-400">
             Faça login ou crie sua conta para continuar
           </CardDescription>
         </CardHeader>
