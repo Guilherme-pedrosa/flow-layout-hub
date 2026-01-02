@@ -32,19 +32,32 @@ export default function Equipamentos() {
   const [editingEquipment, setEditingEquipment] = useState<any>(null);
   const [saving, setSaving] = useState(false);
 
-  // Carregar TODOS os clientes da empresa
+  // Carregar apenas clientes que têm amarração com Field Control
   useEffect(() => {
     const loadClientes = async () => {
       if (!currentCompany) return;
       
-      const { data: allClientes } = await supabase
-        .from("clientes")
-        .select("id, razao_social, nome_fantasia, cpf_cnpj")
+      // Buscar clientes sincronizados com Field Control
+      const { data: syncData } = await supabase
+        .from("field_control_sync")
+        .select("wai_id")
         .eq("company_id", currentCompany.id)
-        .eq("status", "ativo")
-        .order("razao_social");
+        .eq("entity_type", "customer");
       
-      setClientes(allClientes || []);
+      if (syncData && syncData.length > 0) {
+        const clientIds = syncData.map(s => s.wai_id);
+        
+        const { data: clientesData } = await supabase
+          .from("clientes")
+          .select("id, razao_social, nome_fantasia, cpf_cnpj")
+          .in("id", clientIds)
+          .eq("status", "ativo")
+          .order("razao_social");
+        
+        setClientes(clientesData || []);
+      } else {
+        setClientes([]);
+      }
     };
     loadClientes();
   }, [currentCompany]);
