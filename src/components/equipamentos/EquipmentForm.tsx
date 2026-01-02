@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -18,12 +18,117 @@ import {
   DialogFooter,
   DialogDescription,
 } from "@/components/ui/dialog";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Info, QrCode, MapPin, Wrench, Calendar, Building2 } from "lucide-react";
+import { Loader2, Info, QrCode, MapPin, Wrench, Calendar, Building2, Check, ChevronsUpDown, Search } from "lucide-react";
 import { Equipment } from "@/hooks/useEquipments";
 import { supabase } from "@/integrations/supabase/client";
+import { cn } from "@/lib/utils";
+
+// Componente de select com pesquisa para clientes
+interface ClienteSearchSelectProps {
+  clientes: Array<{ id: string; razao_social?: string; nome_fantasia?: string; cpf_cnpj?: string }>;
+  value: string;
+  onChange: (value: string) => void;
+}
+
+function ClienteSearchSelect({ clientes, value, onChange }: ClienteSearchSelectProps) {
+  const [open, setOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const filteredClientes = useMemo(() => {
+    if (!searchQuery) return clientes;
+    const query = searchQuery.toLowerCase();
+    return clientes.filter(c => 
+      c.razao_social?.toLowerCase().includes(query) ||
+      c.nome_fantasia?.toLowerCase().includes(query) ||
+      c.cpf_cnpj?.includes(query)
+    );
+  }, [clientes, searchQuery]);
+
+  const selectedCliente = clientes.find(c => c.id === value);
+
+  return (
+    <div className="grid gap-2">
+      <Label>Cliente</Label>
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button
+            variant="outline"
+            role="combobox"
+            aria-expanded={open}
+            className="justify-between font-normal"
+          >
+            {selectedCliente 
+              ? (selectedCliente.razao_social || selectedCliente.nome_fantasia || "Cliente sem nome")
+              : "Selecione um cliente..."
+            }
+            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-[400px] p-0" align="start">
+          <Command shouldFilter={false}>
+            <CommandInput 
+              placeholder="Pesquisar por nome ou CPF/CNPJ..." 
+              value={searchQuery}
+              onValueChange={setSearchQuery}
+            />
+            <CommandList>
+              <CommandEmpty>Nenhum cliente encontrado.</CommandEmpty>
+              <CommandGroup>
+                <CommandItem
+                  value="none"
+                  onSelect={() => {
+                    onChange("");
+                    setOpen(false);
+                  }}
+                >
+                  <Check className={cn("mr-2 h-4 w-4", !value ? "opacity-100" : "opacity-0")} />
+                  <span className="text-muted-foreground">Sem cliente vinculado</span>
+                </CommandItem>
+                {filteredClientes.map((cliente) => (
+                  <CommandItem
+                    key={cliente.id}
+                    value={cliente.id}
+                    onSelect={() => {
+                      onChange(cliente.id);
+                      setOpen(false);
+                    }}
+                  >
+                    <Check className={cn("mr-2 h-4 w-4", value === cliente.id ? "opacity-100" : "opacity-0")} />
+                    <div className="flex flex-col">
+                      <span>{cliente.razao_social || cliente.nome_fantasia || "Cliente sem nome"}</span>
+                      {cliente.cpf_cnpj && (
+                        <span className="text-xs text-muted-foreground">{cliente.cpf_cnpj}</span>
+                      )}
+                    </div>
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            </CommandList>
+          </Command>
+        </PopoverContent>
+      </Popover>
+      <p className="text-xs text-muted-foreground">
+        {clientes.length} cliente(s) disponível(is) - Digite para filtrar
+      </p>
+    </div>
+  );
+}
 
 interface EquipmentFormData {
   serial_number: string;
@@ -49,7 +154,7 @@ interface EquipmentFormProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   equipment: Equipment | null;
-  clientes: Array<{ id: string; razao_social?: string; nome_fantasia?: string }>;
+  clientes: Array<{ id: string; razao_social?: string; nome_fantasia?: string; cpf_cnpj?: string }>;
   companyId: string | undefined;
   onSave: (data: EquipmentFormData) => Promise<void>;
   isSaving: boolean;
@@ -329,35 +434,11 @@ export function EquipmentForm({
                 <CardTitle className="text-sm font-medium">Vinculação com Cliente</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="grid gap-2">
-                  <Label htmlFor="client_id">Cliente</Label>
-                  <Select
-                    value={formData.client_id || "none"}
-                    onValueChange={(value) =>
-                      setFormData({
-                        ...formData,
-                        client_id: value === "none" ? "" : value,
-                      })
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecione um cliente" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">Sem cliente vinculado</SelectItem>
-                      {clientes.map((c) => (
-                        <SelectItem key={c.id} value={c.id}>
-                          {c.razao_social || c.nome_fantasia || "Cliente sem nome"}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <p className="text-xs text-muted-foreground">
-                    {clientes.length > 0 
-                      ? `${clientes.length} clientes sincronizados com Field Control`
-                      : "Sincronize clientes com o Field Control primeiro"}
-                  </p>
-                </div>
+                <ClienteSearchSelect 
+                  clientes={clientes}
+                  value={formData.client_id}
+                  onChange={(value) => setFormData({ ...formData, client_id: value })}
+                />
 
                 {formData.client_id && (
                   <div className="p-3 bg-muted rounded-lg">
