@@ -5,6 +5,8 @@ import { AppHeader } from "./AppHeader";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { AIAssistant } from "@/components/shared/AIAssistant";
+import { WaiAlertBanner } from "@/components/wai-observer/WaiAlertBanner";
+
 export function AppLayout() {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -54,7 +56,9 @@ export function AppLayout() {
         
         {/* Content area with padding and max-width */}
         <main className="flex-1 p-4 md:p-8 overflow-x-hidden page-enter">
-          <div className="mx-auto max-w-7xl">
+          <div className="mx-auto max-w-7xl space-y-4">
+            {/* WAI Observer Alert Banner - Global */}
+            <WaiAlertBanner className="mb-2" />
             <Outlet />
           </div>
         </main>

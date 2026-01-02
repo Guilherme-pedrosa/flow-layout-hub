@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Json } from "@/integrations/supabase/types";
 import { useCompany } from "@/contexts/CompanyContext";
+import { useAuditLog } from "./useAuditLog";
 
 export type StockBehavior = 'none' | 'reserve' | 'move';
 export type FinancialBehavior = 'none' | 'forecast' | 'effective';
@@ -205,6 +206,7 @@ export function useSaleStatuses() {
 export function useSales() {
   const queryClient = useQueryClient();
   const { currentCompany } = useCompany();
+  const { logEvent } = useAuditLog();
 
   const salesQuery = useQuery({
     queryKey: ["sales", currentCompany?.id],
@@ -302,9 +304,10 @@ export function useSales() {
 
       return saleData;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["sales"] });
       toast.success("Venda criada com sucesso!");
+      logEvent({ eventType: "sale.created", entityType: "sale", entityId: data.id });
     },
     onError: (error) => {
       toast.error(`Erro ao criar venda: ${error.message}`);
@@ -323,9 +326,10 @@ export function useSales() {
       if (error) throw error;
       return data;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["sales"] });
       toast.success("Venda atualizada!");
+      logEvent({ eventType: "sale.updated", entityType: "sale", entityId: data.id });
     },
   });
 
@@ -333,10 +337,12 @@ export function useSales() {
     mutationFn: async (id: string) => {
       const { error } = await supabase.from("sales").delete().eq("id", id);
       if (error) throw error;
+      return id;
     },
-    onSuccess: () => {
+    onSuccess: (deletedId) => {
       queryClient.invalidateQueries({ queryKey: ["sales"] });
       toast.success("Venda excluída!");
+      logEvent({ eventType: "sale.deleted", entityType: "sale", entityId: deletedId, triggerObserver: true });
     },
   });
 

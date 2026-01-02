@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Json } from "@/integrations/supabase/types";
 import { useCompany } from "@/contexts/CompanyContext";
+import { useAuditLog } from "./useAuditLog";
 
 export type StockBehavior = 'none' | 'reserve';
 export type FinancialBehavior = 'none' | 'forecast' | 'effective';
@@ -250,6 +251,7 @@ export function useServiceOrderStatuses() {
 
 export function useServiceOrders() {
   const queryClient = useQueryClient();
+  const { logEvent } = useAuditLog();
 
   const ordersQuery = useQuery({
     queryKey: ["service_orders"],
@@ -316,9 +318,10 @@ export function useServiceOrders() {
 
       return orderData;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["service_orders"] });
       toast.success("Ordem de serviço criada com sucesso!");
+      logEvent({ eventType: "service_order.created", entityType: "service_order", entityId: data.id });
     },
     onError: (error) => {
       toast.error(`Erro ao criar OS: ${error.message}`);
@@ -337,9 +340,10 @@ export function useServiceOrders() {
       if (error) throw error;
       return data;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["service_orders"] });
       toast.success("OS atualizada!");
+      logEvent({ eventType: "service_order.updated", entityType: "service_order", entityId: data.id });
     },
   });
 
