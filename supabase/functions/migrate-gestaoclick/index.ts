@@ -165,10 +165,12 @@ serve(async (req) => {
           external_id: gcId,
         };
 
-        // Verificar se já existe APENAS por external_id (GC ID)
-        // Cada registro no GC é único - se não tem external_id, é um registro novo
+        // Verificar duplicidade:
+        // 1. Primeiro por external_id (GC ID) - atualiza se já existe
+        // 2. Depois por cpf_cnpj + nome_fantasia - atualiza se igual, insere se diferente
         let existingPessoa = null;
         
+        // Buscar por external_id primeiro
         if (gcId) {
           const { data } = await supabase
             .from('pessoas')
@@ -179,8 +181,28 @@ serve(async (req) => {
           existingPessoa = data;
         }
 
+        // Se não encontrou por external_id, verificar por cpf_cnpj + nome_fantasia
+        if (!existingPessoa && cpfCnpj) {
+          const { data } = await supabase
+            .from('pessoas')
+            .select('id, is_cliente, is_fornecedor, is_transportadora, external_id, nome_fantasia')
+            .eq('company_id', company_id)
+            .eq('cpf_cnpj', cpfCnpj);
+          
+          // Se nome_fantasia for igual a algum existente, considera duplicado
+          if (data && data.length > 0) {
+            const matchingByName = data.find(p => 
+              (p.nome_fantasia || '').toLowerCase().trim() === (nomeFantasia || '').toLowerCase().trim()
+            );
+            if (matchingByName) {
+              existingPessoa = matchingByName;
+            }
+            // Se nome_fantasia for diferente, permite inserir (não seta existingPessoa)
+          }
+        }
+
         if (existingPessoa) {
-          // Atualizar registro existente (já veio do GC antes)
+          // Atualizar registro existente (mesmo external_id ou mesmo cpf_cnpj + nome_fantasia)
           const updateData: any = { ...pessoaData };
           if (existingPessoa.is_cliente) updateData.is_cliente = true;
           if (existingPessoa.is_fornecedor) updateData.is_fornecedor = true;
@@ -193,7 +215,7 @@ serve(async (req) => {
 
           return error ? 'erro' : 'atualizado';
         } else {
-          // Inserir novo registro - cada unidade do GC é um cliente separado
+          // Inserir novo registro - nome_fantasia diferente permite duplicar
           const { error } = await supabase.from('pessoas').insert(pessoaData);
           return error ? 'erro' : 'importado';
         }
