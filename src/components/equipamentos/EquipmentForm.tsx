@@ -88,27 +88,29 @@ const EQUIPMENT_TYPES = [
   "Outro",
 ];
 
-// Marcas comuns
-const COMMON_BRANDS = [
-  "Carrier",
-  "Springer",
-  "Midea",
-  "LG",
-  "Samsung",
-  "Daikin",
-  "Trane",
-  "Hitachi",
-  "Elgin",
-  "Gree",
-  "Fujitsu",
-  "York",
-  "Komeco",
-  "Philco",
-  "Consul",
-  "Electrolux",
-  "Brastemp",
-  "Hussmann",
-  "Metalfrio",
+// Tipos de equipamento para cozinha industrial
+const EQUIPMENT_TYPES_KITCHEN = [
+  "Fogão Industrial",
+  "Forno Combinado",
+  "Forno Elétrico",
+  "Forno a Gás",
+  "Fritadeira",
+  "Chapa",
+  "Grelha",
+  "Banho Maria",
+  "Estufa",
+  "Pass Through",
+  "Refrigerador Industrial",
+  "Freezer Industrial",
+  "Câmara Fria",
+  "Balcão Refrigerado",
+  "Mesa Refrigerada",
+  "Ultracongelador",
+  "Máquina de Gelo",
+  "Coifa",
+  "Exaustor",
+  "Ar Condicionado",
+  "Cortina de Ar",
   "Outro",
 ];
 
@@ -122,7 +124,6 @@ export function EquipmentForm({
 }: EquipmentFormProps) {
   const [formData, setFormData] = useState<EquipmentFormData>(initialFormData);
   const [activeTab, setActiveTab] = useState("dados");
-  const [customBrand, setCustomBrand] = useState("");
   const [customType, setCustomType] = useState("");
 
   useEffect(() => {
@@ -141,16 +142,12 @@ export function EquipmentForm({
         warranty_end: equipment.warranty_end || "",
         notes: equipment.notes || "",
       });
-      // Check if brand/type are custom
-      if (equipment.brand && !COMMON_BRANDS.includes(equipment.brand)) {
-        setCustomBrand(equipment.brand);
-      }
-      if (equipment.equipment_type && !EQUIPMENT_TYPES.includes(equipment.equipment_type)) {
+      // Check if type is custom
+      if (equipment.equipment_type && !EQUIPMENT_TYPES_KITCHEN.includes(equipment.equipment_type)) {
         setCustomType(equipment.equipment_type);
       }
     } else {
       setFormData(initialFormData);
-      setCustomBrand("");
       setCustomType("");
     }
     setActiveTab("dados");
@@ -161,10 +158,9 @@ export function EquipmentForm({
       return;
     }
     
-    // Apply custom values if "Outro" is selected
+    // Apply custom type if "Outro" is selected
     const finalData = {
       ...formData,
-      brand: formData.brand === "Outro" ? customBrand : formData.brand,
       equipment_type: formData.equipment_type === "Outro" ? customType : formData.equipment_type,
     };
     
@@ -239,42 +235,21 @@ export function EquipmentForm({
                 <div className="grid grid-cols-2 gap-4">
                   <div className="grid gap-2">
                     <Label htmlFor="brand">Marca</Label>
-                    <Select
-                      value={COMMON_BRANDS.includes(formData.brand) ? formData.brand : (formData.brand ? "Outro" : "")}
-                      onValueChange={(value) => {
-                        if (value === "Outro") {
-                          setFormData({ ...formData, brand: "Outro" });
-                        } else {
-                          setFormData({ ...formData, brand: value });
-                          setCustomBrand("");
-                        }
-                      }}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Selecione a marca" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {COMMON_BRANDS.map((brand) => (
-                          <SelectItem key={brand} value={brand}>
-                            {brand}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {(formData.brand === "Outro" || (formData.brand && !COMMON_BRANDS.includes(formData.brand))) && (
-                      <Input
-                        placeholder="Digite a marca"
-                        value={customBrand || (formData.brand !== "Outro" ? formData.brand : "")}
-                        onChange={(e) => setCustomBrand(e.target.value)}
-                      />
-                    )}
+                    <Input
+                      id="brand"
+                      placeholder="Ex: Tramontina, Rational, Electrolux"
+                      value={formData.brand}
+                      onChange={(e) =>
+                        setFormData({ ...formData, brand: e.target.value })
+                      }
+                    />
                   </div>
 
                   <div className="grid gap-2">
                     <Label htmlFor="model">Modelo</Label>
                     <Input
                       id="model"
-                      placeholder="Ex: Split Inverter 12000 BTU"
+                      placeholder="Ex: Forno Combinado 10 GN"
                       value={formData.model}
                       onChange={(e) =>
                         setFormData({ ...formData, model: e.target.value })
@@ -286,7 +261,7 @@ export function EquipmentForm({
                 <div className="grid gap-2">
                   <Label htmlFor="equipment_type">Tipo de Equipamento</Label>
                   <Select
-                    value={EQUIPMENT_TYPES.includes(formData.equipment_type) ? formData.equipment_type : (formData.equipment_type ? "Outro" : "")}
+                    value={EQUIPMENT_TYPES_KITCHEN.includes(formData.equipment_type) ? formData.equipment_type : (formData.equipment_type ? "Outro" : "")}
                     onValueChange={(value) => {
                       if (value === "Outro") {
                         setFormData({ ...formData, equipment_type: "Outro" });
@@ -300,14 +275,14 @@ export function EquipmentForm({
                       <SelectValue placeholder="Selecione o tipo" />
                     </SelectTrigger>
                     <SelectContent>
-                      {EQUIPMENT_TYPES.map((type) => (
+                      {EQUIPMENT_TYPES_KITCHEN.map((type) => (
                         <SelectItem key={type} value={type}>
                           {type}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
-                  {(formData.equipment_type === "Outro" || (formData.equipment_type && !EQUIPMENT_TYPES.includes(formData.equipment_type))) && (
+                  {(formData.equipment_type === "Outro" || (formData.equipment_type && !EQUIPMENT_TYPES_KITCHEN.includes(formData.equipment_type))) && (
                     <Input
                       placeholder="Digite o tipo"
                       value={customType || (formData.equipment_type !== "Outro" ? formData.equipment_type : "")}
