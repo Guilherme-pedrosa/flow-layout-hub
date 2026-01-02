@@ -7,6 +7,9 @@ import {
   ChevronUp,
   Bell,
   Loader2,
+  Shield,
+  TrendingDown,
+  AlertTriangle,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -15,12 +18,11 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useWaiObserver } from "@/hooks/useWaiObserver";
+import { useTopAlerts } from "@/hooks/useTopAlerts";
 import { WaiObserverAlertCard } from "./WaiObserverAlertCard";
 
 export function WaiObserverPanel() {
   const {
-    alerts,
-    unreadCount,
     isLoading,
     isAnalyzing,
     fetchAlerts,
@@ -31,6 +33,16 @@ export function WaiObserverPanel() {
     recordAction,
   } = useWaiObserver();
 
+  const {
+    topAlerts,
+    strategicRisks,
+    economicRisks,
+    tacticalAttention,
+    totalPotentialLoss,
+    fetchTopAlerts,
+    maxAlerts,
+  } = useTopAlerts();
+
   const [isOpen, setIsOpen] = useState(true);
   const [question, setQuestion] = useState("");
   const [questionResponse, setQuestionResponse] = useState<string | null>(null);
@@ -40,19 +52,31 @@ export function WaiObserverPanel() {
 
     const response = await askQuestion({ question });
     if (response) {
-      if (response.alert_generated) {
+      if (response.response && !response.response.no_alert) {
+        const r = response.response;
+        // Formato econômico obrigatório
         setQuestionResponse(
-          `⚠️ Problema detectado: ${response.alert?.economic_reason}`
+          `📌 ${r.economic_reason || "Análise concluída"}\n` +
+          (r.potential_loss ? `📉 Impacto: R$ ${r.potential_loss.toLocaleString("pt-BR")}\n` : "") +
+          (r.margin_change_percent ? `🧮 Variação de margem: ${r.margin_change_percent.toFixed(1)}%\n` : "") +
+          (r.recommendation ? `✅ ${r.recommendation}` : "")
         );
+        fetchTopAlerts();
       } else {
-        setQuestionResponse(response.reason || "Análise concluída sem alertas.");
+        setQuestionResponse(response.response?.reason || response.reason || "✓ Sem problemas detectados.");
       }
     }
     setQuestion("");
   };
 
-  const criticalCount = alerts.filter((a) => a.severity === "critical").length;
-  const warningCount = alerts.filter((a) => a.severity === "warning").length;
+  const handleRefresh = async () => {
+    await fetchAlerts();
+    await fetchTopAlerts();
+  };
+
+  const handleAlertUpdated = () => {
+    fetchTopAlerts();
+  };
 
   return (
     <Card className="border-2 border-primary/20">
@@ -63,21 +87,29 @@ export function WaiObserverPanel() {
               <div className="flex items-center gap-2">
                 <Brain className="h-5 w-5 text-primary" />
                 <CardTitle className="text-lg">WAI Observer AI</CardTitle>
-                {unreadCount > 0 && (
-                  <Badge variant="destructive" className="ml-2">
-                    {unreadCount} novo{unreadCount > 1 ? "s" : ""}
+                {topAlerts.length > 0 && (
+                  <Badge variant="secondary" className="ml-2">
+                    {topAlerts.length}/{maxAlerts}
                   </Badge>
                 )}
               </div>
               <div className="flex items-center gap-2">
-                {criticalCount > 0 && (
-                  <Badge variant="destructive">
-                    {criticalCount} crítico{criticalCount > 1 ? "s" : ""}
+                {strategicRisks.length > 0 && (
+                  <Badge variant="destructive" className="flex items-center gap-1">
+                    <Shield className="h-3 w-3" />
+                    {strategicRisks.length} estratégico{strategicRisks.length > 1 ? "s" : ""}
                   </Badge>
                 )}
-                {warningCount > 0 && (
-                  <Badge variant="outline" className="border-yellow-500 text-yellow-700">
-                    {warningCount} atenção
+                {economicRisks.length > 0 && (
+                  <Badge variant="outline" className="border-red-500 text-red-700 flex items-center gap-1">
+                    <TrendingDown className="h-3 w-3" />
+                    {economicRisks.length}
+                  </Badge>
+                )}
+                {tacticalAttention.length > 0 && (
+                  <Badge variant="outline" className="border-yellow-500 text-yellow-700 flex items-center gap-1">
+                    <AlertTriangle className="h-3 w-3" />
+                    {tacticalAttention.length}
                   </Badge>
                 )}
                 {isOpen ? (
@@ -92,6 +124,19 @@ export function WaiObserverPanel() {
 
         <CollapsibleContent>
           <CardContent className="pt-0 space-y-4">
+            {/* Resumo de perda potencial */}
+            {totalPotentialLoss > 0 && (
+              <div className="p-3 bg-red-50 border border-red-200 rounded-md flex items-center justify-between">
+                <div>
+                  <p className="text-xs text-red-600 font-medium">Perda Potencial Acumulada</p>
+                  <p className="text-lg font-bold text-red-700">
+                    R$ {totalPotentialLoss.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                  </p>
+                </div>
+                <TrendingDown className="h-8 w-8 text-red-300" />
+              </div>
+            )}
+
             {/* Barra de ações */}
             <div className="flex flex-wrap gap-2">
               <Button
@@ -110,7 +155,7 @@ export function WaiObserverPanel() {
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={fetchAlerts}
+                onClick={handleRefresh}
                 disabled={isLoading}
               >
                 <RefreshCw
@@ -138,10 +183,10 @@ export function WaiObserverPanel() {
               </Button>
             </div>
 
-            {/* Resposta da pergunta */}
+            {/* Resposta da pergunta - formato econômico */}
             {questionResponse && (
-              <div className="p-3 bg-muted rounded-md">
-                <p className="text-sm">{questionResponse}</p>
+              <div className="p-3 bg-muted rounded-md border-l-4 border-primary">
+                <pre className="text-sm whitespace-pre-wrap font-sans">{questionResponse}</pre>
                 <Button
                   variant="ghost"
                   size="sm"
@@ -153,27 +198,74 @@ export function WaiObserverPanel() {
               </div>
             )}
 
-            {/* Lista de alertas */}
-            {alerts.length === 0 ? (
+            {/* Lista de alertas priorizados (máximo 7) */}
+            {topAlerts.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
                 <Bell className="h-12 w-12 mx-auto mb-2 opacity-20" />
                 <p className="font-medium">Nenhum alerta ativo</p>
                 <p className="text-sm">
-                  A IA está observando sua operação
+                  A IA está observando sua operação em silêncio
                 </p>
               </div>
             ) : (
               <ScrollArea className="h-[400px] pr-4">
                 <div className="space-y-3">
-                  {alerts.map((alert) => (
-                    <WaiObserverAlertCard
-                      key={alert.id}
-                      alert={alert}
-                      onMarkRead={markAsRead}
-                      onDismiss={dismissAlert}
-                      onRecordAction={recordAction}
-                    />
-                  ))}
+                  {/* Alertas estratégicos primeiro */}
+                  {strategicRisks.length > 0 && (
+                    <div className="mb-2">
+                      <p className="text-xs font-semibold text-red-700 mb-2 flex items-center gap-1">
+                        <Shield className="h-3 w-3" /> DECISÃO ESTRATÉGICA NECESSÁRIA
+                      </p>
+                      {strategicRisks.map((alert) => (
+                        <WaiObserverAlertCard
+                          key={alert.id}
+                          alert={alert}
+                          onMarkRead={markAsRead}
+                          onDismiss={dismissAlert}
+                          onRecordAction={recordAction}
+                          onAlertUpdated={handleAlertUpdated}
+                        />
+                      ))}
+                    </div>
+                  )}
+                  
+                  {/* Riscos econômicos */}
+                  {economicRisks.length > 0 && (
+                    <div className="mb-2">
+                      <p className="text-xs font-semibold text-orange-700 mb-2 flex items-center gap-1">
+                        <TrendingDown className="h-3 w-3" /> RISCO ECONÔMICO
+                      </p>
+                      {economicRisks.map((alert) => (
+                        <WaiObserverAlertCard
+                          key={alert.id}
+                          alert={alert}
+                          onMarkRead={markAsRead}
+                          onDismiss={dismissAlert}
+                          onRecordAction={recordAction}
+                          onAlertUpdated={handleAlertUpdated}
+                        />
+                      ))}
+                    </div>
+                  )}
+                  
+                  {/* Atenção tática */}
+                  {tacticalAttention.length > 0 && (
+                    <div>
+                      <p className="text-xs font-semibold text-yellow-700 mb-2 flex items-center gap-1">
+                        <AlertTriangle className="h-3 w-3" /> ATENÇÃO
+                      </p>
+                      {tacticalAttention.map((alert) => (
+                        <WaiObserverAlertCard
+                          key={alert.id}
+                          alert={alert}
+                          onMarkRead={markAsRead}
+                          onDismiss={dismissAlert}
+                          onRecordAction={recordAction}
+                          onAlertUpdated={handleAlertUpdated}
+                        />
+                      ))}
+                    </div>
+                  )}
                 </div>
               </ScrollArea>
             )}

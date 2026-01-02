@@ -1,5 +1,6 @@
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { useCompany } from "@/contexts/CompanyContext";
 import { toast } from "sonner";
 
 export type FeedbackAction = "dismissed" | "actioned" | "ignored" | "escalated";
@@ -11,25 +12,34 @@ interface RecordFeedbackParams {
   notes?: string;
 }
 
+/**
+ * Hook para Loop de Feedback Humano
+ * Toda ação do usuário ensina a IA:
+ * - dismissed = falso positivo (reduz sensibilidade)
+ * - actioned = alerta válido (mantém/aumenta sensibilidade)
+ * - ignored = baixo valor (reduz prioridade)
+ * - escalated = problema grave (aumenta severidade)
+ */
 export function useAiFeedback() {
-  /**
-   * Registra feedback humano no sistema
-   * A IA aprende com base nessas ações:
-   * - dismissed = falso positivo (reduz sensibilidade)
-   * - actioned = alerta válido (mantém/aumenta sensibilidade)
-   * - ignored = baixo valor (reduz prioridade)
-   * - escalated = problema grave (aumenta severidade)
-   */
+  const { currentCompany } = useCompany();
+  const [isLoading, setIsLoading] = useState(false);
+
   const recordFeedback = useCallback(async ({
     alertId,
     action,
     feedbackScore,
     notes,
-  }: RecordFeedbackParams) => {
+  }: RecordFeedbackParams): Promise<boolean> => {
+    if (!currentCompany?.id) {
+      toast.error("Empresa não selecionada");
+      return false;
+    }
+
+    setIsLoading(true);
     try {
       const { data: userData } = await supabase.auth.getUser();
       
-      // Usar chamada direta pois a função foi criada recentemente
+      // Chamar função SQL que registra feedback e atualiza memória
       const { data, error } = await supabase.rpc(
         "ai_record_feedback" as any,
         {
@@ -45,8 +55,8 @@ export function useAiFeedback() {
 
       const result = data as { success: boolean; action?: string; error?: string };
       
-      if (!result.success) {
-        throw new Error(result.error || "Erro ao registrar feedback");
+      if (!result?.success) {
+        throw new Error(result?.error || "Erro ao registrar feedback");
       }
 
       // Mensagens específicas por tipo de ação
@@ -63,11 +73,14 @@ export function useAiFeedback() {
       console.error("[useAiFeedback] Error:", error);
       toast.error("Erro ao registrar feedback");
       return false;
+    } finally {
+      setIsLoading(false);
     }
-  }, []);
+  }, [currentCompany?.id]);
 
   /**
    * Dispensa alerta como falso positivo
+   * A IA aprende que alertas similares devem ter menor prioridade
    */
   const dismissAsFalsePositive = useCallback(async (alertId: string, notes?: string) => {
     return recordFeedback({
@@ -80,6 +93,7 @@ export function useAiFeedback() {
 
   /**
    * Marca alerta como acionado (ação tomada)
+   * A IA aprende que este tipo de alerta é válido
    */
   const markAsActioned = useCallback(async (alertId: string, actionDescription: string) => {
     return recordFeedback({
@@ -92,6 +106,7 @@ export function useAiFeedback() {
 
   /**
    * Ignora alerta (baixa prioridade)
+   * A IA aprende que este tipo tem menor relevância
    */
   const ignoreAlert = useCallback(async (alertId: string) => {
     return recordFeedback({
@@ -103,6 +118,7 @@ export function useAiFeedback() {
 
   /**
    * Escala alerta para decisão humana obrigatória
+   * A IA aprende que este tipo requer atenção máxima
    */
   const escalateAlert = useCallback(async (alertId: string, notes?: string) => {
     return recordFeedback({
@@ -119,5 +135,6 @@ export function useAiFeedback() {
     markAsActioned,
     ignoreAlert,
     escalateAlert,
+    isLoading,
   };
 }

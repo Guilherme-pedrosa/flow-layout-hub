@@ -151,6 +151,61 @@ export type Database = {
           },
         ]
       }
+      ai_alert_feedback: {
+        Row: {
+          action: string
+          alert_id: string
+          company_id: string
+          created_at: string
+          feedback_score: number | null
+          id: string
+          notes: string | null
+          user_id: string | null
+        }
+        Insert: {
+          action: string
+          alert_id: string
+          company_id: string
+          created_at?: string
+          feedback_score?: number | null
+          id?: string
+          notes?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          action?: string
+          alert_id?: string
+          company_id?: string
+          created_at?: string
+          feedback_score?: number | null
+          id?: string
+          notes?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_alert_feedback_alert_id_fkey"
+            columns: ["alert_id"]
+            isOneToOne: false
+            referencedRelation: "ai_alerts_ranked"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_alert_feedback_alert_id_fkey"
+            columns: ["alert_id"]
+            isOneToOne: false
+            referencedRelation: "ai_observer_alerts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_alert_feedback_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ai_decision_log: {
         Row: {
           alert_id: string | null
@@ -7297,6 +7352,16 @@ export type Database = {
       }
       ai_get_vendas_analysis: {
         Args: { p_company_id: string; p_periodo_dias?: number }
+        Returns: Json
+      }
+      ai_record_feedback: {
+        Args: {
+          p_action: string
+          p_alert_id: string
+          p_feedback_score?: number
+          p_notes?: string
+          p_user_id?: string
+        }
         Returns: Json
       }
       ai_should_silence_alert: {
