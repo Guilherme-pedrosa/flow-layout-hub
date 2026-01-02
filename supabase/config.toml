@@ -152,3 +152,6 @@ verify_jwt = false
 
 [functions.field-match-customers]
 verify_jwt = false
+
+[functions.field-delete-all-customers]
+verify_jwt = false
