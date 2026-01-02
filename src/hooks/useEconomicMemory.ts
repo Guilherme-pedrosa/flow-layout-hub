@@ -30,19 +30,19 @@ export interface TopProblemEntity {
 }
 
 export function useEconomicMemory() {
-  const { company: selectedCompany } = useCompany();
+  const { currentCompany } = useCompany();
   const [topProblems, setTopProblems] = useState<TopProblemEntity[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
   const fetchTopProblems = useCallback(async (limit = 10) => {
-    if (!selectedCompany) return;
+    if (!currentCompany) return;
 
     setIsLoading(true);
     try {
       const { data, error } = await supabase
         .from("ai_economic_memory")
         .select("entity_type, entity_name, total_alerts, critical_alerts, total_potential_loss")
-        .eq("company_id", selectedCompany.id)
+        .eq("company_id", currentCompany.id)
         .order("total_potential_loss", { ascending: false })
         .limit(limit);
 
@@ -53,24 +53,24 @@ export function useEconomicMemory() {
     } finally {
       setIsLoading(false);
     }
-  }, [selectedCompany]);
+  }, [currentCompany]);
 
   const getEntityMemory = async (
     entityType: string,
     entityId: string
   ): Promise<EconomicMemoryEntry | null> => {
-    if (!selectedCompany) return null;
+    if (!currentCompany) return null;
 
     try {
       const { data, error } = await supabase
         .from("ai_economic_memory")
         .select("*")
-        .eq("company_id", selectedCompany.id)
+        .eq("company_id", currentCompany.id)
         .eq("entity_type", entityType)
         .eq("entity_id", entityId)
-        .single();
+        .maybeSingle();
 
-      if (error && error.code !== "PGRST116") throw error;
+      if (error) throw error;
       return data as EconomicMemoryEntry | null;
     } catch (error) {
       console.error("Error fetching entity memory:", error);
@@ -79,13 +79,13 @@ export function useEconomicMemory() {
   };
 
   const getProblematicSuppliers = async (limit = 5): Promise<TopProblemEntity[]> => {
-    if (!selectedCompany) return [];
+    if (!currentCompany) return [];
 
     try {
       const { data, error } = await supabase
         .from("ai_economic_memory")
         .select("entity_type, entity_name, total_alerts, critical_alerts, total_potential_loss")
-        .eq("company_id", selectedCompany.id)
+        .eq("company_id", currentCompany.id)
         .eq("entity_type", "supplier")
         .order("total_potential_loss", { ascending: false })
         .limit(limit);
@@ -99,13 +99,13 @@ export function useEconomicMemory() {
   };
 
   const getProblematicProducts = async (limit = 5): Promise<TopProblemEntity[]> => {
-    if (!selectedCompany) return [];
+    if (!currentCompany) return [];
 
     try {
       const { data, error } = await supabase
         .from("ai_economic_memory")
         .select("entity_type, entity_name, total_alerts, critical_alerts, total_potential_loss")
-        .eq("company_id", selectedCompany.id)
+        .eq("company_id", currentCompany.id)
         .eq("entity_type", "product")
         .order("total_potential_loss", { ascending: false })
         .limit(limit);
