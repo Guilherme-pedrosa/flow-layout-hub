@@ -6613,6 +6613,7 @@ export type Database = {
       system_settings: {
         Row: {
           company_id: string
+          field_control_api_key: string | null
           id: string
           key: string
           updated_at: string
@@ -6620,6 +6621,7 @@ export type Database = {
         }
         Insert: {
           company_id: string
+          field_control_api_key?: string | null
           id?: string
           key: string
           updated_at?: string
@@ -6627,6 +6629,7 @@ export type Database = {
         }
         Update: {
           company_id?: string
+          field_control_api_key?: string | null
           id?: string
           key?: string
           updated_at?: string
