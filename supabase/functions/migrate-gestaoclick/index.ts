@@ -185,19 +185,24 @@ serve(async (req) => {
         if (!existingPessoa && cpfCnpj) {
           const { data } = await supabase
             .from('pessoas')
-            .select('id, is_cliente, is_fornecedor, is_transportadora, external_id, nome_fantasia')
+            .select('id, is_cliente, is_fornecedor, is_transportadora, external_id, nome_fantasia, razao_social')
             .eq('company_id', company_id)
             .eq('cpf_cnpj', cpfCnpj);
           
           // Se nome_fantasia for igual a algum existente, considera duplicado
+          // Comparar com nome_fantasia OU razao_social (porque às vezes salva como razao_social)
           if (data && data.length > 0) {
-            const matchingByName = data.find(p => 
-              (p.nome_fantasia || '').toLowerCase().trim() === (nomeFantasia || '').toLowerCase().trim()
-            );
+            const nomeParaComparar = (nomeFantasia || '').toLowerCase().trim();
+            const matchingByName = data.find(p => {
+              const nfDb = (p.nome_fantasia || '').toLowerCase().trim();
+              const rsDb = (p.razao_social || '').toLowerCase().trim();
+              // Considera igual se nome_fantasia OU razao_social bater
+              return nfDb === nomeParaComparar || rsDb === nomeParaComparar;
+            });
             if (matchingByName) {
               existingPessoa = matchingByName;
             }
-            // Se nome_fantasia for diferente, permite inserir (não seta existingPessoa)
+            // Se nome_fantasia for diferente de todos, permite inserir (não seta existingPessoa)
           }
         }
 
