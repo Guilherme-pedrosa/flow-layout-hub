@@ -357,15 +357,35 @@ export function EquipmentForm({
                   <Label htmlFor="serial_number">
                     Número de Série / Identificação *
                   </Label>
-                  <Input
-                    id="serial_number"
-                    placeholder="Ex: SN123456789"
-                    value={formData.serial_number}
-                    onChange={(e) =>
-                      setFormData({ ...formData, serial_number: e.target.value })
-                    }
-                    className={!formData.serial_number.trim() ? "border-destructive" : ""}
-                  />
+                  <div className="flex gap-2">
+                    <Input
+                      id="serial_number"
+                      placeholder="Ex: SN123456789"
+                      value={formData.serial_number}
+                      onChange={(e) =>
+                        setFormData({ ...formData, serial_number: e.target.value })
+                      }
+                      className={`flex-1 ${!formData.serial_number.trim() ? "border-destructive" : ""}`}
+                    />
+                    {!formData.serial_number && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          const timestamp = Math.floor(Date.now() / 1000);
+                          const random = Math.random().toString(36).substring(2, 5).toUpperCase();
+                          const serial = `EQ${timestamp}${random}`;
+                          setFormData({ ...formData, serial_number: serial });
+                          toast.success("Número de série gerado!");
+                        }}
+                        className="gap-1"
+                      >
+                        <Sparkles className="h-3 w-3" />
+                        Gerar
+                      </Button>
+                    )}
+                  </div>
                   <p className="text-xs text-muted-foreground">
                     Identificador único do equipamento (número de série, patrimônio, etc.)
                   </p>
@@ -460,36 +480,14 @@ export function EquipmentForm({
                     <QrCode className="h-3 w-3" />
                     Código QR / Etiqueta
                   </Label>
-                  <div className="flex gap-2">
-                    <Input
-                      id="qr_code"
-                      placeholder="Código da etiqueta QR"
-                      value={formData.qr_code}
-                      onChange={(e) =>
-                        setFormData({ ...formData, qr_code: e.target.value })
-                      }
-                      className="flex-1"
-                    />
-                    {!formData.qr_code && (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          // Padrão Field: EQ + timestamp + random (ex: EQ1704153600ABC)
-                          const timestamp = Math.floor(Date.now() / 1000);
-                          const random = Math.random().toString(36).substring(2, 5).toUpperCase();
-                          const code = `EQ${timestamp}${random}`;
-                          setFormData({ ...formData, qr_code: code });
-                          toast.success("Código gerado!");
-                        }}
-                        className="gap-1"
-                      >
-                        <Sparkles className="h-3 w-3" />
-                        Gerar
-                      </Button>
-                    )}
-                  </div>
+                  <Input
+                    id="qr_code"
+                    placeholder="Código da etiqueta QR"
+                    value={formData.qr_code}
+                    onChange={(e) =>
+                      setFormData({ ...formData, qr_code: e.target.value })
+                    }
+                  />
                   <p className="text-xs text-muted-foreground">
                     Código para leitura via QR Code no Field Control
                   </p>
