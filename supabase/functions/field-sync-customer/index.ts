@@ -24,6 +24,7 @@ interface CustomerRecord {
   cidade?: string;
   estado?: string;
   company_id?: string;
+  auvo_codigo?: string; // Código AUVO - usado como externalId no Field
 }
 
 interface SyncRequest {
@@ -57,11 +58,15 @@ function buildFieldControlPayload(record: CustomerRecord) {
 
   const displayName = record.nome_fantasia?.trim() || record.razao_social?.trim() || 'Cliente sem nome';
   
-  // NÃO enviar documentNumber (CNPJ) para evitar erro de duplicidade
-  // Usar apenas externalId (ID do ERP) como amarração
+  // USAR auvo_codigo como externalId se disponível, senão usar ID do ERP
+  // O auvo_codigo é o elo de ligação entre WAI, AUVO e Field Control
+  const externalId = record.auvo_codigo || record.id;
+  
+  console.log(`[field-sync] Payload: nome=${displayName}, externalId=${externalId} (auvo_codigo=${record.auvo_codigo || 'N/A'})`);
+  
   return {
     name: displayName,
-    externalId: record.id, // ID do ERP como chave de amarração
+    externalId: externalId, // auvo_codigo como chave de amarração (ou id como fallback)
     contact: {
       email: record.email || '',
       phone: cleanPhone(record.telefone)
@@ -431,7 +436,7 @@ serve(async (req) => {
       
       const { data: pessoas } = await supabase
         .from('pessoas')
-        .select('id, razao_social, nome_fantasia, cpf_cnpj, email, telefone, cep, logradouro, numero, bairro, complemento, cidade, estado, company_id')
+        .select('id, razao_social, nome_fantasia, cpf_cnpj, email, telefone, cep, logradouro, numero, bairro, complemento, cidade, estado, company_id, auvo_codigo')
         .eq('company_id', payload.company_id)
         .eq('is_active', true)
         .or(`nome_fantasia.ilike.%${payload.filter_name}%,razao_social.ilike.%${payload.filter_name}%`);
@@ -472,7 +477,7 @@ serve(async (req) => {
       // Buscar pessoas com CEP válido que ainda não foram sincronizadas
       const { data: pessoas, error: fetchError } = await supabase
         .from('pessoas')
-        .select('id, razao_social, nome_fantasia, cpf_cnpj, email, telefone, cep, logradouro, numero, bairro, complemento, cidade, estado, company_id')
+        .select('id, razao_social, nome_fantasia, cpf_cnpj, email, telefone, cep, logradouro, numero, bairro, complemento, cidade, estado, company_id, auvo_codigo')
         .eq('company_id', payload.company_id)
         .eq('is_active', true)
         .not('cep', 'is', null)
@@ -531,7 +536,7 @@ serve(async (req) => {
       
       const { data: pessoas, error: fetchError } = await supabase
         .from('pessoas')
-        .select('id, razao_social, nome_fantasia, cpf_cnpj, email, telefone, cep, logradouro, numero, bairro, complemento, cidade, estado, company_id')
+        .select('id, razao_social, nome_fantasia, cpf_cnpj, email, telefone, cep, logradouro, numero, bairro, complemento, cidade, estado, company_id, auvo_codigo')
         .eq('company_id', payload.company_id)
         .eq('is_active', true)
         .order('created_at', { ascending: true })
