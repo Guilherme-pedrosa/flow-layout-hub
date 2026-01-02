@@ -34,7 +34,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Info, QrCode, MapPin, Wrench, Calendar, Building2, Check, ChevronsUpDown, Search, Camera, Upload, X } from "lucide-react";
+import { Loader2, Info, QrCode, MapPin, Wrench, Calendar, Building2, Check, ChevronsUpDown, Search, Camera, Upload, X, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { Equipment } from "@/hooks/useEquipments";
 import { supabase } from "@/integrations/supabase/client";
@@ -460,14 +460,36 @@ export function EquipmentForm({
                     <QrCode className="h-3 w-3" />
                     Código QR / Etiqueta
                   </Label>
-                  <Input
-                    id="qr_code"
-                    placeholder="Código da etiqueta QR"
-                    value={formData.qr_code}
-                    onChange={(e) =>
-                      setFormData({ ...formData, qr_code: e.target.value })
-                    }
-                  />
+                  <div className="flex gap-2">
+                    <Input
+                      id="qr_code"
+                      placeholder="Código da etiqueta QR"
+                      value={formData.qr_code}
+                      onChange={(e) =>
+                        setFormData({ ...formData, qr_code: e.target.value })
+                      }
+                      className="flex-1"
+                    />
+                    {!formData.qr_code && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          // Padrão Field: EQ + timestamp + random (ex: EQ1704153600ABC)
+                          const timestamp = Math.floor(Date.now() / 1000);
+                          const random = Math.random().toString(36).substring(2, 5).toUpperCase();
+                          const code = `EQ${timestamp}${random}`;
+                          setFormData({ ...formData, qr_code: code });
+                          toast.success("Código gerado!");
+                        }}
+                        className="gap-1"
+                      >
+                        <Sparkles className="h-3 w-3" />
+                        Gerar
+                      </Button>
+                    )}
+                  </div>
                   <p className="text-xs text-muted-foreground">
                     Código para leitura via QR Code no Field Control
                   </p>
