@@ -156,19 +156,28 @@ async function shouldSilenceAlert(
   eventType: string,
   alertHash: string,
   marginChange: number
-): Promise<{ silence: boolean; reason?: string }> {
-  // 1. Verificar cooldown - alerta similar nas últimas 24h
-  const { data: recentAlert } = await supabase
-    .from("ai_observer_alerts")
-    .select("id, created_at")
-    .eq("company_id", companyId)
-    .eq("alert_hash", alertHash)
-    .eq("is_dismissed", false)
-    .gte("created_at", new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
-    .limit(1);
+): Promise<{ silence: boolean; reason?: string; shouldEscalate?: boolean; escalationReason?: string }> {
+  // 1. Usar função SQL anti-duplicata com escalonamento
+  const { data: duplicateCheck } = await supabase.rpc("ai_check_duplicate_alert", {
+    p_company_id: companyId,
+    p_alert_hash: alertHash,
+    p_event_type: eventType,
+    p_hours_cooldown: 24,
+  });
 
-  if (recentAlert && recentAlert.length > 0) {
-    return { silence: true, reason: "Alerta similar existe nas últimas 24h" };
+  if (duplicateCheck && duplicateCheck.length > 0) {
+    const check = duplicateCheck[0];
+    if (check.is_duplicate) {
+      // Se deve escalar, não silenciar - apenas sinalizar
+      if (check.should_escalate) {
+        return { 
+          silence: false, 
+          shouldEscalate: true, 
+          escalationReason: check.escalation_reason 
+        };
+      }
+      return { silence: true, reason: "Alerta similar existe nas últimas 24h" };
+    }
   }
 
   // 2. Verificar regras de silêncio personalizadas
