@@ -100,8 +100,8 @@ export function ClientesList() {
         "Regime Tributário": cliente.regime_tributario || "",
         "É Fornecedor": cliente.is_fornecedor ? "Sim" : "Não",
         "É Transportadora": cliente.is_transportadora ? "Sim" : "Não",
-        "Código GC": (cliente as any).gestaoclick_id || "",
-        "Field ID": (cliente as any).field_customer_id || "",
+        "Código Externo (GC/Auvo)": (cliente as any).external_id || "",
+        "ID WAI": cliente.id,
       }));
 
       const ws = XLSX.utils.json_to_sheet(dataToExport);
