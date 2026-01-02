@@ -86,7 +86,10 @@ serve(async (req) => {
 async function syncCompanyEquipments(supabaseClient: any, company_id: string, apiKey: string, client_id: string | null) {
   const equipmentsResponse = await fetch(`${FIELD_CONTROL_BASE_URL}/equipments`, {
     method: 'GET',
-    headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+    headers: { 
+      'x-api-key': apiKey,
+      'Content-Type': 'application/json' 
+    },
   });
 
   if (!equipmentsResponse.ok) {

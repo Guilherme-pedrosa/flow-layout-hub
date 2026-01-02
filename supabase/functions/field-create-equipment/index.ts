@@ -105,7 +105,7 @@ serve(async (req) => {
       const updateResponse = await fetch(`${FIELD_CONTROL_BASE_URL}/equipments/${equipment.field_equipment_id}`, {
         method: 'PUT',
         headers: {
-          'Authorization': `Bearer ${apiKey}`,
+          'x-api-key': apiKey,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(fieldPayload),
@@ -131,7 +131,7 @@ serve(async (req) => {
       const createResponse = await fetch(`${FIELD_CONTROL_BASE_URL}/equipments`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${apiKey}`,
+          'x-api-key': apiKey,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(fieldPayload),
