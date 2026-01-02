@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { PurchaseOrderStatus } from "./usePurchaseOrderStatuses";
 import { Supplier } from "./useSuppliers";
 import { useCompany } from "@/contexts/CompanyContext";
+import { useAuditLog } from "./useAuditLog";
 
 export interface PurchaseOrder {
   id: string;
@@ -186,6 +187,7 @@ export interface PurchaseOrderItemInsert {
 export function usePurchaseOrders() {
   const queryClient = useQueryClient();
   const { currentCompany } = useCompany();
+  const { logEvent } = useAuditLog();
 
   const ordersQuery = useQuery({
     queryKey: ["purchase_orders", currentCompany?.id],
@@ -245,10 +247,12 @@ export function usePurchaseOrders() {
 
       return data;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["purchase_orders", currentCompany?.id] });
       queryClient.invalidateQueries({ queryKey: ["payables"] });
       toast.success("Pedido de compra criado com sucesso!");
+      // Log audit event
+      logEvent({ eventType: "purchase_order.created", entityType: "purchase_order", entityId: data.id });
     },
     onError: (error) => {
       toast.error(`Erro ao criar pedido de compra: ${error.message}`);
@@ -319,10 +323,12 @@ export function usePurchaseOrders() {
 
       return result;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["purchase_orders", currentCompany?.id] });
       queryClient.invalidateQueries({ queryKey: ["payables"] });
       toast.success("Pedido atualizado com sucesso!");
+      // Log audit event
+      logEvent({ eventType: "purchase_order.updated", entityType: "purchase_order", entityId: data.id });
     },
     onError: (error) => {
       toast.error(`Erro ao atualizar pedido: ${error.message}`);
