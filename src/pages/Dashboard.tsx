@@ -3,7 +3,7 @@ import { KpiCard, SalesChart, CashFlowChart, AiInsightCard, TasksList } from "@/
 import { useDashboardKpis } from "@/hooks/useDashboardKpis";
 import { useSalesChartData } from "@/hooks/useSalesChartData";
 import { useCashFlowData } from "@/hooks/useCashFlowData";
-import { useDashboardAiInsight } from "@/hooks/useDashboardAiInsight";
+import { useWaiInsights } from "@/hooks/useWaiInsights";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { RefreshCw, Building2 } from "lucide-react";
@@ -40,7 +40,7 @@ const Dashboard = () => {
   const { data: kpis, isLoading: kpisLoading, refetch: refetchKpis } = useDashboardKpis(companyIdForQuery);
   const { data: salesData, isLoading: salesLoading, refetch: refetchSales } = useSalesChartData(7, companyIdForQuery);
   const { data: cashFlowData, isLoading: cashFlowLoading, refetch: refetchCashFlow } = useCashFlowData(6, companyIdForQuery);
-  const { insight, isLoading: insightLoading, refetch: refetchInsight } = useDashboardAiInsight();
+  const { insight, isLoading: insightLoading, refetch: refetchInsight, dismiss: dismissInsight } = useWaiInsights();
   
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [tasks, setTasks] = useState<Task[]>(mockTasks);
@@ -148,7 +148,8 @@ const Dashboard = () => {
       <AiInsightCard 
         insight={insight} 
         isLoading={insightLoading} 
-        onRefresh={refetchInsight} 
+        onRefresh={refetchInsight}
+        onDismiss={dismissInsight}
       />
 
       {/* KPI Cards */}

@@ -14,13 +14,16 @@ import {
   Clock,
   CheckCircle,
   Building2,
-  Landmark
+  Landmark,
+  Sparkles
 } from "lucide-react";
 import { FinancialAIChat } from "@/components/financeiro/FinancialAIChat";
 import { AlertAnalysisModal } from "@/components/financeiro/AlertAnalysisModal";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useWaiInsights } from "@/hooks/useWaiInsights";
 import { 
   LineChart, 
   Line, 
@@ -106,6 +109,7 @@ const DashboardFinanceiro = () => {
   const navigate = useNavigate();
   const [showAIChat, setShowAIChat] = useState(false);
   const [showAlertAnalysis, setShowAlertAnalysis] = useState(false);
+  const { insight, isLoading: insightLoading, refetch: refetchInsight } = useWaiInsights("financeiro");
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -211,31 +215,90 @@ const DashboardFinanceiro = () => {
         </Card>
       </div>
 
-      {/* AI Banner */}
-      <Card className="bg-gradient-to-r from-primary to-primary/80 border-0">
-        <CardContent className="p-4">
-          <div className="flex items-center justify-between">
+      {/* AI Banner - Dynamic */}
+      {insightLoading ? (
+        <Card className="bg-gradient-to-r from-primary to-primary/80 border-0">
+          <CardContent className="p-4">
             <div className="flex items-center gap-4">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/20">
-                <Bot className="h-5 w-5 text-white" />
-              </div>
-              <div>
-                <p className="font-medium text-white">IA prevê déficit de R$ 5.000 na próxima semana</p>
-                <p className="text-sm text-white/80">Sugestão: Considere antecipar recebíveis</p>
+              <Skeleton className="h-10 w-10 rounded-full bg-white/20" />
+              <div className="flex-1 space-y-2">
+                <Skeleton className="h-4 w-3/4 bg-white/20" />
+                <Skeleton className="h-3 w-1/2 bg-white/20" />
               </div>
             </div>
-            <Button 
-              variant="secondary" 
-              size="sm" 
-              className="bg-white text-primary hover:bg-white/90"
-              onClick={() => setShowAlertAnalysis(true)}
-            >
-              Ver análise completa
-              <ArrowRight className="h-4 w-4 ml-2" />
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      ) : insight ? (
+        <Card className={`border-0 ${
+          insight.type === 'critical' 
+            ? 'bg-gradient-to-r from-destructive to-destructive/80' 
+            : insight.type === 'warning'
+            ? 'bg-gradient-to-r from-yellow-500 to-yellow-600'
+            : 'bg-gradient-to-r from-primary to-primary/80'
+        }`}>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/20">
+                  {insight.type === 'critical' ? (
+                    <AlertTriangle className="h-5 w-5 text-white" />
+                  ) : (
+                    <Bot className="h-5 w-5 text-white" />
+                  )}
+                </div>
+                <div>
+                  <p className="font-medium text-white">{insight.title}</p>
+                  <p className="text-sm text-white/80">{insight.description}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button 
+                  variant="secondary" 
+                  size="sm" 
+                  className="bg-white text-primary hover:bg-white/90"
+                  onClick={() => navigate(insight.action.href)}
+                >
+                  {insight.action.label}
+                  <ArrowRight className="h-4 w-4 ml-2" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={refetchInsight}
+                  className="h-8 w-8 text-white/60 hover:text-white hover:bg-white/10"
+                >
+                  <RefreshCw className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      ) : (
+        <Card className="bg-gradient-to-r from-primary to-primary/80 border-0">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/20">
+                  <Sparkles className="h-5 w-5 text-white" />
+                </div>
+                <div>
+                  <p className="font-medium text-white">Tudo em ordem!</p>
+                  <p className="text-sm text-white/80">Nenhum alerta financeiro no momento</p>
+                </div>
+              </div>
+              <Button 
+                variant="secondary" 
+                size="sm" 
+                className="bg-white text-primary hover:bg-white/90"
+                onClick={() => setShowAIChat(true)}
+              >
+                Perguntar à IA
+                <ArrowRight className="h-4 w-4 ml-2" />
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Charts Row */}
       <div className="grid gap-6 lg:grid-cols-2">
