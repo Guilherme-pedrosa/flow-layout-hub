@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { format } from "date-fns";
+import { format, formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { useNavigate } from "react-router-dom";
 import {
   AlertTriangle,
   TrendingDown,
@@ -11,6 +12,9 @@ import {
   ChevronUp,
   AlertCircle,
   ThumbsDown,
+  Clock,
+  ExternalLink,
+  User,
 } from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -35,11 +39,40 @@ export function WaiObserverAlertCard({
   onRecordAction,
   onAlertUpdated,
 }: WaiObserverAlertCardProps) {
+  const navigate = useNavigate();
   const [isExpanded, setIsExpanded] = useState(false);
   const [actionText, setActionText] = useState("");
   const [showActionInput, setShowActionInput] = useState(false);
   
   const { dismissAsFalsePositive, markAsActioned, escalateAlert, isLoading } = useAiFeedback();
+
+  // SLA config
+  const roleLabels: Record<string, string> = {
+    diretoria: "Diretoria",
+    financeiro: "Financeiro",
+    operacoes: "Operações",
+  };
+
+  const priorityLabels: Record<string, { label: string; color: string }> = {
+    strategic_risk: { label: "Estratégico", color: "bg-red-600 text-white" },
+    economic_risk: { label: "Econômico", color: "bg-orange-500 text-white" },
+    tactical_attention: { label: "Tático", color: "bg-yellow-500 text-white" },
+  };
+
+  const getSlaStatus = () => {
+    if (!alert.sla_deadline) return null;
+    const deadline = new Date(alert.sla_deadline);
+    const now = new Date();
+    const hoursRemaining = (deadline.getTime() - now.getTime()) / (1000 * 60 * 60);
+    
+    if (alert.is_sla_breached) return { status: "breached", label: "SLA Estourado", color: "text-red-700 bg-red-100" };
+    if (hoursRemaining < 0) return { status: "overdue", label: "Atrasado", color: "text-red-600 bg-red-50" };
+    if (hoursRemaining < 4) return { status: "urgent", label: `${Math.ceil(hoursRemaining)}h restantes`, color: "text-orange-600 bg-orange-50" };
+    if (hoursRemaining < 24) return { status: "soon", label: `${Math.ceil(hoursRemaining)}h restantes`, color: "text-yellow-600 bg-yellow-50" };
+    return { status: "ok", label: `${Math.ceil(hoursRemaining / 24)}d restantes`, color: "text-green-600 bg-green-50" };
+  };
+
+  const slaStatus = getSlaStatus();
 
   const severityConfig = {
     info: {
@@ -89,6 +122,13 @@ export function WaiObserverAlertCard({
     }
   };
 
+  // Handle deep-link navigation
+  const handleActionClick = () => {
+    if (alert.action_url) {
+      navigate(alert.action_url);
+    }
+  };
+
   return (
     <Card
       className={cn(
@@ -96,6 +136,7 @@ export function WaiObserverAlertCard({
         alert.severity === "critical" && "border-l-red-500",
         alert.severity === "warning" && "border-l-yellow-500",
         alert.severity === "info" && "border-l-blue-500",
+        alert.is_sla_breached && "ring-2 ring-red-500 ring-offset-2",
         !alert.is_read && "bg-muted/50"
       )}
     >
@@ -110,13 +151,35 @@ export function WaiObserverAlertCard({
                 <Badge variant="outline" className={config.color}>
                   {config.label}
                 </Badge>
-                <Badge variant="secondary" className="text-xs">
-                  {alert.event_type}
-                </Badge>
+                {/* Priority Level Badge */}
+                {alert.priority_level && priorityLabels[alert.priority_level] && (
+                  <Badge className={cn("text-xs", priorityLabels[alert.priority_level].color)}>
+                    {priorityLabels[alert.priority_level].label}
+                  </Badge>
+                )}
+                {/* Responsible Role */}
+                {alert.responsible_role && (
+                  <Badge variant="outline" className="text-xs gap-1">
+                    <User className="h-3 w-3" />
+                    {roleLabels[alert.responsible_role] || alert.responsible_role}
+                  </Badge>
+                )}
+                {/* SLA Status */}
+                {slaStatus && (
+                  <Badge variant="outline" className={cn("text-xs gap-1", slaStatus.color)}>
+                    <Clock className="h-3 w-3" />
+                    {slaStatus.label}
+                  </Badge>
+                )}
                 {alert.is_actioned && (
                   <Badge variant="default" className="bg-green-500 text-xs">
                     <CheckCircle className="h-3 w-3 mr-1" />
                     Ação tomada
+                  </Badge>
+                )}
+                {alert.escalation_reason && (
+                  <Badge variant="destructive" className="text-xs">
+                    Escalado
                   </Badge>
                 )}
               </div>
@@ -124,6 +187,11 @@ export function WaiObserverAlertCard({
                 {format(new Date(alert.created_at), "dd/MM/yyyy 'às' HH:mm", {
                   locale: ptBR,
                 })}
+                {alert.escalated_at && (
+                  <span className="ml-2 text-red-600">
+                    • Escalado {formatDistanceToNow(new Date(alert.escalated_at), { locale: ptBR, addSuffix: true })}
+                  </span>
+                )}
               </p>
             </div>
           </div>
@@ -228,11 +296,22 @@ export function WaiObserverAlertCard({
           </div>
         )}
 
-        {/* Recomendação */}
+        {/* Recomendação + Deep Link */}
         {alert.recommendation && (
           <div className="p-2 bg-primary/5 rounded-md border border-primary/20 mb-3">
             <p className="text-xs font-medium text-primary">💡 Recomendação</p>
             <p className="text-sm">{alert.recommendation}</p>
+            {alert.action_url && (
+              <Button
+                variant="link"
+                size="sm"
+                className="p-0 h-auto mt-2 text-primary"
+                onClick={handleActionClick}
+              >
+                <ExternalLink className="h-3 w-3 mr-1" />
+                Corrigir agora
+              </Button>
+            )}
           </div>
         )}
 
