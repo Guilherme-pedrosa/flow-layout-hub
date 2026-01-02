@@ -58,73 +58,25 @@ export function useDashboardAiInsight() {
         "actionHref": "rota relativa (use apenas as rotas listadas acima)"
       }`;
 
-      // Get the session token for authenticated requests
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.access_token) {
-        setInsight({
-          id: 'no-session',
-          type: 'info',
-          title: 'Login necessário',
-          description: 'Faça login para receber insights de IA.',
-          confidence: 100,
-          action: { label: 'Login', href: '/auth' },
-          createdAt: new Date().toISOString(),
-        });
-        setIsLoading(false);
-        return;
-      }
+      // Use supabase.functions.invoke which handles auth automatically
+      const { data: responseData, error: fnError } = await supabase.functions.invoke('financial-ai', {
+        body: {
+          messages: [{ role: 'user', content: prompt }],
+          companyId,
+        },
+      });
 
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/financial-ai`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${session.access_token}`,
-            apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-          },
-          body: JSON.stringify({
-            messages: [{ role: 'user', content: prompt }],
-            companyId,
-          }),
-        }
-      );
+      if (fnError) throw fnError;
 
-      if (!response.ok) throw new Error('Erro ao carregar insight');
-
-      const reader = response.body?.getReader();
-      const decoder = new TextDecoder();
+      // Handle response - can be streaming text or JSON object
       let fullText = '';
-      let textBuffer = '';
-
-      if (reader) {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          
-          textBuffer += decoder.decode(value, { stream: true });
-          
-          let newlineIndex: number;
-          while ((newlineIndex = textBuffer.indexOf('\n')) !== -1) {
-            let line = textBuffer.slice(0, newlineIndex);
-            textBuffer = textBuffer.slice(newlineIndex + 1);
-            
-            if (line.endsWith('\r')) line = line.slice(0, -1);
-            if (line.startsWith(':') || line.trim() === '') continue;
-            if (!line.startsWith('data: ')) continue;
-            
-            const jsonStr = line.slice(6).trim();
-            if (jsonStr === '[DONE]') continue;
-            
-            try {
-              const parsed = JSON.parse(jsonStr);
-              const content = parsed.choices?.[0]?.delta?.content;
-              if (content) fullText += content;
-            } catch {
-              // Incomplete JSON, continue
-            }
-          }
-        }
+      
+      if (typeof responseData === 'string') {
+        fullText = responseData;
+      } else if (responseData?.choices?.[0]?.message?.content) {
+        fullText = responseData.choices[0].message.content;
+      } else if (responseData?.error) {
+        throw new Error(responseData.error);
       }
 
       // Remove markdown code blocks
