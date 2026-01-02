@@ -14,20 +14,76 @@ serve(async (req) => {
   }
 
   try {
+    // === AUTHENTICATION CHECK ===
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) {
+      return new Response(JSON.stringify({ error: "Unauthorized - No token provided" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+
+    // Create client with user's token to verify auth
+    const supabaseAuth = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } }
+    });
+
+    const { data: { user }, error: authError } = await supabaseAuth.auth.getUser();
+    if (authError || !user) {
+      console.error("[financial-ai] Auth error:", authError?.message);
+      return new Response(JSON.stringify({ error: "Unauthorized - Invalid token" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    console.log("[financial-ai] Authenticated user:", user.email);
+
     const body = await req.json();
     const { type, companyId } = body;
     const messages = Array.isArray(body.messages) ? body.messages : [];
 
-    console.log("[financial-ai] Request received:", { type, messagesCount: messages.length });
+    // === VALIDATE INPUT ===
+    if (companyId && typeof companyId !== 'string') {
+      return new Response(JSON.stringify({ error: "Invalid companyId format" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Verify user has access to the company
+    if (companyId) {
+      const { data: userCompanies } = await supabaseAuth.rpc('get_user_companies');
+      if (!userCompanies?.includes(companyId)) {
+        console.error("[financial-ai] User does not have access to company:", companyId);
+        return new Response(JSON.stringify({ error: "Forbidden - No access to this company" }), {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
+    // Validate messages array
+    if (messages.length > 50) {
+      return new Response(JSON.stringify({ error: "Too many messages in conversation" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    console.log("[financial-ai] Request received:", { type, messagesCount: messages.length, companyId });
 
     if (!OPENAI_API_KEY) {
       console.error("[financial-ai] OPENAI_API_KEY is not configured");
       throw new Error("OPENAI_API_KEY is not configured");
     }
 
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    // Use service role for data fetching (bypasses RLS, but we've already verified access)
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     // Fetch ALL data using optimized SQL functions
     let fullContext = "";
