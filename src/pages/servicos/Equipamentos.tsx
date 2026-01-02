@@ -7,8 +7,6 @@ import { PageHeader } from "@/components/shared/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import {
   Table,
@@ -18,22 +16,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Plus, Pencil, Trash2, Search, Package, Cloud, Loader2 } from "lucide-react";
+import { Plus, Pencil, Trash2, Search, Package, Cloud, Loader2, Calendar } from "lucide-react";
 import { useClientes } from "@/hooks/useClientes";
+import { EquipmentForm } from "@/components/equipamentos";
+import { format } from "date-fns";
 
 export default function Equipamentos() {
   const { currentCompany } = useCompany();
@@ -46,16 +32,7 @@ export default function Equipamentos() {
   const [syncing, setSyncing] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingEquipment, setEditingEquipment] = useState<any>(null);
-  const [formData, setFormData] = useState({
-    serial_number: "",
-    brand: "",
-    model: "",
-    equipment_type: "",
-    client_id: "",
-    sector: "",
-    location_description: "",
-    notes: "",
-  });
+  const [saving, setSaving] = useState(false);
 
   // Carregar clientes
   useEffect(() => {
@@ -82,7 +59,6 @@ export default function Equipamentos() {
       toast.error('Selecione uma empresa primeiro');
       return;
     }
-    console.log('[handleSync] company_id:', currentCompany.id);
     setSyncing(true);
     try {
       const { data, error } = await supabase.functions.invoke('field-sync-equipment', {
@@ -90,7 +66,6 @@ export default function Equipamentos() {
       });
       
       if (error) {
-        // Parse error message from edge function
         const errorMsg = error.message || String(error);
         if (errorMsg.includes('API Key do Field Control não configurada')) {
           toast.error('Configure a API Key do Field Control nas configurações da empresa para sincronizar equipamentos.');
@@ -120,48 +95,31 @@ export default function Equipamentos() {
 
   const handleOpenNew = () => {
     setEditingEquipment(null);
-    setFormData({
-      serial_number: "",
-      brand: "",
-      model: "",
-      equipment_type: "",
-      client_id: "",
-      sector: "",
-      location_description: "",
-      notes: "",
-    });
     setDialogOpen(true);
   };
 
   const handleOpenEdit = (eq: any) => {
     setEditingEquipment(eq);
-    setFormData({
-      serial_number: eq.serial_number || "",
-      brand: eq.brand || "",
-      model: eq.model || "",
-      equipment_type: eq.equipment_type || "",
-      client_id: eq.client_id || "",
-      sector: eq.sector || "",
-      location_description: eq.location_description || "",
-      notes: eq.notes || "",
-    });
     setDialogOpen(true);
   };
 
-  const handleSave = async () => {
-    if (!currentCompany || !formData.serial_number) {
-      toast.error("Número de série é obrigatório");
+  const handleSave = async (formData: any) => {
+    if (!currentCompany) {
+      toast.error("Selecione uma empresa");
       return;
     }
 
+    setSaving(true);
     try {
+      const dataToSave = {
+        ...formData,
+        client_id: formData.client_id || null,
+      };
+
       if (editingEquipment) {
         await updateEquipment.mutateAsync({
           id: editingEquipment.id,
-          data: {
-            ...formData,
-            client_id: formData.client_id || null,
-          }
+          data: dataToSave
         });
         
         // Se tiver field_equipment_id, atualiza no Field Control também
@@ -170,9 +128,8 @@ export default function Equipamentos() {
         }
       } else {
         const result = await createEquipment.mutateAsync({
-          ...formData,
+          ...dataToSave,
           company_id: currentCompany.id,
-          client_id: formData.client_id || null,
           is_active: true,
         });
         
@@ -184,6 +141,9 @@ export default function Equipamentos() {
       refetch();
     } catch (err: any) {
       console.error("Erro ao salvar:", err);
+      toast.error(`Erro ao salvar: ${err.message}`);
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -197,7 +157,6 @@ export default function Equipamentos() {
       });
       
       if (error) {
-        // Silently ignore if API key not configured - equipment saved locally
         const errorMsg = error.message || String(error);
         if (!errorMsg.includes('API Key')) {
           console.error("Erro ao enviar para Field Control:", error);
@@ -209,7 +168,6 @@ export default function Equipamentos() {
         toast.success("Equipamento sincronizado com Field Control");
       }
     } catch (err) {
-      // Silent fail - equipment still saved locally
       console.error("Erro ao sincronizar com Field:", err);
     }
   };
@@ -221,11 +179,16 @@ export default function Equipamentos() {
     }
   };
 
+  const isWarrantyValid = (warrantyEnd: string | null) => {
+    if (!warrantyEnd) return null;
+    return new Date(warrantyEnd) > new Date();
+  };
+
   return (
     <div className="p-6 space-y-6">
       <PageHeader
         title="Equipamentos"
-        description="Gerencie os equipamentos sincronizados do Field Control"
+        description="Cadastre e gerencie equipamentos. Os equipamentos serão sincronizados com o Field Control."
       />
 
       <div className="flex flex-col sm:flex-row gap-4 justify-between">
@@ -285,53 +248,76 @@ export default function Equipamentos() {
                     <TableHead>Modelo</TableHead>
                     <TableHead>Tipo</TableHead>
                     <TableHead>Cliente</TableHead>
-                    <TableHead>Setor</TableHead>
                     <TableHead>Localização</TableHead>
+                    <TableHead>Garantia</TableHead>
                     <TableHead>Origem</TableHead>
                     <TableHead className="w-[100px]">Ações</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredEquipments.map((eq: any) => (
-                    <TableRow key={eq.id}>
-                      <TableCell className="font-medium">{eq.serial_number}</TableCell>
-                      <TableCell>{eq.brand || "-"}</TableCell>
-                      <TableCell>{eq.model || "-"}</TableCell>
-                      <TableCell>{eq.equipment_type || "-"}</TableCell>
-                      <TableCell>
-                        {eq.client?.razao_social || eq.client?.nome_fantasia || "-"}
-                      </TableCell>
-                      <TableCell>{eq.sector || "-"}</TableCell>
-                      <TableCell>{eq.location_description || "-"}</TableCell>
-                      <TableCell>
-                        {eq.field_equipment_id ? (
-                          <Badge variant="secondary" className="gap-1">
-                            <Cloud className="h-3 w-3" /> Field
-                          </Badge>
-                        ) : (
-                          <Badge variant="outline">WAI</Badge>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex gap-1">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleOpenEdit(eq)}
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleDelete(eq.id)}
-                          >
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  {filteredEquipments.map((eq: any) => {
+                    const warrantyStatus = isWarrantyValid(eq.warranty_end);
+                    
+                    return (
+                      <TableRow key={eq.id}>
+                        <TableCell className="font-medium">{eq.serial_number}</TableCell>
+                        <TableCell>{eq.brand || "-"}</TableCell>
+                        <TableCell>{eq.model || "-"}</TableCell>
+                        <TableCell>{eq.equipment_type || "-"}</TableCell>
+                        <TableCell>
+                          {eq.client?.razao_social || eq.client?.nome_fantasia || "-"}
+                        </TableCell>
+                        <TableCell>
+                          <div className="text-sm">
+                            {eq.sector && <span>{eq.sector}</span>}
+                            {eq.sector && eq.environment && <span> / </span>}
+                            {eq.environment && <span>{eq.environment}</span>}
+                            {!eq.sector && !eq.environment && "-"}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          {eq.warranty_end ? (
+                            <Badge 
+                              variant={warrantyStatus ? "default" : "destructive"}
+                              className="gap-1"
+                            >
+                              <Calendar className="h-3 w-3" />
+                              {format(new Date(eq.warranty_end), "dd/MM/yyyy")}
+                            </Badge>
+                          ) : (
+                            "-"
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {eq.field_equipment_id ? (
+                            <Badge variant="secondary" className="gap-1">
+                              <Cloud className="h-3 w-3" /> Field
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline">WAI</Badge>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex gap-1">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleOpenEdit(eq)}
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleDelete(eq.id)}
+                            >
+                              <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </div>
@@ -339,116 +325,15 @@ export default function Equipamentos() {
         </CardContent>
       </Card>
 
-      {/* Dialog de criação/edição */}
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>
-              {editingEquipment ? "Editar Equipamento" : "Novo Equipamento"}
-            </DialogTitle>
-          </DialogHeader>
-          
-          <div className="grid gap-4 py-4">
-            <div className="grid gap-2">
-              <Label htmlFor="serial_number">Número de Série *</Label>
-              <Input
-                id="serial_number"
-                value={formData.serial_number}
-                onChange={(e) => setFormData({ ...formData, serial_number: e.target.value })}
-              />
-            </div>
-            
-            <div className="grid grid-cols-2 gap-4">
-              <div className="grid gap-2">
-                <Label htmlFor="brand">Marca</Label>
-                <Input
-                  id="brand"
-                  value={formData.brand}
-                  onChange={(e) => setFormData({ ...formData, brand: e.target.value })}
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="model">Modelo</Label>
-                <Input
-                  id="model"
-                  value={formData.model}
-                  onChange={(e) => setFormData({ ...formData, model: e.target.value })}
-                />
-              </div>
-            </div>
-            
-            <div className="grid grid-cols-2 gap-4">
-              <div className="grid gap-2">
-                <Label htmlFor="equipment_type">Tipo</Label>
-                <Input
-                  id="equipment_type"
-                  value={formData.equipment_type}
-                  onChange={(e) => setFormData({ ...formData, equipment_type: e.target.value })}
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="sector">Setor</Label>
-                <Input
-                  id="sector"
-                  value={formData.sector}
-                  onChange={(e) => setFormData({ ...formData, sector: e.target.value })}
-                />
-              </div>
-            </div>
-            
-            <div className="grid gap-2">
-              <Label htmlFor="client_id">Cliente</Label>
-              <Select
-                value={formData.client_id || "none"}
-                onValueChange={(value) => setFormData({ ...formData, client_id: value === "none" ? "" : value })}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione um cliente" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Sem cliente</SelectItem>
-                  {clientes.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>
-                      {c.razao_social || c.nome_fantasia}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            
-            <div className="grid gap-2">
-              <Label htmlFor="location_description">Localização</Label>
-              <Input
-                id="location_description"
-                value={formData.location_description}
-                onChange={(e) => setFormData({ ...formData, location_description: e.target.value })}
-              />
-            </div>
-            
-            <div className="grid gap-2">
-              <Label htmlFor="notes">Observações</Label>
-              <Textarea
-                id="notes"
-                value={formData.notes}
-                onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                rows={3}
-              />
-            </div>
-          </div>
-          
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>
-              Cancelar
-            </Button>
-            <Button onClick={handleSave} disabled={createEquipment.isPending || updateEquipment.isPending}>
-              {(createEquipment.isPending || updateEquipment.isPending) && (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              )}
-              Salvar
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Formulário de equipamento */}
+      <EquipmentForm
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        equipment={editingEquipment}
+        clientes={clientes}
+        onSave={handleSave}
+        isSaving={saving}
+      />
     </div>
   );
 }
