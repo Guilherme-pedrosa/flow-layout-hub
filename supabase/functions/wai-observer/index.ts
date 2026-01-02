@@ -636,6 +636,49 @@ function generateDecisionOptions(
 }
 
 // ============================================
+// GERAR DEEP-LINK CONTEXTUAL (action_url)
+// ============================================
+
+function generateActionUrl(
+  entityType: string,
+  entityId: string,
+  eventType: string,
+  alertCategory?: string
+): string {
+  // Mapeamento de entidades para rotas com deep-link
+  const routes: Record<string, (id: string, event: string) => string> = {
+    product: (id, event) => {
+      // Se evento indica falta de custo, abrir na aba valores
+      if (event.includes("cost") || event.includes("custo") || event.includes("price")) {
+        return `/produtos?edit=${id}&tab=valores`;
+      }
+      // Se evento de estoque, abrir aba estoque
+      if (event.includes("stock") || event.includes("estoque")) {
+        return `/produtos?edit=${id}&tab=estoque`;
+      }
+      return `/produtos?edit=${id}`;
+    },
+    service_order: (id, _event) => `/ordens-servico/${id}?highlight=margin`,
+    sale: (id, _event) => `/vendas/${id}?highlight=pricing`,
+    purchase_order: (id, _event) => `/pedidos-compra?view=${id}`,
+    supplier: (id, _event) => `/fornecedores?edit=${id}`,
+    client: (id, _event) => `/clientes/${id}`,
+    customer: (id, _event) => `/clientes/${id}`,
+    payable: (id, _event) => `/contas-pagar?view=${id}`,
+    receivable: (id, _event) => `/contas-receber?view=${id}`,
+    bank_transaction: (id, _event) => `/conciliacao?tx=${id}`,
+  };
+
+  const routeGenerator = routes[entityType];
+  if (routeGenerator) {
+    return routeGenerator(entityId, eventType);
+  }
+
+  // Fallback genérico
+  return `/configuracoes/alertas`;
+}
+
+// ============================================
 // CHAMADA À IA
 // ============================================
 
@@ -845,7 +888,10 @@ ${entityMemory ? `Histórico da entidade: ${entityMemory.total_alerts} alertas a
         ? aiResponse.decision_options 
         : generateDecisionOptions(event_type, aiResponse.severity || "warning", risk.rootCause);
 
-      // 9. Persistir alerta com novos campos
+      // 9. Gerar deep-link contextual
+      const actionUrl = generateActionUrl(entity_type, entity_id, event_type, alertCategory);
+
+      // 10. Persistir alerta com novos campos
       const { data: insertedAlert, error: insertError } = await supabase
         .from("ai_observer_alerts")
         .insert({
@@ -871,6 +917,7 @@ ${entityMemory ? `Histórico da entidade: ${entityMemory.total_alerts} alertas a
           alert_hash: alertHash,
           raw_ai_response: aiResponse,
           context_data: contextWithMetrics,
+          action_url: actionUrl,
         })
         .select()
         .single();

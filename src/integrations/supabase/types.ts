@@ -7542,55 +7542,26 @@ export type Database = {
         Returns: Json
       }
       ai_get_top_alerts: {
-        Args: { p_company_id: string; p_max_alerts?: number }
+        Args: { p_company_id: string; p_limit?: number }
         Returns: {
-          action_taken: string | null
-          action_url: string | null
-          actioned_at: string | null
-          actioned_by: string | null
-          alert_category: string | null
-          alert_hash: string
-          company_id: string
-          context_data: Json | null
+          action_url: string
           created_at: string
-          decision_options: Json | null
-          downstream_entities: Json | null
-          economic_priority_score: number | null
           economic_reason: string
-          escalated_at: string | null
-          escalation_reason: string | null
-          event_source_id: string | null
-          event_source_type: string | null
+          entity_recurrence_count: number
+          entity_total_loss: number
+          escalation_reason: string
           event_type: string
           id: string
-          impacted_entities: Json | null
-          is_actioned: boolean | null
-          is_dismissed: boolean | null
-          is_read: boolean | null
-          is_sla_breached: boolean | null
-          margin_after: number | null
-          margin_before: number | null
-          margin_change_percent: number | null
-          mode: string
-          potential_loss: number | null
-          priority_level: string | null
-          projected_loss_30d: number | null
-          raw_ai_response: Json | null
-          recommendation: string | null
-          requires_human_decision: boolean | null
-          responsible_role: string | null
-          root_cause: string | null
+          is_sla_breached: boolean
+          margin_change_percent: number
+          potential_loss: number
+          priority_level: string
+          priority_rank: number
+          responsible_role: string
           severity: string
-          sla_deadline: string | null
-          sla_hours: number | null
-          updated_at: string
+          sla_deadline: string
+          sla_hours: number
         }[]
-        SetofOptions: {
-          from: "*"
-          to: "ai_observer_alerts"
-          isOneToOne: false
-          isSetofReturn: true
-        }
       }
       ai_get_vendas_analysis: {
         Args: { p_company_id: string; p_periodo_dias?: number }
