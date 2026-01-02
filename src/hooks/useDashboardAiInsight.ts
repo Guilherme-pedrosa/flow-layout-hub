@@ -12,6 +12,22 @@ export function useDashboardAiInsight() {
     setError(null);
 
     try {
+      // Check if user is authenticated first
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        setInsight({
+          id: 'no-session',
+          type: 'info',
+          title: 'Login necessário',
+          description: 'Faça login para receber insights de IA personalizados.',
+          confidence: 100,
+          action: { label: 'Login', href: '/auth' },
+          createdAt: new Date().toISOString(),
+        });
+        setIsLoading(false);
+        return;
+      }
+
       // Busca company_id
       const { data: credData } = await supabase
         .from('inter_credentials')
