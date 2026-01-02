@@ -10,6 +10,7 @@ import { CompanyProvider } from "@/contexts/CompanyContext";
 import Dashboard from "./pages/Dashboard";
 import NotFound from "./pages/NotFound";
 import Auth from "./pages/Auth";
+import LandingPage from "./pages/LandingPage";
 
 // Operação
 import Vendas from "./pages/receber/Vendas";
@@ -96,12 +97,13 @@ const App = () => (
       <BrowserRouter>
         <Routes>
           {/* Rotas públicas (sem layout) */}
+          <Route path="/" element={<LandingPage />} />
           <Route path="/auth" element={<Auth />} />
           <Route path="/orcamento/:token" element={<OrcamentoView />} />
 
           {/* Rotas com layout */}
           <Route element={<AppLayout />}>
-            <Route path="/" element={<Dashboard />} />
+            <Route path="/dashboard" element={<Dashboard />} />
             
             {/* Operação */}
             <Route path="/vendas" element={<Vendas />} />
