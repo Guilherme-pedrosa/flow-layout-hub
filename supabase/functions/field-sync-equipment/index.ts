@@ -9,17 +9,12 @@ const corsHeaders = {
 const FIELD_CONTROL_BASE_URL = 'https://carchost.fieldcontrol.com.br';
 
 interface FieldEquipment {
-  id: string | number;
+  id: string;
   name?: string;
-  serialNumber?: string;
-  brand?: string;
-  model?: string;
-  type?: string;
-  location?: string;
-  sector?: string;
+  number?: string;
   notes?: string;
-  qrCode?: string;
-  customerId?: string | number;
+  customer?: { id: string };
+  type?: { id: string; name?: string };
 }
 
 serve(async (req) => {
@@ -106,15 +101,34 @@ async function syncCompanyEquipments(supabaseClient: any, company_id: string, ap
       const fieldEquipmentId = String(equipment.id);
       const { data: existing } = await supabaseClient.from('equipments').select('id').eq('company_id', company_id).eq('field_equipment_id', fieldEquipmentId).maybeSingle();
 
-      const equipmentData = {
+      // Buscar client_id se tiver customer no Field
+      let clientId: string | null = null;
+      if (equipment.customer?.id) {
+        const { data: syncData } = await supabaseClient
+          .from('field_control_sync')
+          .select('wai_id')
+          .eq('company_id', company_id)
+          .eq('field_id', equipment.customer.id)
+          .eq('entity_type', 'customer')
+          .maybeSingle();
+        
+        if (syncData?.wai_id) {
+          clientId = syncData.wai_id;
+        }
+      }
+
+      const equipmentData: any = {
         company_id,
-        serial_number: equipment.serialNumber || equipment.name || `FIELD-${fieldEquipmentId}`,
-        brand: equipment.brand || null,
-        model: equipment.model || null,
-        equipment_type: equipment.type || null,
+        serial_number: equipment.number || equipment.name || `FIELD-${fieldEquipmentId}`,
+        equipment_type: equipment.type?.name || equipment.type?.id || null,
+        notes: equipment.notes || null,
         field_equipment_id: fieldEquipmentId,
         is_active: true,
       };
+
+      if (clientId) {
+        equipmentData.client_id = clientId;
+      }
 
       if (existing?.id) {
         await supabaseClient.from('equipments').update({ ...equipmentData, updated_at: new Date().toISOString() }).eq('id', existing.id);
@@ -124,6 +138,7 @@ async function syncCompanyEquipments(supabaseClient: any, company_id: string, ap
         created++;
       }
     } catch (err) {
+      console.error('[field-sync-equipment] Erro ao processar equipamento:', err);
       errors++;
     }
   }
