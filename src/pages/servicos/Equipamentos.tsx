@@ -357,6 +357,7 @@ export default function Equipamentos() {
         onOpenChange={setDialogOpen}
         equipment={editingEquipment}
         clientes={clientes}
+        companyId={currentCompany?.id}
         onSave={handleSave}
         isSaving={saving}
       />
