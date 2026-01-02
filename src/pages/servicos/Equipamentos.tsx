@@ -32,39 +32,19 @@ export default function Equipamentos() {
   const [editingEquipment, setEditingEquipment] = useState<any>(null);
   const [saving, setSaving] = useState(false);
 
-  // Carregar clientes sincronizados com Field Control
+  // Carregar TODOS os clientes da empresa
   useEffect(() => {
     const loadClientes = async () => {
       if (!currentCompany) return;
       
-      // Buscar clientes que têm sync com Field Control
-      const { data: syncData } = await supabase
-        .from("field_control_sync")
-        .select("wai_id")
+      const { data: allClientes } = await supabase
+        .from("clientes")
+        .select("id, razao_social, nome_fantasia, cpf_cnpj")
         .eq("company_id", currentCompany.id)
-        .eq("entity_type", "customer");
+        .eq("status", "ativo")
+        .order("razao_social");
       
-      if (syncData && syncData.length > 0) {
-        const clientIds = syncData.map(s => s.wai_id);
-        
-        const { data: clientesData } = await supabase
-          .from("clientes")
-          .select("id, razao_social, nome_fantasia")
-          .in("id", clientIds)
-          .order("razao_social");
-        
-        setClientes(clientesData || []);
-      } else {
-        // Se não houver sync, buscar todos os clientes ativos
-        const { data: allClientes } = await supabase
-          .from("clientes")
-          .select("id, razao_social, nome_fantasia")
-          .eq("company_id", currentCompany.id)
-          .eq("status", "ativo")
-          .order("razao_social");
-        
-        setClientes(allClientes || []);
-      }
+      setClientes(allClientes || []);
     };
     loadClientes();
   }, [currentCompany]);
