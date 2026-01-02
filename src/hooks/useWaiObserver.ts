@@ -28,6 +28,15 @@ export interface WaiObserverAlert {
   action_taken: string | null;
   created_at: string;
   updated_at: string;
+  // Governance fields
+  responsible_role: string | null;
+  priority_level: string | null;
+  sla_hours: number | null;
+  sla_deadline: string | null;
+  is_sla_breached: boolean | null;
+  escalated_at: string | null;
+  escalation_reason: string | null;
+  action_url: string | null;
 }
 
 interface TriggerEventParams {

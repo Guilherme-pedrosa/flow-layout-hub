@@ -187,6 +187,13 @@ export type Database = {
             foreignKeyName: "ai_alert_feedback_alert_id_fkey"
             columns: ["alert_id"]
             isOneToOne: false
+            referencedRelation: "ai_alerts_by_responsible"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_alert_feedback_alert_id_fkey"
+            columns: ["alert_id"]
+            isOneToOne: false
             referencedRelation: "ai_alerts_ranked"
             referencedColumns: ["id"]
           },
@@ -244,6 +251,13 @@ export type Database = {
           notes?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "ai_decision_log_alert_id_fkey"
+            columns: ["alert_id"]
+            isOneToOne: false
+            referencedRelation: "ai_alerts_by_responsible"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "ai_decision_log_alert_id_fkey"
             columns: ["alert_id"]
@@ -432,6 +446,7 @@ export type Database = {
       ai_observer_alerts: {
         Row: {
           action_taken: string | null
+          action_url: string | null
           actioned_at: string | null
           actioned_by: string | null
           alert_category: string | null
@@ -443,6 +458,8 @@ export type Database = {
           downstream_entities: Json | null
           economic_priority_score: number | null
           economic_reason: string
+          escalated_at: string | null
+          escalation_reason: string | null
           event_source_id: string | null
           event_source_type: string | null
           event_type: string
@@ -451,21 +468,27 @@ export type Database = {
           is_actioned: boolean | null
           is_dismissed: boolean | null
           is_read: boolean | null
+          is_sla_breached: boolean | null
           margin_after: number | null
           margin_before: number | null
           margin_change_percent: number | null
           mode: string
           potential_loss: number | null
+          priority_level: string | null
           projected_loss_30d: number | null
           raw_ai_response: Json | null
           recommendation: string | null
           requires_human_decision: boolean | null
+          responsible_role: string | null
           root_cause: string | null
           severity: string
+          sla_deadline: string | null
+          sla_hours: number | null
           updated_at: string
         }
         Insert: {
           action_taken?: string | null
+          action_url?: string | null
           actioned_at?: string | null
           actioned_by?: string | null
           alert_category?: string | null
@@ -477,6 +500,8 @@ export type Database = {
           downstream_entities?: Json | null
           economic_priority_score?: number | null
           economic_reason: string
+          escalated_at?: string | null
+          escalation_reason?: string | null
           event_source_id?: string | null
           event_source_type?: string | null
           event_type: string
@@ -485,21 +510,27 @@ export type Database = {
           is_actioned?: boolean | null
           is_dismissed?: boolean | null
           is_read?: boolean | null
+          is_sla_breached?: boolean | null
           margin_after?: number | null
           margin_before?: number | null
           margin_change_percent?: number | null
           mode: string
           potential_loss?: number | null
+          priority_level?: string | null
           projected_loss_30d?: number | null
           raw_ai_response?: Json | null
           recommendation?: string | null
           requires_human_decision?: boolean | null
+          responsible_role?: string | null
           root_cause?: string | null
           severity: string
+          sla_deadline?: string | null
+          sla_hours?: number | null
           updated_at?: string
         }
         Update: {
           action_taken?: string | null
+          action_url?: string | null
           actioned_at?: string | null
           actioned_by?: string | null
           alert_category?: string | null
@@ -511,6 +542,8 @@ export type Database = {
           downstream_entities?: Json | null
           economic_priority_score?: number | null
           economic_reason?: string
+          escalated_at?: string | null
+          escalation_reason?: string | null
           event_source_id?: string | null
           event_source_type?: string | null
           event_type?: string
@@ -519,17 +552,22 @@ export type Database = {
           is_actioned?: boolean | null
           is_dismissed?: boolean | null
           is_read?: boolean | null
+          is_sla_breached?: boolean | null
           margin_after?: number | null
           margin_before?: number | null
           margin_change_percent?: number | null
           mode?: string
           potential_loss?: number | null
+          priority_level?: string | null
           projected_loss_30d?: number | null
           raw_ai_response?: Json | null
           recommendation?: string | null
           requires_human_decision?: boolean | null
+          responsible_role?: string | null
           root_cause?: string | null
           severity?: string
+          sla_deadline?: string | null
+          sla_hours?: number | null
           updated_at?: string
         }
         Relationships: [
@@ -7175,9 +7213,78 @@ export type Database = {
       }
     }
     Views: {
+      ai_alerts_by_responsible: {
+        Row: {
+          action_url: string | null
+          company_id: string | null
+          created_at: string | null
+          economic_reason: string | null
+          escalated_at: string | null
+          escalation_reason: string | null
+          event_type: string | null
+          hours_remaining: number | null
+          id: string | null
+          is_sla_breached: boolean | null
+          potential_loss: number | null
+          priority_level: string | null
+          responsible_role: string | null
+          severity: string | null
+          sla_deadline: string | null
+          sla_hours: number | null
+          sla_status: string | null
+        }
+        Insert: {
+          action_url?: string | null
+          company_id?: string | null
+          created_at?: string | null
+          economic_reason?: string | null
+          escalated_at?: string | null
+          escalation_reason?: string | null
+          event_type?: string | null
+          hours_remaining?: never
+          id?: string | null
+          is_sla_breached?: boolean | null
+          potential_loss?: number | null
+          priority_level?: string | null
+          responsible_role?: string | null
+          severity?: string | null
+          sla_deadline?: string | null
+          sla_hours?: number | null
+          sla_status?: never
+        }
+        Update: {
+          action_url?: string | null
+          company_id?: string | null
+          created_at?: string | null
+          economic_reason?: string | null
+          escalated_at?: string | null
+          escalation_reason?: string | null
+          event_type?: string | null
+          hours_remaining?: never
+          id?: string | null
+          is_sla_breached?: boolean | null
+          potential_loss?: number | null
+          priority_level?: string | null
+          responsible_role?: string | null
+          severity?: string | null
+          sla_deadline?: string | null
+          sla_hours?: number | null
+          sla_status?: never
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_observer_alerts_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ai_alerts_ranked: {
         Row: {
           action_taken: string | null
+          action_url: string | null
           actioned_at: string | null
           actioned_by: string | null
           alert_category: string | null
@@ -7189,8 +7296,8 @@ export type Database = {
           downstream_entities: Json | null
           economic_priority_score: number | null
           economic_reason: string | null
-          entity_recurrence_count: number | null
-          entity_total_loss: number | null
+          escalated_at: string | null
+          escalation_reason: string | null
           event_source_id: string | null
           event_source_type: string | null
           event_type: string | null
@@ -7199,19 +7306,113 @@ export type Database = {
           is_actioned: boolean | null
           is_dismissed: boolean | null
           is_read: boolean | null
+          is_sla_breached: boolean | null
           margin_after: number | null
           margin_before: number | null
           margin_change_percent: number | null
           mode: string | null
           potential_loss: number | null
-          priority_rank: number | null
+          priority_level: string | null
+          priority_score: number | null
           projected_loss_30d: number | null
           raw_ai_response: Json | null
           recommendation: string | null
           requires_human_decision: boolean | null
+          responsible_role: string | null
           root_cause: string | null
           severity: string | null
+          severity_rank: number | null
+          sla_deadline: string | null
+          sla_hours: number | null
           updated_at: string | null
+        }
+        Insert: {
+          action_taken?: string | null
+          action_url?: string | null
+          actioned_at?: string | null
+          actioned_by?: string | null
+          alert_category?: string | null
+          alert_hash?: string | null
+          company_id?: string | null
+          context_data?: Json | null
+          created_at?: string | null
+          decision_options?: Json | null
+          downstream_entities?: Json | null
+          economic_priority_score?: number | null
+          economic_reason?: string | null
+          escalated_at?: string | null
+          escalation_reason?: string | null
+          event_source_id?: string | null
+          event_source_type?: string | null
+          event_type?: string | null
+          id?: string | null
+          impacted_entities?: Json | null
+          is_actioned?: boolean | null
+          is_dismissed?: boolean | null
+          is_read?: boolean | null
+          is_sla_breached?: boolean | null
+          margin_after?: number | null
+          margin_before?: number | null
+          margin_change_percent?: number | null
+          mode?: string | null
+          potential_loss?: number | null
+          priority_level?: string | null
+          priority_score?: never
+          projected_loss_30d?: number | null
+          raw_ai_response?: Json | null
+          recommendation?: string | null
+          requires_human_decision?: boolean | null
+          responsible_role?: string | null
+          root_cause?: string | null
+          severity?: string | null
+          severity_rank?: never
+          sla_deadline?: string | null
+          sla_hours?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          action_taken?: string | null
+          action_url?: string | null
+          actioned_at?: string | null
+          actioned_by?: string | null
+          alert_category?: string | null
+          alert_hash?: string | null
+          company_id?: string | null
+          context_data?: Json | null
+          created_at?: string | null
+          decision_options?: Json | null
+          downstream_entities?: Json | null
+          economic_priority_score?: number | null
+          economic_reason?: string | null
+          escalated_at?: string | null
+          escalation_reason?: string | null
+          event_source_id?: string | null
+          event_source_type?: string | null
+          event_type?: string | null
+          id?: string | null
+          impacted_entities?: Json | null
+          is_actioned?: boolean | null
+          is_dismissed?: boolean | null
+          is_read?: boolean | null
+          is_sla_breached?: boolean | null
+          margin_after?: number | null
+          margin_before?: number | null
+          margin_change_percent?: number | null
+          mode?: string | null
+          potential_loss?: number | null
+          priority_level?: string | null
+          priority_score?: never
+          projected_loss_30d?: number | null
+          raw_ai_response?: Json | null
+          recommendation?: string | null
+          requires_human_decision?: boolean | null
+          responsible_role?: string | null
+          root_cause?: string | null
+          severity?: string | null
+          severity_rank?: never
+          sla_deadline?: string | null
+          sla_hours?: number | null
+          updated_at?: string | null
         }
         Relationships: [
           {
@@ -7232,6 +7433,13 @@ export type Database = {
       }
     }
     Functions: {
+      ai_assign_governance: {
+        Args: { p_priority_level: string; p_severity: string }
+        Returns: {
+          responsible_role: string
+          sla_hours: number
+        }[]
+      }
       ai_calculate_priority_score: {
         Args: {
           p_is_recurring?: boolean
@@ -7241,9 +7449,20 @@ export type Database = {
         }
         Returns: number
       }
+      ai_check_and_escalate_sla: { Args: never; Returns: number }
       ai_check_duplicate_alert: {
-        Args: { p_alert_hash: string; p_company_id: string }
-        Returns: boolean
+        Args: {
+          p_alert_hash: string
+          p_company_id: string
+          p_event_type?: string
+          p_hours_cooldown?: number
+        }
+        Returns: {
+          escalation_reason: string
+          existing_alert_id: string
+          is_duplicate: boolean
+          should_escalate: boolean
+        }[]
       }
       ai_classify_alert_priority: {
         Args: {
@@ -7264,6 +7483,15 @@ export type Database = {
           p_metric_type: string
         }
         Returns: Json
+      }
+      ai_generate_action_url: {
+        Args: {
+          p_event_source_id: string
+          p_event_source_type: string
+          p_event_type: string
+          p_impacted_entities: Json
+        }
+        Returns: string
       }
       ai_get_clientes_analysis: {
         Args: { p_company_id: string }
@@ -7311,6 +7539,7 @@ export type Database = {
         Args: { p_company_id: string; p_max_alerts?: number }
         Returns: {
           action_taken: string | null
+          action_url: string | null
           actioned_at: string | null
           actioned_by: string | null
           alert_category: string | null
@@ -7322,6 +7551,8 @@ export type Database = {
           downstream_entities: Json | null
           economic_priority_score: number | null
           economic_reason: string
+          escalated_at: string | null
+          escalation_reason: string | null
           event_source_id: string | null
           event_source_type: string | null
           event_type: string
@@ -7330,17 +7561,22 @@ export type Database = {
           is_actioned: boolean | null
           is_dismissed: boolean | null
           is_read: boolean | null
+          is_sla_breached: boolean | null
           margin_after: number | null
           margin_before: number | null
           margin_change_percent: number | null
           mode: string
           potential_loss: number | null
+          priority_level: string | null
           projected_loss_30d: number | null
           raw_ai_response: Json | null
           recommendation: string | null
           requires_human_decision: boolean | null
+          responsible_role: string | null
           root_cause: string | null
           severity: string
+          sla_deadline: string | null
+          sla_hours: number | null
           updated_at: string
         }[]
         SetofOptions: {
