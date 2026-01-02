@@ -59,6 +59,8 @@ export interface Pessoa {
   updated_at: string;
   created_by: string | null;
   updated_by: string | null;
+  external_id: string | null;
+  auvo_codigo: string | null;
 }
 
 export interface PessoaInsert {
@@ -106,6 +108,8 @@ export interface PessoaInsert {
   auth_id?: string;
   status?: ClienteStatus;
   is_active?: boolean;
+  external_id?: string;
+  auvo_codigo?: string;
 }
 
 export interface PessoaContato {
