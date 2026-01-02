@@ -7,9 +7,9 @@ const corsHeaders = {
 };
 
 const GC_BASE_URL = "https://gestaoclick.com/api";
-const BATCH_SIZE = 10; // Processar em lotes de 10
-const MAX_PAGES = 20; // Limite de páginas por tipo
-const TIMEOUT_BUFFER_MS = 25000; // 25 segundos antes de retornar
+const BATCH_SIZE = 20; // Processar em lotes de 20 (mais eficiente)
+const MAX_PAGES = 100; // Limite de páginas por tipo
+const TIMEOUT_BUFFER_MS = 50000; // 50 segundos (edge functions têm 60s)
 
 async function fetchGestaoClick(
   endpoint: string, 
