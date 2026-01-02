@@ -17,11 +17,13 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Card, CardContent } from "@/components/ui/card";
-import { Plus, Search, MoreHorizontal, Edit, Eye, Building2, User, Truck, Briefcase } from "lucide-react";
+import { Plus, Search, MoreHorizontal, Edit, Eye, Building2, User, Truck, Briefcase, Download } from "lucide-react";
 import { usePessoas } from "@/hooks/usePessoas";
 import { formatCpfCnpj, formatTelefone } from "@/lib/formatters";
 import { useSortableData } from "@/hooks/useSortableData";
 import { SortableTableHeader } from "@/components/shared";
+import * as XLSX from "xlsx";
+import { toast } from "sonner";
 
 export function ClientesList() {
   const navigate = useNavigate();
@@ -76,6 +78,46 @@ export function ClientesList() {
     return badges;
   };
 
+  const exportToExcel = () => {
+    try {
+      const dataToExport = sortedClientes.map((cliente) => ({
+        "Tipo Pessoa": cliente.tipo_pessoa,
+        "Razão Social": cliente.razao_social || "",
+        "Nome Fantasia": cliente.nome_fantasia || "",
+        "CPF/CNPJ": cliente.cpf_cnpj || "",
+        "Telefone": cliente.telefone || "",
+        "Email": cliente.email || "",
+        "CEP": cliente.cep || "",
+        "Logradouro": cliente.logradouro || "",
+        "Número": cliente.numero || "",
+        "Complemento": cliente.complemento || "",
+        "Bairro": cliente.bairro || "",
+        "Cidade": cliente.cidade || "",
+        "Estado": cliente.estado || "",
+        "Status": cliente.status,
+        "Inscrição Estadual": cliente.inscricao_estadual || "",
+        "Inscrição Municipal": cliente.inscricao_municipal || "",
+        "Regime Tributário": cliente.regime_tributario || "",
+        "É Fornecedor": cliente.is_fornecedor ? "Sim" : "Não",
+        "É Transportadora": cliente.is_transportadora ? "Sim" : "Não",
+        "Código GC": (cliente as any).gestaoclick_id || "",
+        "Field ID": (cliente as any).field_customer_id || "",
+      }));
+
+      const ws = XLSX.utils.json_to_sheet(dataToExport);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Clientes");
+
+      const fileName = `clientes_${new Date().toISOString().split("T")[0]}.xlsx`;
+      XLSX.writeFile(wb, fileName);
+
+      toast.success(`${dataToExport.length} clientes exportados com sucesso!`);
+    } catch (error) {
+      console.error("Erro ao exportar:", error);
+      toast.error("Erro ao exportar clientes");
+    }
+  };
+
   return (
     <div className="space-y-4">
       {/* Barra de ações */}
@@ -89,10 +131,16 @@ export function ClientesList() {
             className="pl-10"
           />
         </div>
-        <Button onClick={() => navigate('/clientes/novo')}>
-          <Plus className="h-4 w-4 mr-2" />
-          Novo Cliente
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={exportToExcel}>
+            <Download className="h-4 w-4 mr-2" />
+            Exportar Excel
+          </Button>
+          <Button onClick={() => navigate('/clientes/novo')}>
+            <Plus className="h-4 w-4 mr-2" />
+            Novo Cliente
+          </Button>
+        </div>
       </div>
 
       {/* Tabela */}
