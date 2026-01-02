@@ -366,10 +366,10 @@ export default function LandingPage() {
 
         <div className="container mx-auto px-4 relative z-10">
           <div className="max-w-3xl mx-auto text-center">
-            <h2 className="text-4xl md:text-5xl font-bold mb-6">
+            <h2 className="text-4xl md:text-5xl font-bold mb-6 text-white">
               Pronto para ter uma <span className="text-emerald-400">IA</span> gerenciando seu negócio?
             </h2>
-            <p className="text-xl text-slate-300 mb-8">
+            <p className="text-xl text-white mb-8">
               Junte-se a centenas de empresas que já estão economizando tempo e dinheiro 
               com o WAI ERP.
             </p>
