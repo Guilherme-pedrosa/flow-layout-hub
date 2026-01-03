@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { validateCompanyAccess, authErrorResponse } from "../_shared/auth-helper.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -322,6 +323,17 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const payload: SyncRequest = await req.json();
+
+    // Determinar company_id do request
+    const bodyCompanyId = payload.company_id || payload.record?.company_id;
+    
+    // === AUTH GUARD ===
+    if (bodyCompanyId) {
+      const authResult = await validateCompanyAccess(req, supabase, bodyCompanyId);
+      if (!authResult.valid) {
+        return authErrorResponse(authResult, corsHeaders);
+      }
+    }
 
     // Modo 1: Sincronizar um único registro
     if (payload.record) {

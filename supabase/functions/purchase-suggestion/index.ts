@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { validateCompanyAccess, authErrorResponse } from "../_shared/auth-helper.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -40,17 +41,25 @@ serve(async (req) => {
   }
 
   try {
-    const { company_id, forecast_days = 30, include_low_priority = true } = await req.json();
-
-    if (!company_id) {
-      throw new Error("company_id é obrigatório");
-    }
-
-    console.log(`[purchase-suggestion] Analisando estoque para company: ${company_id}`);
-
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    const body = await req.json();
+    const { company_id: bodyCompanyId, forecast_days = 30, include_low_priority = true } = body;
+
+    if (!bodyCompanyId) {
+      throw new Error("company_id é obrigatório");
+    }
+
+    // === AUTH GUARD ===
+    const authResult = await validateCompanyAccess(req, supabase, bodyCompanyId);
+    if (!authResult.valid) {
+      return authErrorResponse(authResult, corsHeaders);
+    }
+    const company_id = authResult.companyId!;
+
+    console.log(`[purchase-suggestion] Analisando estoque para company: ${company_id}`);
 
     // 1. Buscar produtos com controle de estoque
     const { data: products, error: prodError } = await supabase

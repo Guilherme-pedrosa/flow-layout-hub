@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { validateCompanyAccess, authErrorResponse } from "../_shared/auth-helper.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -261,11 +262,19 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const { company_id, max_suggestions = 100, date_tolerance_days = 5, transaction_type = 'all' } = await req.json();
+    const body = await req.json();
+    const { company_id: bodyCompanyId, max_suggestions = 100, date_tolerance_days = 5, transaction_type = 'all' } = body;
 
-    if (!company_id) {
+    if (!bodyCompanyId) {
       throw new Error("company_id é obrigatório");
     }
+
+    // === AUTH GUARD ===
+    const authResult = await validateCompanyAccess(req, supabase, bodyCompanyId);
+    if (!authResult.valid) {
+      return authErrorResponse(authResult, corsHeaders);
+    }
+    const company_id = authResult.companyId!;
 
     // transaction_type: 'payables' (só débitos), 'receivables' (só créditos), 'all' (todos)
     console.log(`[reconciliation-engine] Iniciando análise para company: ${company_id}, type: ${transaction_type}`);

@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { validateCompanyAccess, authErrorResponse } from "../_shared/auth-helper.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -87,18 +88,27 @@ serve(async (req) => {
   }
 
   try {
-    const { company_id, data_inicio, data_fim, tipo_operacao = "D" } = await req.json();
-
-    if (!company_id || !data_inicio || !data_fim) {
-      throw new Error("Parâmetros obrigatórios: company_id, data_inicio, data_fim");
-    }
-
-    console.log(`[inter-extrato] Iniciando para company_id: ${company_id}`);
-
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
+
+    const body = await req.json();
+    const { company_id: bodyCompanyId, data_inicio, data_fim, tipo_operacao = "D" } = body;
+
+    if (!bodyCompanyId || !data_inicio || !data_fim) {
+      throw new Error("Parâmetros obrigatórios: company_id, data_inicio, data_fim");
+    }
+
+    // === AUTH GUARD ===
+    const authResult = await validateCompanyAccess(req, supabase, bodyCompanyId);
+    if (!authResult.valid) {
+      return authErrorResponse(authResult, corsHeaders);
+    }
+    const company_id = authResult.companyId!;
+
+    console.log(`[inter-extrato] Iniciando para company_id: ${company_id}`);
+
 
     // Buscar credenciais do Inter
     const { data: credentials, error: credError } = await supabase

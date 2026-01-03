@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { validateCompanyAccess, authErrorResponse } from "../_shared/auth-helper.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -774,10 +775,17 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
     const request: WaiObserverRequest = await req.json();
 
-    const companyId = request.payload.company_id;
-    if (!companyId) {
+    const bodyCompanyId = request.payload.company_id;
+    if (!bodyCompanyId) {
       throw new Error("company_id é obrigatório");
     }
+
+    // === AUTH GUARD ===
+    const authResult = await validateCompanyAccess(req, supabase, bodyCompanyId);
+    if (!authResult.valid) {
+      return authErrorResponse(authResult, corsHeaders);
+    }
+    const companyId = authResult.companyId!;
 
     console.log(`[WAI Observer v2] Mode: ${request.mode}, Company: ${companyId}`);
 
