@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.89.0";
+import { validateCompanyAccess, authErrorResponse } from "../_shared/auth-helper.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -14,17 +15,25 @@ serve(async (req) => {
   }
 
   try {
-    const { companyId, category } = await req.json();
-
-    if (!companyId) {
-      throw new Error("companyId is required");
-    }
-
-    console.log("[analyze-insights] Starting analysis for company:", companyId, "category:", category);
-
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
+
+    const body = await req.json();
+    const { companyId: bodyCompanyId, category } = body;
+
+    if (!bodyCompanyId) {
+      throw new Error("companyId is required");
+    }
+
+    // === AUTH GUARD ===
+    const authResult = await validateCompanyAccess(req, supabase, bodyCompanyId);
+    if (!authResult.valid) {
+      return authErrorResponse(authResult, corsHeaders);
+    }
+    const companyId = authResult.companyId!;
+
+    console.log("[analyze-insights] Starting analysis for company:", companyId, "category:", category);
 
     // Fetch ALL relevant data
     const today = new Date().toISOString().split('T')[0];

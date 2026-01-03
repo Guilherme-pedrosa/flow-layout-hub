@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { validateCompanyAccess, authErrorResponse } from "../_shared/auth-helper.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -30,7 +31,8 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { products, company_id, clear_existing }: ImportRequest = await req.json();
+    const body = await req.json();
+    const { products, company_id: bodyCompanyId, clear_existing }: ImportRequest = body;
 
     if (!products || !Array.isArray(products) || products.length === 0) {
       return new Response(
@@ -39,12 +41,19 @@ serve(async (req) => {
       );
     }
 
-    if (!company_id) {
+    if (!bodyCompanyId) {
       return new Response(
         JSON.stringify({ error: 'company_id is required' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
+
+    // === AUTH GUARD ===
+    const authResult = await validateCompanyAccess(req, supabase, bodyCompanyId);
+    if (!authResult.valid) {
+      return authErrorResponse(authResult, corsHeaders);
+    }
+    const company_id = authResult.companyId!;
 
     console.log(`Starting import of ${products.length} products for company ${company_id}`);
     console.log(`Clear existing: ${clear_existing}`);

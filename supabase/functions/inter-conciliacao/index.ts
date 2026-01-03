@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { validateCompanyAccess, authErrorResponse } from "../_shared/auth-helper.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -167,18 +168,27 @@ serve(async (req) => {
   }
 
   try {
-    const { company_id, dias_retroativos = 30 } = await req.json();
-
-    if (!company_id) {
-      throw new Error("company_id é obrigatório");
-    }
-
-    console.log(`[conciliacao-ai] Iniciando para company_id: ${company_id}`);
-
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
+
+    const body = await req.json();
+    const { company_id: bodyCompanyId, dias_retroativos = 30 } = body;
+
+    if (!bodyCompanyId) {
+      throw new Error("company_id é obrigatório");
+    }
+
+    // === AUTH GUARD ===
+    const authResult = await validateCompanyAccess(req, supabase, bodyCompanyId);
+    if (!authResult.valid) {
+      return authErrorResponse(authResult, corsHeaders);
+    }
+    const company_id = authResult.companyId!;
+
+    console.log(`[conciliacao-ai] Iniciando para company_id: ${company_id}`);
+
 
     // 1. Calcular período de busca
     const hoje = new Date();

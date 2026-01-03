@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { validateCompanyAccess, authErrorResponse } from "../_shared/auth-helper.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -26,7 +27,8 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const { reconciliation_id, user_id, reason } = await req.json();
+    const body = await req.json();
+    const { reconciliation_id, user_id, reason } = body;
 
     if (!reconciliation_id) {
       throw new Error("reconciliation_id é obrigatório");
@@ -43,6 +45,12 @@ serve(async (req) => {
 
     if (recError || !reconciliation) {
       throw new Error("Conciliação não encontrada");
+    }
+
+    // === AUTH GUARD ===
+    const authResult = await validateCompanyAccess(req, supabase, reconciliation.company_id);
+    if (!authResult.valid) {
+      return authErrorResponse(authResult, corsHeaders);
     }
 
     if (reconciliation.status === 'reversed') {
