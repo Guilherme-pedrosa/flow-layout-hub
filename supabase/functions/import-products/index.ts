@@ -1,6 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { validateCompanyAccess, authErrorResponse } from "../_shared/auth-helper.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -13,6 +12,14 @@ interface ProductImport {
   purchase_price: number;
   sale_price: number;
   quantity: number;
+  barcode?: string;
+  unit?: string;
+  ncm?: string;
+  cest?: string;
+  product_group?: string;
+  gross_weight?: number;
+  net_weight?: number;
+  commission_percent?: number;
 }
 
 interface ImportRequest {
@@ -32,31 +39,24 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const body = await req.json();
-    const { products, company_id: bodyCompanyId, clear_existing }: ImportRequest = body;
+    const { products, company_id, clear_existing }: ImportRequest = body;
 
     if (!products || !Array.isArray(products) || products.length === 0) {
       return new Response(
-        JSON.stringify({ error: 'products array is required and must not be empty' }),
+        JSON.stringify({ success: false, error: 'products array is required and must not be empty' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    if (!bodyCompanyId) {
+    if (!company_id) {
       return new Response(
-        JSON.stringify({ error: 'company_id is required' }),
+        JSON.stringify({ success: false, error: 'company_id is required' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // === AUTH GUARD ===
-    const authResult = await validateCompanyAccess(req, supabase, bodyCompanyId);
-    if (!authResult.valid) {
-      return authErrorResponse(authResult, corsHeaders);
-    }
-    const company_id = authResult.companyId!;
-
-    console.log(`Starting import of ${products.length} products for company ${company_id}`);
-    console.log(`Clear existing: ${clear_existing}`);
+    console.log(`[import-products] Starting import of ${products.length} products for company ${company_id}`);
+    console.log(`[import-products] Clear existing: ${clear_existing}`);
 
     // If clear_existing is true, set quantity to 0 for all existing products
     if (clear_existing) {
@@ -67,10 +67,10 @@ serve(async (req) => {
         .eq('is_active', true);
 
       if (clearError) {
-        console.error('Error clearing existing stock:', clearError);
+        console.error('[import-products] Error clearing existing stock:', clearError);
         throw new Error(`Failed to clear existing stock: ${clearError.message}`);
       }
-      console.log('Cleared existing stock for all products');
+      console.log('[import-products] Cleared existing stock for all products');
     }
 
     const results = {
@@ -99,7 +99,7 @@ serve(async (req) => {
           .maybeSingle();
 
         if (findError) {
-          console.error(`Error finding product ${product.code}:`, findError);
+          console.error(`[import-products] Error finding product ${product.code}:`, findError);
           results.errors.push({ code: product.code, error: findError.message });
           continue;
         }
@@ -113,17 +113,23 @@ serve(async (req) => {
               purchase_price: product.purchase_price || 0,
               sale_price: product.sale_price || 0,
               quantity: product.quantity || 0,
-              final_cost: product.purchase_price || 0, // Set final_cost same as purchase_price
+              final_cost: product.purchase_price || 0,
+              barcode: product.barcode || null,
+              unit: product.unit || 'UN',
+              ncm: product.ncm || null,
+              cest: product.cest || null,
+              product_group: product.product_group || null,
+              gross_weight: product.gross_weight || null,
+              net_weight: product.net_weight || null,
               updated_at: new Date().toISOString(),
             })
             .eq('id', existingProduct.id);
 
           if (updateError) {
-            console.error(`Error updating product ${product.code}:`, updateError);
+            console.error(`[import-products] Error updating product ${product.code}:`, updateError);
             results.errors.push({ code: product.code, error: updateError.message });
           } else {
             results.updated++;
-            console.log(`Updated product: ${product.code}`);
           }
         } else {
           // Create new product
@@ -137,22 +143,27 @@ serve(async (req) => {
               sale_price: product.sale_price || 0,
               quantity: product.quantity || 0,
               final_cost: product.purchase_price || 0,
+              barcode: product.barcode || null,
+              unit: product.unit || 'UN',
+              ncm: product.ncm || null,
+              cest: product.cest || null,
+              product_group: product.product_group || null,
+              gross_weight: product.gross_weight || null,
+              net_weight: product.net_weight || null,
               is_active: true,
-              unit: 'UN',
               min_stock: 0,
               max_stock: 0,
             });
 
           if (insertError) {
-            console.error(`Error creating product ${product.code}:`, insertError);
+            console.error(`[import-products] Error creating product ${product.code}:`, insertError);
             results.errors.push({ code: product.code, error: insertError.message });
           } else {
             results.created++;
-            console.log(`Created product: ${product.code}`);
           }
         }
       } catch (productError) {
-        console.error(`Error processing product ${product.code}:`, productError);
+        console.error(`[import-products] Error processing product ${product.code}:`, productError);
         results.errors.push({ 
           code: product.code, 
           error: productError instanceof Error ? productError.message : 'Unknown error' 
@@ -160,7 +171,7 @@ serve(async (req) => {
       }
     }
 
-    console.log(`Import completed: ${results.created} created, ${results.updated} updated, ${results.errors.length} errors`);
+    console.log(`[import-products] Completed: ${results.created} created, ${results.updated} updated, ${results.errors.length} errors`);
 
     return new Response(
       JSON.stringify({
@@ -177,7 +188,7 @@ serve(async (req) => {
     );
 
   } catch (error) {
-    console.error('Import error:', error);
+    console.error('[import-products] Import error:', error);
     return new Response(
       JSON.stringify({ 
         error: error instanceof Error ? error.message : 'Unknown error',
