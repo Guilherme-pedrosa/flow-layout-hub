@@ -195,14 +195,27 @@ ${fullContext}`;
     
     console.log("[financial-ai] Calling OpenAI GPT, streaming:", useStreaming);
 
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+    const apiKey = LOVABLE_API_KEY || OPENAI_API_KEY;
+    const apiUrl = LOVABLE_API_KEY 
+      ? "https://ai.gateway.lovable.dev/v1/chat/completions"
+      : "https://api.openai.com/v1/chat/completions";
+    
+    if (!apiKey) {
+      console.error("[financial-ai] No API key configured");
+      throw new Error("No API key configured");
+    }
+
+    console.log("[financial-ai] Using API:", LOVABLE_API_KEY ? "Lovable AI" : "OpenAI", "streaming:", useStreaming);
+
+    const response = await fetch(apiUrl, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${OPENAI_API_KEY}`,
+        Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "gpt-4.1-mini-2025-04-14",
+        model: LOVABLE_API_KEY ? "google/gemini-2.5-flash" : "gpt-4o-mini",
         messages: [
           { role: "system", content: systemPrompt },
           ...messages,
