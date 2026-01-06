@@ -21,13 +21,15 @@ export async function validateAuth(
 ): Promise<AuthResult> {
   // 1. Verificar header de autorização
   const authHeader = req.headers.get("Authorization");
-  if (!authHeader) {
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
     return {
       valid: false,
       error: "Não autorizado - Token não fornecido",
       status: 401,
     };
   }
+
+  const token = authHeader.replace("Bearer ", "");
 
   // 2. Criar cliente com token do usuário para validar
   const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
@@ -37,51 +39,68 @@ export async function validateAuth(
     global: { headers: { Authorization: authHeader } },
   });
 
-  // 3. Validar token e obter usuário
-  const {
-    data: { user },
-    error: authError,
-  } = await supabaseAuth.auth.getUser();
+  // 3. Validar token usando getClaims (método recomendado)
+  try {
+    const { data, error: claimsError } = await supabaseAuth.auth.getClaims(token);
 
-  if (authError || !user) {
-    console.error("[auth-helper] Erro de autenticação:", authError?.message);
+    if (claimsError || !data?.claims) {
+      console.error("[auth-helper] Erro de autenticação:", claimsError?.message || "No claims");
+      return {
+        valid: false,
+        error: "Não autorizado - Token inválido",
+        status: 401,
+      };
+    }
+
+    const userId = data.claims.sub as string;
+    
+    if (!userId) {
+      console.error("[auth-helper] Erro de autenticação: No user ID in claims");
+      return {
+        valid: false,
+        error: "Não autorizado - Token inválido",
+        status: 401,
+      };
+    }
+
+    // 4. Buscar empresas do usuário
+    const { data: userCompanies, error: companiesError } = await supabaseAuth.rpc(
+      "get_user_companies"
+    );
+
+    if (companiesError) {
+      console.error("[auth-helper] Erro ao buscar empresas:", companiesError.message);
+      return {
+        valid: false,
+        error: "Erro ao verificar permissões",
+        status: 500,
+      };
+    }
+
+    // Se não tem empresas vinculadas
+    if (!userCompanies || userCompanies.length === 0) {
+      return {
+        valid: false,
+        error: "Usuário sem empresa vinculada",
+        status: 403,
+      };
+    }
+
+    // Retornar primeira empresa como padrão (será sobrescrito se companyId vier no body)
+    return {
+      valid: true,
+      userId: userId,
+      companyId: userCompanies[0], // Primeira empresa como padrão
+      status: 200,
+    };
+  } catch (error) {
+    console.error("[auth-helper] Erro ao validar token:", error);
     return {
       valid: false,
-      error: "Não autorizado - Token inválido",
+      error: "Não autorizado - Erro ao validar token",
       status: 401,
     };
   }
-
-  // 4. Buscar empresas do usuário
-  const { data: userCompanies, error: companiesError } = await supabaseAuth.rpc(
-    "get_user_companies"
-  );
-
-  if (companiesError) {
-    console.error("[auth-helper] Erro ao buscar empresas:", companiesError.message);
-    return {
-      valid: false,
-      error: "Erro ao verificar permissões",
-      status: 500,
-    };
-  }
-
-  // Se não tem empresas vinculadas
-  if (!userCompanies || userCompanies.length === 0) {
-    return {
-      valid: false,
-      error: "Usuário sem empresa vinculada",
-      status: 403,
-    };
-  }
-
-  // Retornar primeira empresa como padrão (será sobrescrito se companyId vier no body)
-  return {
-    valid: true,
-    userId: user.id,
-    companyId: userCompanies[0], // Primeira empresa como padrão
-    status: 200,
-  };
 }
 
 /**
