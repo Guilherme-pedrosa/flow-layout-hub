@@ -49,14 +49,36 @@ export function AIAssistant({
     try {
       const { data, error } = await supabase.functions.invoke('financial-ai', {
         body: {
-          message: messageToSend,
-          context: context,
+          messages: [{ role: 'user', content: messageToSend }],
+          type: 'chat',
           companyId: currentCompany.id
         }
       });
 
       if (error) throw error;
-      setResponse(data.response || data.analysis || 'Resposta recebida.');
+      
+      // Handle streaming response or direct response
+      if (typeof data === 'string') {
+        // Parse SSE response
+        const lines = data.split('\n');
+        let fullResponse = '';
+        for (const line of lines) {
+          if (line.startsWith('data: ') && !line.includes('[DONE]')) {
+            try {
+              const json = JSON.parse(line.slice(6));
+              const content = json.choices?.[0]?.delta?.content;
+              if (content) fullResponse += content;
+            } catch {}
+          }
+        }
+        setResponse(fullResponse || 'Resposta recebida.');
+      } else if (data?.choices?.[0]?.message?.content) {
+        setResponse(data.choices[0].message.content);
+      } else if (data?.response || data?.analysis) {
+        setResponse(data.response || data.analysis);
+      } else {
+        setResponse('Resposta recebida.');
+      }
     } catch (error: any) {
       console.error('AI Error:', error);
       setResponse('Erro ao processar sua pergunta. Tente novamente.');
