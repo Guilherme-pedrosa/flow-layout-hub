@@ -1,6 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.89.0";
-import { validateCompanyAccess, authErrorResponse } from "../_shared/auth-helper.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -20,18 +19,28 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseKey);
 
     const body = await req.json();
-    const { companyId: bodyCompanyId, category } = body;
+    const { companyId, category } = body;
 
-    if (!bodyCompanyId) {
-      throw new Error("companyId is required");
+    if (!companyId) {
+      return new Response(
+        JSON.stringify({ success: false, error: "companyId é obrigatório" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
-    // === AUTH GUARD ===
-    const authResult = await validateCompanyAccess(req, supabase, bodyCompanyId);
-    if (!authResult.valid) {
-      return authErrorResponse(authResult, corsHeaders);
+    // Validar que a empresa existe
+    const { data: company, error: companyError } = await supabase
+      .from("companies")
+      .select("id")
+      .eq("id", companyId)
+      .maybeSingle();
+
+    if (companyError || !company) {
+      return new Response(
+        JSON.stringify({ success: false, error: "Empresa não encontrada" }),
+        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
-    const companyId = authResult.companyId!;
 
     console.log("[analyze-insights] Starting analysis for company:", companyId, "category:", category);
 
