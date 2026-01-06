@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useProducts, ProductInsert } from "@/hooks/useProducts";
+import { useCompany } from "@/contexts/CompanyContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -52,6 +53,7 @@ type StatusFilter = 'all' | 'active' | 'inactive' | 'low_stock' | 'zero_stock' |
 
 export default function GerenciarProdutos() {
   const [searchParams, setSearchParams] = useSearchParams();
+  const { currentCompany } = useCompany();
   const { products, isLoading, createProduct, updateProduct, toggleProductStatus, refetch } = useProducts();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
@@ -69,35 +71,22 @@ export default function GerenciarProdutos() {
   // Buscar contagens reais do banco (não limitado pela paginação)
   useEffect(() => {
     const fetchCounts = async () => {
-      const { data: session } = await supabase.auth.getSession();
-      if (!session?.session?.user) return;
-      
-      const { data: userCompany } = await supabase
-        .from('user_companies')
-        .select('company_id')
-        .eq('user_id', session.session.user.id)
-        .maybeSingle();
-      
-      if (!userCompany?.company_id) return;
-      const companyId = userCompany.company_id;
+      if (!currentCompany?.id) return;
+      const companyId = currentCompany.id;
 
-      // Query all products for the company and count locally
-      // Using count with filters
-      const [activeRes, inactiveRes, lowStockRes, zeroStockRes, negativeStockRes] = await Promise.all([
+      // Query all products for the company and count
+      const [activeRes, inactiveRes, zeroStockRes, negativeStockRes] = await Promise.all([
         supabase.from('products').select('id', { count: 'exact', head: true })
           .eq('company_id', companyId).eq('is_active', true),
         supabase.from('products').select('id', { count: 'exact', head: true })
           .eq('company_id', companyId).eq('is_active', false),
-        supabase.from('products').select('id', { count: 'exact', head: true })
-          .eq('company_id', companyId).eq('is_active', true).eq('controls_stock', true)
-          .gt('quantity', 0).not('min_stock', 'is', null).lte('quantity', 0), // Will fix below
         supabase.from('products').select('id', { count: 'exact', head: true })
           .eq('company_id', companyId).eq('is_active', true).eq('controls_stock', true).eq('quantity', 0),
         supabase.from('products').select('id', { count: 'exact', head: true })
           .eq('company_id', companyId).eq('is_active', true).eq('controls_stock', true).lt('quantity', 0)
       ]);
 
-      // For low stock, we need a different approach since we compare quantity to min_stock
+      // For low stock, we need to compare quantity to min_stock locally
       const { data: lowStockData } = await supabase
         .from('products')
         .select('id, quantity, min_stock')
@@ -119,7 +108,7 @@ export default function GerenciarProdutos() {
     };
     
     fetchCounts();
-  }, [products]); // Refetch when products change
+  }, [currentCompany?.id, products]);
 
   // Abrir diretamente pelo query param (deep-link dos alertas)
   useEffect(() => {
