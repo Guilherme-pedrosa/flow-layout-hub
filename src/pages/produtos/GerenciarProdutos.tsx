@@ -476,7 +476,7 @@ export default function GerenciarProdutos() {
         <div className="flex gap-2">
           <Button variant="outline" onClick={() => setImportModalOpen(true)}>
             <Upload className="mr-2 h-4 w-4" />
-            Importar CIGAM
+            Importar Excel
           </Button>
           <Button onClick={handleOpenNew}>
             <Plus className="mr-2 h-4 w-4" />
