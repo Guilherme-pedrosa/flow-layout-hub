@@ -1,7 +1,6 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.89.0";
-import { validateCompanyAccess, authErrorResponse } from "../_shared/auth-helper.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -21,25 +20,25 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const body = await req.json();
-    const { type, companyId: bodyCompanyId } = body;
+    const { type, companyId } = body;
     const messages = Array.isArray(body.messages) ? body.messages : [];
 
-    console.log("[financial-ai] Request received:", { type, messagesCount: messages.length, companyId: bodyCompanyId });
+    console.log("[financial-ai] Request received:", { type, messagesCount: messages.length, companyId });
 
     // === VALIDATE INPUT ===
-    if (!bodyCompanyId || typeof bodyCompanyId !== 'string') {
+    if (!companyId || typeof companyId !== 'string') {
       return new Response(JSON.stringify({ error: "companyId is required" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // === AUTH GUARD ===
-    const authResult = await validateCompanyAccess(req, supabase, bodyCompanyId);
-    if (!authResult.valid) {
-      return authErrorResponse(authResult, corsHeaders);
+    if (messages.length === 0) {
+      return new Response(JSON.stringify({ error: "messages array is required and must not be empty" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
-    const companyId = authResult.companyId!;
 
     if (messages.length > 50) {
       return new Response(JSON.stringify({ error: "Too many messages in conversation" }), {
