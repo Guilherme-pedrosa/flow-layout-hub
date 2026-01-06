@@ -163,7 +163,7 @@ export function ReconciliationAnalysisModal({ open, onOpenChange }: Reconciliati
       });
     }
     
-    if (analysis.reconciliationRate >= 95 && analysis.pending.length === 0) {
+    if (analysis.reconciliationRate >= 95 && analysis.pending === 0) {
       recs.push({
         type: 'info',
         message: 'Excelente! Todas as transações estão conciliadas. Continue mantendo a conciliação em dia.'

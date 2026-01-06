@@ -22,12 +22,12 @@ interface MovementData {
   product_id: string;
   type: string;
   quantity: number;
-  unit_cost: number | null;
-  total_cost: number | null;
+  unit_price: number | null;
+  total_value: number | null;
   created_at: string;
   products: {
-    name: string;
-    sku: string | null;
+    description: string;
+    code: string | null;
   } | null;
 }
 
@@ -58,8 +58,8 @@ export function MovementAnalysisModal({ open, onOpenChange }: MovementAnalysisMo
       const { data } = await supabase
         .from('stock_movements')
         .select(`
-          id, product_id, type, quantity, unit_cost, total_cost, created_at,
-          products(name, sku)
+          id, product_id, type, quantity, unit_price, total_value, created_at,
+          products(description, code)
         `)
         .eq('company_id', currentCompany.id)
         .gte('created_at', thirtyDaysAgo.toISOString())
@@ -78,7 +78,7 @@ export function MovementAnalysisModal({ open, onOpenChange }: MovementAnalysisMo
     const entries = movements.filter(m => m.type === 'entrada' || m.type === 'compra');
     const exits = movements.filter(m => m.type === 'saida' || m.type === 'venda');
     const adjustments = movements.filter(m => m.type === 'ajuste');
-    const transfers = movements.filter(m => m.movement_type === 'transferencia');
+    const transfers = movements.filter(m => m.type === 'transferencia');
 
     // Totais
     const totalEntries = entries.reduce((sum, m) => sum + m.quantity, 0);
@@ -86,8 +86,8 @@ export function MovementAnalysisModal({ open, onOpenChange }: MovementAnalysisMo
     const totalAdjustments = adjustments.reduce((sum, m) => sum + m.quantity, 0);
 
     // Valores
-    const valueEntries = entries.reduce((sum, m) => sum + (m.total_cost || 0), 0);
-    const valueExits = exits.reduce((sum, m) => sum + (m.total_cost || 0), 0);
+    const valueEntries = entries.reduce((sum, m) => sum + (m.total_value || 0), 0);
+    const valueExits = exits.reduce((sum, m) => sum + (m.total_value || 0), 0);
 
     // Giro de estoque (entradas + saídas / 2)
     const turnoverRate = movements.length > 0 ? ((totalEntries + totalExits) / 2) / 30 : 0;
@@ -107,8 +107,8 @@ export function MovementAnalysisModal({ open, onOpenChange }: MovementAnalysisMo
       const key = m.product_id;
       if (!productMovements[key]) {
         productMovements[key] = {
-          name: m.products?.name || 'Produto desconhecido',
-          sku: m.products?.sku || null,
+          name: m.products?.description || 'Produto desconhecido',
+          sku: m.products?.code || null,
           entries: 0,
           exits: 0,
           adjustments: 0,
@@ -119,10 +119,10 @@ export function MovementAnalysisModal({ open, onOpenChange }: MovementAnalysisMo
       
       if (m.type === 'entrada' || m.type === 'compra') {
         productMovements[key].entries += m.quantity;
-        productMovements[key].valueIn += m.total_cost || 0;
+        productMovements[key].valueIn += m.total_value || 0;
       } else if (m.type === 'saida' || m.type === 'venda') {
         productMovements[key].exits += m.quantity;
-        productMovements[key].valueOut += m.total_cost || 0;
+        productMovements[key].valueOut += m.total_value || 0;
       } else if (m.type === 'ajuste') {
         productMovements[key].adjustments += m.quantity;
       }
