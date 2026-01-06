@@ -351,7 +351,7 @@ export function ClientesList() {
                       {getTipoPessoaIcon(cliente.tipo_pessoa)}
                     </TableCell>
                     <TableCell>
-                      <p className="font-medium">{cliente.razao_social || '-'}</p>
+                      <p className="font-medium">{cliente.razao_social || cliente.nome_fantasia || '-'}</p>
                     </TableCell>
                     <TableCell>
                       <p className="text-sm text-muted-foreground">{cliente.nome_fantasia || '-'}</p>
