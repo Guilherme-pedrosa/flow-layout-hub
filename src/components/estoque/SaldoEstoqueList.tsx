@@ -1,8 +1,9 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useProducts } from "@/hooks/useProducts";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import {
   Table,
   TableBody,
@@ -11,13 +12,25 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Search, AlertTriangle, Package, TrendingDown, DollarSign, Boxes } from "lucide-react";
+import { Search, AlertTriangle, Package, TrendingDown, DollarSign, Boxes, ChevronRight, FileBarChart } from "lucide-react";
 import { formatCurrency } from "@/lib/formatters";
-import { AIBanner, type AIInsight } from "@/components/shared/AIBanner";
+import { supabase } from "@/integrations/supabase/client";
+import { useCompany } from "@/contexts/CompanyContext";
+import { StockAnalysisModal } from "./StockAnalysisModal";
+
+interface StockMetrics {
+  stagnantCount: number;
+  stagnantValue: number;
+  monthlyOpportunityCost: number;
+  avgDaysStopped: number;
+}
 
 export function SaldoEstoqueList() {
   const { products, isLoading } = useProducts();
+  const { currentCompany } = useCompany();
   const [search, setSearch] = useState("");
+  const [analysisModalOpen, setAnalysisModalOpen] = useState(false);
+  const [stockMetrics, setStockMetrics] = useState<StockMetrics | null>(null);
 
   const activeProducts = products.filter((p) => p.is_active);
   
@@ -27,7 +40,7 @@ export function SaldoEstoqueList() {
       p.description.toLowerCase().includes(search.toLowerCase())
   );
 
-  // Calculate KPIs
+  // Calculate basic KPIs
   const totalProducts = activeProducts.length;
   const lowStockProducts = activeProducts.filter(
     (p) => (p.quantity ?? 0) <= (p.min_stock ?? 0)
@@ -41,26 +54,65 @@ export function SaldoEstoqueList() {
     0
   );
 
-  // AI Insights
-  const aiInsights: AIInsight[] = useMemo(() => {
-    const insights: AIInsight[] = [];
-    
-    if (lowStockProducts > 0) {
-      insights.push({
-        id: 'low-stock',
-        message: `${lowStockProducts} produto${lowStockProducts > 1 ? 's' : ''} com estoque baixo. Considere reabastecer para evitar rupturas.`,
-        type: 'warning'
-      });
-    } else if (totalProducts > 0) {
-      insights.push({
-        id: 'stock-ok',
-        message: `Estoque saudável: ${totalProducts} produtos com valor total de ${formatCurrency(totalValue)}.`,
-        type: 'success'
-      });
-    }
-    
-    return insights;
-  }, [lowStockProducts, totalProducts, totalValue]);
+  // Fetch stagnant stock metrics
+  useEffect(() => {
+    if (!currentCompany?.id) return;
+
+    const fetchStagnantMetrics = async () => {
+      try {
+        const ninetyDaysAgo = new Date();
+        ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+
+        // Get products with stock
+        const { data: productsWithStock } = await supabase
+          .from("products")
+          .select("id, quantity, purchase_price")
+          .eq("company_id", currentCompany.id)
+          .eq("is_active", true)
+          .gt("quantity", 0);
+
+        if (!productsWithStock?.length) {
+          setStockMetrics(null);
+          return;
+        }
+
+        // Get movements in last 90 days
+        const { data: recentMovements } = await supabase
+          .from("stock_movements")
+          .select("product_id, created_at")
+          .eq("company_id", currentCompany.id)
+          .gte("created_at", ninetyDaysAgo.toISOString())
+          .ilike("type", "%SAIDA%");
+
+        const productsWithRecentMovement = new Set(
+          (recentMovements || []).map(m => m.product_id)
+        );
+
+        const stagnantProducts = productsWithStock.filter(
+          p => !productsWithRecentMovement.has(p.id)
+        );
+
+        const stagnantValue = stagnantProducts.reduce(
+          (sum, p) => sum + (p.quantity || 0) * (p.purchase_price || 0),
+          0
+        );
+
+        // Monthly opportunity cost (12% annual rate)
+        const monthlyOpportunityCost = (stagnantValue * 0.12) / 12;
+
+        setStockMetrics({
+          stagnantCount: stagnantProducts.length,
+          stagnantValue,
+          monthlyOpportunityCost,
+          avgDaysStopped: 90, // Min threshold
+        });
+      } catch (error) {
+        console.error("Error fetching stagnant metrics:", error);
+      }
+    };
+
+    fetchStagnantMetrics();
+  }, [currentCompany?.id, products]);
 
   if (isLoading) {
     return (
@@ -72,9 +124,41 @@ export function SaldoEstoqueList() {
 
   return (
     <div className="space-y-6">
-      {/* AI Banner */}
-      {aiInsights.length > 0 && (
-        <AIBanner insights={aiInsights} />
+      {/* Stagnant Stock Alert Banner */}
+      {stockMetrics && stockMetrics.stagnantCount > 0 && (
+        <div className="flex items-start gap-3 p-4 rounded-lg border bg-amber-500/10 border-amber-500/20">
+          <AlertTriangle className="h-5 w-5 text-amber-500 flex-shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-xs text-muted-foreground inline-flex items-center gap-1">
+                <FileBarChart className="h-3 w-3" />
+                Especialista
+              </span>
+              <span className="text-sm font-medium">
+                Estoque parado em {stockMetrics.stagnantCount} produtos
+              </span>
+            </div>
+            <p className="text-sm text-foreground/90">
+              {stockMetrics.stagnantCount} produtos sem giro nos últimos 90 dias, com{" "}
+              <strong className="text-destructive">{formatCurrency(stockMetrics.stagnantValue)}</strong>{" "}
+              empatados em estoque sem movimentação.
+              {stockMetrics.monthlyOpportunityCost > 0 && (
+                <span className="text-muted-foreground">
+                  {" "}Custo de oportunidade: {formatCurrency(stockMetrics.monthlyOpportunityCost)}/mês.
+                </span>
+              )}
+            </p>
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="flex-shrink-0 gap-1"
+            onClick={() => setAnalysisModalOpen(true)}
+          >
+            Ver relatório completo
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        </div>
       )}
 
       {/* KPI Cards */}
@@ -210,6 +294,12 @@ export function SaldoEstoqueList() {
           </TableBody>
         </Table>
       </Card>
+
+      {/* Stock Analysis Modal */}
+      <StockAnalysisModal
+        open={analysisModalOpen}
+        onOpenChange={setAnalysisModalOpen}
+      />
     </div>
   );
 }
