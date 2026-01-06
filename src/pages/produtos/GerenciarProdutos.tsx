@@ -61,9 +61,65 @@ export default function GerenciarProdutos() {
   const [editingProductData, setEditingProductData] = useState<Partial<ProductFormData> | undefined>(undefined);
   const [initialTab, setInitialTab] = useState<string | undefined>(undefined);
   const [importModalOpen, setImportModalOpen] = useState(false);
+  const [counts, setCounts] = useState({ active: 0, inactive: 0, lowStock: 0, zeroStock: 0, negativeStock: 0 });
   
   // AI Insights - filtrar por categoria "stock" na tela de produtos
   const { insights, dismiss, markAsRead } = useAiInsights('stock');
+
+  // Buscar contagens reais do banco (não limitado pela paginação)
+  useEffect(() => {
+    const fetchCounts = async () => {
+      const { data: session } = await supabase.auth.getSession();
+      if (!session?.session?.user) return;
+      
+      const { data: userCompany } = await supabase
+        .from('user_companies')
+        .select('company_id')
+        .eq('user_id', session.session.user.id)
+        .maybeSingle();
+      
+      if (!userCompany?.company_id) return;
+      const companyId = userCompany.company_id;
+
+      // Query all products for the company and count locally
+      // Using count with filters
+      const [activeRes, inactiveRes, lowStockRes, zeroStockRes, negativeStockRes] = await Promise.all([
+        supabase.from('products').select('id', { count: 'exact', head: true })
+          .eq('company_id', companyId).eq('is_active', true),
+        supabase.from('products').select('id', { count: 'exact', head: true })
+          .eq('company_id', companyId).eq('is_active', false),
+        supabase.from('products').select('id', { count: 'exact', head: true })
+          .eq('company_id', companyId).eq('is_active', true).eq('controls_stock', true)
+          .gt('quantity', 0).not('min_stock', 'is', null).lte('quantity', 0), // Will fix below
+        supabase.from('products').select('id', { count: 'exact', head: true })
+          .eq('company_id', companyId).eq('is_active', true).eq('controls_stock', true).eq('quantity', 0),
+        supabase.from('products').select('id', { count: 'exact', head: true })
+          .eq('company_id', companyId).eq('is_active', true).eq('controls_stock', true).lt('quantity', 0)
+      ]);
+
+      // For low stock, we need a different approach since we compare quantity to min_stock
+      const { data: lowStockData } = await supabase
+        .from('products')
+        .select('id, quantity, min_stock')
+        .eq('company_id', companyId)
+        .eq('is_active', true)
+        .eq('controls_stock', true)
+        .gt('quantity', 0)
+        .not('min_stock', 'is', null);
+      
+      const lowStockCount = lowStockData?.filter(p => (p.quantity ?? 0) <= (p.min_stock ?? 0)).length || 0;
+
+      setCounts({
+        active: activeRes.count || 0,
+        inactive: inactiveRes.count || 0,
+        lowStock: lowStockCount,
+        zeroStock: zeroStockRes.count || 0,
+        negativeStock: negativeStockRes.count || 0
+      });
+    };
+    
+    fetchCounts();
+  }, [products]); // Refetch when products change
 
   // Abrir diretamente pelo query param (deep-link dos alertas)
   useEffect(() => {
@@ -80,33 +136,6 @@ export default function GerenciarProdutos() {
       }
     }
   }, [searchParams, products]);
-
-  // Contagens para os cards
-  const counts = useMemo(() => {
-    const active = products.filter(p => p.is_active).length;
-    const inactive = products.filter(p => !p.is_active).length;
-    // Estoque baixo: maior que 0 mas abaixo/igual ao mínimo
-    const lowStock = products.filter(p => 
-      p.is_active && 
-      p.controls_stock && 
-      (p.quantity ?? 0) > 0 && 
-      p.min_stock && 
-      (p.quantity ?? 0) <= p.min_stock
-    ).length;
-    // Estoque zerado: exatamente 0
-    const zeroStock = products.filter(p => 
-      p.is_active && 
-      p.controls_stock && 
-      (p.quantity ?? 0) === 0
-    ).length;
-    // Estoque negativo: menor que 0
-    const negativeStock = products.filter(p => 
-      p.is_active && 
-      p.controls_stock && 
-      (p.quantity ?? 0) < 0
-    ).length;
-    return { active, inactive, lowStock, zeroStock, negativeStock };
-  }, [products]);
 
   // Filtrar produtos
   const filteredProducts = useMemo(() => {
