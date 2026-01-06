@@ -214,11 +214,20 @@ Responda APENAS com o JSON array, sem markdown ou explicações.` }],
       const decoder = new TextDecoder();
       let textBuffer = "";
       let streamDone = false;
+      let receivedAnyContent = false;
+
+      console.log("[FinancialAIChat] Starting to read stream...");
 
       while (!streamDone) {
         const { done, value } = await reader.read();
-        if (done) break;
-        textBuffer += decoder.decode(value, { stream: true });
+        if (done) {
+          console.log("[FinancialAIChat] Stream done, buffer remaining:", textBuffer.length);
+          break;
+        }
+        
+        const chunk = decoder.decode(value, { stream: true });
+        textBuffer += chunk;
+        console.log("[FinancialAIChat] Received chunk:", chunk.substring(0, 100));
 
         let newlineIndex: number;
         while ((newlineIndex = textBuffer.indexOf("\n")) !== -1) {
@@ -237,32 +246,86 @@ Responda APENAS com o JSON array, sem markdown ou explicações.` }],
 
           try {
             const parsed = JSON.parse(jsonStr);
-            const content = parsed.choices?.[0]?.delta?.content as string | undefined;
-            if (content) upsertAssistant(content);
-          } catch {
+            console.log("[FinancialAIChat] Parsed SSE:", JSON.stringify(parsed).substring(0, 200));
+            
+            // Try multiple paths to extract content
+            const content = 
+              parsed.choices?.[0]?.delta?.content ||
+              parsed.choices?.[0]?.message?.content ||
+              parsed.content ||
+              parsed.message?.content ||
+              parsed.answer ||
+              parsed.output_text ||
+              parsed.text ||
+              "";
+            
+            if (content) {
+              receivedAnyContent = true;
+              upsertAssistant(content);
+            }
+          } catch (parseErr) {
+            console.log("[FinancialAIChat] JSON parse error, continuing...", parseErr);
             textBuffer = line + "\n" + textBuffer;
             break;
           }
         }
       }
 
+      // Process any remaining buffer
       if (textBuffer.trim()) {
-        for (let raw of textBuffer.split("\n")) {
-          if (!raw) continue;
-          if (raw.endsWith("\r")) raw = raw.slice(0, -1);
-          if (raw.startsWith(":") || raw.trim() === "") continue;
-          if (!raw.startsWith("data: ")) continue;
-          const jsonStr = raw.slice(6).trim();
-          if (jsonStr === "[DONE]") continue;
-          try {
-            const parsed = JSON.parse(jsonStr);
-            const content = parsed.choices?.[0]?.delta?.content as string | undefined;
-            if (content) upsertAssistant(content);
-          } catch { /* ignore */ }
+        console.log("[FinancialAIChat] Processing remaining buffer:", textBuffer.substring(0, 200));
+        
+        // Check if buffer is raw JSON (non-SSE response)
+        try {
+          const rawJson = JSON.parse(textBuffer);
+          console.log("[FinancialAIChat] RAW JSON RESPONSE:", JSON.stringify(rawJson).substring(0, 500));
+          
+          const content = 
+            rawJson.choices?.[0]?.message?.content ||
+            rawJson.choices?.[0]?.delta?.content ||
+            rawJson.content ||
+            rawJson.message?.content ||
+            rawJson.answer ||
+            rawJson.output_text ||
+            rawJson.text ||
+            "";
+          
+          if (content) {
+            receivedAnyContent = true;
+            upsertAssistant(content);
+          }
+        } catch {
+          // Not raw JSON, try SSE lines
+          for (let raw of textBuffer.split("\n")) {
+            if (!raw) continue;
+            if (raw.endsWith("\r")) raw = raw.slice(0, -1);
+            if (raw.startsWith(":") || raw.trim() === "") continue;
+            if (!raw.startsWith("data: ")) continue;
+            const jsonStr = raw.slice(6).trim();
+            if (jsonStr === "[DONE]") continue;
+            try {
+              const parsed = JSON.parse(jsonStr);
+              const content = 
+                parsed.choices?.[0]?.delta?.content ||
+                parsed.choices?.[0]?.message?.content ||
+                parsed.content ||
+                "";
+              if (content) {
+                receivedAnyContent = true;
+                upsertAssistant(content);
+              }
+            } catch { /* ignore */ }
+          }
         }
       }
+
+      // If we got response but no content was extracted, show error
+      if (!receivedAnyContent && !assistantSoFar) {
+        console.error("[FinancialAIChat] No content extracted from response");
+        upsertAssistant("Desculpe, não consegui processar a resposta. Por favor, tente novamente.");
+      }
     } catch (error) {
-      console.error(error);
+      console.error("[FinancialAIChat] Error:", error);
       toast.error(error instanceof Error ? error.message : "Erro ao processar mensagem");
       setMessages(prev => prev.filter(m => m !== userMsg));
     } finally {
