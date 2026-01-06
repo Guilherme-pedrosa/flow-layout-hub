@@ -71,6 +71,7 @@ export function ImportProductsCIGAMModal({
   const [step, setStep] = useState<Step>('upload');
   const [previewProducts, setPreviewProducts] = useState<PreviewProduct[]>([]);
   const [selectedCompanyId, setSelectedCompanyId] = useState<string>("current");
+  const [updateExisting, setUpdateExisting] = useState<boolean>(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Get target company IDs based on selection
@@ -284,7 +285,19 @@ export function ImportProductsCIGAMModal({
     setStep('importing');
     setProgress(5);
     
-    const products = previewProducts.map(({ action, existingId, existingDescription, ...p }) => p);
+    // Filter products based on updateExisting option
+    const productsToImport = updateExisting 
+      ? previewProducts 
+      : previewProducts.filter(p => p.action === 'create');
+    
+    if (productsToImport.length === 0) {
+      toast.warning("Nenhum produto para importar");
+      setStep('preview');
+      setIsImporting(false);
+      return;
+    }
+    
+    const products = productsToImport.map(({ action, existingId, existingDescription, ...p }) => p);
     
     let totalCreated = 0;
     let totalUpdated = 0;
@@ -303,6 +316,7 @@ export function ImportProductsCIGAMModal({
             products,
             company_id: companyId,
             clear_existing: clearExisting,
+            skip_updates: !updateExisting,
           },
         });
 
@@ -354,6 +368,7 @@ export function ImportProductsCIGAMModal({
       setStep('upload');
       setPreviewProducts([]);
       setSelectedCompanyId("current");
+      setUpdateExisting(true);
       if (fileInputRef.current) {
         fileInputRef.current.value = "";
       }
@@ -499,16 +514,35 @@ export function ImportProductsCIGAMModal({
             </div>
 
             {toUpdateCount > 0 && (
-              <div className="flex items-start gap-2 p-3 rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-900">
-                <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
-                <div className="text-sm">
-                  <p className="font-medium text-amber-800 dark:text-amber-200">
-                    {toUpdateCount} produto(s) serão atualizados
-                  </p>
-                  <p className="text-amber-700 dark:text-amber-300 text-xs mt-1">
-                    Produtos com mesmo código terão seus dados substituídos.
-                  </p>
+              <div className="space-y-3 p-3 rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-900">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
+                  <div className="text-sm">
+                    <p className="font-medium text-amber-800 dark:text-amber-200">
+                      {toUpdateCount} produto(s) já existem no sistema
+                    </p>
+                    <p className="text-amber-700 dark:text-amber-300 text-xs mt-1">
+                      Produtos com mesmo código podem ter seus dados substituídos.
+                    </p>
+                  </div>
                 </div>
+                
+                <div className="flex items-center space-x-2 pt-2 border-t border-amber-200 dark:border-amber-800">
+                  <Checkbox
+                    id="updateExisting"
+                    checked={updateExisting}
+                    onCheckedChange={(checked) => setUpdateExisting(checked === true)}
+                  />
+                  <Label htmlFor="updateExisting" className="text-sm cursor-pointer text-amber-800 dark:text-amber-200">
+                    Atualizar produtos existentes ({toUpdateCount})
+                  </Label>
+                </div>
+                
+                {!updateExisting && (
+                  <p className="text-xs text-muted-foreground">
+                    Apenas os <strong>{toCreateCount}</strong> produtos novos serão importados.
+                  </p>
+                )}
               </div>
             )}
 
