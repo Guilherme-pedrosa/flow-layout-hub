@@ -81,26 +81,36 @@ serve(async (req) => {
       console.log(`[import-products] Skipping ${invalidCount} products without code/description`);
     }
 
-    // Get all existing product codes in one query
+    // Get all existing product codes in batches to avoid URL length limits
     const productCodes = validProducts.map(p => p.code);
     console.log(`[import-products] Fetching existing products for ${productCodes.length} codes`);
     
-    const { data: existingProducts, error: fetchError } = await supabase
-      .from('products')
-      .select('id, code')
-      .eq('company_id', company_id)
-      .in('code', productCodes);
-
-    if (fetchError) {
-      console.error('[import-products] Error fetching existing products:', fetchError);
-      throw new Error(`Failed to fetch existing products: ${fetchError.message}`);
-    }
-
     // Create a map of existing products by code
     const existingMap = new Map<string, string>();
-    (existingProducts || []).forEach(p => {
-      existingMap.set(p.code, p.id);
-    });
+    
+    // Fetch in batches of 100 to avoid URL length limits
+    const FETCH_BATCH_SIZE = 100;
+    for (let i = 0; i < productCodes.length; i += FETCH_BATCH_SIZE) {
+      const batchCodes = productCodes.slice(i, i + FETCH_BATCH_SIZE);
+      
+      const { data: existingProducts, error: fetchError } = await supabase
+        .from('products')
+        .select('id, code')
+        .eq('company_id', company_id)
+        .in('code', batchCodes);
+
+      if (fetchError) {
+        console.error(`[import-products] Error fetching existing products batch ${Math.floor(i / FETCH_BATCH_SIZE) + 1}:`, fetchError);
+        // Continue with other batches instead of failing completely
+        continue;
+      }
+
+      (existingProducts || []).forEach(p => {
+        existingMap.set(p.code, p.id);
+      });
+      
+      console.log(`[import-products] Fetched batch ${Math.floor(i / FETCH_BATCH_SIZE) + 1}: found ${existingProducts?.length || 0} existing`);
+    }
 
     console.log(`[import-products] Found ${existingMap.size} existing products to update`);
 
