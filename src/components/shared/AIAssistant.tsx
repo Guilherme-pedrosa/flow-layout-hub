@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/components/ui/card';
 import { Bot, Send, Loader2, X, Sparkles } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
+
 import { useCompany } from '@/contexts/CompanyContext';
 import { cn } from '@/lib/utils';
 
@@ -47,37 +47,93 @@ export function AIAssistant({
     setMessage('');
 
     try {
-      const { data, error } = await supabase.functions.invoke('financial-ai', {
-        body: {
+      const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/financial-ai`;
+      
+      const resp = await fetch(CHAT_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+        },
+        body: JSON.stringify({
           messages: [{ role: 'user', content: messageToSend }],
           type: 'chat',
           companyId: currentCompany.id
-        }
+        }),
       });
 
-      if (error) throw error;
-      
-      // Handle streaming response or direct response
-      if (typeof data === 'string') {
-        // Parse SSE response
-        const lines = data.split('\n');
-        let fullResponse = '';
-        for (const line of lines) {
-          if (line.startsWith('data: ') && !line.includes('[DONE]')) {
+      if (!resp.ok) {
+        throw new Error('Erro ao conectar com a IA');
+      }
+
+      if (!resp.body) {
+        throw new Error('No response body');
+      }
+
+      const reader = resp.body.getReader();
+      const decoder = new TextDecoder();
+      let fullResponse = '';
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        
+        buffer += decoder.decode(value, { stream: true });
+        
+        // Process SSE lines
+        let newlineIndex: number;
+        while ((newlineIndex = buffer.indexOf('\n')) !== -1) {
+          let line = buffer.slice(0, newlineIndex);
+          buffer = buffer.slice(newlineIndex + 1);
+          
+          if (line.endsWith('\r')) line = line.slice(0, -1);
+          if (!line.startsWith('data: ')) continue;
+          
+          const jsonStr = line.slice(6).trim();
+          if (jsonStr === '[DONE]') continue;
+          
+          try {
+            const parsed = JSON.parse(jsonStr);
+            const content = parsed.choices?.[0]?.delta?.content || '';
+            if (content) {
+              fullResponse += content;
+              setResponse(fullResponse);
+            }
+          } catch {}
+        }
+      }
+
+      // Process remaining buffer
+      if (buffer.trim()) {
+        try {
+          // Try parsing as raw JSON (non-streaming response)
+          const rawJson = JSON.parse(buffer);
+          const content = rawJson.choices?.[0]?.message?.content || '';
+          if (content) {
+            fullResponse = content;
+            setResponse(content);
+          }
+        } catch {
+          // Process remaining SSE lines
+          for (const line of buffer.split('\n')) {
+            if (!line.startsWith('data: ')) continue;
+            const jsonStr = line.slice(6).trim();
+            if (jsonStr === '[DONE]') continue;
             try {
-              const json = JSON.parse(line.slice(6));
-              const content = json.choices?.[0]?.delta?.content;
-              if (content) fullResponse += content;
+              const parsed = JSON.parse(jsonStr);
+              const content = parsed.choices?.[0]?.delta?.content || '';
+              if (content) {
+                fullResponse += content;
+                setResponse(fullResponse);
+              }
             } catch {}
           }
         }
-        setResponse(fullResponse || 'Resposta recebida.');
-      } else if (data?.choices?.[0]?.message?.content) {
-        setResponse(data.choices[0].message.content);
-      } else if (data?.response || data?.analysis) {
-        setResponse(data.response || data.analysis);
-      } else {
-        setResponse('Resposta recebida.');
+      }
+
+      if (!fullResponse) {
+        setResponse('Não consegui processar a resposta. Tente novamente.');
       }
     } catch (error: any) {
       console.error('AI Error:', error);
