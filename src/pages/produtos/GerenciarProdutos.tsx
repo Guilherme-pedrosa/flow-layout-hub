@@ -36,10 +36,12 @@ import {
   XCircle, 
   AlertTriangle,
   TrendingDown,
-  History
+  History,
+  Upload
 } from "lucide-react";
 import { formatCurrency } from "@/lib/formatters";
 import { ProductForm, ProductFormData } from "@/components/produtos/ProductForm";
+import { ImportProductsCIGAMModal } from "@/components/produtos/ImportProductsCIGAMModal";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/shared";
@@ -50,7 +52,7 @@ type StatusFilter = 'all' | 'active' | 'inactive' | 'low_stock' | 'zero_stock' |
 
 export default function GerenciarProdutos() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const { products, isLoading, createProduct, updateProduct, toggleProductStatus } = useProducts();
+  const { products, isLoading, createProduct, updateProduct, toggleProductStatus, refetch } = useProducts();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -58,6 +60,7 @@ export default function GerenciarProdutos() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [editingProductData, setEditingProductData] = useState<Partial<ProductFormData> | undefined>(undefined);
   const [initialTab, setInitialTab] = useState<string | undefined>(undefined);
+  const [importModalOpen, setImportModalOpen] = useState(false);
   
   // AI Insights - filtrar por categoria "stock" na tela de produtos
   const { insights, dismiss, markAsRead } = useAiInsights('stock');
@@ -470,10 +473,16 @@ export default function GerenciarProdutos() {
             </SelectContent>
           </Select>
         </div>
-        <Button onClick={handleOpenNew}>
-          <Plus className="mr-2 h-4 w-4" />
-          Novo Produto
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setImportModalOpen(true)}>
+            <Upload className="mr-2 h-4 w-4" />
+            Importar CIGAM
+          </Button>
+          <Button onClick={handleOpenNew}>
+            <Plus className="mr-2 h-4 w-4" />
+            Novo Produto
+          </Button>
+        </div>
       </div>
 
       {/* Tabela */}
@@ -586,6 +595,13 @@ export default function GerenciarProdutos() {
           />
         </DialogContent>
       </Dialog>
+
+      {/* Modal de Importação CIGAM */}
+      <ImportProductsCIGAMModal
+        open={importModalOpen}
+        onOpenChange={setImportModalOpen}
+        onImportComplete={() => refetch()}
+      />
     </div>
   );
 }
