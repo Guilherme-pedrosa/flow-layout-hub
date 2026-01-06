@@ -73,101 +73,135 @@ serve(async (req) => {
       console.log('[import-products] Cleared existing stock for all products');
     }
 
+    // Filter valid products
+    const validProducts = products.filter(p => p.code && p.description);
+    const invalidCount = products.length - validProducts.length;
+    
+    if (invalidCount > 0) {
+      console.log(`[import-products] Skipping ${invalidCount} products without code/description`);
+    }
+
+    // Get all existing product codes in one query
+    const productCodes = validProducts.map(p => p.code);
+    console.log(`[import-products] Fetching existing products for ${productCodes.length} codes`);
+    
+    const { data: existingProducts, error: fetchError } = await supabase
+      .from('products')
+      .select('id, code')
+      .eq('company_id', company_id)
+      .in('code', productCodes);
+
+    if (fetchError) {
+      console.error('[import-products] Error fetching existing products:', fetchError);
+      throw new Error(`Failed to fetch existing products: ${fetchError.message}`);
+    }
+
+    // Create a map of existing products by code
+    const existingMap = new Map<string, string>();
+    (existingProducts || []).forEach(p => {
+      existingMap.set(p.code, p.id);
+    });
+
+    console.log(`[import-products] Found ${existingMap.size} existing products to update`);
+
+    // Separate products for update and insert
+    const toUpdate: { id: string; data: any }[] = [];
+    const toInsert: any[] = [];
+
+    for (const product of validProducts) {
+      const existingId = existingMap.get(product.code);
+      const productData = {
+        description: product.description,
+        purchase_price: product.purchase_price || 0,
+        sale_price: product.sale_price || 0,
+        quantity: product.quantity || 0,
+        final_cost: product.purchase_price || 0,
+        barcode: product.barcode || null,
+        unit: product.unit || 'UN',
+        ncm: product.ncm || null,
+        cest: product.cest || null,
+        product_group: product.product_group || null,
+        gross_weight: product.gross_weight || null,
+        net_weight: product.net_weight || null,
+      };
+
+      if (existingId) {
+        toUpdate.push({
+          id: existingId,
+          data: { ...productData, updated_at: new Date().toISOString() }
+        });
+      } else {
+        toInsert.push({
+          company_id,
+          code: product.code,
+          ...productData,
+          is_active: true,
+          min_stock: 0,
+          max_stock: 0,
+        });
+      }
+    }
+
     const results = {
       created: 0,
       updated: 0,
       errors: [] as { code: string; error: string }[],
     };
 
-    for (const product of products) {
-      try {
-        // Validate required fields
-        if (!product.code || !product.description) {
-          results.errors.push({ 
-            code: product.code || 'unknown', 
-            error: 'code and description are required' 
-          });
-          continue;
-        }
-
-        // Check if product exists by code
-        const { data: existingProduct, error: findError } = await supabase
+    // Batch insert new products (in chunks of 500)
+    const BATCH_SIZE = 500;
+    if (toInsert.length > 0) {
+      console.log(`[import-products] Inserting ${toInsert.length} new products in batches of ${BATCH_SIZE}`);
+      
+      for (let i = 0; i < toInsert.length; i += BATCH_SIZE) {
+        const batch = toInsert.slice(i, i + BATCH_SIZE);
+        const { error: insertError, data: insertedData } = await supabase
           .from('products')
-          .select('id, quantity')
-          .eq('company_id', company_id)
-          .eq('code', product.code)
-          .maybeSingle();
+          .insert(batch)
+          .select('id');
 
-        if (findError) {
-          console.error(`[import-products] Error finding product ${product.code}:`, findError);
-          results.errors.push({ code: product.code, error: findError.message });
-          continue;
-        }
-
-        if (existingProduct) {
-          // Update existing product
-          const { error: updateError } = await supabase
-            .from('products')
-            .update({
-              description: product.description,
-              purchase_price: product.purchase_price || 0,
-              sale_price: product.sale_price || 0,
-              quantity: product.quantity || 0,
-              final_cost: product.purchase_price || 0,
-              barcode: product.barcode || null,
-              unit: product.unit || 'UN',
-              ncm: product.ncm || null,
-              cest: product.cest || null,
-              product_group: product.product_group || null,
-              gross_weight: product.gross_weight || null,
-              net_weight: product.net_weight || null,
-              updated_at: new Date().toISOString(),
-            })
-            .eq('id', existingProduct.id);
-
-          if (updateError) {
-            console.error(`[import-products] Error updating product ${product.code}:`, updateError);
-            results.errors.push({ code: product.code, error: updateError.message });
-          } else {
-            results.updated++;
-          }
+        if (insertError) {
+          console.error(`[import-products] Error inserting batch ${i / BATCH_SIZE + 1}:`, insertError);
+          batch.forEach(p => results.errors.push({ code: p.code, error: insertError.message }));
         } else {
-          // Create new product
-          const { error: insertError } = await supabase
-            .from('products')
-            .insert({
-              company_id,
-              code: product.code,
-              description: product.description,
-              purchase_price: product.purchase_price || 0,
-              sale_price: product.sale_price || 0,
-              quantity: product.quantity || 0,
-              final_cost: product.purchase_price || 0,
-              barcode: product.barcode || null,
-              unit: product.unit || 'UN',
-              ncm: product.ncm || null,
-              cest: product.cest || null,
-              product_group: product.product_group || null,
-              gross_weight: product.gross_weight || null,
-              net_weight: product.net_weight || null,
-              is_active: true,
-              min_stock: 0,
-              max_stock: 0,
-            });
+          results.created += insertedData?.length || batch.length;
+          console.log(`[import-products] Inserted batch ${Math.floor(i / BATCH_SIZE) + 1}: ${insertedData?.length || batch.length} products`);
+        }
+      }
+    }
 
-          if (insertError) {
-            console.error(`[import-products] Error creating product ${product.code}:`, insertError);
-            results.errors.push({ code: product.code, error: insertError.message });
+    // Batch update existing products (in chunks of 100 due to individual updates)
+    if (toUpdate.length > 0) {
+      console.log(`[import-products] Updating ${toUpdate.length} existing products`);
+      
+      // For updates, we need to do them in parallel batches
+      const UPDATE_BATCH_SIZE = 50;
+      for (let i = 0; i < toUpdate.length; i += UPDATE_BATCH_SIZE) {
+        const batch = toUpdate.slice(i, i + UPDATE_BATCH_SIZE);
+        
+        const updatePromises = batch.map(async ({ id, data }) => {
+          const { error } = await supabase
+            .from('products')
+            .update(data)
+            .eq('id', id);
+          
+          if (error) {
+            return { success: false, id, error: error.message };
+          }
+          return { success: true, id };
+        });
+
+        const updateResults = await Promise.all(updatePromises);
+        
+        for (const result of updateResults) {
+          if (result.success) {
+            results.updated++;
           } else {
-            results.created++;
+            results.errors.push({ code: result.id, error: result.error || 'Unknown error' });
           }
         }
-      } catch (productError) {
-        console.error(`[import-products] Error processing product ${product.code}:`, productError);
-        results.errors.push({ 
-          code: product.code, 
-          error: productError instanceof Error ? productError.message : 'Unknown error' 
-        });
+        
+        console.log(`[import-products] Updated batch ${Math.floor(i / UPDATE_BATCH_SIZE) + 1}: ${batch.length} products`);
       }
     }
 
@@ -178,11 +212,13 @@ serve(async (req) => {
         success: true,
         stats: {
           total_processed: products.length,
+          valid_products: validProducts.length,
           created: results.created,
           updated: results.updated,
           errors: results.errors.length,
+          skipped_invalid: invalidCount,
         },
-        error_details: results.errors,
+        error_details: results.errors.slice(0, 50), // Limit error details to first 50
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
