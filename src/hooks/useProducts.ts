@@ -13,18 +13,22 @@ export function useProducts() {
   const { currentCompany } = useCompany();
 
   const productsQuery = useQuery({
-    queryKey: ["products"],
+    queryKey: ["products", currentCompany?.id],
     queryFn: async () => {
-      // Buscar TODOS os produtos ativos (compartilhado entre empresas)
+      if (!currentCompany) return [];
+      
+      // Buscar produtos ativos da empresa atual
       const { data, error } = await supabase
         .from("products")
         .select("*")
+        .eq("company_id", currentCompany.id)
         .eq("is_active", true)
         .order("description", { ascending: true });
 
       if (error) throw error;
       return data as Product[];
     },
+    enabled: !!currentCompany,
   });
 
   // Buscar próximo código sequencial (5 dígitos)
