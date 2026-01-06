@@ -13,7 +13,14 @@ import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
-import { Upload, FileSpreadsheet, Loader2, Download, AlertTriangle, CheckCircle, PlusCircle, RefreshCw } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Upload, FileSpreadsheet, Loader2, Download, AlertTriangle, CheckCircle, PlusCircle, RefreshCw, Building2 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import * as XLSX from "xlsx";
@@ -54,7 +61,7 @@ export function ImportProductsCIGAMModal({
   onOpenChange,
   onImportComplete,
 }: ImportProductsExcelModalProps) {
-  const { currentCompany } = useCompany();
+  const { currentCompany, companies } = useCompany();
   const [file, setFile] = useState<File | null>(null);
   const [clearExisting, setClearExisting] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
@@ -63,7 +70,30 @@ export function ImportProductsCIGAMModal({
   const [status, setStatus] = useState<string>("");
   const [step, setStep] = useState<Step>('upload');
   const [previewProducts, setPreviewProducts] = useState<PreviewProduct[]>([]);
+  const [selectedCompanyId, setSelectedCompanyId] = useState<string>("current");
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Get target company IDs based on selection
+  const getTargetCompanyIds = (): string[] => {
+    if (selectedCompanyId === "all") {
+      return companies.map(c => c.company_id);
+    } else if (selectedCompanyId === "current" && currentCompany) {
+      return [currentCompany.id];
+    } else {
+      return [selectedCompanyId];
+    }
+  };
+
+  const getTargetCompanyName = (): string => {
+    if (selectedCompanyId === "all") {
+      return "Todas as empresas";
+    } else if (selectedCompanyId === "current" && currentCompany) {
+      return currentCompany.name;
+    } else {
+      const company = companies.find(c => c.company_id === selectedCompanyId);
+      return company?.company.name || "Empresa selecionada";
+    }
+  };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
@@ -191,7 +221,13 @@ export function ImportProductsCIGAMModal({
   };
 
   const analyzeProducts = async () => {
-    if (!file || !currentCompany?.id) return;
+    if (!file) return;
+    
+    const targetIds = getTargetCompanyIds();
+    if (targetIds.length === 0) {
+      toast.error("Selecione uma empresa para importar");
+      return;
+    }
 
     setIsAnalyzing(true);
     try {
@@ -202,11 +238,13 @@ export function ImportProductsCIGAMModal({
         return;
       }
 
+      // For preview, use first target company (or current)
+      const previewCompanyId = targetIds[0];
       const codes = products.map(p => p.code);
       const { data: existingProducts, error } = await supabase
         .from('products')
         .select('id, code, description')
-        .eq('company_id', currentCompany.id)
+        .eq('company_id', previewCompanyId)
         .in('code', codes);
 
       if (error) throw error;
@@ -234,40 +272,63 @@ export function ImportProductsCIGAMModal({
   };
 
   const handleImport = async () => {
-    if (!currentCompany?.id || previewProducts.length === 0) return;
+    if (previewProducts.length === 0) return;
+
+    const targetIds = getTargetCompanyIds();
+    if (targetIds.length === 0) {
+      toast.error("Selecione uma empresa para importar");
+      return;
+    }
 
     setIsImporting(true);
     setStep('importing');
-    setProgress(10);
-    setStatus("Enviando para o servidor...");
+    setProgress(5);
+    
+    const products = previewProducts.map(({ action, existingId, existingDescription, ...p }) => p);
+    
+    let totalCreated = 0;
+    let totalUpdated = 0;
+    let totalErrors = 0;
 
     try {
-      const products = previewProducts.map(({ action, existingId, existingDescription, ...p }) => p);
+      for (let i = 0; i < targetIds.length; i++) {
+        const companyId = targetIds[i];
+        const companyName = companies.find(c => c.company_id === companyId)?.company.name || "Empresa";
+        
+        setStatus(`Importando para ${companyName}... (${i + 1}/${targetIds.length})`);
+        setProgress(5 + Math.round((i / targetIds.length) * 90));
 
-      const { data, error } = await supabase.functions.invoke("import-products", {
-        body: {
-          products,
-          company_id: currentCompany.id,
-          clear_existing: clearExisting,
-        },
-      });
+        const { data, error } = await supabase.functions.invoke("import-products", {
+          body: {
+            products,
+            company_id: companyId,
+            clear_existing: clearExisting,
+          },
+        });
 
-      if (error) {
-        throw new Error(error.message || "Erro ao importar produtos");
+        if (error) {
+          console.error(`Erro na empresa ${companyName}:`, error);
+          totalErrors++;
+          continue;
+        }
+
+        if (data.stats) {
+          totalCreated += data.stats.created || 0;
+          totalUpdated += data.stats.updated || 0;
+          totalErrors += data.stats.errors || 0;
+        }
       }
 
       setProgress(100);
       setStatus("Importação concluída!");
 
-      const stats = data.stats;
       toast.success(
-        `Importação concluída: ${stats.created} criados, ${stats.updated} atualizados, ${stats.errors} erros`,
+        `Importação concluída: ${totalCreated} criados, ${totalUpdated} atualizados em ${targetIds.length} empresa(s)`,
         { duration: 5000 }
       );
 
-      if (data.error_details && data.error_details.length > 0) {
-        console.warn("Erros na importação:", data.error_details);
-        toast.warning(`${stats.errors} produtos com erro. Verifique o console para detalhes.`);
+      if (totalErrors > 0) {
+        toast.warning(`${totalErrors} produtos com erro. Verifique o console para detalhes.`);
       }
 
       setTimeout(() => {
@@ -292,6 +353,7 @@ export function ImportProductsCIGAMModal({
       setStatus("");
       setStep('upload');
       setPreviewProducts([]);
+      setSelectedCompanyId("current");
       if (fileInputRef.current) {
         fileInputRef.current.value = "";
       }
@@ -314,6 +376,46 @@ export function ImportProductsCIGAMModal({
 
         {step === 'upload' && (
           <div className="space-y-4 py-4">
+            {/* Company Selection */}
+            <div className="space-y-2">
+              <Label className="flex items-center gap-2">
+                <Building2 className="h-4 w-4" />
+                Importar para qual empresa?
+              </Label>
+              <Select
+                value={selectedCompanyId}
+                onValueChange={setSelectedCompanyId}
+                disabled={isAnalyzing}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione a empresa" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="current">
+                    {currentCompany?.name || "Empresa atual"}
+                  </SelectItem>
+                  {companies.length > 1 && (
+                    <>
+                      <SelectItem value="all" className="font-medium text-primary">
+                        🏢 Todas as empresas ({companies.length})
+                      </SelectItem>
+                      <div className="px-2 py-1 text-xs text-muted-foreground">
+                        Ou escolha uma específica:
+                      </div>
+                      {companies
+                        .filter(c => c.company_id !== currentCompany?.id)
+                        .map(c => (
+                          <SelectItem key={c.company_id} value={c.company_id}>
+                            {c.company.name}
+                          </SelectItem>
+                        ))
+                      }
+                    </>
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+
             <Button 
               variant="outline" 
               onClick={downloadTemplate}
@@ -377,6 +479,14 @@ export function ImportProductsCIGAMModal({
 
         {step === 'preview' && (
           <div className="space-y-4 py-4">
+            {/* Target info */}
+            <div className="flex items-center gap-2 p-2 rounded-lg border bg-primary/5 border-primary/20">
+              <Building2 className="h-4 w-4 text-primary" />
+              <span className="text-sm">
+                Importar para: <strong>{getTargetCompanyName()}</strong>
+              </span>
+            </div>
+
             <div className="flex items-center gap-4 p-3 rounded-lg bg-muted">
               <div className="flex items-center gap-2">
                 <PlusCircle className="h-4 w-4 text-green-600" />
