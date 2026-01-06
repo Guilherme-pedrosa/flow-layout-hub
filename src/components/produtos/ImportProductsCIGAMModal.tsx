@@ -11,7 +11,9 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
-import { Upload, FileSpreadsheet, Loader2, Download } from "lucide-react";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Badge } from "@/components/ui/badge";
+import { Upload, FileSpreadsheet, Loader2, Download, AlertTriangle, CheckCircle, PlusCircle, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import * as XLSX from "xlsx";
@@ -39,6 +41,14 @@ interface ProductRow {
   commission_percent?: number;
 }
 
+interface PreviewProduct extends ProductRow {
+  action: 'create' | 'update';
+  existingId?: string;
+  existingDescription?: string;
+}
+
+type Step = 'upload' | 'preview' | 'importing';
+
 export function ImportProductsCIGAMModal({
   open,
   onOpenChange,
@@ -48,8 +58,11 @@ export function ImportProductsCIGAMModal({
   const [file, setFile] = useState<File | null>(null);
   const [clearExisting, setClearExisting] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [progress, setProgress] = useState(0);
   const [status, setStatus] = useState<string>("");
+  const [step, setStep] = useState<Step>('upload');
+  const [previewProducts, setPreviewProducts] = useState<PreviewProduct[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -65,11 +78,12 @@ export function ImportProductsCIGAMModal({
         return;
       }
       setFile(selectedFile);
+      setPreviewProducts([]);
+      setStep('upload');
     }
   };
 
   const downloadTemplate = () => {
-    // Create template data
     const templateData = [
       {
         "Código": "PROD001",
@@ -92,21 +106,10 @@ export function ImportProductsCIGAMModal({
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Produtos");
     
-    // Set column widths
     ws["!cols"] = [
-      { wch: 15 }, // Código
-      { wch: 12 }, // Qtd
-      { wch: 40 }, // Nome
-      { wch: 15 }, // Preço compra
-      { wch: 15 }, // Preço venda
-      { wch: 20 }, // Código barras
-      { wch: 10 }, // Unidade
-      { wch: 12 }, // NCM
-      { wch: 10 }, // CEST
-      { wch: 20 }, // Grupo
-      { wch: 15 }, // Peso bruto
-      { wch: 15 }, // Peso líquido
-      { wch: 12 }, // Comissão
+      { wch: 15 }, { wch: 12 }, { wch: 40 }, { wch: 15 }, { wch: 15 },
+      { wch: 20 }, { wch: 10 }, { wch: 12 }, { wch: 10 }, { wch: 20 },
+      { wch: 15 }, { wch: 15 }, { wch: 12 },
     ];
 
     XLSX.writeFile(wb, "modelo_importacao_produtos.xlsx");
@@ -115,12 +118,11 @@ export function ImportProductsCIGAMModal({
 
   const parseNumber = (value: any): number => {
     if (value === null || value === undefined || value === '') return 0;
-    // Handle string values with R$ prefix and comma decimal separator
     if (typeof value === 'string') {
       const cleaned = value
         .replace(/R\$\s*/g, '')
-        .replace(/\./g, '') // Remove thousands separator
-        .replace(',', '.') // Convert decimal separator
+        .replace(/\./g, '')
+        .replace(',', '.')
         .trim();
       return parseFloat(cleaned) || 0;
     }
@@ -139,13 +141,11 @@ export function ImportProductsCIGAMModal({
           const firstSheetName = workbook.SheetNames[0];
           const worksheet = workbook.Sheets[firstSheetName];
           
-          // Convert to JSON with headers
           const jsonData = XLSX.utils.sheet_to_json(worksheet, { defval: '' }) as any[];
           
           const products: ProductRow[] = [];
           
           for (const row of jsonData) {
-            // Map columns based on header names (Portuguese)
             const code = String(row["Código"] || row["codigo"] || row["CODIGO"] || "").trim();
             const description = String(row["Nome do produto *"] || row["Nome do produto"] || row["nome"] || row["NOME"] || row["Descrição"] || row["descricao"] || "").trim();
             const quantity = parseNumber(row["Qtd. Estoque"] || row["Qtd"] || row["quantidade"] || row["QUANTIDADE"] || 0);
@@ -160,7 +160,6 @@ export function ImportProductsCIGAMModal({
             const netWeight = parseNumber(row["Peso Líquido (quilos)"] || row["peso_liquido"] || 0);
             const commissionPercent = parseNumber(row["Comissão (%)"] || row["comissao"] || 0);
             
-            // Skip rows without code or description
             if (!code || !description) continue;
             
             products.push({
@@ -191,37 +190,60 @@ export function ImportProductsCIGAMModal({
     });
   };
 
-  const handleImport = async () => {
-    if (!file) {
-      toast.error("Selecione um arquivo para importar");
-      return;
-    }
+  const analyzeProducts = async () => {
+    if (!file || !currentCompany?.id) return;
 
-    if (!currentCompany?.id) {
-      toast.error("Nenhuma empresa selecionada");
-      return;
-    }
-
-    setIsImporting(true);
-    setProgress(10);
-    setStatus("Lendo planilha...");
-
+    setIsAnalyzing(true);
     try {
-      // Parse Excel file
       const products = await parseExcelFile(file);
       
       if (products.length === 0) {
         toast.error("Nenhum produto válido encontrado na planilha");
-        setIsImporting(false);
-        setProgress(0);
-        setStatus("");
         return;
       }
 
-      setProgress(30);
-      setStatus(`${products.length} produtos encontrados. Enviando para o servidor...`);
+      const codes = products.map(p => p.code);
+      const { data: existingProducts, error } = await supabase
+        .from('products')
+        .select('id, code, description')
+        .eq('company_id', currentCompany.id)
+        .in('code', codes);
 
-      // Call edge function
+      if (error) throw error;
+
+      const existingMap = new Map(existingProducts?.map(p => [p.code, p]) || []);
+
+      const preview: PreviewProduct[] = products.map(product => {
+        const existing = existingMap.get(product.code);
+        return {
+          ...product,
+          action: existing ? 'update' : 'create',
+          existingId: existing?.id,
+          existingDescription: existing?.description,
+        };
+      });
+
+      setPreviewProducts(preview);
+      setStep('preview');
+    } catch (error) {
+      console.error("Erro ao analisar planilha:", error);
+      toast.error("Erro ao analisar planilha");
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
+  const handleImport = async () => {
+    if (!currentCompany?.id || previewProducts.length === 0) return;
+
+    setIsImporting(true);
+    setStep('importing');
+    setProgress(10);
+    setStatus("Enviando para o servidor...");
+
+    try {
+      const products = previewProducts.map(({ action, existingId, existingDescription, ...p }) => p);
+
       const { data, error } = await supabase.functions.invoke("import-products", {
         body: {
           products,
@@ -243,13 +265,11 @@ export function ImportProductsCIGAMModal({
         { duration: 5000 }
       );
 
-      // Log errors if any
       if (data.error_details && data.error_details.length > 0) {
         console.warn("Erros na importação:", data.error_details);
         toast.warning(`${stats.errors} produtos com erro. Verifique o console para detalhes.`);
       }
 
-      // Reset and close
       setTimeout(() => {
         onImportComplete();
         handleClose();
@@ -258,17 +278,20 @@ export function ImportProductsCIGAMModal({
     } catch (error) {
       console.error("Erro na importação:", error);
       toast.error(error instanceof Error ? error.message : "Erro ao importar produtos");
+      setStep('preview');
     } finally {
       setIsImporting(false);
     }
   };
 
   const handleClose = () => {
-    if (!isImporting) {
+    if (!isImporting && !isAnalyzing) {
       setFile(null);
       setClearExisting(false);
       setProgress(0);
       setStatus("");
+      setStep('upload');
+      setPreviewProducts([]);
       if (fileInputRef.current) {
         fileInputRef.current.value = "";
       }
@@ -276,9 +299,12 @@ export function ImportProductsCIGAMModal({
     }
   };
 
+  const toUpdateCount = previewProducts.filter(p => p.action === 'update').length;
+  const toCreateCount = previewProducts.filter(p => p.action === 'create').length;
+
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="sm:max-w-2xl max-h-[90vh]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FileSpreadsheet className="h-5 w-5" />
@@ -286,96 +312,186 @@ export function ImportProductsCIGAMModal({
           </DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-4 py-4">
-          {/* Download Template Button */}
-          <Button 
-            variant="outline" 
-            onClick={downloadTemplate}
-            className="w-full"
-          >
-            <Download className="mr-2 h-4 w-4" />
-            Baixar Planilha Modelo
-          </Button>
+        {step === 'upload' && (
+          <div className="space-y-4 py-4">
+            <Button 
+              variant="outline" 
+              onClick={downloadTemplate}
+              className="w-full"
+            >
+              <Download className="mr-2 h-4 w-4" />
+              Baixar Planilha Modelo
+            </Button>
 
-          {/* File Input */}
-          <div className="space-y-2">
-            <Label htmlFor="file">Planilha (.xls ou .xlsx)</Label>
-            <div className="flex items-center gap-2">
-              <Input
-                ref={fileInputRef}
-                id="file"
-                type="file"
-                accept=".xls,.xlsx"
-                onChange={handleFileChange}
-                disabled={isImporting}
-                className="flex-1"
-              />
-            </div>
-            {file && (
-              <p className="text-sm text-muted-foreground">
-                Arquivo selecionado: {file.name}
-              </p>
-            )}
-          </div>
-
-          {/* Format Help */}
-          <div className="rounded-lg bg-muted p-3 text-sm">
-            <p className="font-medium mb-1">Colunas esperadas:</p>
-            <ul className="text-muted-foreground space-y-0.5 text-xs grid grid-cols-2 gap-x-2">
-              <li>• Código</li>
-              <li>• Qtd. Estoque</li>
-              <li>• Nome do produto *</li>
-              <li>• Preço de compra</li>
-              <li>• Preço de venda</li>
-              <li>• Código de barras</li>
-              <li>• Unidade</li>
-              <li>• NCM</li>
-              <li>• CEST</li>
-              <li>• Grupo do produto</li>
-              <li>• Peso Bruto</li>
-              <li>• Peso Líquido</li>
-            </ul>
-          </div>
-
-          {/* Clear Existing Checkbox */}
-          <div className="flex items-center space-x-2">
-            <Checkbox
-              id="clearExisting"
-              checked={clearExisting}
-              onCheckedChange={(checked) => setClearExisting(checked === true)}
-              disabled={isImporting}
-            />
-            <Label htmlFor="clearExisting" className="text-sm cursor-pointer">
-              Zerar estoque dos produtos existentes antes de importar
-            </Label>
-          </div>
-
-          {/* Progress */}
-          {isImporting && (
             <div className="space-y-2">
-              <Progress value={progress} className="h-2" />
+              <Label htmlFor="file">Planilha (.xls ou .xlsx)</Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  ref={fileInputRef}
+                  id="file"
+                  type="file"
+                  accept=".xls,.xlsx"
+                  onChange={handleFileChange}
+                  disabled={isAnalyzing}
+                  className="flex-1"
+                />
+              </div>
+              {file && (
+                <p className="text-sm text-muted-foreground">
+                  Arquivo selecionado: {file.name}
+                </p>
+              )}
+            </div>
+
+            <div className="rounded-lg bg-muted p-3 text-sm">
+              <p className="font-medium mb-1">Colunas esperadas:</p>
+              <ul className="text-muted-foreground space-y-0.5 text-xs grid grid-cols-2 gap-x-2">
+                <li>• Código</li>
+                <li>• Qtd. Estoque</li>
+                <li>• Nome do produto *</li>
+                <li>• Preço de compra</li>
+                <li>• Preço de venda</li>
+                <li>• Código de barras</li>
+                <li>• Unidade</li>
+                <li>• NCM</li>
+                <li>• CEST</li>
+                <li>• Grupo do produto</li>
+                <li>• Peso Bruto</li>
+                <li>• Peso Líquido</li>
+              </ul>
+            </div>
+
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="clearExisting"
+                checked={clearExisting}
+                onCheckedChange={(checked) => setClearExisting(checked === true)}
+                disabled={isAnalyzing}
+              />
+              <Label htmlFor="clearExisting" className="text-sm cursor-pointer">
+                Zerar estoque dos produtos existentes antes de importar
+              </Label>
+            </div>
+          </div>
+        )}
+
+        {step === 'preview' && (
+          <div className="space-y-4 py-4">
+            <div className="flex items-center gap-4 p-3 rounded-lg bg-muted">
+              <div className="flex items-center gap-2">
+                <PlusCircle className="h-4 w-4 text-green-600" />
+                <span className="text-sm font-medium">{toCreateCount} novos</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <RefreshCw className="h-4 w-4 text-amber-600" />
+                <span className="text-sm font-medium">{toUpdateCount} a atualizar</span>
+              </div>
+            </div>
+
+            {toUpdateCount > 0 && (
+              <div className="flex items-start gap-2 p-3 rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-900">
+                <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
+                <div className="text-sm">
+                  <p className="font-medium text-amber-800 dark:text-amber-200">
+                    {toUpdateCount} produto(s) serão atualizados
+                  </p>
+                  <p className="text-amber-700 dark:text-amber-300 text-xs mt-1">
+                    Produtos com mesmo código terão seus dados substituídos.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            <ScrollArea className="h-[300px] rounded-lg border">
+              <div className="p-2 space-y-1">
+                {previewProducts.map((product, idx) => (
+                  <div 
+                    key={idx} 
+                    className="flex items-center justify-between p-2 rounded hover:bg-muted/50"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <code className="text-xs bg-muted px-1.5 py-0.5 rounded font-mono">
+                          {product.code}
+                        </code>
+                        <span className="text-sm truncate">{product.description}</span>
+                      </div>
+                      {product.action === 'update' && product.existingDescription && 
+                       product.existingDescription !== product.description && (
+                        <p className="text-xs text-muted-foreground mt-1 truncate">
+                          Atual: {product.existingDescription}
+                        </p>
+                      )}
+                    </div>
+                    <Badge 
+                      variant={product.action === 'create' ? 'default' : 'secondary'}
+                      className={product.action === 'create' 
+                        ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' 
+                        : 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200'
+                      }
+                    >
+                      {product.action === 'create' ? (
+                        <><PlusCircle className="h-3 w-3 mr-1" />Novo</>
+                      ) : (
+                        <><RefreshCw className="h-3 w-3 mr-1" />Atualizar</>
+                      )}
+                    </Badge>
+                  </div>
+                ))}
+              </div>
+            </ScrollArea>
+          </div>
+        )}
+
+        {step === 'importing' && (
+          <div className="space-y-4 py-8">
+            <div className="flex flex-col items-center gap-4">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              <Progress value={progress} className="h-2 w-full" />
               <p className="text-sm text-muted-foreground text-center">{status}</p>
             </div>
-          )}
-        </div>
+          </div>
+        )}
 
         <DialogFooter>
-          <Button variant="outline" onClick={handleClose} disabled={isImporting}>
-            Cancelar
-          </Button>
-          <Button onClick={handleImport} disabled={!file || isImporting}>
-            {isImporting ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Importando...
-              </>
-            ) : (
-              <>
+          {step === 'upload' && (
+            <>
+              <Button variant="outline" onClick={handleClose} disabled={isAnalyzing}>
+                Cancelar
+              </Button>
+              <Button onClick={analyzeProducts} disabled={!file || isAnalyzing}>
+                {isAnalyzing ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Analisando...
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle className="mr-2 h-4 w-4" />
+                    Analisar Planilha
+                  </>
+                )}
+              </Button>
+            </>
+          )}
+          
+          {step === 'preview' && (
+            <>
+              <Button variant="outline" onClick={() => setStep('upload')}>
+                Voltar
+              </Button>
+              <Button onClick={handleImport}>
                 <Upload className="mr-2 h-4 w-4" />
-                Importar
-              </>
-            )}
-          </Button>
+                Confirmar Importação
+              </Button>
+            </>
+          )}
+          
+          {step === 'importing' && (
+            <Button variant="outline" disabled>
+              Importando...
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>
