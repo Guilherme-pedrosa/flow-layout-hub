@@ -73,13 +73,22 @@ serve(async (req) => {
     let fullContext = "";
 
     try {
-      // Fetch financial data
+      // Fetch ALL business data in parallel
       const [
         { data: payables },
         { data: receivables },
         { data: transactions },
-        { data: lowStockProducts }
+        { data: lowStockProducts },
+        { data: allProducts },
+        { data: clients },
+        { data: suppliers },
+        { data: sales },
+        { data: purchaseOrders },
+        { data: serviceOrders },
+        { data: services },
+        { data: equipments }
       ] = await Promise.all([
+        // Contas a pagar
         supabase
           .from("payables")
           .select("*, supplier:pessoas!payables_supplier_id_fkey(razao_social, nome_fantasia, cpf_cnpj)")
@@ -87,6 +96,7 @@ serve(async (req) => {
           .eq("is_paid", false)
           .order("due_date", { ascending: true })
           .limit(100),
+        // Contas a receber
         supabase
           .from("accounts_receivable")
           .select("*, client:clientes(razao_social, nome_fantasia, cpf_cnpj)")
@@ -94,20 +104,74 @@ serve(async (req) => {
           .eq("is_paid", false)
           .order("due_date", { ascending: true })
           .limit(100),
+        // Transações bancárias
         supabase
           .from("bank_transactions")
           .select("*, bank_account:bank_accounts(name, bank_name)")
           .eq("company_id", companyId)
           .order("transaction_date", { ascending: false })
           .limit(50),
+        // Produtos com estoque baixo
         supabase
           .from("products")
-          .select("id, code, name, description, current_stock, minimum_stock, cost_price, sale_price")
+          .select("id, code, name, current_stock, minimum_stock, cost_price, sale_price")
           .eq("company_id", companyId)
           .eq("is_active", true)
           .eq("stock_control", true)
           .lte("current_stock", 10)
-          .limit(50)
+          .limit(50),
+        // Todos os produtos (resumo)
+        supabase
+          .from("products")
+          .select("id, code, name, current_stock, cost_price, sale_price, is_active")
+          .eq("company_id", companyId)
+          .limit(200),
+        // Clientes
+        supabase
+          .from("clientes")
+          .select("id, razao_social, nome_fantasia, cpf_cnpj, email, telefone, cidade, estado, status, limite_credito")
+          .eq("company_id", companyId)
+          .limit(200),
+        // Fornecedores
+        supabase
+          .from("pessoas")
+          .select("id, razao_social, nome_fantasia, cpf_cnpj, email, telefone, cidade, estado, is_supplier")
+          .eq("company_id", companyId)
+          .eq("is_supplier", true)
+          .limit(200),
+        // Vendas (últimas 100)
+        supabase
+          .from("sales")
+          .select("id, sale_number, status, total_amount, payment_method, created_at, client:clientes(razao_social, nome_fantasia)")
+          .eq("company_id", companyId)
+          .order("created_at", { ascending: false })
+          .limit(100),
+        // Pedidos de compra (últimos 100)
+        supabase
+          .from("purchase_orders")
+          .select("id, order_number, status, total_amount, created_at, supplier:pessoas(razao_social, nome_fantasia)")
+          .eq("company_id", companyId)
+          .order("created_at", { ascending: false })
+          .limit(100),
+        // Ordens de serviço (últimas 100)
+        supabase
+          .from("service_orders")
+          .select("id, order_number, status, total_amount, scheduled_date, client:clientes(razao_social, nome_fantasia)")
+          .eq("company_id", companyId)
+          .order("created_at", { ascending: false })
+          .limit(100),
+        // Serviços
+        supabase
+          .from("services")
+          .select("id, code, name, sale_price, is_active")
+          .eq("company_id", companyId)
+          .limit(100),
+        // Equipamentos
+        supabase
+          .from("equipments")
+          .select("id, serial_number, brand, model, equipment_type, is_active, client:clientes(razao_social, nome_fantasia)")
+          .eq("company_id", companyId)
+          .limit(100)
       ]);
 
       const today = new Date().toISOString().split('T')[0];
@@ -120,28 +184,59 @@ serve(async (req) => {
       const totalOverduePayables = overduePayables.reduce((sum, p) => sum + (p.amount || 0), 0);
       const totalOverdueReceivables = overdueReceivables.reduce((sum, r) => sum + (r.amount || 0), 0);
 
-      fullContext = `
-## 📊 CONTEXTO FINANCEIRO (${today})
+      // Sales stats
+      const totalSales = sales?.reduce((sum, s) => sum + (s.total_amount || 0), 0) || 0;
+      const salesByStatus = sales?.reduce((acc, s) => {
+        acc[s.status] = (acc[s.status] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>) || {};
 
-### 💰 RESUMO
+      // Service orders stats
+      const openServiceOrders = serviceOrders?.filter(so => !['concluida', 'cancelada', 'faturada'].includes(so.status?.toLowerCase() || '')) || [];
+
+      fullContext = `
+## 📊 CONTEXTO COMPLETO DO ERP (${today})
+
+### 💰 RESUMO FINANCEIRO
 - Contas a Pagar Pendentes: ${payables?.length || 0} títulos (R$ ${totalPayables.toFixed(2)})
 - Contas a Pagar Vencidas: ${overduePayables.length} títulos (R$ ${totalOverduePayables.toFixed(2)})
 - Contas a Receber Pendentes: ${receivables?.length || 0} títulos (R$ ${totalReceivables.toFixed(2)})
 - Contas a Receber Vencidas: ${overdueReceivables.length} títulos (R$ ${totalOverdueReceivables.toFixed(2)})
-- Produtos com Estoque Baixo: ${lowStockProducts?.length || 0}
 
-### Contas a Pagar Vencidas (${overduePayables.length} registros)
-${JSON.stringify(overduePayables.slice(0, 20).map(p => ({
+### 👥 CADASTROS
+- Total de Clientes: ${clients?.length || 0}
+- Clientes Ativos: ${clients?.filter(c => c.status === 'ativo').length || 0}
+- Total de Fornecedores: ${suppliers?.length || 0}
+- Total de Produtos: ${allProducts?.length || 0}
+- Produtos Ativos: ${allProducts?.filter(p => p.is_active).length || 0}
+- Produtos com Estoque Baixo: ${lowStockProducts?.length || 0}
+- Total de Serviços: ${services?.length || 0}
+- Total de Equipamentos: ${equipments?.length || 0}
+
+### 📈 VENDAS (últimas 100)
+- Total em Vendas: R$ ${totalSales.toFixed(2)}
+- Por Status: ${JSON.stringify(salesByStatus)}
+
+### 🛠️ ORDENS DE SERVIÇO
+- Total: ${serviceOrders?.length || 0}
+- Em Aberto: ${openServiceOrders.length}
+
+### 📦 PEDIDOS DE COMPRA
+- Total: ${purchaseOrders?.length || 0}
+
+---
+
+### 📋 DETALHES - Contas a Pagar Vencidas (${overduePayables.length})
+${JSON.stringify(overduePayables.slice(0, 15).map(p => ({
   descricao: p.description,
   valor: p.amount,
   vencimento: p.due_date,
   fornecedor: p.supplier?.razao_social || p.supplier?.nome_fantasia,
-  metodo_pagamento: p.payment_method_type,
   dias_atraso: Math.floor((new Date().getTime() - new Date(p.due_date).getTime()) / (1000 * 60 * 60 * 24))
 })), null, 2)}
 
-### Contas a Receber Vencidas (${overdueReceivables.length} registros)
-${JSON.stringify(overdueReceivables.slice(0, 20).map(r => ({
+### 📋 DETALHES - Contas a Receber Vencidas (${overdueReceivables.length})
+${JSON.stringify(overdueReceivables.slice(0, 15).map(r => ({
   descricao: r.description,
   valor: r.amount,
   vencimento: r.due_date,
@@ -149,7 +244,43 @@ ${JSON.stringify(overdueReceivables.slice(0, 20).map(r => ({
   dias_atraso: Math.floor((new Date().getTime() - new Date(r.due_date).getTime()) / (1000 * 60 * 60 * 24))
 })), null, 2)}
 
-### Produtos com Estoque Baixo (${lowStockProducts?.length || 0} produtos)
+### 📋 DETALHES - Clientes (${clients?.length || 0})
+${JSON.stringify(clients?.slice(0, 50).map(c => ({
+  nome: c.razao_social || c.nome_fantasia,
+  cpf_cnpj: c.cpf_cnpj,
+  cidade: c.cidade,
+  estado: c.estado,
+  status: c.status,
+  limite_credito: c.limite_credito
+})), null, 2)}
+
+### 📋 DETALHES - Fornecedores (${suppliers?.length || 0})
+${JSON.stringify(suppliers?.slice(0, 30).map(f => ({
+  nome: f.razao_social || f.nome_fantasia,
+  cpf_cnpj: f.cpf_cnpj,
+  cidade: f.cidade,
+  estado: f.estado
+})), null, 2)}
+
+### 📋 DETALHES - Últimas Vendas (20)
+${JSON.stringify(sales?.slice(0, 20).map(s => ({
+  numero: s.sale_number,
+  status: s.status,
+  valor: s.total_amount,
+  cliente: (s.client as any)?.razao_social || (s.client as any)?.nome_fantasia,
+  data: s.created_at
+})), null, 2)}
+
+### 📋 DETALHES - Ordens de Serviço em Aberto (${openServiceOrders.length})
+${JSON.stringify(openServiceOrders.slice(0, 20).map(os => ({
+  numero: os.order_number,
+  status: os.status,
+  valor: os.total_amount,
+  cliente: (os.client as any)?.razao_social || (os.client as any)?.nome_fantasia,
+  agendamento: os.scheduled_date
+})), null, 2)}
+
+### 📋 DETALHES - Produtos com Estoque Baixo (${lowStockProducts?.length || 0})
 ${JSON.stringify(lowStockProducts?.map(p => ({
   codigo: p.code,
   nome: p.name,
@@ -157,7 +288,7 @@ ${JSON.stringify(lowStockProducts?.map(p => ({
   estoque_minimo: p.minimum_stock
 })), null, 2)}
 
-### Últimas Transações Bancárias
+### 📋 DETALHES - Transações Bancárias Recentes
 ${JSON.stringify(transactions?.slice(0, 15).map(t => ({
   data: t.transaction_date,
   descricao: t.description,
@@ -169,24 +300,28 @@ ${JSON.stringify(transactions?.slice(0, 15).map(t => ({
 `;
     } catch (dataError) {
       console.error("[financial-ai] Error fetching data:", dataError);
-      fullContext = "## Dados não disponíveis\nNão foi possível carregar os dados financeiros.";
+      fullContext = "## Dados não disponíveis\nNão foi possível carregar os dados do sistema.";
     }
 
-    const systemPrompt = `Você é um assistente de inteligência artificial financeira do ERP WAI. Você analisa dados financeiros e fornece insights práticos.
+    const systemPrompt = `Você é o assistente de inteligência artificial do ERP WAI. Você tem acesso COMPLETO a todos os dados do sistema e pode responder qualquer pergunta sobre o negócio.
 
 ## SUAS CAPACIDADES
-1. Análise de contas a pagar e receber
-2. Detecção de vencimentos e atrasos
-3. Projeção de fluxo de caixa
-4. Identificação de riscos financeiros
-5. Sugestões de priorização de pagamentos
+1. **Financeiro**: Contas a pagar/receber, vencimentos, fluxo de caixa, transações bancárias
+2. **Clientes**: Cadastros, status, limites de crédito, histórico
+3. **Fornecedores**: Cadastros, dados de contato
+4. **Vendas**: Pedidos, status, valores, clientes
+5. **Compras**: Pedidos de compra, fornecedores
+6. **Estoque**: Produtos, níveis de estoque, preços
+7. **Serviços**: Ordens de serviço, agendamentos, equipamentos
+8. **Análises**: Estatísticas, tendências, alertas
 
 ## REGRAS DE RESPOSTA
 - Seja direto e objetivo
-- Use dados concretos do contexto fornecido
+- Use SEMPRE dados concretos do contexto - nunca invente dados
 - Destaque riscos (🚨 crítico, ⚠️ atenção) e oportunidades (✅ ok, 💡 sugestão)
 - Formate em Markdown para legibilidade
 - Sugira ações práticas quando relevante
+- Se não tiver dados suficientes para responder, diga claramente
 
 ${fullContext}`;
 
