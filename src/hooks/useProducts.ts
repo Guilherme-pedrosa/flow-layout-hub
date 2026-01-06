@@ -17,16 +17,36 @@ export function useProducts() {
     queryFn: async () => {
       if (!currentCompany) return [];
       
-      // Buscar produtos ativos da empresa atual
-      const { data, error } = await supabase
-        .from("products")
-        .select("*")
-        .eq("company_id", currentCompany.id)
-        .eq("is_active", true)
-        .order("description", { ascending: true });
+      // Buscar TODOS os produtos ativos usando paginação (Supabase limita a 1000 por query)
+      const allProducts: Product[] = [];
+      const PAGE_SIZE = 1000;
+      let page = 0;
+      let hasMore = true;
+      
+      while (hasMore) {
+        const from = page * PAGE_SIZE;
+        const to = from + PAGE_SIZE - 1;
+        
+        const { data, error } = await supabase
+          .from("products")
+          .select("*")
+          .eq("company_id", currentCompany.id)
+          .eq("is_active", true)
+          .order("description", { ascending: true })
+          .range(from, to);
 
-      if (error) throw error;
-      return data as Product[];
+        if (error) throw error;
+        
+        if (data && data.length > 0) {
+          allProducts.push(...data);
+          hasMore = data.length === PAGE_SIZE;
+          page++;
+        } else {
+          hasMore = false;
+        }
+      }
+      
+      return allProducts;
     },
     enabled: !!currentCompany,
   });
