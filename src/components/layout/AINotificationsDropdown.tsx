@@ -102,7 +102,10 @@ export function AINotificationsDropdown() {
                     'flex flex-col items-start gap-1 py-3 px-4 cursor-pointer',
                     !insight.is_read && 'bg-muted/50'
                   )}
-                  onClick={() => handleInsightClick(insight)}
+                  onSelect={(e) => {
+                    e.preventDefault();
+                    handleInsightClick(insight);
+                  }}
                 >
                   <div className="flex items-start justify-between w-full gap-2">
                     <div className="flex items-center gap-2">
@@ -136,7 +139,10 @@ export function AINotificationsDropdown() {
             <DropdownMenuSeparator />
             <DropdownMenuItem 
               className="justify-center text-primary cursor-pointer"
-              onClick={() => navigate('/insights')}
+              onSelect={(e) => {
+                e.preventDefault();
+                navigate('/configuracoes/alertas');
+              }}
             >
               Ver todos os insights
             </DropdownMenuItem>
