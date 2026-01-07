@@ -238,6 +238,107 @@ async function syncAndGetCustomers(supabaseClient: any, company_id: string, apiK
   return customerMap;
 }
 
+// Buscar customer específico da API do Field Control e sincronizar
+async function fetchAndSyncCustomer(supabaseClient: any, company_id: string, apiKey: string, fieldCustomerId: string): Promise<string | null> {
+  try {
+    // Buscar customer específico da API do Field Control
+    const response = await fetch(`${FIELD_CONTROL_BASE_URL}/customers/${fieldCustomerId}`, {
+      method: 'GET',
+      headers: { 'x-api-key': apiKey, 'Content-Type': 'application/json' },
+    });
+    
+    if (!response.ok) {
+      console.log(`[field-sync-equipment] Erro ao buscar customer ${fieldCustomerId}:`, response.status);
+      return null;
+    }
+    
+    const customer: FieldCustomer = await response.json();
+    console.log(`[field-sync-equipment] Customer encontrado: ${customer.name}`);
+    
+    // Buscar cliente no WAI pelo documento
+    let clienteId: string | null = null;
+    if (customer.document) {
+      const doc = customer.document.replace(/\D/g, '');
+      const { data: existingCliente } = await supabaseClient
+        .from('clientes')
+        .select('id')
+        .eq('company_id', company_id)
+        .or(`cpf_cnpj.eq.${doc},cpf_cnpj.ilike.%${doc}%`)
+        .maybeSingle();
+      
+      if (existingCliente?.id) {
+        clienteId = existingCliente.id;
+      }
+    }
+    
+    // Se não encontrou pelo documento, buscar pelo nome
+    if (!clienteId && customer.name) {
+      const { data: existingByName } = await supabaseClient
+        .from('clientes')
+        .select('id')
+        .eq('company_id', company_id)
+        .or(`razao_social.ilike.%${customer.name}%,nome_fantasia.ilike.%${customer.name}%`)
+        .maybeSingle();
+      
+      if (existingByName?.id) {
+        clienteId = existingByName.id;
+      }
+    }
+    
+    // Se não encontrou, criar cliente
+    if (!clienteId) {
+      const tipoPessoa = customer.document && customer.document.replace(/\D/g, '').length > 11 ? 'PJ' : 'PF';
+      const { data: newCliente, error: insertError } = await supabaseClient
+        .from('clientes')
+        .insert({
+          company_id,
+          razao_social: customer.name,
+          nome_fantasia: customer.name,
+          cpf_cnpj: customer.document?.replace(/\D/g, '') || null,
+          email: customer.email || null,
+          telefone: customer.phone || null,
+          logradouro: customer.address?.street || null,
+          numero: customer.address?.number || null,
+          complemento: customer.address?.complement || null,
+          bairro: customer.address?.neighborhood || null,
+          cidade: customer.address?.city || null,
+          estado: customer.address?.state || null,
+          cep: customer.address?.zipCode?.replace(/\D/g, '') || null,
+          tipo_pessoa: tipoPessoa,
+          status: 'ativo',
+        })
+        .select('id')
+        .single();
+      
+      if (newCliente?.id) {
+        clienteId = newCliente.id;
+        console.log(`[field-sync-equipment] Cliente criado: ${customer.name}`);
+      } else {
+        console.error(`[field-sync-equipment] Erro ao criar cliente:`, insertError);
+        return null;
+      }
+    }
+    
+    // Salvar sync
+    if (clienteId) {
+      await supabaseClient.from('field_control_sync').upsert({
+        company_id,
+        field_id: fieldCustomerId,
+        entity_type: 'customer',
+        wai_id: clienteId,
+        last_sync: new Date().toISOString(),
+      }, { onConflict: 'company_id,field_id,entity_type' });
+      
+      console.log(`[field-sync-equipment] Sync criado: Field ${fieldCustomerId} -> WAI ${clienteId}`);
+    }
+    
+    return clienteId;
+  } catch (err) {
+    console.error(`[field-sync-equipment] Erro ao buscar/sincronizar customer ${fieldCustomerId}:`, err);
+    return null;
+  }
+}
+
 async function syncCompanyEquipments(supabaseClient: any, company_id: string, apiKey: string, client_id: string | null) {
   // Primeiro, buscar tipos de equipamento e sincronizar clientes
   console.log('[field-sync-equipment] Buscando tipos de equipamento e clientes...');
@@ -273,12 +374,17 @@ async function syncCompanyEquipments(supabaseClient: any, company_id: string, ap
   for (const equipment of equipments) {
     try {
       const fieldEquipmentId = String(equipment.id);
+      
+      // Log para debug - ver estrutura do customer
+      console.log(`[field-sync-equipment] Equipment ${equipment.number || fieldEquipmentId}: customer =`, equipment.customer);
+      
       const { data: existing } = await supabaseClient.from('equipments').select('id').eq('company_id', company_id).eq('field_equipment_id', fieldEquipmentId).maybeSingle();
 
       // Buscar client_id do mapa de clientes sincronizados
       let clientId: string | null = null;
       if (equipment.customer?.id) {
-        clientId = customerMap.get(equipment.customer.id) || null;
+        const fieldCustomerId = String(equipment.customer.id);
+        clientId = customerMap.get(fieldCustomerId) || null;
         
         // Fallback: buscar na tabela de sync
         if (!clientId) {
@@ -286,13 +392,19 @@ async function syncCompanyEquipments(supabaseClient: any, company_id: string, ap
             .from('field_control_sync')
             .select('wai_id')
             .eq('company_id', company_id)
-            .eq('field_id', equipment.customer.id)
+            .eq('field_id', fieldCustomerId)
             .eq('entity_type', 'customer')
             .maybeSingle();
           
           if (syncData?.wai_id) {
             clientId = syncData.wai_id;
           }
+        }
+        
+        // Fallback 2: buscar customer da API do Field e criar/vincular
+        if (!clientId) {
+          console.log(`[field-sync-equipment] Customer ${fieldCustomerId} não encontrado no mapa, buscando da API...`);
+          clientId = await fetchAndSyncCustomer(supabaseClient, company_id, apiKey, fieldCustomerId);
         }
       }
 
