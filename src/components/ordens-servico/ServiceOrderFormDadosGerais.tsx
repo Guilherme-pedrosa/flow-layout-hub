@@ -159,10 +159,10 @@ export function ServiceOrderFormDadosGerais({ formData, onChange }: ServiceOrder
             </div>
 
             <div className="space-y-2">
-              <Label>Tipo de OS</Label>
+              <Label>Tipo de OS <span className="text-destructive">*</span></Label>
               <div className="flex gap-1">
                 <Select value={formData.service_type_id} onValueChange={(v) => onChange('service_type_id', v)}>
-                  <SelectTrigger className="flex-1">
+                  <SelectTrigger className={`flex-1 ${!formData.service_type_id ? 'border-destructive/50' : ''}`}>
                     <SelectValue placeholder="Selecione o tipo" />
                   </SelectTrigger>
                   <SelectContent>
@@ -171,6 +171,9 @@ export function ServiceOrderFormDadosGerais({ formData, onChange }: ServiceOrder
                         <div className="flex items-center gap-2">
                           <div className="w-3 h-3 rounded-full" style={{ backgroundColor: t.color }} />
                           {t.name}
+                          {t.field_service_id && (
+                            <span className="text-xs text-muted-foreground">(Field)</span>
+                          )}
                         </div>
                       </SelectItem>
                     ))}
@@ -187,6 +190,9 @@ export function ServiceOrderFormDadosGerais({ formData, onChange }: ServiceOrder
                   <RefreshCw className={`h-4 w-4 ${isSyncing ? 'animate-spin' : ''}`} />
                 </Button>
               </div>
+              {activeServiceTypes.length === 0 && (
+                <p className="text-xs text-destructive">Nenhum tipo cadastrado. Clique no botão para sincronizar do Field.</p>
+              )}
             </div>
 
             <div className="space-y-2">

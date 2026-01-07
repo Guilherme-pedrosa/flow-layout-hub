@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Save, X, DollarSign, FileText, Truck, Printer, Send } from "lucide-react";
+import { Save, X, DollarSign, FileText, Truck, Printer, Send, AlertTriangle } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useDocumentPdf } from "@/hooks/useDocumentPdf";
 import { ServiceOrderFormDadosGerais } from "./ServiceOrderFormDadosGerais";
@@ -17,6 +17,11 @@ import { SaleFormAnexos, SaleAttachment } from "@/components/vendas/SaleFormAnex
 import { SaleFormTransporte } from "@/components/vendas/SaleFormTransporte";
 import { useServiceOrders, ServiceOrderProductItem, ServiceOrderServiceItem, ServiceOrder } from "@/hooks/useServiceOrders";
 import { formatCurrency } from "@/lib/formatters";
+import { useCompany } from "@/contexts/CompanyContext";
+import { useClientes } from "@/hooks/useClientes";
+import { useServiceTypes } from "@/hooks/useServiceTypes";
+import { toast } from "sonner";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 interface ServiceOrderFormProps {
   onClose: () => void;
@@ -24,10 +29,15 @@ interface ServiceOrderFormProps {
 }
 
 export function ServiceOrderForm({ onClose, initialData }: ServiceOrderFormProps) {
+  const { currentCompany } = useCompany();
   const { createOrder } = useServiceOrders();
+  const { fetchClientes } = useClientes();
+  const { activeServiceTypes } = useServiceTypes();
   const navigate = useNavigate();
   const { printDocument, printSummary, isGenerating } = useDocumentPdf();
   const isEditing = !!initialData?.id;
+  const [validationErrors, setValidationErrors] = useState<string[]>([]);
+  const [clientes, setClientes] = useState<any[]>([]);
   const [formData, setFormData] = useState({
     client_id: initialData?.client_id ?? '',
     seller_id: initialData?.seller_id ?? '',
@@ -103,12 +113,50 @@ export function ServiceOrderForm({ onClose, initialData }: ServiceOrderFormProps
   };
 
   const handleSave = async () => {
+    // Validações obrigatórias
+    const errors: string[] = [];
+    
+    // Carregar clientes para validação
+    const clientesList = await fetchClientes();
+    
+    if (!formData.client_id) {
+      errors.push('Cliente é obrigatório');
+    } else {
+      // Verificar se cliente tem field_customer_id
+      const selectedClient = clientesList.find(c => c.id === formData.client_id);
+      if (!selectedClient?.field_customer_id) {
+        errors.push('Cliente não está sincronizado com Field Control (field_customer_id ausente)');
+      }
+    }
+    
+    if (!formData.service_type_id) {
+      errors.push('Tipo de OS é obrigatório');
+    } else {
+      // Verificar se tipo tem field_service_id
+      const selectedType = activeServiceTypes.find(t => t.id === formData.service_type_id);
+      if (!selectedType?.field_service_id) {
+        errors.push('Tipo de OS não está sincronizado com Field Control (sincronize os tipos primeiro)');
+      }
+    }
+    
+    if (!formData.order_date) {
+      errors.push('Data é obrigatória');
+    }
+    
+    if (errors.length > 0) {
+      setValidationErrors(errors);
+      errors.forEach(err => toast.error(err));
+      return;
+    }
+    
+    setValidationErrors([]);
+    
     const laborCost = parseFloat(formData.labor_cost) || calculatedLaborCost;
     const partsCost = parseFloat(formData.parts_cost) || calculatedPartsCost;
     const externalCost = parseFloat(formData.external_service_cost) || 0;
 
     const order = {
-      company_id: '7875af52-18d0-434e-8ae9-97981bd668e7',
+      company_id: currentCompany?.id || '',
       client_id: formData.client_id || null,
       seller_id: formData.seller_id || null,
       technician_id: formData.technician_id || null,
@@ -173,6 +221,19 @@ export function ServiceOrderForm({ onClose, initialData }: ServiceOrderFormProps
 
   return (
     <div className="space-y-6">
+      {validationErrors.length > 0 && (
+        <Alert variant="destructive">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertDescription>
+            <ul className="list-disc list-inside">
+              {validationErrors.map((err, i) => (
+                <li key={i}>{err}</li>
+              ))}
+            </ul>
+          </AlertDescription>
+        </Alert>
+      )}
+      
       <ServiceOrderFormDadosGerais formData={formData} onChange={handleChange} />
       <ServiceOrderFormProdutos items={productItems} onChange={setProductItems} />
       <ServiceOrderFormServicos items={serviceItems} onChange={setServiceItems} />
