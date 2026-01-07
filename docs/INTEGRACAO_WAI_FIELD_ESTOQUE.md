@@ -93,6 +93,12 @@
 }
 ```
 
+### ⚠️ Regra sobre `unitPrice`
+
+> O `unitPrice` vindo do Field é **apenas evidência**, não fonte de verdade.  
+> O preço faturável **deve ser resolvido no WAI** (tabela de preços, contrato do cliente, ou política comercial).  
+> Isso evita problemas quando técnico edita preço no app.
+
 ### Identificação do Produto
 
 | Campo | Uso | Prioridade |
@@ -388,11 +394,34 @@ INSERT INTO movimentacoes_estoque (
 | Bloquear fechamento por falta de estoque | Operação travada |
 | Processar webhook duplicado | Baixa duplicada |
 | Estornar sem movimentação inversa | Saldo incorreto |
-| Consumir em OS já faturada | Erro financeiro |
+| **Consumir em OS já faturada** | **ERRO FINANCEIRO CRÍTICO** |
+
+### ⛔ Regra Hard: OS Faturada
+
+> **SE A OS ESTIVER FATURADA, QUALQUER NOVO CONSUMO DEVE SER REJEITADO.**  
+> Não há exceção. Não há override.  
+> Para ajustar consumo pós-faturamento, é necessário **estornar a fatura primeiro**.
 
 ---
 
-## 🔟 Observabilidade
+## 🔟 Estoque Multi-Local (Nota Arquitetural)
+
+> A arquitetura atual **já suporta múltiplos estoques** (técnico, veículo, almoxarifado central).  
+> Não é necessário implementar agora, mas o caminho está aberto.
+
+### Estrutura Futura (quando necessário)
+
+| Local | Uso |
+|-------|-----|
+| `almoxarifado` | Estoque central da empresa |
+| `veiculo_{id}` | Estoque do veículo do técnico |
+| `tecnico_{id}` | Estoque pessoal do técnico |
+
+> Quando implementado, o consumo deverá especificar `estoque_origem` na movimentação.
+
+---
+
+## 1️⃣1️⃣ Observabilidade
 
 ### Audit Logs Obrigatórios
 
