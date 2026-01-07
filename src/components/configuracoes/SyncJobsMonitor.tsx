@@ -15,9 +15,9 @@ import {
 } from "@/components/ui/select";
 import { 
   RefreshCw, Play, AlertTriangle, CheckCircle2, Clock, Skull, 
-  Loader2, RotateCcw, ChevronDown, ChevronUp, Activity
+  Loader2, RotateCcw, ChevronDown, ChevronUp, Activity, Zap
 } from "lucide-react";
-import { format } from "date-fns";
+import { format, differenceInMinutes } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
 interface SyncJob {
@@ -43,7 +43,37 @@ interface SyncJobsStats {
   done: number;
   error: number;
   dead: number;
+  stuck: number;
 }
+
+// Mascarar dados sensíveis (CPF, CNPJ, telefone, email)
+function maskSensitiveData(obj: any): any {
+  if (obj === null || obj === undefined) return obj;
+  if (typeof obj === 'string') {
+    // CPF: 000.000.000-00 ou 00000000000
+    let masked = obj.replace(/\b\d{3}\.?\d{3}\.?\d{3}-?\d{2}\b/g, '***.***.***-**');
+    // CNPJ: 00.000.000/0000-00 ou 00000000000000
+    masked = masked.replace(/\b\d{2}\.?\d{3}\.?\d{3}\/?\d{4}-?\d{2}\b/g, '**.***.***/****-**');
+    // Telefone: (00) 00000-0000 ou variações
+    masked = masked.replace(/\(?\d{2}\)?[\s.-]?\d{4,5}[\s.-]?\d{4}/g, '(**) *****-****');
+    // Email parcial
+    masked = masked.replace(/([a-zA-Z0-9._-]+)@([a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/g, '***@$2');
+    return masked;
+  }
+  if (Array.isArray(obj)) {
+    return obj.map(maskSensitiveData);
+  }
+  if (typeof obj === 'object') {
+    const masked: any = {};
+    for (const key of Object.keys(obj)) {
+      masked[key] = maskSensitiveData(obj[key]);
+    }
+    return masked;
+  }
+  return obj;
+}
+
+const WORKER_COOLDOWN_MS = 30000; // 30 segundos
 
 export function SyncJobsMonitor() {
   const { currentCompany } = useCompany();
@@ -51,32 +81,64 @@ export function SyncJobsMonitor() {
   const [stats, setStats] = useState<SyncJobsStats | null>(null);
   const [loading, setLoading] = useState(false);
   const [workerLoading, setWorkerLoading] = useState(false);
+  const [workerCooldown, setWorkerCooldown] = useState(false);
+  const [cooldownRemaining, setCooldownRemaining] = useState(0);
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [entityFilter, setEntityFilter] = useState<string>("all");
   const [expandedJob, setExpandedJob] = useState<string | null>(null);
   const [limit, setLimit] = useState(50);
+
+  const fetchStats = useCallback(async () => {
+    if (!currentCompany?.id) return;
+
+    try {
+      // Usar RPC para estatísticas (evita count no front)
+      const { data, error } = await supabase.rpc('get_sync_jobs_stats' as any, {
+        p_company_id: currentCompany.id
+      });
+
+      if (error) throw error;
+
+      if (data && Array.isArray(data) && data.length > 0) {
+        const row = data[0] as any;
+        setStats({
+          pending: Number(row.pending) || 0,
+          processing: Number(row.processing) || 0,
+          done: Number(row.done) || 0,
+          error: Number(row.error) || 0,
+          dead: Number(row.dead) || 0,
+          stuck: Number(row.stuck) || 0,
+        });
+      }
+    } catch (err: any) {
+      console.error('Erro ao buscar stats:', err);
+      // Fallback se RPC não existir
+      const { data: allJobs } = await supabase
+        .from('sync_jobs')
+        .select('status, processing_started_at')
+        .eq('company_id', currentCompany.id);
+
+      if (allJobs) {
+        const now = new Date();
+        const newStats: SyncJobsStats = {
+          pending: allJobs.filter(j => j.status === 'pending').length,
+          processing: allJobs.filter(j => j.status === 'processing' && (!j.processing_started_at || differenceInMinutes(now, new Date(j.processing_started_at)) < 5)).length,
+          done: allJobs.filter(j => j.status === 'done').length,
+          error: allJobs.filter(j => j.status === 'error').length,
+          dead: allJobs.filter(j => j.status === 'dead').length,
+          stuck: allJobs.filter(j => j.status === 'processing' && j.processing_started_at && differenceInMinutes(now, new Date(j.processing_started_at)) >= 5).length,
+        };
+        setStats(newStats);
+      }
+    }
+  }, [currentCompany?.id]);
 
   const fetchJobs = useCallback(async () => {
     if (!currentCompany?.id) return;
 
     setLoading(true);
     try {
-      // Buscar estatísticas
-      const { data: allJobs } = await supabase
-        .from('sync_jobs')
-        .select('status')
-        .eq('company_id', currentCompany.id);
-
-      if (allJobs) {
-        const newStats: SyncJobsStats = {
-          pending: allJobs.filter(j => j.status === 'pending').length,
-          processing: allJobs.filter(j => j.status === 'processing').length,
-          done: allJobs.filter(j => j.status === 'done').length,
-          error: allJobs.filter(j => j.status === 'error').length,
-          dead: allJobs.filter(j => j.status === 'dead').length,
-        };
-        setStats(newStats);
-      }
+      await fetchStats();
 
       // Buscar jobs com filtros
       let query = supabase
@@ -87,7 +149,13 @@ export function SyncJobsMonitor() {
         .limit(limit);
 
       if (statusFilter !== 'all') {
-        query = query.eq('status', statusFilter);
+        if (statusFilter === 'stuck') {
+          // Jobs stuck = processing há mais de 5 min
+          const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+          query = query.eq('status', 'processing').lte('processing_started_at', fiveMinAgo);
+        } else {
+          query = query.eq('status', statusFilter);
+        }
       }
 
       if (entityFilter !== 'all') {
@@ -104,7 +172,7 @@ export function SyncJobsMonitor() {
     } finally {
       setLoading(false);
     }
-  }, [currentCompany?.id, statusFilter, entityFilter, limit]);
+  }, [currentCompany?.id, statusFilter, entityFilter, limit, fetchStats]);
 
   useEffect(() => {
     fetchJobs();
@@ -112,13 +180,35 @@ export function SyncJobsMonitor() {
 
   // Refresh automático a cada 10 segundos quando há jobs pendentes ou em processamento
   useEffect(() => {
-    if (!stats || (stats.pending === 0 && stats.processing === 0)) return;
+    if (!stats || (stats.pending === 0 && stats.processing === 0 && stats.stuck === 0)) return;
 
     const interval = setInterval(fetchJobs, 10000);
     return () => clearInterval(interval);
   }, [stats, fetchJobs]);
 
+  // Cooldown timer para botão Worker
+  useEffect(() => {
+    if (!workerCooldown) return;
+
+    const interval = setInterval(() => {
+      setCooldownRemaining(prev => {
+        if (prev <= 1) {
+          setWorkerCooldown(false);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [workerCooldown]);
+
   const runWorker = async () => {
+    if (workerCooldown) {
+      toast.warning(`Aguarde ${cooldownRemaining}s antes de executar novamente`);
+      return;
+    }
+
     setWorkerLoading(true);
     try {
       const { data, error } = await supabase.functions.invoke('field-sync-worker', {
@@ -129,9 +219,23 @@ export function SyncJobsMonitor() {
 
       if (data.ok) {
         toast.success(`Worker executado: ${data.success || 0} sucesso, ${data.errors || 0} erros`);
+        
+        // Registrar no audit_logs
+        await supabase.from('audit_logs').insert({
+          company_id: currentCompany!.id,
+          entity: 'sync_jobs',
+          action: 'worker_manual_execution',
+          metadata_json: {
+            results: data
+          }
+        });
       } else {
         toast.error(data.error || 'Erro ao executar worker');
       }
+
+      // Ativar cooldown
+      setWorkerCooldown(true);
+      setCooldownRemaining(WORKER_COOLDOWN_MS / 1000);
 
       // Atualizar lista após worker
       await fetchJobs();
@@ -143,18 +247,56 @@ export function SyncJobsMonitor() {
     }
   };
 
-  const retryJob = async (jobId: string) => {
+  const reapStuckJobs = async () => {
     try {
+      const { data, error } = await supabase.rpc('reap_stuck_sync_jobs' as any, {
+        p_stuck_minutes: 5
+      });
+
+      if (error) throw error;
+
+      const count = data || 0;
+      if (count > 0) {
+        toast.success(`${count} jobs travados liberados`);
+        
+        // Registrar no audit_logs
+        await supabase.from('audit_logs').insert({
+          company_id: currentCompany!.id,
+          entity: 'sync_jobs',
+          action: 'reap_stuck_jobs',
+          metadata_json: { released_count: count }
+        });
+      } else {
+        toast.info('Nenhum job travado encontrado');
+      }
+
+      await fetchJobs();
+    } catch (err: any) {
+      toast.error('Erro ao liberar jobs travados');
+    }
+  };
+
+  const retryJob = async (jobId: string, currentAttempts: number) => {
+    try {
+      // NÃO zerar attempts - manter histórico
       await supabase
         .from('sync_jobs')
         .update({
           status: 'pending',
-          attempts: 0,
           last_error: null,
           next_retry_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         })
         .eq('id', jobId);
+
+      // Registrar no audit_logs
+      await supabase.from('audit_logs').insert({
+        company_id: currentCompany!.id,
+        entity: 'sync_jobs',
+        entity_id: jobId,
+        action: 'manual_retry',
+        metadata_json: { previous_attempts: currentAttempts }
+      });
 
       toast.success('Job reativado para retry');
       await fetchJobs();
@@ -167,11 +309,23 @@ export function SyncJobsMonitor() {
     if (!currentCompany?.id) return;
 
     try {
+      // Buscar jobs com erro para contar
+      const { data: errorJobs } = await supabase
+        .from('sync_jobs')
+        .select('id, attempts')
+        .eq('company_id', currentCompany.id)
+        .in('status', ['error', 'dead']);
+
+      if (!errorJobs || errorJobs.length === 0) {
+        toast.info('Nenhum job com erro encontrado');
+        return;
+      }
+
+      // NÃO zerar attempts
       await supabase
         .from('sync_jobs')
         .update({
           status: 'pending',
-          attempts: 0,
           last_error: null,
           next_retry_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
@@ -179,15 +333,35 @@ export function SyncJobsMonitor() {
         .eq('company_id', currentCompany.id)
         .in('status', ['error', 'dead']);
 
-      toast.success('Todos os jobs com erro reativados');
+      // Registrar no audit_logs
+      await supabase.from('audit_logs').insert({
+        company_id: currentCompany.id,
+        entity: 'sync_jobs',
+        action: 'bulk_manual_retry',
+        metadata_json: { 
+          count: errorJobs.length,
+          job_ids: errorJobs.map(j => j.id)
+        }
+      });
+
+      toast.success(`${errorJobs.length} jobs reativados`);
       await fetchJobs();
     } catch (err: any) {
       toast.error('Erro ao reativar jobs');
     }
   };
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
+  const isJobStuck = (job: SyncJob): boolean => {
+    if (job.status !== 'processing' || !job.processing_started_at) return false;
+    return differenceInMinutes(new Date(), new Date(job.processing_started_at)) >= 5;
+  };
+
+  const getStatusBadge = (job: SyncJob) => {
+    if (isJobStuck(job)) {
+      return <Badge variant="destructive" className="gap-1 bg-orange-500"><Zap className="h-3 w-3" /> Travado</Badge>;
+    }
+    
+    switch (job.status) {
       case 'pending':
         return <Badge variant="secondary" className="gap-1"><Clock className="h-3 w-3" /> Pendente</Badge>;
       case 'processing':
@@ -199,7 +373,7 @@ export function SyncJobsMonitor() {
       case 'dead':
         return <Badge variant="destructive" className="bg-gray-700 gap-1"><Skull className="h-3 w-3" /> Dead Letter</Badge>;
       default:
-        return <Badge variant="outline">{status}</Badge>;
+        return <Badge variant="outline">{job.status}</Badge>;
     }
   };
 
@@ -242,15 +416,16 @@ export function SyncJobsMonitor() {
             <Button
               size="sm"
               onClick={runWorker}
-              disabled={workerLoading}
+              disabled={workerLoading || workerCooldown}
               className="gap-1"
+              title={workerCooldown ? `Aguarde ${cooldownRemaining}s` : 'Executar worker de sincronização'}
             >
               {workerLoading ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
                 <Play className="h-4 w-4" />
               )}
-              Executar Worker
+              {workerCooldown ? `${cooldownRemaining}s` : 'Worker'}
             </Button>
           </div>
         </div>
@@ -258,7 +433,7 @@ export function SyncJobsMonitor() {
       <CardContent className="space-y-4">
         {/* Stats Cards */}
         {stats && (
-          <div className="grid grid-cols-5 gap-2 text-sm">
+          <div className="grid grid-cols-6 gap-2 text-sm">
             <div 
               className={`rounded-lg p-3 text-center cursor-pointer transition-colors ${
                 statusFilter === 'pending' ? 'ring-2 ring-primary' : ''
@@ -276,6 +451,15 @@ export function SyncJobsMonitor() {
             >
               <div className="text-2xl font-bold text-blue-600">{stats.processing}</div>
               <div className="text-xs text-muted-foreground">Processando</div>
+            </div>
+            <div 
+              className={`rounded-lg p-3 text-center cursor-pointer transition-colors ${
+                statusFilter === 'stuck' ? 'ring-2 ring-primary' : ''
+              } bg-orange-100 dark:bg-orange-900/30 hover:bg-orange-200 dark:hover:bg-orange-900/50`}
+              onClick={() => setStatusFilter(statusFilter === 'stuck' ? 'all' : 'stuck')}
+            >
+              <div className="text-2xl font-bold text-orange-600">{stats.stuck}</div>
+              <div className="text-xs text-muted-foreground">Travados</div>
             </div>
             <div 
               className={`rounded-lg p-3 text-center cursor-pointer transition-colors ${
@@ -307,7 +491,7 @@ export function SyncJobsMonitor() {
           </div>
         )}
 
-        {/* Filtros */}
+        {/* Filtros e Ações */}
         <div className="flex flex-wrap gap-3 items-center">
           <Select value={entityFilter} onValueChange={setEntityFilter}>
             <SelectTrigger className="w-40">
@@ -333,6 +517,18 @@ export function SyncJobsMonitor() {
             </SelectContent>
           </Select>
 
+          {(stats?.stuck || 0) > 0 && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={reapStuckJobs}
+              className="gap-1 text-orange-600 hover:text-orange-700"
+            >
+              <Zap className="h-4 w-4" />
+              Liberar travados ({stats?.stuck})
+            </Button>
+          )}
+
           {(stats?.error || 0) + (stats?.dead || 0) > 0 && (
             <Button
               variant="outline"
@@ -341,7 +537,7 @@ export function SyncJobsMonitor() {
               className="gap-1 text-red-600 hover:text-red-700"
             >
               <RotateCcw className="h-4 w-4" />
-              Reativar todos com erro ({(stats?.error || 0) + (stats?.dead || 0)})
+              Reativar erros ({(stats?.error || 0) + (stats?.dead || 0)})
             </Button>
           )}
         </div>
@@ -374,7 +570,7 @@ export function SyncJobsMonitor() {
                     <>
                       <TableRow 
                         key={job.id} 
-                        className="cursor-pointer hover:bg-muted/50"
+                        className={`cursor-pointer hover:bg-muted/50 ${isJobStuck(job) ? 'bg-orange-50 dark:bg-orange-900/10' : ''}`}
                         onClick={() => setExpandedJob(expandedJob === job.id ? null : job.id)}
                       >
                         <TableCell>
@@ -391,7 +587,7 @@ export function SyncJobsMonitor() {
                           </div>
                         </TableCell>
                         <TableCell className="capitalize">{job.action}</TableCell>
-                        <TableCell>{getStatusBadge(job.status)}</TableCell>
+                        <TableCell>{getStatusBadge(job)}</TableCell>
                         <TableCell className="text-center">
                           <span className={job.attempts >= job.max_attempts ? 'text-red-600 font-bold' : ''}>
                             {job.attempts} / {job.max_attempts}
@@ -404,13 +600,13 @@ export function SyncJobsMonitor() {
                           {formatDate(job.updated_at)}
                         </TableCell>
                         <TableCell>
-                          {(job.status === 'error' || job.status === 'dead') && (
+                          {(job.status === 'error' || job.status === 'dead' || isJobStuck(job)) && (
                             <Button
                               variant="ghost"
                               size="sm"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                retryJob(job.id);
+                                retryJob(job.id, job.attempts);
                               }}
                               className="h-7 w-7 p-0"
                               title="Reativar job"
@@ -428,19 +624,24 @@ export function SyncJobsMonitor() {
                                 <span className="font-medium">Entity ID:</span>{' '}
                                 <code className="bg-muted px-1 rounded">{job.entity_id}</code>
                               </div>
+                              {isJobStuck(job) && job.processing_started_at && (
+                                <div className="p-2 bg-orange-50 dark:bg-orange-900/20 rounded text-orange-700 dark:text-orange-300">
+                                  <span className="font-medium">⚠️ Job travado há {differenceInMinutes(new Date(), new Date(job.processing_started_at))} minutos</span>
+                                </div>
+                              )}
                               {job.last_error && (
                                 <div>
                                   <span className="font-medium text-red-600">Último Erro:</span>
                                   <pre className="mt-1 p-2 bg-red-50 dark:bg-red-900/20 rounded text-xs overflow-x-auto whitespace-pre-wrap text-red-700 dark:text-red-300">
-                                    {job.last_error}
+                                    {maskSensitiveData(job.last_error)}
                                   </pre>
                                 </div>
                               )}
                               {job.payload_json && (
                                 <div>
-                                  <span className="font-medium">Payload:</span>
+                                  <span className="font-medium">Payload (dados sensíveis mascarados):</span>
                                   <pre className="mt-1 p-2 bg-muted rounded text-xs overflow-x-auto whitespace-pre-wrap max-h-40">
-                                    {JSON.stringify(job.payload_json, null, 2)}
+                                    {JSON.stringify(maskSensitiveData(job.payload_json), null, 2)}
                                   </pre>
                                 </div>
                               )}
