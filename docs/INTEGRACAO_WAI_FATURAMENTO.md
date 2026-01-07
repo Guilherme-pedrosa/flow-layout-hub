@@ -342,7 +342,56 @@ situacao_financeira TEXT,          -- 'pendente', 'parcial', 'quitado'
 
 ---
 
-## 🔟 Idempotência de Faturamento
+## 🔟 SLA e Métricas de Faturamento
+
+### KPIs Recomendados
+
+| Métrica | Cálculo | Uso |
+|---------|---------|-----|
+| Tempo OS concluída → faturada | `faturada_em - concluida_em` | Eficiência administrativa |
+| Taxa de estorno | `% de faturas estornadas` | Qualidade operacional |
+| Tempo médio de recebimento | `paid_at - issue_date` | Saúde financeira |
+
+> O tempo entre conclusão e faturamento é KPI crítico:
+> - Impacta fluxo de caixa
+> - Indica gargalo operacional
+> - Mede eficiência do backoffice
+
+---
+
+## 1️⃣1️⃣ Exceções Controladas
+
+### Estoque Negativo com Autorização
+
+Em casos excepcionais, pode-se permitir faturamento com estoque negativo:
+
+```sql
+-- Flag de exceção na OS
+estoque_negativo_autorizado BOOLEAN DEFAULT FALSE,
+estoque_negativo_autorizado_por UUID,
+estoque_negativo_autorizado_em TIMESTAMPTZ
+```
+
+| Condição | Comportamento |
+|----------|---------------|
+| Flag = false + estoque negativo | ❌ BLOQUEIA |
+| Flag = true + estoque negativo | ✔️ Permite (com audit) |
+
+> Isso permite exceções sem quebrar a regra geral.  
+> Toda autorização fica registrada para auditoria.
+
+### Faturamento Automático vs Manual
+
+| Tipo | Quando usar | Configuração |
+|------|-------------|--------------|
+| **Automático** | Contratos fixos, manutenção recorrente | `cliente.faturamento_automatico = true` |
+| **Manual** | Orçamentos, trabalhos avulsos | Requer aprovação humana |
+
+> A arquitetura já suporta ambos — basta flag no cliente/contrato.
+
+---
+
+## 1️⃣2️⃣ Idempotência de Faturamento
 
 ### Problema
 
