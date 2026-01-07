@@ -1,6 +1,7 @@
 import { useState, useRef } from "react";
 import { PageHeader } from "@/components/shared";
 import { Plug, RefreshCw, CheckCircle, AlertCircle, Loader2, Upload, ArrowRight, Link2, FileSpreadsheet, Eye } from "lucide-react";
+import { SyncJobsMonitor } from "@/components/configuracoes/SyncJobsMonitor";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
@@ -677,6 +678,9 @@ export default function Integracoes() {
           )}
         </CardContent>
       </Card>
+
+      {/* Monitor de Sync Jobs */}
+      <SyncJobsMonitor />
     </div>
   );
 }
