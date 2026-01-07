@@ -7253,6 +7253,7 @@ export type Database = {
           max_attempts: number | null
           next_retry_at: string | null
           payload_json: Json | null
+          processing_started_at: string | null
           status: string
           updated_at: string | null
         }
@@ -7268,6 +7269,7 @@ export type Database = {
           max_attempts?: number | null
           next_retry_at?: string | null
           payload_json?: Json | null
+          processing_started_at?: string | null
           status?: string
           updated_at?: string | null
         }
@@ -7283,6 +7285,7 @@ export type Database = {
           max_attempts?: number | null
           next_retry_at?: string | null
           payload_json?: Json | null
+          processing_started_at?: string | null
           status?: string
           updated_at?: string | null
         }
@@ -7825,10 +7828,64 @@ export type Database = {
         }
         Returns: number
       }
+      claim_sync_jobs: {
+        Args: { batch_size?: number }
+        Returns: {
+          action: string
+          attempts: number | null
+          company_id: string
+          created_at: string | null
+          entity_id: string
+          entity_type: string
+          id: string
+          last_error: string | null
+          max_attempts: number | null
+          next_retry_at: string | null
+          payload_json: Json | null
+          processing_started_at: string | null
+          status: string
+          updated_at: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "sync_jobs"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      get_pending_equipment_jobs_for_customer: {
+        Args: { p_client_id: string; p_company_id: string }
+        Returns: {
+          action: string
+          attempts: number | null
+          company_id: string
+          created_at: string | null
+          entity_id: string
+          entity_type: string
+          id: string
+          last_error: string | null
+          max_attempts: number | null
+          next_retry_at: string | null
+          payload_json: Json | null
+          processing_started_at: string | null
+          status: string
+          updated_at: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "sync_jobs"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       get_user_companies: { Args: never; Returns: string[] }
       get_user_company_id: { Args: never; Returns: string }
       increment_rule_usage: { Args: { rule_id: string }; Returns: undefined }
       is_admin: { Args: never; Returns: boolean }
+      reap_stuck_sync_jobs: {
+        Args: { stuck_minutes?: number }
+        Returns: number
+      }
       user_belongs_to_company: {
         Args: { _company_id: string; _user_id: string }
         Returns: boolean
