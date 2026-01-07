@@ -110,7 +110,7 @@ export function ServiceOrderFormTecnico({
               <Input 
                 type="number"
                 step="0.01"
-                value={formData.labor_cost || calculatedLaborCost} 
+                value={formData.labor_cost !== '' ? formData.labor_cost : calculatedLaborCost.toFixed(2)} 
                 onChange={(e) => onChange('labor_cost', e.target.value)} 
                 placeholder={calculatedLaborCost.toString()}
               />
@@ -123,7 +123,7 @@ export function ServiceOrderFormTecnico({
               <Input 
                 type="number"
                 step="0.01"
-                value={formData.parts_cost || calculatedPartsCost} 
+                value={formData.parts_cost !== '' ? formData.parts_cost : calculatedPartsCost.toFixed(2)} 
                 onChange={(e) => onChange('parts_cost', e.target.value)} 
                 placeholder={calculatedPartsCost.toString()}
               />
