@@ -7829,7 +7829,7 @@ export type Database = {
         Returns: number
       }
       claim_sync_jobs: {
-        Args: { batch_size?: number }
+        Args: { p_batch_size?: number }
         Returns: {
           action: string
           attempts: number | null
@@ -7883,7 +7883,7 @@ export type Database = {
       increment_rule_usage: { Args: { rule_id: string }; Returns: undefined }
       is_admin: { Args: never; Returns: boolean }
       reap_stuck_sync_jobs: {
-        Args: { stuck_minutes?: number }
+        Args: { p_stuck_minutes?: number }
         Returns: number
       }
       user_belongs_to_company: {
