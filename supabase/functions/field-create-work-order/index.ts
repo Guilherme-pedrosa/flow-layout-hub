@@ -13,11 +13,25 @@ interface WorkOrderInput {
   service_order_id: string;
   order_number: string | number;
   field_customer_id: string;
+  field_task_type_id: string; // OBRIGATÓRIO - ID do tipo de OS no Field Control
   scheduled_date: string; // YYYY-MM-DD
   scheduled_time?: string; // HH:MM
+  duration?: number; // Duração em minutos
   description?: string;
-  equipment_field_ids?: string[];
+  equipment_field_id?: string; // ID do equipamento no Field (opcional)
   technician_ids?: string[];
+  address?: {
+    street?: string;
+    number?: string;
+    neighborhood?: string;
+    city?: string;
+    state?: string;
+    zipCode?: string;
+    coords?: {
+      latitude: number;
+      longitude: number;
+    };
+  };
 }
 
 /**
@@ -61,6 +75,13 @@ serve(async (req) => {
       );
     }
 
+    if (!input.field_task_type_id) {
+      return new Response(
+        JSON.stringify({ success: false, error: 'field_task_type_id é obrigatório (tipo de OS)' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     if (!input.scheduled_date) {
       return new Response(
         JSON.stringify({ success: false, error: 'scheduled_date é obrigatório' }),
@@ -68,7 +89,7 @@ serve(async (req) => {
       );
     }
 
-    console.log(`[field-create-work-order] Criando OS ${input.order_number} para customer ${input.field_customer_id}`);
+    console.log(`[field-create-work-order] Criando OS ${input.order_number} para customer ${input.field_customer_id}, tipo ${input.field_task_type_id}`);
 
     const headers = {
       'X-Api-Key': apiKey,
@@ -82,16 +103,38 @@ serve(async (req) => {
 
     // Criar Task no Field Control
     // A API do Field Control usa Tasks como unidade principal
-    const taskPayload = {
+    // taskTypeId é OBRIGATÓRIO para criar uma task
+    const taskPayload: Record<string, unknown> = {
       identifier: String(input.order_number), // WAI order_number = Field identifier
       customer: {
         id: input.field_customer_id
       },
+      taskType: {
+        id: input.field_task_type_id // OBRIGATÓRIO
+      },
       scheduledTo: scheduledDateTime,
+      duration: input.duration || 60,
       description: input.description || `Ordem de Serviço #${input.order_number}`,
-      equipments: (input.equipment_field_ids || []).map(id => ({ id })),
-      assignees: (input.technician_ids || []).map(id => ({ id }))
+      assignees: (input.technician_ids || []).map((id: string) => ({ id }))
     };
+
+    // Adicionar equipamento se fornecido
+    if (input.equipment_field_id) {
+      taskPayload.equipments = [{ id: input.equipment_field_id }];
+    }
+
+    // Adicionar endereço se fornecido
+    if (input.address) {
+      taskPayload.address = {
+        street: input.address.street,
+        number: input.address.number,
+        neighborhood: input.address.neighborhood,
+        city: input.address.city,
+        state: input.address.state,
+        zipCode: input.address.zipCode,
+        coords: input.address.coords
+      };
+    }
 
     console.log(`[field-create-work-order] Task payload:`, JSON.stringify(taskPayload));
 
