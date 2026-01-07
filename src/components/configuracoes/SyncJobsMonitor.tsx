@@ -15,7 +15,8 @@ import {
 } from "@/components/ui/select";
 import { 
   RefreshCw, Play, AlertTriangle, CheckCircle2, Clock, Skull, 
-  Loader2, RotateCcw, ChevronDown, ChevronUp, Activity, Zap
+  Loader2, RotateCcw, ChevronDown, ChevronUp, Activity, Zap,
+  Timer, TrendingUp
 } from "lucide-react";
 import { format, differenceInMinutes } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -56,6 +57,16 @@ interface SyncStatsRow {
   stuck: number;
 }
 
+// Tipo para SLA
+interface SlaMetrics {
+  entity_type: string;
+  total_jobs: number;
+  avg_duration_seconds: number;
+  p95_duration_seconds: number;
+  p99_duration_seconds: number;
+  success_rate: number;
+}
+
 // Mascarar dados sensíveis (CPF, CNPJ, telefone, email)
 function maskSensitiveData(obj: any): any {
   if (obj === null || obj === undefined) return obj;
@@ -89,6 +100,7 @@ export function SyncJobsMonitor() {
   const { currentCompany } = useCompany();
   const [jobs, setJobs] = useState<SyncJob[]>([]);
   const [stats, setStats] = useState<SyncJobsStats | null>(null);
+  const [slaMetrics, setSlaMetrics] = useState<SlaMetrics[]>([]);
   const [loading, setLoading] = useState(false);
   const [workerLoading, setWorkerLoading] = useState(false);
   const [workerCooldown, setWorkerCooldown] = useState(false);
@@ -97,6 +109,7 @@ export function SyncJobsMonitor() {
   const [entityFilter, setEntityFilter] = useState<string>("all");
   const [expandedJob, setExpandedJob] = useState<string | null>(null);
   const [limit, setLimit] = useState(50);
+  const [showSla, setShowSla] = useState(false);
 
   const fetchStats = useCallback(async () => {
     if (!currentCompany?.id) return;
@@ -144,12 +157,38 @@ export function SyncJobsMonitor() {
     }
   }, [currentCompany?.id]);
 
+  const fetchSlaMetrics = useCallback(async () => {
+    if (!currentCompany?.id) return;
+
+    try {
+      const { data, error } = await (supabase.rpc as any)('get_sync_jobs_sla', {
+        p_company_id: currentCompany.id
+      });
+
+      if (error) throw error;
+
+      if (data && Array.isArray(data)) {
+        setSlaMetrics(data.map((row: any) => ({
+          entity_type: row.entity_type,
+          total_jobs: Number(row.total_jobs) || 0,
+          avg_duration_seconds: Number(row.avg_duration_seconds) || 0,
+          p95_duration_seconds: Number(row.p95_duration_seconds) || 0,
+          p99_duration_seconds: Number(row.p99_duration_seconds) || 0,
+          success_rate: Number(row.success_rate) || 0,
+        })));
+      }
+    } catch (err: any) {
+      console.error('Erro ao buscar SLA:', err);
+    }
+  }, [currentCompany?.id]);
+
   const fetchJobs = useCallback(async () => {
     if (!currentCompany?.id) return;
 
     setLoading(true);
     try {
       await fetchStats();
+      await fetchSlaMetrics();
 
       // Buscar jobs com filtros
       let query = supabase
@@ -183,7 +222,7 @@ export function SyncJobsMonitor() {
     } finally {
       setLoading(false);
     }
-  }, [currentCompany?.id, statusFilter, entityFilter, limit, fetchStats]);
+  }, [currentCompany?.id, statusFilter, entityFilter, limit, fetchStats, fetchSlaMetrics]);
 
   useEffect(() => {
     fetchJobs();
@@ -412,8 +451,12 @@ export function SyncJobsMonitor() {
               <Activity className="h-5 w-5" />
               Monitoramento de Sincronização
             </CardTitle>
-            <CardDescription>
+            <CardDescription className="flex items-center gap-2">
               Acompanhe os jobs de sincronização WAI ↔ Field Control
+              <Badge variant="outline" className="gap-1 text-green-600 border-green-300">
+                <Clock className="h-3 w-3" />
+                Cron ativo (1/min)
+              </Badge>
             </CardDescription>
           </div>
           <div className="flex gap-2">
@@ -502,6 +545,76 @@ export function SyncJobsMonitor() {
             </div>
           </div>
         )}
+
+        {/* SLA Metrics */}
+        <div className="space-y-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowSla(!showSla)}
+            className="gap-2 text-muted-foreground hover:text-foreground"
+          >
+            <Timer className="h-4 w-4" />
+            Métricas de SLA (últimos 30 dias)
+            <ChevronDown className={`h-4 w-4 transition-transform ${showSla ? 'rotate-180' : ''}`} />
+          </Button>
+          
+          {showSla && slaMetrics.length > 0 && (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              {slaMetrics.map((metric) => (
+                <div key={metric.entity_type} className="border rounded-lg p-4 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium capitalize">
+                      {metric.entity_type === 'customer' ? 'Clientes' :
+                       metric.entity_type === 'equipment' ? 'Equipamentos' :
+                       metric.entity_type === 'service_order' ? 'Ordens de Serviço' :
+                       metric.entity_type}
+                    </span>
+                    <Badge variant="outline" className="gap-1">
+                      <TrendingUp className="h-3 w-3" />
+                      {metric.success_rate}%
+                    </Badge>
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    {metric.total_jobs.toLocaleString()} jobs processados
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 text-center pt-2 border-t">
+                    <div>
+                      <div className="text-lg font-bold text-blue-600">
+                        {metric.avg_duration_seconds < 60 
+                          ? `${Math.round(metric.avg_duration_seconds)}s`
+                          : `${Math.round(metric.avg_duration_seconds / 60)}m`}
+                      </div>
+                      <div className="text-xs text-muted-foreground">Média</div>
+                    </div>
+                    <div>
+                      <div className="text-lg font-bold text-orange-600">
+                        {metric.p95_duration_seconds < 60 
+                          ? `${Math.round(metric.p95_duration_seconds)}s`
+                          : `${Math.round(metric.p95_duration_seconds / 60)}m`}
+                      </div>
+                      <div className="text-xs text-muted-foreground">P95</div>
+                    </div>
+                    <div>
+                      <div className="text-lg font-bold text-red-600">
+                        {metric.p99_duration_seconds < 60 
+                          ? `${Math.round(metric.p99_duration_seconds)}s`
+                          : `${Math.round(metric.p99_duration_seconds / 60)}m`}
+                      </div>
+                      <div className="text-xs text-muted-foreground">P99</div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          
+          {showSla && slaMetrics.length === 0 && (
+            <div className="text-sm text-muted-foreground p-4 text-center border rounded-lg">
+              Nenhum job concluído nos últimos 30 dias
+            </div>
+          )}
+        </div>
 
         {/* Filtros e Ações */}
         <div className="flex flex-wrap gap-3 items-center">

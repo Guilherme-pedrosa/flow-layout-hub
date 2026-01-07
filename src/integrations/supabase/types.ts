@@ -7878,6 +7878,17 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      get_sync_jobs_sla: {
+        Args: { p_company_id: string }
+        Returns: {
+          avg_duration_seconds: number
+          entity_type: string
+          p95_duration_seconds: number
+          p99_duration_seconds: number
+          success_rate: number
+          total_jobs: number
+        }[]
+      }
       get_user_companies: { Args: never; Returns: string[] }
       get_user_company_id: { Args: never; Returns: string }
       increment_rule_usage: { Args: { rule_id: string }; Returns: undefined }
