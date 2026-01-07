@@ -39,10 +39,13 @@ O equipamento é identificado por:
 }
 ```
 
-### Regra de Unicidade
+### Regras de Formato e Unicidade
+
+> O `externalId` **deve ser enviado sempre como string**, mesmo quando o UUID for armazenado internamente como UUID.  
+> Isso evita bugs de serialização em SDKs e APIs.
 
 > O valor de `externalId` **deve ser único** por equipamento dentro do tenant Field Control.  
-> **Não pode ser reutilizado**, mesmo em exclusões lógicas.  
+> **Não pode ser reutilizado**, mesmo em exclusões lógicas.
 > Reutilizar UUID antigo = corrupção de dados garantida.
 
 **📌 Esta é a âncora de idempotência:**
@@ -170,12 +173,18 @@ Quando equipamento muda no WAI (nome, modelo, número de série):
    - Atualiza registro existente
    - **Não duplica**
 
-### ⚠️ Mudança de Cliente
+### ⚠️ Mudança de Cliente (Evento Crítico)
 
 Se equipamento mudar de cliente:
 1. Novo cliente **deve estar sincronizado** com Field
 2. Payload atualizado usa novo `customerId`
 3. Field Control move equipamento para novo cliente
+
+**Ações obrigatórias na mudança de cliente:**
+- Gerar novo `audit_log` com action: `equipment_client_changed`
+- Criar novo `sync_job` imediatamente
+- **Invalidar OS abertas** vinculadas ao equipamento (se existirem)
+- Notificar responsável técnico
 
 ---
 
@@ -189,9 +198,19 @@ Se equipamento mudar de cliente:
 1. WAI **cria equipamento** localmente
 2. Já grava `field_equipment_id` recebido
 3. Gera novo `equipamentos.id` (UUID)
-4. Sincroniza de volta com `externalId = novo equipamentos.id`
+4. **Marca `equipamentos.created_from_field = true`**
+5. Sincroniza de volta com `externalId = novo equipamentos.id`
 
 **📌 Nunca existe equipamento "solto" sem vínculo bidirecional**
+
+### Flag `created_from_field`
+
+| Valor | Significado |
+|-------|-------------|
+| `true` | Equipamento criado a partir de dados do Field (webhook) |
+| `false` | Equipamento criado nativamente no WAI |
+
+> Útil para relatórios, auditoria e saneamento futuro de dados.
 
 ### ⛔ Proibição de Merge Automático
 
