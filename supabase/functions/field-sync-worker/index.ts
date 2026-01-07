@@ -235,10 +235,10 @@ async function processCustomerJob(job: SyncJob, headers: any, supabase: any) {
   const payload = job.payload_json;
   const externalId = job.entity_id; // WAI ID para idempotência
   
-  // Buscar cliente
+  // Buscar cliente completo
   const { data: cliente } = await supabase
     .from('clientes')
-    .select('id, field_customer_id')
+    .select('*')
     .eq('id', job.entity_id)
     .single();
 
@@ -246,35 +246,52 @@ async function processCustomerJob(job: SyncJob, headers: any, supabase: any) {
     throw new Error('Cliente não encontrado no WAI');
   }
 
-  // Validações
-  const name = payload.name;
+  // Validações OBRIGATÓRIAS do Field Control
+  const name = payload.name || cliente.razao_social || cliente.nome_fantasia;
   if (!name || name.length < 6) {
     throw new Error('Nome deve ter pelo menos 6 caracteres');
   }
 
-  const cleanZip = (payload.cep || '').replace(/\D/g, '');
+  const cleanZip = (payload.cep || cliente.cep || '').replace(/\D/g, '');
   if (cleanZip.length !== 8) {
     throw new Error('CEP deve ter 8 dígitos');
   }
 
-  // Montar payload do Field
-  const fieldPayload = {
+  // Coordenadas são OBRIGATÓRIAS no Field Control
+  // Se não tiver, usar coordenadas default de Brasília (centro do Brasil)
+  const latitude = payload.latitude || cliente.latitude || -15.793889;
+  const longitude = payload.longitude || cliente.longitude || -47.882778;
+
+  // Montar payload OFICIAL do Field Control
+  const fieldPayload: any = {
     name: name,
-    externalId: externalId,
-    contact: {
-      email: payload.email || '',
-      phone: (payload.phone || '').replace(/\D/g, '')
+    external: {
+      id: externalId  // Campo correto para idempotência
     },
     address: {
+      street: payload.street || cliente.logradouro || '',
+      number: payload.number || cliente.numero || 'S/N',
+      neighborhood: payload.district || cliente.bairro || '',
+      complement: payload.complement || cliente.complemento || '',
+      city: payload.city || cliente.cidade || '',
+      state: payload.state || cliente.estado || '',
       zipCode: cleanZip,
-      street: payload.street || '',
-      number: payload.number || '',
-      neighborhood: payload.district || '',
-      complement: payload.complement || '',
-      city: payload.city || '',
-      state: payload.state || ''
+      coords: {
+        latitude: parseFloat(String(latitude)),
+        longitude: parseFloat(String(longitude))
+      }
     }
   };
+
+  // Campos opcionais de contato
+  const email = payload.email || cliente.email;
+  const phone = (payload.phone || cliente.telefone || '').replace(/\D/g, '');
+  
+  if (email || phone) {
+    fieldPayload.contact = {};
+    if (email) fieldPayload.contact.email = email;
+    if (phone) fieldPayload.contact.phone = phone;
+  }
 
   let fieldCustomerId = cliente.field_customer_id;
 
@@ -432,7 +449,7 @@ async function processEquipmentJob(job: SyncJob, headers: any, supabase: any) {
   const payload = job.payload_json;
   const externalId = job.entity_id;
   
-  // Verificar field_customer_id
+  // Verificar field_customer_id - OBRIGATÓRIO
   let fieldCustomerId = payload.field_customer_id;
   
   if (!fieldCustomerId && payload.client_id) {
@@ -449,10 +466,10 @@ async function processEquipmentJob(job: SyncJob, headers: any, supabase: any) {
     throw new Error('Cliente não sincronizado - aguardando');
   }
 
-  // Buscar equipamento
+  // Buscar equipamento completo
   const { data: equipment } = await supabase
     .from('equipments')
-    .select('id, field_equipment_id')
+    .select('*')
     .eq('id', job.entity_id)
     .single();
 
@@ -460,14 +477,30 @@ async function processEquipmentJob(job: SyncJob, headers: any, supabase: any) {
     throw new Error('Equipamento não encontrado no WAI');
   }
 
-  // Montar payload
-  const fieldPayload = {
-    externalId: externalId,
-    number: payload.serial_number || `EQ-${job.entity_id.substring(0, 8)}`,
-    name: payload.model || 'Equipamento',
-    brand: payload.brand || '',
-    customer: { id: fieldCustomerId }
+  // Montar payload OFICIAL do Field Control
+  // Campos OBRIGATÓRIOS: customerId, serialNumber, name, external.id
+  const fieldPayload: any = {
+    customerId: fieldCustomerId,
+    serialNumber: payload.serial_number || equipment.serial_number || `EQ-${job.entity_id.substring(0, 8)}`,
+    name: payload.model || equipment.model || 'Equipamento',
+    external: {
+      id: externalId  // Campo correto para idempotência
+    }
   };
+
+  // Campos opcionais mas recomendados
+  if (payload.brand || equipment.brand) {
+    fieldPayload.brand = payload.brand || equipment.brand;
+  }
+  if (payload.equipment_type || equipment.equipment_type) {
+    fieldPayload.type = payload.equipment_type || equipment.equipment_type;
+  }
+  if (payload.notes || equipment.notes) {
+    fieldPayload.notes = payload.notes || equipment.notes;
+  }
+  if (payload.qr_code || equipment.qr_code) {
+    fieldPayload.qrCode = payload.qr_code || equipment.qr_code;
+  }
 
   let fieldEquipmentId = equipment.field_equipment_id;
 
@@ -563,10 +596,10 @@ async function processEquipmentJob(job: SyncJob, headers: any, supabase: any) {
 async function processServiceOrderJob(job: SyncJob, headers: any, supabase: any) {
   const externalId = job.entity_id;
   
-  // Buscar OS com cliente
+  // Buscar OS com cliente e equipamento
   const { data: os } = await supabase
     .from('service_orders')
-    .select('*, client:clientes(field_customer_id)')
+    .select('*, client:clientes(field_customer_id), equipment:equipments(field_equipment_id)')
     .eq('id', job.entity_id)
     .single();
 
@@ -574,23 +607,38 @@ async function processServiceOrderJob(job: SyncJob, headers: any, supabase: any)
     throw new Error('OS não encontrada no WAI');
   }
 
+  // Campo OBRIGATÓRIO: customerId
   const fieldCustomerId = os.client?.field_customer_id;
   if (!fieldCustomerId) {
     throw new Error('Cliente da OS não sincronizado - aguardando');
   }
 
+  // Campo OBRIGATÓRIO: equipmentId
+  const fieldEquipmentId = os.equipment?.field_equipment_id;
+  if (!fieldEquipmentId) {
+    throw new Error('Equipamento da OS não sincronizado - aguardando');
+  }
+
   let fieldTaskId = os.field_task_id;
 
-  // Montar payload
-  const scheduledDate = os.scheduled_date || os.order_date;
+  // Montar payload OFICIAL do Field Control
+  // Campos OBRIGATÓRIOS: customerId, equipmentId, title, type=service, external.id
+  const scheduledDate = os.scheduled_date || os.order_date || new Date().toISOString().split('T')[0];
   const scheduledTime = os.scheduled_time || '08:00';
   
-  const fieldPayload = {
-    identifier: String(os.order_number),
-    externalId: externalId,
-    customer: { id: fieldCustomerId },
-    scheduledTo: `${scheduledDate}T${scheduledTime}:00`,
-    description: os.reported_issue || `Ordem de Serviço #${os.order_number}`
+  const fieldPayload: any = {
+    customerId: fieldCustomerId,
+    equipmentId: fieldEquipmentId,
+    title: os.reported_issue || `Ordem de Serviço #${os.order_number}`,
+    type: 'service',
+    external: {
+      id: externalId  // Campo correto para idempotência
+    },
+    // Campos opcionais
+    description: os.reported_issue || '',
+    scheduledAt: `${scheduledDate}T${scheduledTime}:00Z`,
+    priority: 'normal',
+    status: 'open'
   };
 
   if (fieldTaskId) {
