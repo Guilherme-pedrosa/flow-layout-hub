@@ -58,8 +58,9 @@ serve(async (req) => {
 
     const apiKey = settings.field_control_api_key;
 
-    // Buscar TASK-TYPES do Field Control (tipos de OS)
-    const response = await fetch(`${FIELD_CONTROL_BASE_URL}/task-types`, {
+    // Buscar SERVICES do Field Control (tipos de OS/serviço)
+    // O Field Control usa "services" para os tipos de tarefa
+    const response = await fetch(`${FIELD_CONTROL_BASE_URL}/services`, {
       method: 'GET',
       headers: {
         'x-api-key': apiKey,
@@ -68,7 +69,7 @@ serve(async (req) => {
     });
 
     if (!response.ok) {
-      console.error(`[field-service-types] Erro ao buscar task-types: ${response.status}`);
+      console.error(`[field-service-types] Erro ao buscar services: ${response.status}`);
       const errorText = await response.text();
       console.error(`[field-service-types] Response: ${errorText}`);
       return new Response(
@@ -78,29 +79,29 @@ serve(async (req) => {
     }
 
     const data = await response.json();
-    const taskTypes = data.items || data.data || data || [];
+    const services = data.items || data.data || data || [];
 
-    console.log(`[field-service-types] ${taskTypes.length} tipos de OS encontrados`);
+    console.log(`[field-service-types] ${services.length} tipos de OS encontrados`);
 
     // Se sync=true, sincronizar com tabela service_types
-    if (sync && taskTypes.length > 0) {
+    if (sync && services.length > 0) {
       console.log('[field-service-types] Iniciando sincronização com banco local...');
       
       let syncedCount = 0;
       
-      for (const taskType of taskTypes) {
-        const fieldTaskTypeId = String(taskType.id);
-        const typeName = taskType.name || taskType.title || `Tipo ${taskType.id}`;
-        const typeColor = taskType.color || '#3b82f6';
-        const defaultDuration = taskType.duration || taskType.defaultDuration || 60;
+      for (const service of services) {
+        const fieldServiceId = String(service.id);
+        const serviceName = service.name || service.title || `Tipo ${service.id}`;
+        const serviceColor = service.color || '#3b82f6';
+        const defaultDuration = service.duration || service.defaultDuration || 60;
 
         try {
-          // Verificar se já existe pelo field_service_id (que armazena o task-type id)
+          // Verificar se já existe pelo field_service_id
           const { data: existing } = await supabaseClient
             .from('service_types')
             .select('id')
             .eq('company_id', company_id)
-            .eq('field_service_id', fieldTaskTypeId)
+            .eq('field_service_id', fieldServiceId)
             .single();
 
           if (existing) {
@@ -108,33 +109,33 @@ serve(async (req) => {
             await supabaseClient
               .from('service_types')
               .update({
-                name: typeName,
-                color: typeColor,
+                name: serviceName,
+                color: serviceColor,
                 default_duration: defaultDuration,
                 is_active: true,
                 updated_at: new Date().toISOString()
               })
               .eq('id', existing.id);
             
-            console.log(`[field-service-types] Atualizado: ${typeName}`);
+            console.log(`[field-service-types] Atualizado: ${serviceName}`);
           } else {
             // Inserir novo
             await supabaseClient
               .from('service_types')
               .insert({
                 company_id,
-                name: typeName,
-                field_service_id: fieldTaskTypeId,
-                color: typeColor,
+                name: serviceName,
+                field_service_id: fieldServiceId,
+                color: serviceColor,
                 default_duration: defaultDuration,
                 is_active: true
               });
             
-            console.log(`[field-service-types] Criado: ${typeName}`);
+            console.log(`[field-service-types] Criado: ${serviceName}`);
           }
           syncedCount++;
         } catch (upsertError) {
-          console.error(`[field-service-types] Erro ao sincronizar ${typeName}:`, upsertError);
+          console.error(`[field-service-types] Erro ao sincronizar ${serviceName}:`, upsertError);
         }
       }
       
@@ -142,7 +143,7 @@ serve(async (req) => {
       await supabaseClient.from('audit_logs').insert({
         company_id,
         entity: 'service_types',
-        action: 'task_types_synced',
+        action: 'service_types_synced',
         metadata_json: { synced_count: syncedCount, source: 'field_control' }
       });
       
@@ -152,13 +153,13 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({ 
         success: true, 
-        services: taskTypes.map((t: any) => ({ 
-          id: t.id, 
-          name: t.name || t.title,
-          color: t.color,
-          duration: t.duration || t.defaultDuration
+        services: services.map((s: any) => ({ 
+          id: s.id, 
+          name: s.name || s.title,
+          color: s.color,
+          duration: s.duration || s.defaultDuration
         })),
-        synced: sync ? taskTypes.length : 0
+        synced: sync ? services.length : 0
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
