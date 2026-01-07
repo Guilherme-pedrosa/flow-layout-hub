@@ -167,3 +167,6 @@ verify_jwt = false
 
 [functions.field-sync-worker]
 verify_jwt = false
+
+[functions.field-service-types]
+verify_jwt = false
