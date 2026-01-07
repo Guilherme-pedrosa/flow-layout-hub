@@ -20,6 +20,8 @@ interface FieldEquipment {
   locationEnvironment?: string;
   qrCode?: string;
   archived?: boolean;
+  avatarUrl?: string;
+  brand?: string;
 }
 
 /**
@@ -74,6 +76,22 @@ serve(async (req) => {
 
     console.log('[field-sync-equipment] Iniciando sync para company:', company_id);
 
+    // FASE 0: Buscar equipment-types para mapear ID → nome
+    const typeMap = new Map<string, string>();
+    try {
+      const typesResp = await fetch(`${FIELD_CONTROL_BASE_URL}/equipment-types`, { method: 'GET', headers });
+      if (typesResp.ok) {
+        const typesData = await typesResp.json();
+        const types = typesData.items || typesData.data || (Array.isArray(typesData) ? typesData : []);
+        for (const t of types) {
+          if (t.id && t.name) typeMap.set(String(t.id), t.name);
+        }
+        console.log('[field-sync-equipment] Equipment types mapeados:', typeMap.size);
+      }
+    } catch (e) {
+      console.log('[field-sync-equipment] Erro ao buscar types:', e);
+    }
+
     // FASE 1: Buscar TODOS os equipamentos do Field (paginação rápida)
     const allEquipments: FieldEquipment[] = [];
     let offset = 0;
@@ -103,6 +121,10 @@ serve(async (req) => {
       if (offset === 0) {
         totalExpected = data.totalCount || 0;
         console.log('[field-sync-equipment] Total esperado da API:', totalExpected);
+        // Log da estrutura do primeiro equipamento para debug
+        if (data.items?.[0]) {
+          console.log('[field-sync-equipment] Estrutura equipamento:', JSON.stringify(data.items[0]).substring(0, 500));
+        }
       }
 
       const items: FieldEquipment[] = data.items || data.data || [];
@@ -112,7 +134,9 @@ serve(async (req) => {
       allEquipments.push(...items);
       offset += items.length;
 
-      console.log(`[field-sync-equipment] Buscados ${allEquipments.length}/${totalExpected}`);
+      if (offset % 500 === 0) {
+        console.log(`[field-sync-equipment] Buscados ${allEquipments.length}/${totalExpected}`);
+      }
 
       if (allEquipments.length >= totalExpected || items.length < pageSize) break;
     }
@@ -164,9 +188,9 @@ serve(async (req) => {
     }
     console.log('[field-sync-equipment] Total customers após clientes:', customerMap.size);
 
-    // FASE 3: Processar equipamentos em batch
-    let created = 0, updated = 0, errors = 0;
-    const BATCH_SIZE = 50;
+    // FASE 3: Processar equipamentos usando UPSERT (muito mais rápido)
+    let processed = 0, errors = 0;
+    const BATCH_SIZE = 100;
     const missingCustomers = new Set<string>();
 
     for (let i = 0; i < allEquipments.length; i += BATCH_SIZE) {
@@ -176,8 +200,7 @@ serve(async (req) => {
       }
 
       const batch = allEquipments.slice(i, i + BATCH_SIZE);
-      const toInsert: any[] = [];
-      const toUpdate: { id: string; data: any }[] = [];
+      const records: any[] = [];
 
       for (const eq of batch) {
         const fieldEquipmentId = String(eq.id);
@@ -194,11 +217,15 @@ serve(async (req) => {
           }
         }
 
-        const equipmentData = {
+        // Mapear tipo pelo ID se existir
+        const typeName = eq.type?.id ? typeMap.get(String(eq.type.id)) : eq.type?.name;
+
+        const record: any = {
           company_id,
           serial_number: eq.number || `FIELD-${fieldEquipmentId}`,
           model: eq.name || null,
-          equipment_type: eq.type?.name || null,
+          brand: eq.brand || null,
+          equipment_type: typeName || null,
           notes: eq.notes || null,
           field_equipment_id: fieldEquipmentId,
           is_active: !eq.archived,
@@ -206,47 +233,39 @@ serve(async (req) => {
           environment: eq.locationEnvironment || null,
           location_description: eq.location || null,
           qr_code: eq.qrCode || null,
+          image_url: eq.avatarUrl || null,
           client_id: clientId,
           sync_status: 'synced',
           sync_updated_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
         };
 
+        // Se existe, incluir ID para upsert
         if (existingId) {
-          toUpdate.push({ id: existingId, data: { ...equipmentData, updated_at: new Date().toISOString() } });
-        } else {
-          toInsert.push(equipmentData);
+          record.id = existingId;
         }
+
+        records.push(record);
       }
 
-      // Inserir novos
-      if (toInsert.length > 0) {
-        const { error: insertError } = await supabase
-          .from('equipments')
-          .insert(toInsert);
+      // UPSERT em batch (muito mais rápido que insert/update individual)
+      const { error: upsertError } = await supabase
+        .from('equipments')
+        .upsert(records, { 
+          onConflict: 'company_id,field_equipment_id',
+          ignoreDuplicates: false 
+        });
 
-        if (insertError) {
-          console.error('[field-sync-equipment] Erro batch insert:', insertError.message);
-          errors += toInsert.length;
-        } else {
-          created += toInsert.length;
-        }
+      if (upsertError) {
+        console.error('[field-sync-equipment] Erro batch upsert:', upsertError.message);
+        errors += records.length;
+      } else {
+        processed += records.length;
       }
 
-      // Atualizar existentes (um por um para evitar conflitos)
-      for (const upd of toUpdate) {
-        const { error: updateError } = await supabase
-          .from('equipments')
-          .update(upd.data)
-          .eq('id', upd.id);
-
-        if (updateError) {
-          errors++;
-        } else {
-          updated++;
-        }
+      if ((i + BATCH_SIZE) % 500 === 0 || i + BATCH_SIZE >= allEquipments.length) {
+        console.log(`[field-sync-equipment] Processados ${Math.min(i + BATCH_SIZE, allEquipments.length)}/${allEquipments.length}`);
       }
-
-      console.log(`[field-sync-equipment] Processados ${Math.min(i + BATCH_SIZE, allEquipments.length)}/${allEquipments.length}`);
     }
 
     // FASE 4: Buscar customers faltantes (em background para não travar)
@@ -322,13 +341,12 @@ serve(async (req) => {
     }
 
     const elapsed = Date.now() - startTime;
-    console.log('[field-sync-equipment] Finalizado em', elapsed, 'ms:', { created, updated, errors, total: allEquipments.length });
+    console.log('[field-sync-equipment] Finalizado em', elapsed, 'ms:', { processed, errors, total: allEquipments.length });
 
     return new Response(
       JSON.stringify({
         success: true,
-        created,
-        updated,
+        processed,
         errors,
         total: allEquipments.length,
         totalExpected,
