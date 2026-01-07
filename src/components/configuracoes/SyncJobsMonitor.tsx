@@ -46,6 +46,16 @@ interface SyncJobsStats {
   stuck: number;
 }
 
+// Tipo para retorno da RPC (até types serem regenerados)
+interface SyncStatsRow {
+  pending: number;
+  processing: number;
+  done: number;
+  error: number;
+  dead: number;
+  stuck: number;
+}
+
 // Mascarar dados sensíveis (CPF, CNPJ, telefone, email)
 function maskSensitiveData(obj: any): any {
   if (obj === null || obj === undefined) return obj;
@@ -93,14 +103,15 @@ export function SyncJobsMonitor() {
 
     try {
       // Usar RPC para estatísticas (evita count no front)
-      const { data, error } = await supabase.rpc('get_sync_jobs_stats' as any, {
+      // Cast necessário até regenerar types do Supabase
+      const { data, error } = await (supabase.rpc as any)('get_sync_jobs_stats', {
         p_company_id: currentCompany.id
       });
 
       if (error) throw error;
 
       if (data && Array.isArray(data) && data.length > 0) {
-        const row = data[0] as any;
+        const row = data[0] as SyncStatsRow;
         setStats({
           pending: Number(row.pending) || 0,
           processing: Number(row.processing) || 0,
@@ -249,7 +260,8 @@ export function SyncJobsMonitor() {
 
   const reapStuckJobs = async () => {
     try {
-      const { data, error } = await supabase.rpc('reap_stuck_sync_jobs' as any, {
+      // Cast necessário até regenerar types do Supabase
+      const { data, error } = await (supabase.rpc as any)('reap_stuck_sync_jobs', {
         p_stuck_minutes: 5
       });
 
