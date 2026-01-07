@@ -208,121 +208,95 @@ Responda APENAS com o JSON array, sem markdown ou explicações.` }],
 
     try {
       const resp = await streamChat(newMessages);
-      if (!resp.body) throw new Error("No response body");
-
-      const reader = resp.body.getReader();
-      const decoder = new TextDecoder();
-      let textBuffer = "";
-      let streamDone = false;
-      let receivedAnyContent = false;
-
-      console.log("[FinancialAIChat] Starting to read stream...");
-
-      while (!streamDone) {
-        const { done, value } = await reader.read();
-        if (done) {
-          console.log("[FinancialAIChat] Stream done, buffer remaining:", textBuffer.length);
-          break;
-        }
-        
-        const chunk = decoder.decode(value, { stream: true });
-        textBuffer += chunk;
-        console.log("[FinancialAIChat] Received chunk:", chunk.substring(0, 100));
-
-        let newlineIndex: number;
-        while ((newlineIndex = textBuffer.indexOf("\n")) !== -1) {
-          let line = textBuffer.slice(0, newlineIndex);
-          textBuffer = textBuffer.slice(newlineIndex + 1);
-
-          if (line.endsWith("\r")) line = line.slice(0, -1);
-          if (line.startsWith(":") || line.trim() === "") continue;
-          if (!line.startsWith("data: ")) continue;
-
-          const jsonStr = line.slice(6).trim();
-          if (jsonStr === "[DONE]") {
-            streamDone = true;
-            break;
-          }
-
-          try {
-            const parsed = JSON.parse(jsonStr);
-            console.log("[FinancialAIChat] Parsed SSE:", JSON.stringify(parsed).substring(0, 200));
-            
-            // Try multiple paths to extract content
-            const content = 
-              parsed.choices?.[0]?.delta?.content ||
-              parsed.choices?.[0]?.message?.content ||
-              parsed.content ||
-              parsed.message?.content ||
-              parsed.answer ||
-              parsed.output_text ||
-              parsed.text ||
-              "";
-            
-            if (content) {
-              receivedAnyContent = true;
-              upsertAssistant(content);
-            }
-          } catch (parseErr) {
-            console.log("[FinancialAIChat] JSON parse error, continuing...", parseErr);
-            textBuffer = line + "\n" + textBuffer;
-            break;
-          }
-        }
+      
+      // CRITICAL: First get the raw text response
+      const rawText = await resp.text();
+      console.log("[FinancialAIChat] RAW RESPONSE:", rawText.substring(0, 500));
+      
+      if (!rawText || !rawText.trim()) {
+        upsertAssistant("⚠️ Recebi resposta vazia do servidor. Verifique payload.");
+        return;
       }
 
-      // Process any remaining buffer
-      if (textBuffer.trim()) {
-        console.log("[FinancialAIChat] Processing remaining buffer:", textBuffer.substring(0, 200));
-        
-        // Check if buffer is raw JSON (non-SSE response)
+      // Helper to try parsing JSON safely
+      const tryParseJson = (str: string) => {
         try {
-          const rawJson = JSON.parse(textBuffer);
-          console.log("[FinancialAIChat] RAW JSON RESPONSE:", JSON.stringify(rawJson).substring(0, 500));
-          
-          const content = 
-            rawJson.choices?.[0]?.message?.content ||
-            rawJson.choices?.[0]?.delta?.content ||
-            rawJson.content ||
-            rawJson.message?.content ||
-            rawJson.answer ||
-            rawJson.output_text ||
-            rawJson.text ||
-            "";
-          
-          if (content) {
-            receivedAnyContent = true;
-            upsertAssistant(content);
-          }
+          return JSON.parse(str);
         } catch {
-          // Not raw JSON, try SSE lines
-          for (let raw of textBuffer.split("\n")) {
-            if (!raw) continue;
-            if (raw.endsWith("\r")) raw = raw.slice(0, -1);
-            if (raw.startsWith(":") || raw.trim() === "") continue;
-            if (!raw.startsWith("data: ")) continue;
-            const jsonStr = raw.slice(6).trim();
-            if (jsonStr === "[DONE]") continue;
-            try {
-              const parsed = JSON.parse(jsonStr);
-              const content = 
-                parsed.choices?.[0]?.delta?.content ||
-                parsed.choices?.[0]?.message?.content ||
-                parsed.content ||
-                "";
-              if (content) {
-                receivedAnyContent = true;
-                upsertAssistant(content);
-              }
-            } catch { /* ignore */ }
-          }
+          return null;
+        }
+      };
+
+      // Check if it's a plain JSON response (non-streaming)
+      const directJson = tryParseJson(rawText);
+      if (directJson) {
+        console.log("[FinancialAIChat] Direct JSON response detected");
+        
+        // Try all possible paths to extract the message
+        const text =
+          directJson.message ??
+          directJson.answer ??
+          directJson.content ??
+          directJson.data?.message ??
+          directJson.data?.answer ??
+          directJson.data?.content ??
+          directJson.response?.message ??
+          directJson.response?.content ??
+          directJson.choices?.[0]?.message?.content ??
+          directJson.choices?.[0]?.delta?.content ??
+          directJson.output_text ??
+          directJson.text ??
+          "";
+        
+        if (text && text.trim().length) {
+          upsertAssistant(text);
+          return;
+        } else if (directJson.error) {
+          upsertAssistant(`❌ Erro: ${directJson.error}`);
+          return;
         }
       }
 
-      // If we got response but no content was extracted, show error
+      // It's SSE format - parse line by line
+      let receivedAnyContent = false;
+      const lines = rawText.split('\n');
+      
+      for (const rawLine of lines) {
+        let line = rawLine.trim();
+        if (!line) continue;
+        if (line.startsWith(':')) continue;
+        if (!line.startsWith('data: ')) continue;
+        
+        const jsonStr = line.slice(6).trim();
+        if (jsonStr === '[DONE]') continue;
+        
+        const parsed = tryParseJson(jsonStr);
+        if (!parsed) continue;
+        
+        console.log("[FinancialAIChat] Parsed SSE chunk:", JSON.stringify(parsed).substring(0, 200));
+        
+        // Try multiple paths to extract content
+        const content = 
+          parsed.choices?.[0]?.delta?.content ||
+          parsed.choices?.[0]?.message?.content ||
+          parsed.content ||
+          parsed.message?.content ||
+          parsed.message ||
+          parsed.answer ||
+          parsed.output_text ||
+          parsed.text ||
+          "";
+        
+        if (content && typeof content === 'string') {
+          receivedAnyContent = true;
+          upsertAssistant(content);
+        }
+      }
+
+      // If we parsed SSE but got no content, show warning
       if (!receivedAnyContent && !assistantSoFar) {
-        console.error("[FinancialAIChat] No content extracted from response");
-        upsertAssistant("Desculpe, não consegui processar a resposta. Por favor, tente novamente.");
+        console.error("[FinancialAIChat] No content extracted. Raw response:", rawText.substring(0, 1000));
+        upsertAssistant("⚠️ Resposta recebida mas sem conteúdo. Verifique os logs do console (F12).");
       }
     } catch (error) {
       console.error("[FinancialAIChat] Error:", error);
