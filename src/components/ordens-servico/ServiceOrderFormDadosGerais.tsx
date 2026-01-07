@@ -8,13 +8,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { SearchableSelect } from "@/components/shared/SearchableSelect";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { formatCpfCnpj } from "@/lib/formatters";
-import { FileEdit, Wrench, Plus, Clock, Monitor } from "lucide-react";
+import { FileEdit, Wrench, Plus, Clock, Monitor, RefreshCw } from "lucide-react";
 import { useServiceOrderStatuses } from "@/hooks/useServiceOrders";
 import { useCostCenters } from "@/hooks/useFinanceiro";
 import { useSystemUsers } from "@/hooks/useServices";
 import { usePessoas } from "@/hooks/usePessoas";
 import { useServiceTypes } from "@/hooks/useServiceTypes";
 import { useEquipments } from "@/hooks/useEquipments";
+import { useFieldServiceTypes } from "@/hooks/useFieldServiceTypes";
 import { CadastrarPessoaDialog } from "@/components/shared/CadastrarPessoaDialog";
 import { useCompany } from "@/contexts/CompanyContext";
 
@@ -56,8 +57,9 @@ export function ServiceOrderFormDadosGerais({ formData, onChange }: ServiceOrder
   const { costCenters } = useCostCenters();
   const { data: users } = useSystemUsers();
   const { activePessoas, refetch: refetchPessoas } = usePessoas();
-  const { activeServiceTypes, createServiceType } = useServiceTypes();
+  const { activeServiceTypes, createServiceType, refetch: refetchServiceTypes } = useServiceTypes();
   const { equipments: clientEquipments, createEquipment, refetch: refetchEquipments } = useEquipments(formData.client_id || undefined);
+  const { syncServiceTypes, isSyncing } = useFieldServiceTypes();
 
   const [showCadastrarCliente, setShowCadastrarCliente] = useState(false);
   const [showCadastrarEquipamento, setShowCadastrarEquipamento] = useState(false);
@@ -158,21 +160,33 @@ export function ServiceOrderFormDadosGerais({ formData, onChange }: ServiceOrder
 
             <div className="space-y-2">
               <Label>Tipo de OS</Label>
-              <Select value={formData.service_type_id} onValueChange={(v) => onChange('service_type_id', v)}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione o tipo" />
-                </SelectTrigger>
-                <SelectContent>
-                  {activeServiceTypes.map(t => (
-                    <SelectItem key={t.id} value={t.id}>
-                      <div className="flex items-center gap-2">
-                        <div className="w-3 h-3 rounded-full" style={{ backgroundColor: t.color }} />
-                        {t.name}
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className="flex gap-1">
+                <Select value={formData.service_type_id} onValueChange={(v) => onChange('service_type_id', v)}>
+                  <SelectTrigger className="flex-1">
+                    <SelectValue placeholder="Selecione o tipo" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {activeServiceTypes.map(t => (
+                      <SelectItem key={t.id} value={t.id}>
+                        <div className="flex items-center gap-2">
+                          <div className="w-3 h-3 rounded-full" style={{ backgroundColor: t.color }} />
+                          {t.name}
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  onClick={() => syncServiceTypes()}
+                  disabled={isSyncing}
+                  title="Sincronizar tipos do Field Control"
+                >
+                  <RefreshCw className={`h-4 w-4 ${isSyncing ? 'animate-spin' : ''}`} />
+                </Button>
+              </div>
             </div>
 
             <div className="space-y-2">
