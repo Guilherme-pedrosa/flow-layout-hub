@@ -6,3 +6,4 @@ export { AIBanner, type AIInsight } from "./AIBanner";
 export { DeleteConfirmDialog } from "./DeleteConfirmDialog";
 export { SortableTableHeader } from "./SortableTableHeader";
 export { SelectionSummaryBar } from "./SelectionSummaryBar";
+export { SyncStatusBadge } from "./SyncStatusBadge";

@@ -1545,6 +1545,9 @@ export type Database = {
           situacao_cadastral: string | null
           sla_padrao: string | null
           status: Database["public"]["Enums"]["cliente_status"]
+          sync_last_error: string | null
+          sync_status: string | null
+          sync_updated_at: string | null
           telefone: string | null
           tipo_cliente:
             | Database["public"]["Enums"]["tipo_cliente_comercial"]
@@ -1589,6 +1592,9 @@ export type Database = {
           situacao_cadastral?: string | null
           sla_padrao?: string | null
           status?: Database["public"]["Enums"]["cliente_status"]
+          sync_last_error?: string | null
+          sync_status?: string | null
+          sync_updated_at?: string | null
           telefone?: string | null
           tipo_cliente?:
             | Database["public"]["Enums"]["tipo_cliente_comercial"]
@@ -1633,6 +1639,9 @@ export type Database = {
           situacao_cadastral?: string | null
           sla_padrao?: string | null
           status?: Database["public"]["Enums"]["cliente_status"]
+          sync_last_error?: string | null
+          sync_status?: string | null
+          sync_updated_at?: string | null
           telefone?: string | null
           tipo_cliente?:
             | Database["public"]["Enums"]["tipo_cliente_comercial"]
@@ -1767,6 +1776,9 @@ export type Database = {
           qr_code: string | null
           sector: string | null
           serial_number: string
+          sync_last_error: string | null
+          sync_status: string | null
+          sync_updated_at: string | null
           updated_at: string | null
           warranty_end: string | null
           warranty_start: string | null
@@ -1788,6 +1800,9 @@ export type Database = {
           qr_code?: string | null
           sector?: string | null
           serial_number: string
+          sync_last_error?: string | null
+          sync_status?: string | null
+          sync_updated_at?: string | null
           updated_at?: string | null
           warranty_end?: string | null
           warranty_start?: string | null
@@ -1809,6 +1824,9 @@ export type Database = {
           qr_code?: string | null
           sector?: string | null
           serial_number?: string
+          sync_last_error?: string | null
+          sync_status?: string | null
+          sync_updated_at?: string | null
           updated_at?: string | null
           warranty_end?: string | null
           warranty_start?: string | null
@@ -7215,6 +7233,62 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "suppliers_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sync_jobs: {
+        Row: {
+          action: string
+          attempts: number | null
+          company_id: string
+          created_at: string | null
+          entity_id: string
+          entity_type: string
+          id: string
+          last_error: string | null
+          max_attempts: number | null
+          next_retry_at: string | null
+          payload_json: Json | null
+          status: string
+          updated_at: string | null
+        }
+        Insert: {
+          action?: string
+          attempts?: number | null
+          company_id: string
+          created_at?: string | null
+          entity_id: string
+          entity_type: string
+          id?: string
+          last_error?: string | null
+          max_attempts?: number | null
+          next_retry_at?: string | null
+          payload_json?: Json | null
+          status?: string
+          updated_at?: string | null
+        }
+        Update: {
+          action?: string
+          attempts?: number | null
+          company_id?: string
+          created_at?: string | null
+          entity_id?: string
+          entity_type?: string
+          id?: string
+          last_error?: string | null
+          max_attempts?: number | null
+          next_retry_at?: string | null
+          payload_json?: Json | null
+          status?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sync_jobs_company_id_fkey"
             columns: ["company_id"]
             isOneToOne: false
             referencedRelation: "companies"

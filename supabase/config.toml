@@ -164,3 +164,6 @@ verify_jwt = false
 
 [functions.field-sync-equipments]
 verify_jwt = false
+
+[functions.field-sync-worker]
+verify_jwt = false
