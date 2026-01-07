@@ -1,4 +1,4 @@
-import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 export interface AuthResult {
   valid: boolean;
@@ -17,7 +17,7 @@ export interface AuthResult {
  */
 export async function validateAuth(
   req: Request,
-  supabase: SupabaseClient
+  supabase: any
 ): Promise<AuthResult> {
   // 1. Verificar header de autorização
   const authHeader = req.headers.get("Authorization");
@@ -108,7 +108,7 @@ export async function validateAuth(
  */
 export async function validateCompanyAccess(
   req: Request,
-  supabase: SupabaseClient,
+  supabase: any,
   requestedCompanyId: string
 ): Promise<AuthResult> {
   const authResult = await validateAuth(req, supabase);
