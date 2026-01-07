@@ -155,3 +155,12 @@ verify_jwt = false
 
 [functions.field-delete-all-customers]
 verify_jwt = false
+
+[functions.field-upsert-customer]
+verify_jwt = false
+
+[functions.field-create-work-order]
+verify_jwt = false
+
+[functions.field-sync-equipments]
+verify_jwt = false

@@ -1524,6 +1524,7 @@ export type Database = {
           data_abertura: string | null
           email: string | null
           estado: string | null
+          field_customer_id: string | null
           id: string
           inscricao_estadual: string | null
           inscricao_municipal: string | null
@@ -1567,6 +1568,7 @@ export type Database = {
           data_abertura?: string | null
           email?: string | null
           estado?: string | null
+          field_customer_id?: string | null
           id?: string
           inscricao_estadual?: string | null
           inscricao_municipal?: string | null
@@ -1610,6 +1612,7 @@ export type Database = {
           data_abertura?: string | null
           email?: string | null
           estado?: string | null
+          field_customer_id?: string | null
           id?: string
           inscricao_estadual?: string | null
           inscricao_municipal?: string | null
