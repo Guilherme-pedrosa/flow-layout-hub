@@ -1,4 +1,5 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
+import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
 
 export interface AuthResult {
   valid: boolean;
@@ -9,15 +10,28 @@ export interface AuthResult {
 }
 
 /**
+ * Cria um cliente Supabase autenticado como o usuário do request
+ */
+export function createSupabaseAsUser(req: Request): SupabaseClient {
+  const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+  const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
+  const authHeader = req.headers.get("Authorization") ?? "";
+
+  return createClient(supabaseUrl, supabaseAnonKey, {
+    global: { headers: { Authorization: authHeader } },
+  });
+}
+
+/**
  * Valida autenticação do usuário e acesso à empresa
  * 
  * @param req - Request HTTP
- * @param supabase - Cliente Supabase com service role (para validações)
+ * @param _supabase - Cliente Supabase (ignorado, mantido para compatibilidade)
  * @returns AuthResult com userId e companyId validados
  */
 export async function validateAuth(
   req: Request,
-  supabase: any
+  _supabase?: SupabaseClient
 ): Promise<AuthResult> {
   // 1. Verificar header de autorização
   const authHeader = req.headers.get("Authorization");
@@ -29,22 +43,15 @@ export async function validateAuth(
     };
   }
 
-  const token = authHeader.replace("Bearer ", "");
-
   // 2. Criar cliente com token do usuário para validar
-  const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
-  const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
+  const supabaseAuth = createSupabaseAsUser(req);
 
-  const supabaseAuth = createClient(supabaseUrl, supabaseAnonKey, {
-    global: { headers: { Authorization: authHeader } },
-  });
-
-  // 3. Validar token usando getClaims (método recomendado)
+  // 3. Validar token usando getUser (método compatível)
   try {
-    const { data, error: claimsError } = await supabaseAuth.auth.getClaims(token);
+    const { data: { user }, error: userError } = await supabaseAuth.auth.getUser();
 
-    if (claimsError || !data?.claims) {
-      console.error("[auth-helper] Erro de autenticação:", claimsError?.message || "No claims");
+    if (userError || !user) {
+      console.error("[auth-helper] Erro de autenticação:", userError?.message || "No user");
       return {
         valid: false,
         error: "Não autorizado - Token inválido",
@@ -52,16 +59,7 @@ export async function validateAuth(
       };
     }
 
-    const userId = data.claims.sub as string;
-    
-    if (!userId) {
-      console.error("[auth-helper] Erro de autenticação: No user ID in claims");
-      return {
-        valid: false,
-        error: "Não autorizado - Token inválido",
-        status: 401,
-      };
-    }
+    const userId = user.id;
 
     // 4. Buscar empresas do usuário
     const { data: userCompanies, error: companiesError } = await supabaseAuth.rpc(
@@ -108,24 +106,17 @@ export async function validateAuth(
  */
 export async function validateCompanyAccess(
   req: Request,
-  supabase: any,
+  _supabase: SupabaseClient | unknown,
   requestedCompanyId: string
 ): Promise<AuthResult> {
-  const authResult = await validateAuth(req, supabase);
+  const authResult = await validateAuth(req);
 
   if (!authResult.valid) {
     return authResult;
   }
 
   // Buscar empresas do usuário novamente para validar acesso
-  const authHeader = req.headers.get("Authorization")!;
-  const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
-  const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
-
-  const supabaseAuth = createClient(supabaseUrl, supabaseAnonKey, {
-    global: { headers: { Authorization: authHeader } },
-  });
-
+  const supabaseAuth = createSupabaseAsUser(req);
   const { data: userCompanies } = await supabaseAuth.rpc("get_user_companies");
 
   if (!userCompanies?.includes(requestedCompanyId)) {
