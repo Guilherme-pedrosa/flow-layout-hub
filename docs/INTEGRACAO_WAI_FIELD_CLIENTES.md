@@ -13,6 +13,11 @@
 | **WAI** | System of Record (fonte da verdade) |
 | **Field Control** | Camada de execução (recebe e opera) |
 
+### ⚠️ Regra de Identidade (Imutável)
+
+> **Identidade de cliente é gerada exclusivamente pelo WAI.**  
+> Nenhum identificador externo (Field, ERP, CNPJ, nome) possui autoridade para criar ou redefinir identidade.
+
 **Regra de ouro:**
 - Todo cliente **nasce no WAI**
 - Toda sincronização **parte do WAI**
@@ -35,6 +40,12 @@ O cliente é identificado por:
   }
 }
 ```
+
+### Regra de Unicidade
+
+> O valor de `external.id` **deve ser único** por cliente dentro do tenant Field Control.  
+> **Não pode ser reutilizado**, mesmo em exclusões lógicas.  
+> Reutilizar UUID antigo = corrupção de dados garantida.
 
 **📌 Esta é a âncora de idempotência:**
 - Reenvio ≠ duplicação
@@ -141,6 +152,12 @@ Quando cliente muda no WAI (nome, endereço, telefone):
 
 **📌 Nunca existe cliente "solto" sem vínculo bidirecional**
 
+### ⛔ Proibição de Merge Automático
+
+> **É PROIBIDO realizar merge automático de clientes** com base em nome, documento ou endereço quando vindos do Field.  
+> Qualquer potencial duplicidade **deve gerar alerta humano** para decisão manual.  
+> Merge errado = corrupção irreversível.
+
 ---
 
 ## 6️⃣ Proibições (Anti-Patterns)
@@ -184,8 +201,18 @@ Quando cliente muda no WAI (nome, endereço, telefone):
 ### Fallback
 Se geocodificação falhar:
 1. Usar coordenadas da cidade (centro)
-2. Registrar flag `geocode_approximate = true`
+2. Registrar `geocode_source = 'approximate'`
 3. Alertar usuário para correção manual
+
+### Campo `clientes.geocode_source`
+
+| Valor | Significado |
+|-------|-------------|
+| `precise` | Coordenadas obtidas por geocodificação exata do endereço |
+| `approximate` | Coordenadas aproximadas (centro da cidade ou fallback) |
+| `manual` | Coordenadas inseridas/corrigidas manualmente pelo usuário |
+
+> Este campo é essencial para SLA, disputas operacionais e correções futuras.
 
 ---
 
@@ -214,6 +241,35 @@ INSERT INTO sync_jobs (
 ## 🔑 Resumo Executivo
 
 > **O cliente nasce no WAI, é identificado pelo ID do WAI (`external.id`) e sincronizado com o Field via API, com endereço geolocalizado obrigatório. O Field nunca é fonte de verdade para identidade.**
+
+---
+
+## 🔍 Observabilidade
+
+Toda criação/atualização de cliente **deve gerar registro em `audit_logs`**.
+
+### Campos Mínimos Obrigatórios
+
+| Campo | Descrição |
+|-------|-----------|
+| `action` | `customer_created` \| `customer_updated` \| `customer_synced_field` |
+| `entity_id` | `clientes.id` |
+| `entity_type` | `customer` |
+| `metadata` | `{ field_customer_id, geocode_source, sync_job_id }` |
+
+### Exemplo de Registro
+```json
+{
+  "action": "customer_synced_field",
+  "entity_id": "uuid-do-cliente",
+  "entity_type": "customer",
+  "metadata": {
+    "field_customer_id": "12345",
+    "geocode_source": "precise",
+    "sync_job_id": "uuid-do-job"
+  }
+}
+```
 
 ---
 
