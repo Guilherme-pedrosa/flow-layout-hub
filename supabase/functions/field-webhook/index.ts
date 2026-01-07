@@ -7,9 +7,9 @@ const corsHeaders = {
 };
 
 /**
- * FIELD-WEBHOOK
+ * FIELD-WEBHOOK (v2 - Padrão Oficial)
  * 
- * Recebe eventos do Field Control e atualiza WAI em tempo real
+ * WAI = System of Record | Field = Execution Layer
  * 
  * Eventos suportados:
  * - task-started → "EM EXECUÇÃO"
@@ -17,6 +17,12 @@ const corsHeaders = {
  * - task-reported → "RELATÓRIO / FINALIZADO"
  * - task-canceled → "CANCELADO"
  * - equipment-created/updated (sync equipamentos)
+ * - item-used / parts-used (ESTOQUE - Field → WAI - debita saldo)
+ * 
+ * REGRA CRÍTICA DE ESTOQUE:
+ * - Estoque é EXCLUSIVO do WAI
+ * - Field apenas informa uso de peças
+ * - WAI valida e debita estoque
  */
 
 // Mapeamento de status Field → WAI
@@ -238,6 +244,8 @@ serve(async (req) => {
                 brand: equipmentData.brand || '',
                 equipment_type: equipmentData.type?.name || '',
                 is_active: true,
+                sync_status: 'synced',
+                sync_updated_at: new Date().toISOString(),
                 updated_at: new Date().toISOString()
               }, { onConflict: 'company_id,field_equipment_id' });
 
@@ -245,6 +253,184 @@ serve(async (req) => {
               console.log(`[field-webhook] Equipamento ${equipmentId} sincronizado`);
             }
           }
+        }
+      }
+
+      // === EVENTOS DE ESTOQUE / PEÇAS USADAS (CRÍTICO) ===
+      // Field apenas informa uso - WAI valida e debita
+      if (eventType.includes('item') || eventType.includes('part') || eventType.includes('material')) {
+        const itemsData = payload.data || payload.items || payload.parts || payload.materials || [];
+        const items = Array.isArray(itemsData) ? itemsData : [itemsData];
+        
+        // Extrair task/OS
+        const taskId = payload.taskId || payload.task?.id || payload.data?.taskId;
+        const identifier = payload.identifier || payload.data?.identifier;
+
+        // Buscar OS no WAI
+        let serviceOrder = null;
+        
+        if (taskId) {
+          const { data } = await supabase
+            .from('service_orders')
+            .select('id, company_id, order_number')
+            .eq('field_task_id', String(taskId))
+            .single();
+          serviceOrder = data;
+        }
+
+        if (!serviceOrder && identifier) {
+          const { data } = await supabase
+            .from('service_orders')
+            .select('id, company_id, order_number')
+            .eq('order_number', parseInt(identifier, 10))
+            .single();
+          serviceOrder = data;
+        }
+
+        if (serviceOrder) {
+          console.log(`[field-webhook] Processando ${items.length} itens de estoque para OS ${serviceOrder.order_number}`);
+
+          for (const item of items) {
+            const productCode = item.code || item.sku || item.productCode || item.externalId;
+            const productName = item.name || item.description || item.productName;
+            const quantity = parseFloat(item.quantity || item.qty || 1);
+            const fieldItemId = item.id;
+
+            if (!productCode && !productName) {
+              console.log(`[field-webhook] Item sem código ou nome, ignorando`);
+              continue;
+            }
+
+            // Buscar produto no WAI por código ou nome
+            let product = null;
+            
+            if (productCode) {
+              const { data } = await supabase
+                .from('products')
+                .select('id, name, stock_quantity, track_stock')
+                .eq('company_id', serviceOrder.company_id)
+                .eq('code', productCode)
+                .single();
+              product = data;
+            }
+
+            if (!product && productName) {
+              const { data } = await supabase
+                .from('products')
+                .select('id, name, stock_quantity, track_stock')
+                .eq('company_id', serviceOrder.company_id)
+                .ilike('name', `%${productName}%`)
+                .limit(1)
+                .single();
+              product = data;
+            }
+
+            if (!product) {
+              console.log(`[field-webhook] Produto não encontrado: ${productCode || productName}`);
+              
+              // Registrar item não encontrado
+              await supabase.from('audit_logs').insert({
+                company_id: serviceOrder.company_id,
+                entity: 'stock_movements',
+                entity_id: serviceOrder.id,
+                action: 'field_item_not_found',
+                metadata_json: {
+                  field_task_id: taskId,
+                  product_code: productCode,
+                  product_name: productName,
+                  quantity,
+                  field_item_id: fieldItemId
+                }
+              });
+              continue;
+            }
+
+            // Verificar se produto controla estoque
+            if (product.track_stock === false) {
+              console.log(`[field-webhook] Produto ${product.name} não controla estoque, ignorando`);
+              continue;
+            }
+
+            // Validar saldo disponível
+            const currentStock = product.stock_quantity || 0;
+            const newStock = currentStock - quantity;
+
+            if (newStock < 0) {
+              console.log(`[field-webhook] ALERTA: Estoque insuficiente para ${product.name}. Atual: ${currentStock}, Solicitado: ${quantity}`);
+              
+              // Registrar alerta mas ainda assim debitar
+              await supabase.from('audit_logs').insert({
+                company_id: serviceOrder.company_id,
+                entity: 'stock_movements',
+                entity_id: product.id,
+                action: 'field_stock_insufficient',
+                metadata_json: {
+                  field_task_id: taskId,
+                  service_order_id: serviceOrder.id,
+                  product_id: product.id,
+                  product_name: product.name,
+                  current_stock: currentStock,
+                  requested_quantity: quantity,
+                  resulting_stock: newStock
+                }
+              });
+            }
+
+            // DEBITAR ESTOQUE (WAI é a fonte da verdade)
+            await supabase
+              .from('products')
+              .update({
+                stock_quantity: newStock,
+                updated_at: new Date().toISOString()
+              })
+              .eq('id', product.id);
+
+            // Registrar movimentação de estoque
+            await supabase.from('stock_movements').insert({
+              company_id: serviceOrder.company_id,
+              product_id: product.id,
+              movement_type: 'saida',
+              quantity: quantity,
+              reason: `OS #${serviceOrder.order_number} - Field Control`,
+              reference_type: 'service_order',
+              reference_id: serviceOrder.id,
+              stock_before: currentStock,
+              stock_after: newStock,
+              created_at: new Date().toISOString()
+            });
+
+            console.log(`[field-webhook] Estoque debitado: ${product.name} -${quantity} (${currentStock} → ${newStock})`);
+
+            // Vincular item à OS (se existir tabela de itens da OS)
+            try {
+              await supabase.from('service_order_items').insert({
+                company_id: serviceOrder.company_id,
+                service_order_id: serviceOrder.id,
+                product_id: product.id,
+                quantity: quantity,
+                unit_price: item.price || item.unitPrice || 0,
+                total_price: (item.price || item.unitPrice || 0) * quantity,
+                field_item_id: fieldItemId,
+                source: 'field_webhook',
+                created_at: new Date().toISOString()
+              });
+            } catch (e) {
+              // Tabela pode não existir, ignorar
+              console.log(`[field-webhook] Não foi possível vincular item à OS: ${e}`);
+            }
+          }
+
+          // Registrar sucesso
+          await supabase.from('audit_logs').insert({
+            company_id: serviceOrder.company_id,
+            entity: 'service_orders',
+            entity_id: serviceOrder.id,
+            action: 'field_items_processed',
+            metadata_json: {
+              field_task_id: taskId,
+              items_count: items.length
+            }
+          });
         }
       }
 
