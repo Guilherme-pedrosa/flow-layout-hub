@@ -349,15 +349,16 @@ async function syncCompanyEquipments(supabaseClient: any, company_id: string, ap
   
   console.log('[field-sync-equipment] Types mapeados:', typeMap.size, 'Customers mapeados:', customerMap.size);
 
-  // Buscar equipamentos com paginação
+  // Buscar equipamentos com paginação usando offset (padrão Field Control)
   const equipments: FieldEquipment[] = [];
-  let page = 1;
-  const pageSize = 100; // Máximo permitido pela API
+  const pageSize = 100;
+  let offset = 0;
+  let totalCount = 0;
   let hasMore = true;
   
   while (hasMore) {
-    console.log(`[field-sync-equipment] Buscando página ${page}...`);
-    const equipmentsResponse = await fetch(`${FIELD_CONTROL_BASE_URL}/equipments?page=${page}&limit=${pageSize}`, {
+    console.log(`[field-sync-equipment] Buscando offset ${offset}, limit ${pageSize}...`);
+    const equipmentsResponse = await fetch(`${FIELD_CONTROL_BASE_URL}/equipments?offset=${offset}&limit=${pageSize}`, {
       method: 'GET',
       headers: { 
         'x-api-key': apiKey,
@@ -366,36 +367,37 @@ async function syncCompanyEquipments(supabaseClient: any, company_id: string, ap
     });
 
     if (!equipmentsResponse.ok) {
+      console.error(`[field-sync-equipment] Erro API: ${equipmentsResponse.status}`);
       return { success: false, error: `Erro Field API: ${equipmentsResponse.status}` };
     }
 
     const equipmentsData = await equipmentsResponse.json();
     
-    // Verificar estrutura da resposta
-    if (page === 1) {
+    // Log completo na primeira página para debug
+    if (offset === 0) {
       console.log('[field-sync-equipment] Raw response keys:', Object.keys(equipmentsData));
+      console.log('[field-sync-equipment] totalCount from API:', equipmentsData.totalCount);
+      totalCount = equipmentsData.totalCount || 0;
     }
     
-    const pageItems: FieldEquipment[] = Array.isArray(equipmentsData) 
-      ? equipmentsData 
-      : (equipmentsData.data || equipmentsData.items || equipmentsData.equipments || []);
+    const pageItems: FieldEquipment[] = equipmentsData.items || equipmentsData.data || [];
     
-    console.log(`[field-sync-equipment] Página ${page}: ${pageItems.length} equipamentos`);
+    console.log(`[field-sync-equipment] Offset ${offset}: ${pageItems.length} equipamentos (total esperado: ${totalCount})`);
     
     if (pageItems.length === 0) {
       hasMore = false;
     } else {
       equipments.push(...pageItems);
-      // Se retornou menos que o limite, é a última página
-      if (pageItems.length < pageSize) {
+      offset += pageItems.length;
+      
+      // Verificar se já buscou todos
+      if (equipments.length >= totalCount || pageItems.length < pageSize) {
         hasMore = false;
-      } else {
-        page++;
       }
     }
   }
   
-  console.log('[field-sync-equipment] Total equipments from API:', equipments.length);
+  console.log('[field-sync-equipment] Total equipments sincronizados:', equipments.length, 'de', totalCount, 'esperados');
 
   let created = 0, updated = 0, errors = 0;
   const errorDetails: string[] = [];
