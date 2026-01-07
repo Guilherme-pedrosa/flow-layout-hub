@@ -133,10 +133,19 @@ A OS (Activity/Task) é identificada por:
 |-------|-------|------------------------|
 | `externalId` | **OBRIGATÓRIO** | Duplicação garantida |
 | `customerId` | **OBRIGATÓRIO** | API rejeita (404) |
+| `equipmentId` | Opcional | OS pode existir sem equipamento |
 | `identifier` | Único por empresa | Pode causar confusão |
 | `duration` | Minutos (inteiro) | API rejeita |
 | `scheduledDate` | Formato YYYY-MM-DD | API rejeita |
 | `address.coords` | **OBRIGATÓRIO** | API rejeita |
+
+### ⚠️ Regras Importantes
+
+> **`identifier` é apenas informativo** — nunca deve ser usado como chave lógica, técnica ou de reconciliação.  
+> Use sempre `externalId` para identificação programática.
+
+> **OS pode existir sem equipamento**, desde que vinculada a um cliente válido.  
+> Isso é comum em serviços de vistoria, consultoria ou atendimentos gerais.
 
 ---
 
@@ -248,6 +257,17 @@ A OS (Activity/Task) é identificada por:
 5. **Calcular tempo real** de execução
 6. **Liberar para faturamento**
 7. **Gerar audit_log**
+
+### ⚠️ Tempo Planejado vs Tempo Real
+
+| Campo | Origem | Comportamento |
+|-------|--------|---------------|
+| `duration_planned` | WAI (criação) | **Nunca sobrescrito** |
+| `duration_real` | Field (fechamento) | Calculado de `checkinAt` até `checkoutAt` |
+
+> O tempo planejado é referência para SLA e planejamento.  
+> O tempo real é evidência para faturamento e análise de produtividade.  
+> **Nunca substituir um pelo outro.**
 
 ---
 
