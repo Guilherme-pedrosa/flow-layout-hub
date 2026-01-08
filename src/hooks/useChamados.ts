@@ -113,8 +113,8 @@ export function parseExcelChamado(file: File): Promise<ExcelChamadoData> {
         }
         
         // Extrair células conforme template real do Excel Ecolab
-        // Nº OS: linha 7, coluna H
-        const os_numero = getCellValue(sheet, 'H7');
+        // Nº OS: linha 7, coluna I (após "Nº" em H7)
+        const os_numero = getCellValue(sheet, 'I7');
         // DATA ABERTURA: linha 8, coluna G
         const os_data = getDateValue(sheet, 'G8');
         // CÓD. DISTRITO: linha 10, coluna I
@@ -129,7 +129,7 @@ export function parseExcelChamado(file: File): Promise<ExcelChamadoData> {
         const tra_nome = getCellValue(sheet, 'H36');
         
         if (!os_numero) {
-          reject(new Error('Campo Nº OS (H7) é obrigatório e está vazio'));
+          reject(new Error('Campo Nº OS (I7) é obrigatório e está vazio'));
           return;
         }
         
