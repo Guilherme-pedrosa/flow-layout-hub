@@ -57,15 +57,15 @@ export function ServiceOrderFormDadosGerais({ formData, onChange }: ServiceOrder
   const { statuses } = useServiceOrderStatuses();
   const { costCenters } = useCostCenters();
   const { data: users } = useSystemUsers();
-  const { fetchClientes } = useClientes();
+  const { fetchClientesFromField } = useClientes();
   const { activeServiceTypes, createServiceType, refetch: refetchServiceTypes } = useServiceTypes();
   const { equipments: clientEquipments, createEquipment, refetch: refetchEquipments } = useEquipments(formData.client_id || undefined);
   const { syncServiceTypes, isSyncing } = useFieldServiceTypes();
 
-  // Buscar clientes da tabela clientes (não pessoas) para vincular com equipamentos
+  // Buscar APENAS clientes que vieram do Field Control (têm field_customer_id)
   const { data: clientes = [], refetch: refetchClientes } = useQuery({
-    queryKey: ['clientes-for-os', currentCompany?.id],
-    queryFn: fetchClientes,
+    queryKey: ['clientes-field-os', currentCompany?.id],
+    queryFn: fetchClientesFromField,
     enabled: !!currentCompany?.id,
   });
 
