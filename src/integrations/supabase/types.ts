@@ -1690,6 +1690,80 @@ export type Database = {
           },
         ]
       }
+      cliente_envios_docs: {
+        Row: {
+          assunto: string
+          cliente_id: string
+          colaborador_id: string
+          company_id: string
+          created_at: string
+          destinatario_email: string
+          documentos_enviados: Json
+          enviado_por: string | null
+          enviado_por_nome: string | null
+          erro_mensagem: string | null
+          id: string
+          status: string
+        }
+        Insert: {
+          assunto: string
+          cliente_id: string
+          colaborador_id: string
+          company_id: string
+          created_at?: string
+          destinatario_email: string
+          documentos_enviados?: Json
+          enviado_por?: string | null
+          enviado_por_nome?: string | null
+          erro_mensagem?: string | null
+          id?: string
+          status?: string
+        }
+        Update: {
+          assunto?: string
+          cliente_id?: string
+          colaborador_id?: string
+          company_id?: string
+          created_at?: string
+          destinatario_email?: string
+          documentos_enviados?: Json
+          enviado_por?: string | null
+          enviado_por_nome?: string | null
+          erro_mensagem?: string | null
+          id?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cliente_envios_docs_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cliente_envios_docs_colaborador_id_fkey"
+            columns: ["colaborador_id"]
+            isOneToOne: false
+            referencedRelation: "rh_colaboradores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cliente_envios_docs_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cliente_envios_docs_enviado_por_fkey"
+            columns: ["enviado_por"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       cliente_historico: {
         Row: {
           campo_alterado: string
