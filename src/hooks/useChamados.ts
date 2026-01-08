@@ -47,35 +47,146 @@ interface ExcelChamadoData {
   tra_nome: string | null;
 }
 
-// Helper para ler célula do Excel
-function getCellValue(sheet: XLSX.WorkSheet, cell: string): string | null {
-  const cellData = sheet[cell];
-  if (!cellData) return null;
-  const value = cellData.v;
-  if (value === undefined || value === null || value === '') return null;
-  return String(value).trim();
+// ═══════════════════════════════════════════════════════════════════════════
+// ESTRATÉGIA ANCHOR-BASED - Buscar Rótulo → Extrair Valor Vizinho
+// Resiliente a deslocamento de colunas no template Excel
+// ═══════════════════════════════════════════════════════════════════════════
+
+interface CellCoords {
+  row: number;
+  col: number;
 }
 
-// Helper para converter data do Excel
-function getDateValue(sheet: XLSX.WorkSheet, cell: string): Date | null {
-  const cellData = sheet[cell];
-  if (!cellData) return null;
+// Mapeamento de âncoras conforme documentação oficial
+const ANCHOR_MAP = {
+  os_numero: { anchor: "Nº", fallback: "H2", direction: "right" },
+  os_data: { anchor: "DATA ABERTURA:", fallback: "F3", direction: "right" },
+  distrito: { anchor: "CÓD. DISTRITO", fallback: "H5", direction: "right" },
+  tecnico_nome: { anchor: "NOME DO SOLICITANTE", fallback: "E6", direction: "right" },
+  cliente_codigo: { anchor: "CÓD. JDE DO CLIENTE", fallback: "E14", direction: "right" },
+  cliente_nome: { anchor: "NOME DO CLIENTE", fallback: "E15", direction: "right" },
+  tra_nome: { anchor: "NOME DO TRA:", fallback: "G31", direction: "right" },
+} as const;
+
+// Helper para converter endereço de célula (ex: "A1") para coordenadas
+function cellToCoords(cell: string): CellCoords {
+  const match = cell.match(/^([A-Z]+)(\d+)$/);
+  if (!match) return { row: 0, col: 0 };
+  
+  let col = 0;
+  for (let i = 0; i < match[1].length; i++) {
+    col = col * 26 + (match[1].charCodeAt(i) - 64);
+  }
+  return { row: parseInt(match[2], 10) - 1, col: col - 1 };
+}
+
+// Helper para converter coordenadas para endereço de célula
+function coordsToCell(row: number, col: number): string {
+  let colStr = '';
+  let c = col + 1;
+  while (c > 0) {
+    c--;
+    colStr = String.fromCharCode(65 + (c % 26)) + colStr;
+    c = Math.floor(c / 26);
+  }
+  return `${colStr}${row + 1}`;
+}
+
+// Buscar coordenadas de uma célula que contém o texto âncora (case insensitive)
+function findAnchorCell(sheet: XLSX.WorkSheet, anchorText: string): CellCoords | null {
+  const range = XLSX.utils.decode_range(sheet['!ref'] || 'A1:Z100');
+  const searchText = anchorText.toLowerCase().trim();
+  
+  for (let row = range.s.r; row <= Math.min(range.e.r, 50); row++) { // Limitar a 50 linhas
+    for (let col = range.s.c; col <= range.e.c; col++) {
+      const cellAddr = coordsToCell(row, col);
+      const cell = sheet[cellAddr];
+      if (cell && cell.v !== undefined && cell.v !== null) {
+        const cellValue = String(cell.v).toLowerCase().trim();
+        if (cellValue.includes(searchText) || searchText.includes(cellValue)) {
+          return { row, col };
+        }
+      }
+    }
+  }
+  return null;
+}
+
+// Extrair valor usando estratégia ANCHOR-BASED com fallback
+function extractValueByAnchor(
+  sheet: XLSX.WorkSheet, 
+  anchorText: string, 
+  fallbackCell: string,
+  direction: "right" | "below" = "right"
+): string | null {
+  // Tentar encontrar âncora
+  const anchorCoords = findAnchorCell(sheet, anchorText);
+  
+  let targetCell: string;
+  
+  if (anchorCoords) {
+    // Âncora encontrada - pegar valor vizinho
+    if (direction === "right") {
+      targetCell = coordsToCell(anchorCoords.row, anchorCoords.col + 1);
+    } else {
+      targetCell = coordsToCell(anchorCoords.row + 1, anchorCoords.col);
+    }
+  } else {
+    // Fallback para célula fixa
+    targetCell = fallbackCell;
+    console.warn(`[ANCHOR] Âncora "${anchorText}" não encontrada, usando fallback: ${fallbackCell}`);
+  }
+  
+  const cell = sheet[targetCell];
+  if (!cell || cell.v === undefined || cell.v === null || cell.v === '') {
+    return null;
+  }
+  return String(cell.v).trim();
+}
+
+// Extrair data com tratamento especial (string ISO ou serial Excel)
+function extractDateByAnchor(
+  sheet: XLSX.WorkSheet,
+  anchorText: string,
+  fallbackCell: string
+): Date | null {
+  const anchorCoords = findAnchorCell(sheet, anchorText);
+  
+  let targetCell: string;
+  if (anchorCoords) {
+    targetCell = coordsToCell(anchorCoords.row, anchorCoords.col + 1);
+  } else {
+    targetCell = fallbackCell;
+  }
+  
+  const cell = sheet[targetCell];
+  if (!cell || cell.v === undefined || cell.v === null) return null;
   
   // Se é número (serial date do Excel)
-  if (typeof cellData.v === 'number') {
-    const date = XLSX.SSF.parse_date_code(cellData.v);
+  if (typeof cell.v === 'number') {
+    const date = XLSX.SSF.parse_date_code(cell.v);
     if (date) {
       return new Date(date.y, date.m - 1, date.d);
     }
   }
   
-  // Se é string, tentar parsear
-  if (typeof cellData.v === 'string') {
-    const parsed = new Date(cellData.v);
-    if (!isNaN(parsed.getTime())) return parsed;
+  // Se é Date
+  if (cell.v instanceof Date) {
+    return cell.v;
+  }
+  
+  // Se é string
+  if (typeof cell.v === 'string') {
+    const str = cell.v.trim();
+    
+    // Tentar ISO 8601 primeiro (2025-01-07)
+    const isoDate = new Date(str);
+    if (!isNaN(isoDate.getTime()) && str.includes('-')) {
+      return isoDate;
+    }
     
     // Tentar formato BR dd/mm/yyyy
-    const parts = cellData.v.split('/');
+    const parts = str.split('/');
     if (parts.length === 3) {
       const d = parseInt(parts[0], 10);
       const m = parseInt(parts[1], 10) - 1;
@@ -88,7 +199,7 @@ function getDateValue(sheet: XLSX.WorkSheet, cell: string): Date | null {
   return null;
 }
 
-// Função para extrair dados do Excel conforme template fixo
+// Função principal para extrair dados do Excel usando ANCHOR-BASED
 export function parseExcelChamado(file: File): Promise<ExcelChamadoData> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -98,44 +209,34 @@ export function parseExcelChamado(file: File): Promise<ExcelChamadoData> {
         const data = new Uint8Array(e.target?.result as ArrayBuffer);
         const workbook = XLSX.read(data, { type: 'array', cellDates: true });
         
-        // Usar aba OS_Terceiro conforme template Ecolab
-        let sheet: XLSX.WorkSheet | undefined;
-        if (workbook.SheetNames.includes('OS_Terceiro')) {
-          sheet = workbook.Sheets['OS_Terceiro'];
-        } else {
-          // Fallback para primeira aba
-          sheet = workbook.Sheets[workbook.SheetNames[0]];
-        }
+        // Usar primeira aba disponível
+        const sheet = workbook.Sheets[workbook.SheetNames[0]];
         
         if (!sheet) {
-          reject(new Error('Planilha vazia ou inválida. Aba "OS_Terceiro" não encontrada.'));
+          reject(new Error('Planilha vazia ou inválida.'));
           return;
         }
         
+        console.log('[ANCHOR] Iniciando extração anchor-based...');
+        console.log('[ANCHOR] Aba:', workbook.SheetNames[0]);
+        
         // ═══════════════════════════════════════════════════════════════
-        // MAPEAMENTO OFICIAL - PDF "Mapeamento de Células do Excel"
-        // FONTE DE VERDADE: Documento oficial Ecolab
-        // PROIBIDO alterar sem atualização do documento oficial
+        // EXTRAÇÃO ANCHOR-BASED - Conforme mapeamento oficial
         // ═══════════════════════════════════════════════════════════════
         
-        // B5 = numeroOS (OBRIGATÓRIO)
-        const os_numero = getCellValue(sheet, 'B5');
-        // F5 = dataOS (OBRIGATÓRIO)
-        const os_data = getDateValue(sheet, 'F5');
-        // B8 = distrito
-        const distrito = getCellValue(sheet, 'B8');
-        // F8 = nomeGT (técnico)
-        const tecnico_nome = getCellValue(sheet, 'F8');
-        // B11 = codigoCliente
-        const cliente_codigo = getCellValue(sheet, 'B11');
-        // B12 = cliente (nome)
-        const cliente_nome = getCellValue(sheet, 'B12');
-        // F11 = nomeTRA
-        const tra_nome = getCellValue(sheet, 'F11');
+        const os_numero = extractValueByAnchor(sheet, ANCHOR_MAP.os_numero.anchor, ANCHOR_MAP.os_numero.fallback);
+        const os_data = extractDateByAnchor(sheet, ANCHOR_MAP.os_data.anchor, ANCHOR_MAP.os_data.fallback);
+        const distrito = extractValueByAnchor(sheet, ANCHOR_MAP.distrito.anchor, ANCHOR_MAP.distrito.fallback);
+        const tecnico_nome = extractValueByAnchor(sheet, ANCHOR_MAP.tecnico_nome.anchor, ANCHOR_MAP.tecnico_nome.fallback);
+        const cliente_codigo = extractValueByAnchor(sheet, ANCHOR_MAP.cliente_codigo.anchor, ANCHOR_MAP.cliente_codigo.fallback);
+        const cliente_nome = extractValueByAnchor(sheet, ANCHOR_MAP.cliente_nome.anchor, ANCHOR_MAP.cliente_nome.fallback);
+        const tra_nome = extractValueByAnchor(sheet, ANCHOR_MAP.tra_nome.anchor, ANCHOR_MAP.tra_nome.fallback);
         
-        // Validação obrigatória conforme documento
+        console.log('[ANCHOR] Dados extraídos:', { os_numero, os_data, distrito, tecnico_nome, cliente_codigo, cliente_nome, tra_nome });
+        
+        // Validação obrigatória
         if (!os_numero) {
-          reject(new Error('Célula B5 (numeroOS) é obrigatória e está vazia. Verifique se o Excel segue o template oficial.'));
+          reject(new Error('Campo obrigatório "Nº" (os_numero) não encontrado. Verifique se o Excel segue o template oficial Ecolab.'));
           return;
         }
         
