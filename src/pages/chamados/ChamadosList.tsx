@@ -1,24 +1,16 @@
 import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useChamados, STATUS_CONFIG, ChamadoStatus } from "@/hooks/useChamados";
+import { ChamadoRow } from "@/components/chamados/ChamadoRow";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import {
   Table,
   TableBody,
-  TableCell,
   TableHead,
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import {
   Dialog,
   DialogContent,
@@ -28,30 +20,24 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
-import { Upload, Search, Plus, Download, Loader2, Eye, Pencil, Trash2 } from "lucide-react";
-import { format, differenceInDays } from "date-fns";
-import { ptBR } from "date-fns/locale";
+import { Upload, Search, Plus, Download } from "lucide-react";
 
 export default function ChamadosList() {
   const navigate = useNavigate();
-  const { chamados, isLoading, importChamado, exportToExcel, deleteChamado } = useChamados();
+  const { chamados, isLoading, importChamado, exportToExcel, deleteChamado, refetch } = useChamados();
   
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("todos");
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [deleteId, setDeleteId] = useState<string | null>(null);
   
   const filteredChamados = useMemo(() => {
     if (!chamados) return [];
@@ -60,8 +46,7 @@ export default function ChamadosList() {
       const matchesSearch =
         chamado.os_numero.toLowerCase().includes(searchTerm.toLowerCase()) ||
         chamado.cliente_nome?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        chamado.nome_gt?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        chamado.tecnico_nome?.toLowerCase().includes(searchTerm.toLowerCase());
+        chamado.nome_gt?.toLowerCase().includes(searchTerm.toLowerCase());
 
       const matchesStatus = statusFilter === "todos" || chamado.status === statusFilter;
 
@@ -77,21 +62,8 @@ export default function ChamadosList() {
     setSelectedFile(null);
   };
 
-  const handleDelete = async () => {
-    if (!deleteId) return;
-    await deleteChamado.mutateAsync(deleteId);
-    setDeleteId(null);
-  };
-
-  const calcularDias = (dataOs: string | null | undefined): number => {
-    if (!dataOs) return 0;
-    try {
-      const osDate = new Date(dataOs);
-      const today = new Date();
-      return differenceInDays(today, osDate);
-    } catch {
-      return 0;
-    }
+  const handleDelete = async (id: string) => {
+    await deleteChamado.mutateAsync(id);
   };
   
   const stats = useMemo(() => {
@@ -104,49 +76,18 @@ export default function ChamadosList() {
       fechados: chamados.filter(c => c.status === "fechado").length,
     };
   }, [chamados]);
-
-  const getStatusBadge = (status: ChamadoStatus) => {
-    const config = STATUS_CONFIG[status];
-    if (!config) return <Badge>{status}</Badge>;
-    
-    return (
-      <Badge 
-        className="whitespace-nowrap text-xs font-medium"
-        style={{ 
-          backgroundColor: config.color, 
-          color: 'white',
-          border: 'none'
-        }}
-      >
-        {config.label}
-      </Badge>
-    );
-  };
-
-  const formatDate = (date: string | null | undefined): string => {
-    if (!date) return '-';
-    try {
-      return format(new Date(date), 'dd/MM/yyyy', { locale: ptBR });
-    } catch {
-      return '-';
-    }
-  };
   
   return (
-    <div className="space-y-6 p-6">
-      {/* Header */}
+    <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Chamados</h1>
-          <p className="text-muted-foreground text-sm">
+          <h1 className="text-3xl font-bold tracking-tight">Chamados</h1>
+          <p className="text-muted-foreground">
             Gerencie todos os chamados da Ecolab
           </p>
         </div>
-        <div className="flex gap-2">
-          <Button 
-            onClick={() => navigate("/chamados/novo")}
-            className="bg-blue-600 hover:bg-blue-700"
-          >
+        <div className="flex gap-2 flex-wrap">
+          <Button onClick={() => navigate("/chamados/novo")}>
             <Plus className="mr-2 h-4 w-4" />
             Novo Chamado
           </Button>
@@ -160,7 +101,7 @@ export default function ChamadosList() {
           </Button>
           <Dialog open={uploadDialogOpen} onOpenChange={setUploadDialogOpen}>
             <DialogTrigger asChild>
-              <Button className="bg-blue-600 hover:bg-blue-700">
+              <Button>
                 <Upload className="mr-2 h-4 w-4" />
                 Importar Planilha
               </Button>
@@ -197,59 +138,61 @@ export default function ChamadosList() {
 
       {/* Cards de estatísticas */}
       <div className="grid gap-4 md:grid-cols-4">
-        <Card className="border">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Total</CardTitle>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">{stats.total}</div>
+            <div className="text-2xl font-bold">{stats.total}</div>
           </CardContent>
         </Card>
-        <Card className="border">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Abertos</CardTitle>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Abertos</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-yellow-500">{stats.abertos}</div>
+            <div className="text-2xl font-bold text-destructive">{stats.abertos}</div>
           </CardContent>
         </Card>
-        <Card className="border">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Em Andamento</CardTitle>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Em Andamento</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-blue-600">{stats.emAndamento}</div>
+            <div className="text-2xl font-bold text-primary">{stats.emAndamento}</div>
           </CardContent>
         </Card>
-        <Card className="border">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Fechados</CardTitle>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Fechados</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">{stats.fechados}</div>
+            <div className="text-2xl font-bold text-muted-foreground">{stats.fechados}</div>
           </CardContent>
         </Card>
       </div>
 
       {/* Filtros */}
-      <Card className="border">
-        <CardHeader className="pb-4">
-          <CardTitle className="text-base font-medium">Filtros</CardTitle>
+      <Card>
+        <CardHeader>
+          <CardTitle>Filtros</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="flex flex-col md:flex-row gap-4">
-            <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Buscar por OS, cliente ou técnico..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-9"
-              />
+            <div className="flex-1">
+              <div className="relative">
+                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Buscar por OS, cliente ou técnico..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-8"
+                />
+              </div>
             </div>
             <Select value={statusFilter} onValueChange={setStatusFilter}>
               <SelectTrigger className="w-full md:w-[200px]">
-                <SelectValue placeholder="Todos" />
+                <SelectValue placeholder="Status" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="todos">Todos</SelectItem>
@@ -265,101 +208,47 @@ export default function ChamadosList() {
       </Card>
 
       {/* Tabela de chamados */}
-      <Card className="border">
-        <CardHeader className="pb-4">
-          <CardTitle className="text-base font-medium">Lista de Chamados</CardTitle>
-          <p className="text-sm text-muted-foreground">
+      <Card>
+        <CardHeader>
+          <CardTitle>Lista de Chamados</CardTitle>
+          <CardDescription>
             {filteredChamados.length} chamado(s) encontrado(s)
-          </p>
+          </CardDescription>
         </CardHeader>
-        <CardContent className="p-0">
+        <CardContent>
           {isLoading ? (
-            <div className="flex items-center justify-center py-8">
-              <Loader2 className="h-8 w-8 animate-spin" />
-            </div>
+            <div className="text-center py-8">Carregando...</div>
           ) : filteredChamados.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
               Nenhum chamado encontrado
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <div className="rounded-md border">
               <Table>
                 <TableHeader>
-                  <TableRow className="bg-muted/30">
-                    <TableHead className="font-semibold">N° OS</TableHead>
-                    <TableHead className="font-semibold">N° Tarefa</TableHead>
-                    <TableHead className="font-semibold">Data OS</TableHead>
-                    <TableHead className="font-semibold">Data Atend.</TableHead>
-                    <TableHead className="font-semibold">Data Fech.</TableHead>
-                    <TableHead className="font-semibold">N° Dias</TableHead>
-                    <TableHead className="font-semibold">Distrito</TableHead>
-                    <TableHead className="font-semibold">Nome GT</TableHead>
-                    <TableHead className="font-semibold">Cliente</TableHead>
-                    <TableHead className="font-semibold">Observação</TableHead>
-                    <TableHead className="font-semibold">Status</TableHead>
-                    <TableHead className="font-semibold text-center">Ações</TableHead>
+                  <TableRow>
+                    <TableHead>Nº OS</TableHead>
+                    <TableHead>Nº Tarefa</TableHead>
+                    <TableHead>Data OS</TableHead>
+                    <TableHead>Data Atend.</TableHead>
+                    <TableHead>Data Fech.</TableHead>
+                    <TableHead>Nº Dias</TableHead>
+                    <TableHead>Distrito</TableHead>
+                    <TableHead>Nome GT</TableHead>
+                    <TableHead>Cliente</TableHead>
+                    <TableHead className="max-w-xs">Observação</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Ações</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filteredChamados.map((chamado) => (
-                    <TableRow key={chamado.id} className="hover:bg-muted/30">
-                      <TableCell className="font-medium">{chamado.os_numero}</TableCell>
-                      <TableCell>{chamado.numero_tarefa || '-'}</TableCell>
-                      <TableCell>{formatDate(chamado.os_data)}</TableCell>
-                      <TableCell>{formatDate(chamado.data_atendimento)}</TableCell>
-                      <TableCell>{formatDate(chamado.data_fechamento)}</TableCell>
-                      <TableCell>{calcularDias(chamado.os_data)}</TableCell>
-                      <TableCell>{chamado.distrito || '-'}</TableCell>
-                      <TableCell>{chamado.nome_gt || '-'}</TableCell>
-                      <TableCell>
-                        <div className="max-w-[200px] truncate" title={chamado.cliente_nome || ''}>
-                          {chamado.cliente_nome || '-'}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="max-w-[150px] truncate" title={chamado.observacao || ''}>
-                          {chamado.observacao || '-'}
-                        </div>
-                      </TableCell>
-                      <TableCell>{getStatusBadge(chamado.status)}</TableCell>
-                      <TableCell>
-                        <div className="flex items-center justify-center gap-1">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              navigate(`/chamados/${chamado.id}`);
-                            }}
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              navigate(`/chamados/${chamado.id}`);
-                            }}
-                          >
-                            <Eye className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-red-500 hover:text-red-600 hover:bg-red-50"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setDeleteId(chamado.id);
-                            }}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
+                    <ChamadoRow
+                      key={chamado.id}
+                      chamado={chamado}
+                      onUpdate={refetch}
+                      onDelete={handleDelete}
+                    />
                   ))}
                 </TableBody>
               </Table>
@@ -367,27 +256,6 @@ export default function ChamadosList() {
           )}
         </CardContent>
       </Card>
-
-      {/* Dialog de confirmação de exclusão */}
-      <AlertDialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Confirmar exclusão</AlertDialogTitle>
-            <AlertDialogDescription>
-              Tem certeza que deseja excluir este chamado? Esta ação não pode ser desfeita.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleDelete}
-              className="bg-red-600 hover:bg-red-700"
-            >
-              Excluir
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 }

@@ -478,6 +478,7 @@ export function useChamados() {
       data_atendimento?: string | null;
       data_fechamento?: string | null;
       observacao?: string | null;
+      status?: ChamadoStatus;
     }) => {
       const { error } = await supabase
         .from('chamados')
