@@ -29,7 +29,7 @@ export function useEquipments(clientId?: string) {
   const { currentCompany } = useCompany();
 
   const query = useQuery({
-    queryKey: ["equipments", currentCompany?.id, clientId],
+    queryKey: ["equipments", currentCompany?.id, clientId || null],
     queryFn: async () => {
       if (!currentCompany) return [];
       
@@ -50,7 +50,7 @@ export function useEquipments(clientId?: string) {
       if (error) throw error;
       return data as Equipment[];
     },
-    enabled: !!currentCompany,
+    enabled: !!currentCompany && !!clientId, // Só executa se tiver cliente selecionado
   });
 
   const createEquipment = useMutation({
