@@ -1240,6 +1240,147 @@ export type Database = {
           },
         ]
       }
+      chamado_logs: {
+        Row: {
+          action: string
+          chamado_id: string
+          company_id: string
+          created_at: string | null
+          created_by: string | null
+          id: string
+          metadata: Json | null
+        }
+        Insert: {
+          action: string
+          chamado_id: string
+          company_id: string
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          metadata?: Json | null
+        }
+        Update: {
+          action?: string
+          chamado_id?: string
+          company_id?: string
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          metadata?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chamado_logs_chamado_id_fkey"
+            columns: ["chamado_id"]
+            isOneToOne: false
+            referencedRelation: "chamados"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chamado_logs_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chamado_logs_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      chamados: {
+        Row: {
+          client_id: string | null
+          cliente_codigo: string | null
+          cliente_nome: string | null
+          company_id: string
+          created_at: string | null
+          distrito: string | null
+          id: string
+          imported_at: string | null
+          imported_by: string | null
+          imported_from: string
+          os_data: string | null
+          os_numero: string
+          service_order_id: string | null
+          status: string
+          tecnico_nome: string | null
+          tra_nome: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          client_id?: string | null
+          cliente_codigo?: string | null
+          cliente_nome?: string | null
+          company_id: string
+          created_at?: string | null
+          distrito?: string | null
+          id?: string
+          imported_at?: string | null
+          imported_by?: string | null
+          imported_from?: string
+          os_data?: string | null
+          os_numero: string
+          service_order_id?: string | null
+          status?: string
+          tecnico_nome?: string | null
+          tra_nome?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          client_id?: string | null
+          cliente_codigo?: string | null
+          cliente_nome?: string | null
+          company_id?: string
+          created_at?: string | null
+          distrito?: string | null
+          id?: string
+          imported_at?: string | null
+          imported_by?: string | null
+          imported_from?: string
+          os_data?: string | null
+          os_numero?: string
+          service_order_id?: string | null
+          status?: string
+          tecnico_nome?: string | null
+          tra_nome?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chamados_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chamados_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chamados_imported_by_fkey"
+            columns: ["imported_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chamados_service_order_id_fkey"
+            columns: ["service_order_id"]
+            isOneToOne: false
+            referencedRelation: "service_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       chart_of_accounts: {
         Row: {
           account_nature: Database["public"]["Enums"]["account_nature"]

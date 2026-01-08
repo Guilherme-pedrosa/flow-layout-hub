@@ -27,6 +27,10 @@ import Comissoes from "./pages/vendas/Comissoes";
 // Páginas públicas
 import OrcamentoView from "./pages/public/OrcamentoView";
 
+// Chamados
+import ChamadosList from "./pages/chamados/ChamadosList";
+import ChamadoDetail from "./pages/chamados/ChamadoDetail";
+
 // Compras
 import PedidosCompra from "./pages/compras/PedidosCompra";
 import Recebimento from "./pages/compras/Recebimento";
@@ -119,6 +123,8 @@ const App = () => (
             <Route path="/ordens-servico/nova" element={<OrdemServicoFormPage />} />
             <Route path="/ordens-servico/:id" element={<OrdemServicoFormPage />} />
             <Route path="/equipamentos" element={<Equipamentos />} />
+            <Route path="/chamados" element={<ChamadosList />} />
+            <Route path="/chamados/:id" element={<ChamadoDetail />} />
             <Route path="/ordens-servico-config" element={<ConfiguracoesOS />} />
             
             {/* Compras */}
