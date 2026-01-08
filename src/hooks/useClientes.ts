@@ -40,6 +40,33 @@ export function useClientes() {
     }
   };
 
+  // Buscar APENAS clientes que vieram do Field Control (têm field_customer_id)
+  const fetchClientesFromField = async () => {
+    if (!currentCompany) return [];
+    
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from("clientes")
+        .select("*")
+        .eq("company_id", currentCompany.id)
+        .not("field_customer_id", "is", null)
+        .order("razao_social", { ascending: true });
+
+      if (error) throw error;
+      return data || [];
+    } catch (error: any) {
+      toast({
+        title: "Erro ao carregar clientes do Field",
+        description: error.message,
+        variant: "destructive",
+      });
+      return [];
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const fetchCliente = async (id: string) => {
     setLoading(true);
     try {
@@ -267,6 +294,7 @@ export function useClientes() {
   return {
     loading,
     fetchClientes,
+    fetchClientesFromField,
     fetchCliente,
     fetchContatos,
     saveCliente,
