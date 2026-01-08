@@ -44,22 +44,39 @@ export function useFieldServiceTypes() {
     mutationFn: async () => {
       if (!currentCompany?.id) throw new Error('Empresa não selecionada');
 
+      console.info("[syncServiceTypes] 🚀 Starting sync for company_id:", currentCompany.id);
       setIsSyncing(true);
+      
       const { data, error } = await supabase.functions.invoke('field-service-types', {
         body: { company_id: currentCompany.id, sync: true }
       });
 
+      console.info("[syncServiceTypes] 📦 Edge function response:", { data, error });
+
       if (error) throw error;
-      return data;
+      
+      // Verificar o que foi salvo na tabela após o sync
+      console.info("[syncServiceTypes] 🔍 Verifying data in service_types table...");
+      const { data: verifyData, count, error: verifyError } = await supabase
+        .from("service_types")
+        .select("*", { count: "exact" })
+        .eq("company_id", currentCompany.id);
+      
+      console.info("[syncServiceTypes] ✅ Post-sync verification - count:", count, "error:", verifyError);
+      console.info("[syncServiceTypes] 📋 Records in DB:", verifyData?.map(d => ({ name: d.name, field_task_type_id: d.field_task_type_id })));
+      
+      return { ...data, verifiedCount: count };
     },
     onSuccess: (data) => {
       setIsSyncing(false);
       queryClient.invalidateQueries({ queryKey: ['service_types'] });
       queryClient.invalidateQueries({ queryKey: ['field-service-types'] });
-      toast.success(`${data?.synced || 0} tipos de serviço sincronizados do Field Control`);
+      console.info("[syncServiceTypes] ✅ Sync complete - synced:", data?.synced, "verified in DB:", data?.verifiedCount);
+      toast.success(`${data?.synced || 0} tipos sincronizados (${data?.verifiedCount || 0} verificados no banco)`);
     },
     onError: (error) => {
       setIsSyncing(false);
+      console.error("[syncServiceTypes] ❌ Sync error:", error);
       toast.error(`Erro ao sincronizar tipos: ${error.message}`);
     }
   });
