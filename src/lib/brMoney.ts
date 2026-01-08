@@ -73,22 +73,24 @@ export function parseBRNumber(input: string | null | undefined): number | null {
     return null;
   }
 
-  // Detecta formato: se tem vírgula após ponto, é BR (1.234,56)
-  // Se tem ponto após vírgula, é EN (1,234.56)
+  // Detecta formato pelo ÚLTIMO separador (que é sempre o decimal)
   const lastComma = cleaned.lastIndexOf(',');
   const lastDot = cleaned.lastIndexOf('.');
 
-  if (lastComma > lastDot) {
-    // Formato BR: 1.234,56 → remove pontos de milhar, troca vírgula por ponto
-    cleaned = cleaned.replace(/\./g, '').replace(',', '.');
-  } else if (lastDot > lastComma && lastComma !== -1) {
-    // Formato EN com milhar vírgula: 1,234.56 → remove vírgulas
-    cleaned = cleaned.replace(/,/g, '');
-  } else if (lastComma !== -1 && lastDot === -1) {
+  // Se ambos existem, o último é o decimal
+  if (lastComma !== -1 && lastDot !== -1) {
+    if (lastComma > lastDot) {
+      // Formato BR: 1.234,56 → remove pontos de milhar, troca vírgula por ponto
+      cleaned = cleaned.replace(/\./g, '').replace(',', '.');
+    } else {
+      // Formato EN: 1,234.56 → remove vírgulas de milhar
+      cleaned = cleaned.replace(/,/g, '');
+    }
+  } else if (lastComma !== -1) {
     // Só vírgula: 1234,56 → troca vírgula por ponto
     cleaned = cleaned.replace(',', '.');
   }
-  // Se só ponto, já está correto para parseFloat
+  // Se só ponto ou nenhum, já está correto para parseFloat
 
   const parsed = parseFloat(cleaned);
   
