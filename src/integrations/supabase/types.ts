@@ -14,6 +14,110 @@ export type Database = {
   }
   public: {
     Tables: {
+      access_audit_logs: {
+        Row: {
+          company_id: string
+          entity_id: string | null
+          entity_type: string
+          event_type: string
+          id: string
+          payload: Json | null
+          performed_at: string
+          performed_by: string | null
+        }
+        Insert: {
+          company_id: string
+          entity_id?: string | null
+          entity_type: string
+          event_type: string
+          id?: string
+          payload?: Json | null
+          performed_at?: string
+          performed_by?: string | null
+        }
+        Update: {
+          company_id?: string
+          entity_id?: string | null
+          entity_type?: string
+          event_type?: string
+          id?: string
+          payload?: Json | null
+          performed_at?: string
+          performed_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "access_audit_logs_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      access_kits: {
+        Row: {
+          company_id: string
+          created_at: string
+          created_by: string | null
+          files_manifest: Json | null
+          id: string
+          sent_at: string | null
+          sent_message_id: string | null
+          sent_to: string[] | null
+          status: string
+          technician_ids: string[]
+          unit_id: string
+          zip_file_name: string | null
+          zip_file_url: string | null
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          created_by?: string | null
+          files_manifest?: Json | null
+          id?: string
+          sent_at?: string | null
+          sent_message_id?: string | null
+          sent_to?: string[] | null
+          status?: string
+          technician_ids: string[]
+          unit_id: string
+          zip_file_name?: string | null
+          zip_file_url?: string | null
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          created_by?: string | null
+          files_manifest?: Json | null
+          id?: string
+          sent_at?: string | null
+          sent_message_id?: string | null
+          sent_to?: string[] | null
+          status?: string
+          technician_ids?: string[]
+          unit_id?: string
+          zip_file_name?: string | null
+          zip_file_url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "access_kits_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "access_kits_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "client_units"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       accounts_receivable: {
         Row: {
           amount: number
@@ -1632,6 +1736,66 @@ export type Database = {
             columns: ["generated_by"]
             isOneToOne: false
             referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      client_units: {
+        Row: {
+          access_email_cc: string[] | null
+          access_email_to: string[] | null
+          address: string | null
+          client_id: string
+          company_id: string
+          created_at: string
+          id: string
+          integration_validity_days: number | null
+          is_active: boolean | null
+          requires_local_integration: boolean | null
+          unit_name: string
+          updated_at: string
+        }
+        Insert: {
+          access_email_cc?: string[] | null
+          access_email_to?: string[] | null
+          address?: string | null
+          client_id: string
+          company_id: string
+          created_at?: string
+          id?: string
+          integration_validity_days?: number | null
+          is_active?: boolean | null
+          requires_local_integration?: boolean | null
+          unit_name: string
+          updated_at?: string
+        }
+        Update: {
+          access_email_cc?: string[] | null
+          access_email_to?: string[] | null
+          address?: string | null
+          client_id?: string
+          company_id?: string
+          created_at?: string
+          id?: string
+          integration_validity_days?: number | null
+          is_active?: boolean | null
+          requires_local_integration?: boolean | null
+          unit_name?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_units_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_units_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
             referencedColumns: ["id"]
           },
         ]
@@ -8241,6 +8405,121 @@ export type Database = {
             columns: ["uploaded_by"]
             isOneToOne: false
             referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      unit_integration_records: {
+        Row: {
+          certificate_file_name: string | null
+          certificate_file_url: string | null
+          company_id: string
+          created_at: string
+          created_by: string | null
+          expires_at: string | null
+          id: string
+          integration_date: string
+          notes: string | null
+          technician_id: string
+          unit_id: string
+          updated_at: string
+        }
+        Insert: {
+          certificate_file_name?: string | null
+          certificate_file_url?: string | null
+          company_id: string
+          created_at?: string
+          created_by?: string | null
+          expires_at?: string | null
+          id?: string
+          integration_date: string
+          notes?: string | null
+          technician_id: string
+          unit_id: string
+          updated_at?: string
+        }
+        Update: {
+          certificate_file_name?: string | null
+          certificate_file_url?: string | null
+          company_id?: string
+          created_at?: string
+          created_by?: string | null
+          expires_at?: string | null
+          id?: string
+          integration_date?: string
+          notes?: string | null
+          technician_id?: string
+          unit_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "unit_integration_records_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "unit_integration_records_technician_id_fkey"
+            columns: ["technician_id"]
+            isOneToOne: false
+            referencedRelation: "rh_colaboradores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "unit_integration_records_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "client_units"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      unit_policy_requirements: {
+        Row: {
+          applies_to_role: string | null
+          created_at: string
+          document_type_id: string
+          id: string
+          is_required: boolean | null
+          required_for: string
+          sort_order: number | null
+          unit_id: string
+        }
+        Insert: {
+          applies_to_role?: string | null
+          created_at?: string
+          document_type_id: string
+          id?: string
+          is_required?: boolean | null
+          required_for: string
+          sort_order?: number | null
+          unit_id: string
+        }
+        Update: {
+          applies_to_role?: string | null
+          created_at?: string
+          document_type_id?: string
+          id?: string
+          is_required?: boolean | null
+          required_for?: string
+          sort_order?: number | null
+          unit_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "unit_policy_requirements_document_type_id_fkey"
+            columns: ["document_type_id"]
+            isOneToOne: false
+            referencedRelation: "document_types"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "unit_policy_requirements_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "client_units"
             referencedColumns: ["id"]
           },
         ]

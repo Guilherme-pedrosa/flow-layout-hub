@@ -21,6 +21,7 @@ import OrdensServico from "./pages/servicos/OrdensServico";
 import OrdemServicoFormPage from "./pages/servicos/OrdemServicoFormPage";
 import ConfiguracoesOS from "./pages/servicos/ConfiguracoesOS";
 import Equipamentos from "./pages/servicos/Equipamentos";
+import NovaIntegracao from "./pages/servicos/NovaIntegracao";
 import VendaFormPage from "./pages/receber/VendaFormPage";
 import Comissoes from "./pages/vendas/Comissoes";
 
@@ -130,6 +131,7 @@ const App = () => (
             <Route path="/ordens-servico/nova" element={<OrdemServicoFormPage />} />
             <Route path="/ordens-servico/:id" element={<OrdemServicoFormPage />} />
             <Route path="/equipamentos" element={<Equipamentos />} />
+            <Route path="/nova-integracao" element={<NovaIntegracao />} />
             <Route path="/chamados" element={<ChamadosList />} />
             <Route path="/chamados/novo" element={<NovoChamado />} />
             <Route path="/chamados/:id" element={<ChamadoDetail />} />
