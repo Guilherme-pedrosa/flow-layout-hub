@@ -32,8 +32,17 @@ export default function DocumentosEmpresaPage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Check if date is required for current document type
+  const selectedDocType = companyTypes.find(dt => dt.id === selectedTypeId);
+  const requiresDate = selectedDocType?.requires_expiry && selectedDocType?.expiry_mode !== 'NONE';
+  const dateIsMissing = requiresDate && (
+    (selectedDocType?.expiry_mode === 'ISSUE_PLUS_DAYS' && !issueDate) ||
+    (selectedDocType?.expiry_mode === 'EXPIRES_AT' && !expiresAt)
+  );
+
   const handleUpload = async () => {
     if (!selectedTypeId || !selectedFile) return;
+    if (dateIsMissing) return;
     
     const docType = companyTypes.find(dt => dt.id === selectedTypeId);
     let finalExpiresAt = expiresAt;
@@ -312,7 +321,7 @@ export default function DocumentosEmpresaPage() {
             </Button>
             <Button 
               onClick={handleUpload}
-              disabled={!selectedTypeId || !selectedFile || uploadDocument.isPending}
+              disabled={!selectedTypeId || !selectedFile || dateIsMissing || uploadDocument.isPending}
             >
               {uploadDocument.isPending ? 'Enviando...' : 'Enviar'}
             </Button>
