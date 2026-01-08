@@ -8,6 +8,7 @@ import {
   CheckSquare,
   FileSpreadsheet,
   Package,
+  Headphones,
   ArrowRightLeft,
   AlertTriangle,
   Bell,
@@ -103,6 +104,7 @@ const menuGroups: MenuGroup[] = [
     label: "Ordens de Serviço",
     items: [
       { title: "Lista de OS", icon: ClipboardList, href: "/ordens-servico" },
+      { title: "Chamados", icon: Headphones, href: "/chamados" },
       { title: "Equipamentos", icon: Boxes, href: "/equipamentos" },
       { title: "Faturar OS", icon: Receipt, href: "/faturar-os", badge: 2 },
       { title: "Configurações", icon: UserCog, href: "/ordens-servico-config" },
