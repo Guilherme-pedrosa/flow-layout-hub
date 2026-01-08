@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { usePessoas } from "@/hooks/usePessoas";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -16,16 +15,15 @@ import { ShieldCheck, ShieldX, Download, Mail, Building2, Users, FileCheck, File
 import { usePessoas } from "@/hooks/usePessoas";
 import { useClientUnits } from "@/hooks/useClientUnits";
 import { useRh } from "@/hooks/useRh";
-import { useAccessIntegration, AccessPreview, ChecklistItem, TechnicianChecklist } from "@/hooks/useAccessIntegration";
+import { useAccessIntegration, AccessPreview } from "@/hooks/useAccessIntegration";
 import { toast } from "sonner";
 
 export default function NovaIntegracao() {
   const navigate = useNavigate();
-  const { fetchPessoas } = usePessoas();
+  const { clientes } = usePessoas();
   const { colaboradores } = useRh();
   const { generatePreview, generateKit, saveKit } = useAccessIntegration();
 
-  const [clientes, setClientes] = useState<any[]>([]);
   const [selectedClientId, setSelectedClientId] = useState<string>('');
   const [selectedUnitId, setSelectedUnitId] = useState<string>('');
   const [selectedTechnicianIds, setSelectedTechnicianIds] = useState<string[]>([]);
@@ -34,11 +32,6 @@ export default function NovaIntegracao() {
   const [generating, setGenerating] = useState(false);
 
   const { units } = useClientUnits(selectedClientId || undefined);
-
-  // Load clients
-  useEffect(() => {
-    fetchPessoas({ is_cliente: true }).then(setClientes);
-  }, []);
 
   // Active technicians only
   const activeTechnicians = colaboradores.filter(c => c.status === 'ativo');
@@ -187,7 +180,7 @@ export default function NovaIntegracao() {
                   <SelectValue placeholder="Selecione o cliente" />
                 </SelectTrigger>
                 <SelectContent>
-                  {clientes.filter(c => c.status === 'ATIVO').map(c => (
+                  {clientes.filter(c => c.status === 'ativo').map(c => (
                     <SelectItem key={c.id} value={c.id}>
                       {c.nome_fantasia || c.razao_social}
                     </SelectItem>
