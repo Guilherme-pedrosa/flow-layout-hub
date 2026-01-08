@@ -1300,12 +1300,16 @@ export type Database = {
           company_id: string
           created_at: string | null
           distrito: string | null
+          external_reference: string | null
           id: string
+          import_batch_id: string | null
           imported_at: string | null
           imported_by: string | null
           imported_from: string
           os_data: string | null
           os_numero: string
+          prioridade: string | null
+          raw_excel_data: Json | null
           service_order_id: string | null
           status: string
           tecnico_nome: string | null
@@ -1319,12 +1323,16 @@ export type Database = {
           company_id: string
           created_at?: string | null
           distrito?: string | null
+          external_reference?: string | null
           id?: string
+          import_batch_id?: string | null
           imported_at?: string | null
           imported_by?: string | null
           imported_from?: string
           os_data?: string | null
           os_numero: string
+          prioridade?: string | null
+          raw_excel_data?: Json | null
           service_order_id?: string | null
           status?: string
           tecnico_nome?: string | null
@@ -1338,12 +1346,16 @@ export type Database = {
           company_id?: string
           created_at?: string | null
           distrito?: string | null
+          external_reference?: string | null
           id?: string
+          import_batch_id?: string | null
           imported_at?: string | null
           imported_by?: string | null
           imported_from?: string
           os_data?: string | null
           os_numero?: string
+          prioridade?: string | null
+          raw_excel_data?: Json | null
           service_order_id?: string | null
           status?: string
           tecnico_nome?: string | null
@@ -1363,6 +1375,13 @@ export type Database = {
             columns: ["company_id"]
             isOneToOne: false
             referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chamados_import_batch_id_fkey"
+            columns: ["import_batch_id"]
+            isOneToOne: false
+            referencedRelation: "import_batches"
             referencedColumns: ["id"]
           },
           {
@@ -2275,6 +2294,72 @@ export type Database = {
             columns: ["company_id"]
             isOneToOne: false
             referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      import_batches: {
+        Row: {
+          company_id: string
+          completed_at: string | null
+          created_at: string | null
+          created_by: string | null
+          error_log: Json | null
+          file_hash: string | null
+          file_name: string
+          file_size: number | null
+          id: string
+          rows_duplicated: number | null
+          rows_failed: number | null
+          rows_imported: number | null
+          rows_total: number | null
+          status: string
+        }
+        Insert: {
+          company_id: string
+          completed_at?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          error_log?: Json | null
+          file_hash?: string | null
+          file_name: string
+          file_size?: number | null
+          id?: string
+          rows_duplicated?: number | null
+          rows_failed?: number | null
+          rows_imported?: number | null
+          rows_total?: number | null
+          status?: string
+        }
+        Update: {
+          company_id?: string
+          completed_at?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          error_log?: Json | null
+          file_hash?: string | null
+          file_name?: string
+          file_size?: number | null
+          id?: string
+          rows_duplicated?: number | null
+          rows_failed?: number | null
+          rows_imported?: number | null
+          rows_total?: number | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "import_batches_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "import_batches_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
             referencedColumns: ["id"]
           },
         ]

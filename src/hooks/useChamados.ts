@@ -112,24 +112,30 @@ export function parseExcelChamado(file: File): Promise<ExcelChamadoData> {
           return;
         }
         
-        // Extrair células conforme template real do Excel Ecolab
-        // Nº OS: linha 7, coluna I (após "Nº" em H7)
-        const os_numero = getCellValue(sheet, 'I7');
-        // DATA ABERTURA: linha 8, coluna G
-        const os_data = getDateValue(sheet, 'G8');
-        // CÓD. DISTRITO: linha 10, coluna I
-        const distrito = getCellValue(sheet, 'I10');
-        // NOME DO SOLICITANTE (técnico): linha 11, coluna F
-        const tecnico_nome = getCellValue(sheet, 'F11');
-        // CÓD. JDE DO CLIENTE: linha 19, coluna F
-        const cliente_codigo = getCellValue(sheet, 'F19');
-        // NOME DO CLIENTE: linha 20, coluna F
-        const cliente_nome = getCellValue(sheet, 'F20');
-        // NOME DO TRA: linha 36, coluna H
-        const tra_nome = getCellValue(sheet, 'H36');
+        // ═══════════════════════════════════════════════════════════════
+        // MAPEAMENTO OFICIAL - PDF "Mapeamento de Células do Excel"
+        // FONTE DE VERDADE: Documento oficial Ecolab
+        // PROIBIDO alterar sem atualização do documento oficial
+        // ═══════════════════════════════════════════════════════════════
         
+        // B5 = numeroOS (OBRIGATÓRIO)
+        const os_numero = getCellValue(sheet, 'B5');
+        // F5 = dataOS (OBRIGATÓRIO)
+        const os_data = getDateValue(sheet, 'F5');
+        // B8 = distrito
+        const distrito = getCellValue(sheet, 'B8');
+        // F8 = nomeGT (técnico)
+        const tecnico_nome = getCellValue(sheet, 'F8');
+        // B11 = codigoCliente
+        const cliente_codigo = getCellValue(sheet, 'B11');
+        // B12 = cliente (nome)
+        const cliente_nome = getCellValue(sheet, 'B12');
+        // F11 = nomeTRA
+        const tra_nome = getCellValue(sheet, 'F11');
+        
+        // Validação obrigatória conforme documento
         if (!os_numero) {
-          reject(new Error('Campo Nº OS (I7) é obrigatório e está vazio'));
+          reject(new Error('Célula B5 (numeroOS) é obrigatória e está vazia. Verifique se o Excel segue o template oficial.'));
           return;
         }
         
