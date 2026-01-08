@@ -5979,6 +5979,159 @@ export type Database = {
           },
         ]
       }
+      rh_colaboradores: {
+        Row: {
+          ativo: number
+          company_id: string
+          created_at: string
+          id: string
+          nome: string
+          updated_at: string
+        }
+        Insert: {
+          ativo?: number
+          company_id: string
+          created_at?: string
+          id?: string
+          nome: string
+          updated_at?: string
+        }
+        Update: {
+          ativo?: number
+          company_id?: string
+          created_at?: string
+          id?: string
+          nome?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rh_colaboradores_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      rh_documentos_colaborador: {
+        Row: {
+          arquivo_nome: string | null
+          arquivo_url: string | null
+          ativo: number
+          colaborador_id: string
+          company_id: string
+          created_at: string
+          data_emissao: string | null
+          data_vencimento: string
+          id: string
+          tipo_documento: string
+          updated_at: string
+        }
+        Insert: {
+          arquivo_nome?: string | null
+          arquivo_url?: string | null
+          ativo?: number
+          colaborador_id: string
+          company_id: string
+          created_at?: string
+          data_emissao?: string | null
+          data_vencimento: string
+          id?: string
+          tipo_documento: string
+          updated_at?: string
+        }
+        Update: {
+          arquivo_nome?: string | null
+          arquivo_url?: string | null
+          ativo?: number
+          colaborador_id?: string
+          company_id?: string
+          created_at?: string
+          data_emissao?: string | null
+          data_vencimento?: string
+          id?: string
+          tipo_documento?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rh_documentos_colaborador_colaborador_id_fkey"
+            columns: ["colaborador_id"]
+            isOneToOne: false
+            referencedRelation: "rh_colaboradores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rh_documentos_colaborador_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      rh_integracoes: {
+        Row: {
+          ativo: number
+          cliente_id: string
+          colaborador_id: string
+          company_id: string
+          created_at: string
+          data_integracao: string
+          data_vencimento: string
+          id: string
+          observacoes: string | null
+          updated_at: string
+        }
+        Insert: {
+          ativo?: number
+          cliente_id: string
+          colaborador_id: string
+          company_id: string
+          created_at?: string
+          data_integracao: string
+          data_vencimento: string
+          id?: string
+          observacoes?: string | null
+          updated_at?: string
+        }
+        Update: {
+          ativo?: number
+          cliente_id?: string
+          colaborador_id?: string
+          company_id?: string
+          created_at?: string
+          data_integracao?: string
+          data_vencimento?: string
+          id?: string
+          observacoes?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rh_integracoes_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rh_integracoes_colaborador_id_fkey"
+            columns: ["colaborador_id"]
+            isOneToOne: false
+            referencedRelation: "rh_colaboradores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rh_integracoes_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sale_attachments: {
         Row: {
           company_id: string | null

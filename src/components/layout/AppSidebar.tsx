@@ -159,6 +159,13 @@ const menuGroups: MenuGroup[] = [
     ],
   },
   {
+    label: "RH",
+    items: [
+      { title: "Técnicos", icon: Users, href: "/rh/colaboradores" },
+      { title: "Controle Integrações", icon: CheckSquare, href: "/rh/integracoes" },
+    ],
+  },
+  {
     label: "Configurações",
     items: [
       { title: "Empresa", icon: Building, href: "/empresa" },
