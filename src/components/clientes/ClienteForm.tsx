@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
-import { Save, ShoppingCart, FileText, Loader2, Shield, Users } from "lucide-react";
+import { Save, ShoppingCart, FileText, Loader2, Shield, Users, Building2 } from "lucide-react";
 import { usePessoas, PessoaInsert } from "@/hooks/usePessoas";
 import { ClienteFormDadosGerais } from "./ClienteFormDadosGerais";
 import { ClienteFormEndereco } from "./ClienteFormEndereco";
@@ -12,6 +12,7 @@ import { ClienteFormComercial } from "./ClienteFormComercial";
 import { ClienteFormOperacional } from "./ClienteFormOperacional";
 import { ClienteFormFiscal } from "./ClienteFormFiscal";
 import { ClienteFormTecnicosIntegrados } from "./ClienteFormTecnicosIntegrados";
+import { ClienteFormUnidades } from "./ClienteFormUnidades";
 import { HistoricoAlteracoes } from "@/components/shared/HistoricoAlteracoes";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -361,13 +362,17 @@ export function ClienteForm({ clienteId, onSave }: ClienteFormProps) {
       )}
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-7">
+        <TabsList className="grid w-full grid-cols-8">
           <TabsTrigger value="dados-gerais">Dados Gerais</TabsTrigger>
           <TabsTrigger value="endereco">Endereço</TabsTrigger>
           <TabsTrigger value="contatos">Contatos</TabsTrigger>
           <TabsTrigger value="comercial">Comercial</TabsTrigger>
           <TabsTrigger value="operacional">Operacional</TabsTrigger>
           <TabsTrigger value="fiscal">Fiscal</TabsTrigger>
+          <TabsTrigger value="unidades" disabled={!clienteId}>
+            <Building2 className="h-4 w-4 mr-1" />
+            Unidades
+          </TabsTrigger>
           <TabsTrigger value="tecnicos" disabled={!clienteId}>
             <Users className="h-4 w-4 mr-1" />
             Técnicos
@@ -417,6 +422,12 @@ export function ClienteForm({ clienteId, onSave }: ClienteFormProps) {
                 formData={formData}
                 setFormData={setFormData}
               />
+            </TabsContent>
+
+            <TabsContent value="unidades" className="mt-0">
+              {clienteId && (
+                <ClienteFormUnidades clienteId={clienteId} />
+              )}
             </TabsContent>
 
             <TabsContent value="tecnicos" className="mt-0">
