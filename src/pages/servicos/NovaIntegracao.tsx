@@ -4,10 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ShieldCheck, ShieldX, Download, Mail, Building2, Users, FileCheck, FileX, 
   AlertTriangle, CheckCircle, Clock, Loader2 
 } from "lucide-react";
@@ -15,7 +12,8 @@ import { usePessoas } from "@/hooks/usePessoas";
 import { useRh } from "@/hooks/useRh";
 import { useClientDocumentRequirements } from "@/hooks/useClientDocumentRequirements";
 import { useCompanyDocuments, getDocumentStatus } from "@/hooks/useCompanyDocuments";
-import { useColaboradorDocs } from "@/hooks/useColaboradorDocs";
+import { SearchableSelect } from "@/components/shared/SearchableSelect";
+import { SearchableMultiSelect } from "@/components/shared/SearchableMultiSelect";
 import { toast } from "sonner";
 import JSZip from "jszip";
 
@@ -65,16 +63,22 @@ export default function NovaIntegracao() {
   const activeTechnicians = colaboradores.filter(c => c.status === 'ativo');
   const activeClients = clientes.filter(c => c.status === 'ativo');
 
+  // Options for searchable selects
+  const clientOptions = activeClients.map(c => ({
+    value: c.id,
+    label: c.nome_fantasia || c.razao_social || '',
+    sublabel: c.cpf_cnpj || undefined,
+  }));
+
+  const technicianOptions = activeTechnicians.map(t => ({
+    value: t.id,
+    label: t.nome_fantasia || t.razao_social || '',
+    sublabel: t.cpf_cnpj || undefined,
+  }));
+
   const handleSelectClient = (clientId: string) => {
     setSelectedClientId(clientId);
     setSelectedTechnicianIds([]);
-    setPreview(null);
-  };
-
-  const toggleTechnician = (techId: string) => {
-    setSelectedTechnicianIds(prev =>
-      prev.includes(techId) ? prev.filter(id => id !== techId) : [...prev, techId]
-    );
     setPreview(null);
   };
 
@@ -128,42 +132,37 @@ export default function NovaIntegracao() {
       });
 
       // Build technician checklists
-      const techChecklists: TechChecklist[] = await Promise.all(
-        selectedTechnicianIds.map(async techId => {
-          const tech = activeTechnicians.find(t => t.id === techId);
-          
-          // We need to fetch tech docs - for now use colaborador_docs
-          // This is a simplified version - in production you'd batch these queries
-          // Build technician checklists
-          const techDocs: DocItem[] = technicianRequirements.map(req => {
-            const docType = req.document_type;
-            // Mark as MISSING - in production you'd fetch actual docs for each technician
-            const state: DocState = 'MISSING';
+      const techChecklists: TechChecklist[] = selectedTechnicianIds.map(techId => {
+        const tech = activeTechnicians.find(t => t.id === techId);
+        
+        const techDocs: DocItem[] = technicianRequirements.map(req => {
+          const docType = req.document_type;
+          // TODO: Fetch actual docs for each technician from colaborador_docs
+          const state: DocState = 'MISSING';
 
-            if (req.is_required) {
-              blockReasons.push({
-                scope: 'TECHNICIAN',
-                doc_type: `${tech?.nome_fantasia || tech?.razao_social}: ${docType?.name}`,
-                reason: 'Não anexado'
-              });
-            }
-
-            return {
-              doc_type_id: req.document_type_id,
-              doc_type_code: docType?.code || '',
-              doc_type_name: docType?.name || '',
-              state,
-              is_required: req.is_required,
-            };
-          });
+          if (req.is_required) {
+            blockReasons.push({
+              scope: 'TECHNICIAN',
+              doc_type: `${tech?.nome_fantasia || tech?.razao_social}: ${docType?.name}`,
+              reason: 'Não anexado'
+            });
+          }
 
           return {
-            technician_id: techId,
-            technician_name: tech?.nome_fantasia || tech?.razao_social || 'Técnico',
-            docs: techDocs,
+            doc_type_id: req.document_type_id,
+            doc_type_code: docType?.code || '',
+            doc_type_name: docType?.name || '',
+            state,
+            is_required: req.is_required,
           };
-        })
-      );
+        });
+
+        return {
+          technician_id: techId,
+          technician_name: tech?.nome_fantasia || tech?.razao_social || 'Técnico',
+          docs: techDocs,
+        };
+      });
 
       setPreview({
         client_name: client?.nome_fantasia || client?.razao_social || 'Cliente',
@@ -274,21 +273,17 @@ export default function NovaIntegracao() {
             <CardTitle className="text-lg">Seleção</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            {/* Client */}
+            {/* Client - Searchable */}
             <div>
               <Label>Cliente</Label>
-              <Select value={selectedClientId} onValueChange={handleSelectClient}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione o cliente" />
-                </SelectTrigger>
-                <SelectContent>
-                  {activeClients.map(c => (
-                    <SelectItem key={c.id} value={c.id}>
-                      {c.nome_fantasia || c.razao_social}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <SearchableSelect
+                options={clientOptions}
+                value={selectedClientId}
+                onChange={handleSelectClient}
+                placeholder="Digite para buscar cliente..."
+                searchPlaceholder="Buscar por nome ou CNPJ..."
+                emptyMessage="Nenhum cliente encontrado"
+              />
             </div>
 
             {/* Requirements info */}
@@ -306,22 +301,18 @@ export default function NovaIntegracao() {
               </div>
             )}
 
-            {/* Technicians */}
+            {/* Technicians - Searchable Multi-select */}
             {selectedClientId && hasRequirements && (
               <div>
-                <Label>Técnicos ({selectedTechnicianIds.length} selecionados)</Label>
-                <ScrollArea className="h-[200px] border rounded-md p-2 mt-1">
-                  {activeTechnicians.map(tech => (
-                    <div
-                      key={tech.id}
-                      className="flex items-center gap-2 p-2 hover:bg-muted rounded cursor-pointer"
-                      onClick={() => toggleTechnician(tech.id)}
-                    >
-                      <Checkbox checked={selectedTechnicianIds.includes(tech.id)} />
-                      <span className="text-sm">{tech.nome_fantasia || tech.razao_social}</span>
-                    </div>
-                  ))}
-                </ScrollArea>
+                <Label>Técnicos</Label>
+                <SearchableMultiSelect
+                  options={technicianOptions}
+                  values={selectedTechnicianIds}
+                  onChange={setSelectedTechnicianIds}
+                  placeholder="Digite para buscar técnicos..."
+                  searchPlaceholder="Buscar por nome..."
+                  emptyMessage="Nenhum técnico encontrado"
+                />
               </div>
             )}
 
