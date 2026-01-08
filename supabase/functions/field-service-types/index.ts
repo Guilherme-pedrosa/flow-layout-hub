@@ -58,9 +58,10 @@ serve(async (req) => {
 
     const apiKey = settings.field_control_api_key;
 
-    // Buscar SERVICES do Field Control (tipos de OS/serviço)
-    // O Field Control usa "services" para os tipos de tarefa
-    const response = await fetch(`${FIELD_CONTROL_BASE_URL}/services`, {
+    // Buscar TASK-TYPES do Field Control (tipos de OS)
+    // /task-types = tipos de tarefa/OS
+    // /services = serviços prestados (diferente!)
+    const response = await fetch(`${FIELD_CONTROL_BASE_URL}/task-types`, {
       method: 'GET',
       headers: {
         'x-api-key': apiKey,
