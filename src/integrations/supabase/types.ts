@@ -2157,6 +2157,70 @@ export type Database = {
         }
         Relationships: []
       }
+      company_documents: {
+        Row: {
+          company_id: string
+          created_at: string
+          document_type_id: string
+          expires_at: string | null
+          file_name: string
+          file_url: string
+          id: string
+          notes: string | null
+          updated_at: string
+          uploaded_by: string | null
+          version: string | null
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          document_type_id: string
+          expires_at?: string | null
+          file_name: string
+          file_url: string
+          id?: string
+          notes?: string | null
+          updated_at?: string
+          uploaded_by?: string | null
+          version?: string | null
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          document_type_id?: string
+          expires_at?: string | null
+          file_name?: string
+          file_url?: string
+          id?: string
+          notes?: string | null
+          updated_at?: string
+          uploaded_by?: string | null
+          version?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "company_documents_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "company_documents_document_type_id_fkey"
+            columns: ["document_type_id"]
+            isOneToOne: false
+            referencedRelation: "document_types"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "company_documents_uploaded_by_fkey"
+            columns: ["uploaded_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       cost_centers: {
         Row: {
           code: string
@@ -2188,6 +2252,56 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "cost_centers_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      document_types: {
+        Row: {
+          code: string
+          company_id: string | null
+          created_at: string
+          default_validity_days: number | null
+          id: string
+          is_active: boolean
+          name: string
+          requires_expiry: boolean
+          scope: string
+          sort_order: number | null
+          updated_at: string
+        }
+        Insert: {
+          code: string
+          company_id?: string | null
+          created_at?: string
+          default_validity_days?: number | null
+          id?: string
+          is_active?: boolean
+          name: string
+          requires_expiry?: boolean
+          scope: string
+          sort_order?: number | null
+          updated_at?: string
+        }
+        Update: {
+          code?: string
+          company_id?: string | null
+          created_at?: string
+          default_validity_days?: number | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          requires_expiry?: boolean
+          scope?: string
+          sort_order?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "document_types_company_id_fkey"
             columns: ["company_id"]
             isOneToOne: false
             referencedRelation: "companies"
@@ -8056,6 +8170,77 @@ export type Database = {
             columns: ["company_id"]
             isOneToOne: false
             referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      technician_documents: {
+        Row: {
+          company_id: string
+          created_at: string
+          document_type_id: string
+          expires_at: string | null
+          file_name: string
+          file_url: string
+          id: string
+          notes: string | null
+          technician_id: string
+          updated_at: string
+          uploaded_by: string | null
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          document_type_id: string
+          expires_at?: string | null
+          file_name: string
+          file_url: string
+          id?: string
+          notes?: string | null
+          technician_id: string
+          updated_at?: string
+          uploaded_by?: string | null
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          document_type_id?: string
+          expires_at?: string | null
+          file_name?: string
+          file_url?: string
+          id?: string
+          notes?: string | null
+          technician_id?: string
+          updated_at?: string
+          uploaded_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "technician_documents_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "technician_documents_document_type_id_fkey"
+            columns: ["document_type_id"]
+            isOneToOne: false
+            referencedRelation: "document_types"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "technician_documents_technician_id_fkey"
+            columns: ["technician_id"]
+            isOneToOne: false
+            referencedRelation: "rh_colaboradores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "technician_documents_uploaded_by_fkey"
+            columns: ["uploaded_by"]
+            isOneToOne: false
+            referencedRelation: "users"
             referencedColumns: ["id"]
           },
         ]

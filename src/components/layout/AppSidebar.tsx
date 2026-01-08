@@ -163,6 +163,8 @@ const menuGroups: MenuGroup[] = [
     items: [
       { title: "Colaboradores", icon: Users, href: "/rh/colaboradores" },
       { title: "Controle Integrações", icon: CheckSquare, href: "/rh/integracoes" },
+      { title: "Tipos de Documento", icon: FileText, href: "/rh/tipos-documento" },
+      { title: "Docs. Empresa", icon: Building2, href: "/rh/documentos-empresa" },
     ],
   },
   {
