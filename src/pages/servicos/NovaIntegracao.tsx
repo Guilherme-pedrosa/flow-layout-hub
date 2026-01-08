@@ -262,7 +262,7 @@ export default function NovaIntegracao() {
   return (
     <div className="container mx-auto p-6 space-y-6">
       <PageHeader
-        title="Nova Integração"
+        title="Kit Documentação"
         description="Gere o kit de documentação para acesso de técnicos em clientes"
       />
 
