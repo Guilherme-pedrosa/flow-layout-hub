@@ -1890,6 +1890,63 @@ export type Database = {
           },
         ]
       }
+      colaborador_docs: {
+        Row: {
+          arquivo_nome: string | null
+          arquivo_url: string | null
+          colaborador_id: string
+          company_id: string
+          created_at: string | null
+          data_emissao: string | null
+          data_vencimento: string | null
+          id: string
+          tipo: string
+          tipo_customizado: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          arquivo_nome?: string | null
+          arquivo_url?: string | null
+          colaborador_id: string
+          company_id: string
+          created_at?: string | null
+          data_emissao?: string | null
+          data_vencimento?: string | null
+          id?: string
+          tipo: string
+          tipo_customizado?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          arquivo_nome?: string | null
+          arquivo_url?: string | null
+          colaborador_id?: string
+          company_id?: string
+          created_at?: string | null
+          data_emissao?: string | null
+          data_vencimento?: string | null
+          id?: string
+          tipo?: string
+          tipo_customizado?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "colaborador_docs_colaborador_id_fkey"
+            columns: ["colaborador_id"]
+            isOneToOne: false
+            referencedRelation: "pessoas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "colaborador_docs_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       companies: {
         Row: {
           cep: string | null
@@ -2430,6 +2487,70 @@ export type Database = {
             columns: ["created_by"]
             isOneToOne: false
             referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      integracoes: {
+        Row: {
+          cliente_id: string
+          colaborador_id: string
+          company_id: string
+          comprovante_url: string | null
+          created_at: string | null
+          data_realizacao: string
+          data_vencimento: string
+          id: string
+          observacoes: string | null
+          status: string
+          updated_at: string | null
+        }
+        Insert: {
+          cliente_id: string
+          colaborador_id: string
+          company_id: string
+          comprovante_url?: string | null
+          created_at?: string | null
+          data_realizacao: string
+          data_vencimento: string
+          id?: string
+          observacoes?: string | null
+          status?: string
+          updated_at?: string | null
+        }
+        Update: {
+          cliente_id?: string
+          colaborador_id?: string
+          company_id?: string
+          comprovante_url?: string | null
+          created_at?: string | null
+          data_realizacao?: string
+          data_vencimento?: string
+          id?: string
+          observacoes?: string | null
+          status?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "integracoes_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "pessoas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "integracoes_colaborador_id_fkey"
+            columns: ["colaborador_id"]
+            isOneToOne: false
+            referencedRelation: "pessoas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "integracoes_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
             referencedColumns: ["id"]
           },
         ]
@@ -4112,6 +4233,7 @@ export type Database = {
           email: string | null
           estado: string | null
           external_id: string | null
+          funcao: string | null
           id: string
           inscricao_estadual: string | null
           inscricao_municipal: string | null
@@ -4169,6 +4291,7 @@ export type Database = {
           email?: string | null
           estado?: string | null
           external_id?: string | null
+          funcao?: string | null
           id?: string
           inscricao_estadual?: string | null
           inscricao_municipal?: string | null
@@ -4226,6 +4349,7 @@ export type Database = {
           email?: string | null
           estado?: string | null
           external_id?: string | null
+          funcao?: string | null
           id?: string
           inscricao_estadual?: string | null
           inscricao_municipal?: string | null

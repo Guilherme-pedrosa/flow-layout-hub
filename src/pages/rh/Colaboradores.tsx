@@ -1,6 +1,7 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { usePessoas, Pessoa, PessoaInsert } from "@/hooks/usePessoas";
-import { useRhDocumentos, TIPOS_DOCUMENTO, getStatusDocumento } from "@/hooks/useRh";
+import { useAllColaboradorDocs, getDocStatus } from "@/hooks/useColaboradorDocs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,31 +10,25 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Trash2, AlertCircle, Edit, Power, PowerOff } from "lucide-react";
-import { toast } from "sonner";
+import { Plus, Edit, Power, PowerOff, FileText, AlertCircle, CheckCircle, Eye, Search } from "lucide-react";
 import { PageHeader } from "@/components/shared";
 
-interface DocTemp {
-  tipo: string;
-  dataVencimento: string;
-}
-
 export default function RhColaboradoresPage() {
+  const navigate = useNavigate();
   const [dialogAberto, setDialogAberto] = useState(false);
   const [colaboradorSelecionado, setColaboradorSelecionado] = useState<Pessoa | null>(null);
-  const [docRenovar, setDocRenovar] = useState<any>(null);
-  const [novaDataVencimento, setNovaDataVencimento] = useState("");
-  const [documentosTemp, setDocumentosTemp] = useState<DocTemp[]>([]);
-  const [novoDoc, setNovoDoc] = useState({ tipo: "", tipoCustomizado: "", dataVencimento: "" });
+  const [search, setSearch] = useState('');
+  const [filterStatus, setFilterStatus] = useState<string>('ativos');
   
   const [formData, setFormData] = useState({
-    tipo_pessoa: "PJ" as "PF" | "PJ",
+    tipo_pessoa: "PF" as "PF" | "PJ",
     razao_social: "",
     nome_fantasia: "",
     cpf_cnpj: "",
     email: "",
     telefone: "",
     cargo: "",
+    funcao: "",
     departamento: "",
   });
 
@@ -44,31 +39,29 @@ export default function RhColaboradoresPage() {
     updatePessoa, 
     toggleStatus 
   } = usePessoas();
-  
-  const { createDocumento, updateDocumento, deleteDocumento } = useRhDocumentos();
+
+  const { documentos: allDocs } = useAllColaboradorDocs();
 
   const fecharDialog = () => {
     setDialogAberto(false);
     setColaboradorSelecionado(null);
     setFormData({
-      tipo_pessoa: "PJ",
+      tipo_pessoa: "PF",
       razao_social: "",
       nome_fantasia: "",
       cpf_cnpj: "",
       email: "",
       telefone: "",
       cargo: "",
+      funcao: "",
       departamento: "",
     });
-    setDocumentosTemp([]);
-    setNovoDoc({ tipo: "", tipoCustomizado: "", dataVencimento: "" });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!formData.razao_social?.trim()) {
-      toast.error("Preencha o nome do colaborador");
       return;
     }
 
@@ -78,14 +71,6 @@ export default function RhColaboradoresPage() {
           id: colaboradorSelecionado.id,
           data: formData,
         });
-        // Criar novos documentos
-        for (const doc of documentosTemp) {
-          await createDocumento.mutateAsync({
-            colaborador_id: colaboradorSelecionado.id,
-            tipo_documento: doc.tipo,
-            data_vencimento: doc.dataVencimento,
-          });
-        }
       } else {
         await createPessoa.mutateAsync({
           ...formData,
@@ -93,30 +78,9 @@ export default function RhColaboradoresPage() {
         });
       }
       fecharDialog();
-    } catch (error) {
+    } catch {
       // Error handled by mutation
     }
-  };
-
-  const adicionarDocumento = () => {
-    if (!novoDoc.tipo || !novoDoc.dataVencimento) {
-      toast.error("Preencha tipo e vencimento do documento");
-      return;
-    }
-
-    if (novoDoc.tipo === "Outros" && !novoDoc.tipoCustomizado) {
-      toast.error("Digite o nome do documento");
-      return;
-    }
-
-    const tipoFinal = novoDoc.tipo === "Outros" ? novoDoc.tipoCustomizado : novoDoc.tipo;
-    setDocumentosTemp([...documentosTemp, { tipo: tipoFinal, dataVencimento: novoDoc.dataVencimento }]);
-    setNovoDoc({ tipo: "", tipoCustomizado: "", dataVencimento: "" });
-    toast.success("Documento adicionado à lista!");
-  };
-
-  const removerDocumentoTemp = (index: number) => {
-    setDocumentosTemp(documentosTemp.filter((_, i) => i !== index));
   };
 
   const handleEdit = (colab: Pessoa) => {
@@ -129,6 +93,7 @@ export default function RhColaboradoresPage() {
       email: colab.email || "",
       telefone: colab.telefone || "",
       cargo: colab.cargo || "",
+      funcao: (colab as any).funcao || "",
       departamento: colab.departamento || "",
     });
     setDialogAberto(true);
@@ -138,19 +103,41 @@ export default function RhColaboradoresPage() {
     toggleStatus.mutate({ id, is_active: isActive });
   };
 
-  const handleRenovar = () => {
-    if (!novaDataVencimento) {
-      toast.error("Selecione a nova data de vencimento");
-      return;
-    }
-
-    updateDocumento.mutate({
-      id: docRenovar.id,
-      data: { data_vencimento: novaDataVencimento },
+  // Verificar status de documentos para cada colaborador
+  const getColabDocStatus = (colaboradorId: string) => {
+    const docs = allDocs.filter(d => d.colaborador_id === colaboradorId);
+    if (docs.length === 0) return { status: 'none', label: 'Sem docs', color: 'gray' as const };
+    
+    const vencidos = docs.filter(d => {
+      const s = getDocStatus(d.data_vencimento);
+      return s.diasRestantes !== null && s.diasRestantes < 0;
     });
-    setDocRenovar(null);
-    setNovaDataVencimento("");
+    
+    const aVencer = docs.filter(d => {
+      const s = getDocStatus(d.data_vencimento);
+      return s.diasRestantes !== null && s.diasRestantes >= 0 && s.diasRestantes <= 30;
+    });
+
+    if (vencidos.length > 0) {
+      return { status: 'vencido', label: `${vencidos.length} vencido(s)`, color: 'red' as const };
+    }
+    if (aVencer.length > 0) {
+      return { status: 'alerta', label: `${aVencer.length} vencendo`, color: 'yellow' as const };
+    }
+    return { status: 'ok', label: 'Em dia', color: 'green' as const };
   };
+
+  // Filtrar colaboradores
+  const colaboradoresFiltrados = colaboradores.filter(c => {
+    const nome = c.nome_fantasia || c.razao_social || '';
+    const matchSearch = !search || nome.toLowerCase().includes(search.toLowerCase()) || c.cpf_cnpj?.includes(search);
+    
+    let matchStatus = true;
+    if (filterStatus === 'ativos') matchStatus = c.is_active === true;
+    else if (filterStatus === 'inativos') matchStatus = c.is_active === false;
+    
+    return matchSearch && matchStatus;
+  });
 
   if (isLoadingColaboradores) {
     return <div className="flex items-center justify-center h-96">Carregando...</div>;
@@ -173,31 +160,124 @@ export default function RhColaboradoresPage() {
         }
       />
 
-      <div className="grid gap-4 mt-6">
-        {colaboradores?.filter((c) => c.is_active).map((colab) => (
-          <ColaboradorCard
-            key={colab.id}
-            colaborador={colab}
-            onEdit={handleEdit}
-            onToggleStatus={handleToggleStatus}
-            onRenovar={(doc: any) => {
-              setDocRenovar(doc);
-              setNovaDataVencimento(new Date(doc.data_vencimento).toISOString().split('T')[0]);
-            }}
-            onDeleteDocumento={(id: string) => {
-              if (confirm("Remover documento?")) deleteDocumento.mutate(id);
-            }}
-          />
-        ))}
-      </div>
+      {/* Filtros */}
+      <Card className="mt-6">
+        <CardContent className="pt-4">
+          <div className="flex gap-4 flex-wrap">
+            <div className="flex-1 min-w-[200px]">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input 
+                  placeholder="Buscar por nome ou CPF/CNPJ..." 
+                  className="pl-10"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                />
+              </div>
+            </div>
+            <Select value={filterStatus} onValueChange={setFilterStatus}>
+              <SelectTrigger className="w-[150px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todos</SelectItem>
+                <SelectItem value="ativos">Ativos</SelectItem>
+                <SelectItem value="inativos">Inativos</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Tabela de Colaboradores */}
+      <Card className="mt-4">
+        <CardContent className="pt-4">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Nome</TableHead>
+                <TableHead>CPF/CNPJ</TableHead>
+                <TableHead>Cargo/Função</TableHead>
+                <TableHead>Documentos</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="w-[150px]">Ações</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {colaboradoresFiltrados.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={6} className="text-center text-muted-foreground py-10">
+                    Nenhum colaborador encontrado
+                  </TableCell>
+                </TableRow>
+              ) : (
+                colaboradoresFiltrados.map(colab => {
+                  const nome = colab.nome_fantasia || colab.razao_social || 'Sem nome';
+                  const docStatus = getColabDocStatus(colab.id);
+
+                  return (
+                    <TableRow key={colab.id}>
+                      <TableCell className="font-medium">{nome}</TableCell>
+                      <TableCell>{colab.cpf_cnpj || '-'}</TableCell>
+                      <TableCell>{colab.cargo || (colab as any).funcao || '-'}</TableCell>
+                      <TableCell>
+                        <Badge 
+                          variant={docStatus.color === 'green' ? 'default' : docStatus.color === 'yellow' ? 'secondary' : 'destructive'}
+                          className={docStatus.color === 'green' ? 'bg-green-600' : docStatus.color === 'yellow' ? 'bg-yellow-600' : docStatus.color === 'gray' ? 'bg-gray-400' : ''}
+                        >
+                          {docStatus.color === 'green' && <CheckCircle className="h-3 w-3 mr-1" />}
+                          {docStatus.color === 'red' && <AlertCircle className="h-3 w-3 mr-1" />}
+                          {docStatus.label}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={colab.is_active ? 'default' : 'secondary'}>
+                          {colab.is_active ? 'Ativo' : 'Inativo'}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex gap-1">
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            onClick={() => navigate(`/rh/colaboradores/${colab.id}`)}
+                            title="Ver prontuário"
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                          <Button variant="ghost" size="sm" onClick={() => handleEdit(colab)} title="Editar">
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            onClick={() => handleToggleStatus(colab.id, !colab.is_active)}
+                            title={colab.is_active ? 'Desativar' : 'Ativar'}
+                          >
+                            {colab.is_active ? (
+                              <PowerOff className="h-4 w-4 text-red-600" />
+                            ) : (
+                              <Power className="h-4 w-4 text-green-600" />
+                            )}
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })
+              )}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
 
       {/* Dialog de Cadastro/Edição */}
       <Dialog open={dialogAberto} onOpenChange={setDialogAberto}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>{colaboradorSelecionado ? "Editar Colaborador" : "Novo Colaborador"}</DialogTitle>
             <DialogDescription>
-              Preencha os dados do colaborador e adicione seus documentos
+              Preencha os dados do colaborador
             </DialogDescription>
           </DialogHeader>
 
@@ -230,7 +310,7 @@ export default function RhColaboradoresPage() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="grid gap-2">
-                  <Label>{formData.tipo_pessoa === "PF" ? "Nome Completo" : "Razão Social"}</Label>
+                  <Label>{formData.tipo_pessoa === "PF" ? "Nome Completo" : "Razão Social"} *</Label>
                   <Input
                     value={formData.razao_social}
                     onChange={(e) => setFormData({ ...formData, razao_social: e.target.value })}
@@ -266,95 +346,27 @@ export default function RhColaboradoresPage() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="grid gap-2">
-                  <Label>Cargo/Função</Label>
+                  <Label>Cargo</Label>
                   <Input
                     value={formData.cargo}
                     onChange={(e) => setFormData({ ...formData, cargo: e.target.value })}
                   />
                 </div>
                 <div className="grid gap-2">
-                  <Label>Departamento</Label>
+                  <Label>Função (Ex: Mecânico)</Label>
                   <Input
-                    value={formData.departamento}
-                    onChange={(e) => setFormData({ ...formData, departamento: e.target.value })}
+                    value={formData.funcao}
+                    onChange={(e) => setFormData({ ...formData, funcao: e.target.value })}
                   />
                 </div>
               </div>
 
-              <div className="border-t pt-4">
-                <h3 className="font-semibold mb-3">Documentos do Colaborador</h3>
-
-                <div className="grid gap-3 mb-3">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                    <div className="grid gap-2">
-                      <Label>Tipo de Documento</Label>
-                      <Select value={novoDoc.tipo} onValueChange={(v) => setNovoDoc({ ...novoDoc, tipo: v })}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Selecione" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {TIPOS_DOCUMENTO.map((tipo) => (
-                            <SelectItem key={tipo} value={tipo}>{tipo}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    {novoDoc.tipo === "Outros" && (
-                      <div className="grid gap-2">
-                        <Label>Nome do Documento</Label>
-                        <Input
-                          placeholder="Digite o nome"
-                          value={novoDoc.tipoCustomizado}
-                          onChange={(e) => setNovoDoc({ ...novoDoc, tipoCustomizado: e.target.value })}
-                        />
-                      </div>
-                    )}
-
-                    <div className="grid gap-2">
-                      <Label>Data de Vencimento</Label>
-                      <Input
-                        type="date"
-                        value={novoDoc.dataVencimento}
-                        onChange={(e) => setNovoDoc({ ...novoDoc, dataVencimento: e.target.value })}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="flex items-end">
-                    <Button type="button" onClick={adicionarDocumento} className="w-full">
-                      <Plus className="h-4 w-4 mr-2" />
-                      Adicionar
-                    </Button>
-                  </div>
-                </div>
-
-                {documentosTemp.length > 0 && (
-                  <div className="border rounded-lg p-3">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Tipo</TableHead>
-                          <TableHead>Vencimento</TableHead>
-                          <TableHead className="w-[50px]"></TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {documentosTemp.map((doc, idx) => (
-                          <TableRow key={idx}>
-                            <TableCell>{doc.tipo}</TableCell>
-                            <TableCell>{new Date(doc.dataVencimento).toLocaleDateString("pt-BR")}</TableCell>
-                            <TableCell>
-                              <Button type="button" variant="ghost" size="sm" onClick={() => removerDocumentoTemp(idx)}>
-                                <Trash2 className="h-4 w-4 text-red-600" />
-                              </Button>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                )}
+              <div className="grid gap-2">
+                <Label>Departamento</Label>
+                <Input
+                  value={formData.departamento}
+                  onChange={(e) => setFormData({ ...formData, departamento: e.target.value })}
+                />
               </div>
             </div>
 
@@ -369,164 +381,6 @@ export default function RhColaboradoresPage() {
           </form>
         </DialogContent>
       </Dialog>
-
-      {/* Dialog de Renovação */}
-      <Dialog open={!!docRenovar} onOpenChange={() => setDocRenovar(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Renovar Documento</DialogTitle>
-            <DialogDescription>
-              Atualize a data de vencimento do documento {docRenovar?.tipo_documento}
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="grid gap-4 py-4">
-            <div className="grid gap-2">
-              <Label>Nova Data de Vencimento</Label>
-              <Input
-                type="date"
-                value={novaDataVencimento}
-                onChange={(e) => setNovaDataVencimento(e.target.value)}
-              />
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDocRenovar(null)}>
-              Cancelar
-            </Button>
-            <Button onClick={handleRenovar} disabled={updateDocumento.isPending}>
-              Renovar
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
-  );
-}
-
-// Componente separado para card de colaborador
-function ColaboradorCard({ colaborador, onEdit, onToggleStatus, onRenovar, onDeleteDocumento }: {
-  colaborador: Pessoa;
-  onEdit: (c: Pessoa) => void;
-  onToggleStatus: (id: string, isActive: boolean) => void;
-  onRenovar: (doc: any) => void;
-  onDeleteDocumento: (id: string) => void;
-}) {
-  const { documentos, isLoading } = useRhDocumentos(colaborador.id);
-
-  if (isLoading) {
-    return (
-      <Card>
-        <CardContent className="py-6">
-          <div className="text-center text-muted-foreground">Carregando documentos...</div>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  const temDocVencido = documentos?.some((d) => {
-    if (!d.data_vencimento) return false;
-    return new Date(d.data_vencimento) < new Date();
-  });
-
-  const temDocVencendo = documentos?.some((d) => {
-    if (!d.data_vencimento) return false;
-    const diffDias = Math.ceil((new Date(d.data_vencimento).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
-    return diffDias >= 0 && diffDias <= 30;
-  });
-
-  const nome = colaborador.nome_fantasia || colaborador.razao_social || "Sem nome";
-
-  return (
-    <Card className={temDocVencido ? 'border-red-300 bg-red-50' : temDocVencendo ? 'border-yellow-300 bg-yellow-50' : ''}>
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <CardTitle className="text-lg">{nome}</CardTitle>
-            {colaborador.cpf_cnpj && (
-              <Badge variant="outline">{colaborador.cpf_cnpj}</Badge>
-            )}
-            {colaborador.cargo && (
-              <Badge variant="secondary">{colaborador.cargo}</Badge>
-            )}
-            {temDocVencido && (
-              <Badge variant="destructive" className="gap-1">
-                <AlertCircle className="h-3 w-3" />
-                Documentos Vencidos
-              </Badge>
-            )}
-            {!temDocVencido && temDocVencendo && (
-              <Badge className="bg-yellow-600 gap-1">
-                <AlertCircle className="h-3 w-3" />
-                Documentos Vencendo
-              </Badge>
-            )}
-          </div>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={() => onEdit(colaborador)}>
-              <Edit className="h-4 w-4" />
-            </Button>
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={() => onToggleStatus(colaborador.id, !colaborador.is_active)}
-            >
-              {colaborador.is_active ? (
-                <PowerOff className="h-4 w-4 text-red-600" />
-              ) : (
-                <Power className="h-4 w-4 text-green-600" />
-              )}
-            </Button>
-          </div>
-        </div>
-      </CardHeader>
-      <CardContent>
-        {documentos && documentos.length > 0 ? (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            {documentos.map((doc) => {
-              const status = getStatusDocumento(doc.data_vencimento);
-              const precisaRenovar = status && (status.label === "Vencido" || status.label === "Vencendo");
-
-              return (
-                <div key={doc.id} className="flex flex-col gap-1 p-3 border rounded-lg bg-background relative">
-                  <div className="absolute top-1 right-1 flex gap-1">
-                    <button
-                      onClick={() => onDeleteDocumento(doc.id)}
-                      className="p-1 hover:bg-red-100 rounded text-red-600"
-                      title="Remover documento"
-                    >
-                      <Trash2 className="h-3 w-3" />
-                    </button>
-                  </div>
-                  <div className="flex items-center justify-between pr-6">
-                    <Badge variant="outline" className="text-xs">{doc.tipo_documento}</Badge>
-                    {status && (
-                      <Badge variant={status.variant} className={`text-xs ${status.className}`}>
-                        {status.label}
-                      </Badge>
-                    )}
-                  </div>
-                  <span className="text-sm font-medium">
-                    {doc.data_vencimento
-                      ? new Date(doc.data_vencimento).toLocaleDateString("pt-BR")
-                      : "Sem vencimento"}
-                  </span>
-                  {precisaRenovar && (
-                    <Button size="sm" variant="outline" className="mt-2 h-7 text-xs" onClick={() => onRenovar(doc)}>
-                      Renovar
-                    </Button>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        ) : (
-          <div className="text-center py-4 text-sm text-muted-foreground">
-            Nenhum documento cadastrado
-          </div>
-        )}
-      </CardContent>
-    </Card>
   );
 }
