@@ -9,6 +9,7 @@ export interface ServiceType {
   name: string;
   description?: string;
   field_service_id?: string;
+  field_task_type_id?: string; // ID do tipo de tarefa no Field Control
   default_duration: number;
   color: string;
   is_active: boolean;

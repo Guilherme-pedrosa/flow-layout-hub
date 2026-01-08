@@ -6889,6 +6889,7 @@ export type Database = {
           default_duration: number | null
           description: string | null
           field_service_id: string | null
+          field_task_type_id: string | null
           id: string
           is_active: boolean | null
           name: string
@@ -6901,6 +6902,7 @@ export type Database = {
           default_duration?: number | null
           description?: string | null
           field_service_id?: string | null
+          field_task_type_id?: string | null
           id?: string
           is_active?: boolean | null
           name: string
@@ -6913,6 +6915,7 @@ export type Database = {
           default_duration?: number | null
           description?: string | null
           field_service_id?: string | null
+          field_task_type_id?: string | null
           id?: string
           is_active?: boolean | null
           name?: string
