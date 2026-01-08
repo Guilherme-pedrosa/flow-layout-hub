@@ -1,22 +1,37 @@
 import { useState, useRef } from "react";
-import { useClienteAcesso, TecnicoAcesso } from "@/hooks/useClienteAcesso";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
-import { Switch } from "@/components/ui/switch";
-import { Textarea } from "@/components/ui/textarea";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { 
-  Plus, Download, Edit, Ban, CheckCircle, AlertTriangle, XCircle, 
-  User, FileText, Upload, Loader2, RotateCcw, Trash2
-} from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { 
+  UserPlus, Download, Upload, Edit2, Trash2, ChevronDown, ChevronRight,
+  FileText, Shield, ShieldCheck, ShieldAlert, ShieldX, AlertCircle,
+  Calendar, Paperclip, Ban, CheckCircle, RefreshCcw, Loader2, User
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import {
+  Dialog, DialogContent, DialogDescription, DialogFooter,
+  DialogHeader, DialogTitle
+} from "@/components/ui/dialog";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue
+} from "@/components/ui/select";
+import {
+  Collapsible, CollapsibleContent, CollapsibleTrigger
+} from "@/components/ui/collapsible";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle
+} from "@/components/ui/alert-dialog";
+import { Separator } from "@/components/ui/separator";
+import { useClienteAcesso, TecnicoAcesso } from "@/hooks/useClienteAcesso";
+import { useAllColaboradorDocs, ColaboradorDoc, getDocStatus } from "@/hooks/useColaboradorDocs";
+import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 
 interface Props {
@@ -26,397 +41,675 @@ interface Props {
   onConfigChange: (exige: boolean, regras: string) => void;
 }
 
-function StatusBadge({ status }: { status: TecnicoAcesso['statusAcesso'] }) {
-  switch (status) {
-    case 'AUTORIZADO':
-      return (
-        <Badge className="bg-green-600 text-white text-sm px-3 py-1">
-          <CheckCircle className="h-4 w-4 mr-1" />
-          AUTORIZADO
-        </Badge>
-      );
-    case 'A_VENCER':
-      return (
-        <Badge className="bg-yellow-600 text-white text-sm px-3 py-1">
-          <AlertTriangle className="h-4 w-4 mr-1" />
-          A VENCER
-        </Badge>
-      );
-    case 'BLOQUEADO':
-      return (
-        <Badge variant="destructive" className="text-sm px-3 py-1">
-          <XCircle className="h-4 w-4 mr-1" />
-          BLOQUEADO
-        </Badge>
-      );
-  }
+// Status calculado do semáforo inteligente (Dual-Layer)
+type StatusBlindagem = 'LIBERADO' | 'BLOQUEADO_DOC' | 'BLOQUEADO_INT' | 'ATENCAO' | 'BLOQUEADO_MANUAL';
+
+interface TecnicoComBlindagem extends TecnicoAcesso {
+  statusBlindagem: StatusBlindagem;
+  motivoBlindagem: string;
+  docsGlobais: {
+    tipo: string;
+    dataVencimento: string | null;
+    arquivoUrl: string | null;
+    status: ReturnType<typeof getDocStatus>;
+  }[];
 }
 
-export function ClienteFormTecnicosIntegrados({ clienteId, exigeIntegracao, regrasAcesso, onConfigChange }: Props) {
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [uploading, setUploading] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+const DOCS_OBRIGATORIOS = ['ASO', 'NR10', 'NR35'];
 
-  const [formData, setFormData] = useState({
-    colaborador_id: '',
-    data_validade: '',
-    observacoes: '',
+function calcularBlindagem(
+  tecnico: TecnicoAcesso,
+  docsColaborador: ColaboradorDoc[]
+): TecnicoComBlindagem {
+  const docsGlobais = DOCS_OBRIGATORIOS.map(tipo => {
+    const doc = docsColaborador.find(d => d.tipo === tipo);
+    return {
+      tipo,
+      dataVencimento: doc?.data_vencimento || null,
+      arquivoUrl: doc?.arquivo_url || null,
+      status: getDocStatus(doc?.data_vencimento || null),
+    };
   });
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
-  const {
-    tecnicos,
-    isLoading,
-    addTecnico,
-    updateTecnico,
-    revogarAcesso,
-    reativarAcesso,
-    deleteTecnico,
-    uploadComprovante,
-    colaboradoresDisponiveis,
-    allColaboradores,
-  } = useClienteAcesso(clienteId);
+  // 1. Bloqueio manual
+  if (tecnico.is_blocked) {
+    return {
+      ...tecnico,
+      statusBlindagem: 'BLOQUEADO_MANUAL',
+      motivoBlindagem: tecnico.motivo_bloqueio || 'Acesso bloqueado manualmente',
+      docsGlobais,
+    };
+  }
 
-  const handleOpenDialog = (tecnico?: TecnicoAcesso) => {
-    if (tecnico) {
-      setEditingId(tecnico.id);
-      setFormData({
-        colaborador_id: tecnico.colaborador_id,
-        data_validade: tecnico.data_validade,
-        observacoes: tecnico.observacoes || '',
-      });
-    } else {
-      setEditingId(null);
-      setFormData({
-        colaborador_id: '',
-        data_validade: '',
-        observacoes: '',
-      });
+  // 2. Verificar integração local (Camada Local - "O Visto")
+  const hoje = new Date();
+  hoje.setHours(0, 0, 0, 0);
+  const validadeIntegracao = new Date(tecnico.data_validade);
+  validadeIntegracao.setHours(0, 0, 0, 0);
+  const diasIntegracao = Math.ceil((validadeIntegracao.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24));
+
+  if (diasIntegracao < 0) {
+    return {
+      ...tecnico,
+      statusBlindagem: 'BLOQUEADO_INT',
+      motivoBlindagem: `Integração local vencida há ${Math.abs(diasIntegracao)} dias`,
+      docsGlobais,
+    };
+  }
+
+  // 3. Verificar documentos globais (Camada Global - "O Passaporte")
+  const docVencido = docsGlobais.find(d => d.status.diasRestantes !== null && d.status.diasRestantes < 0);
+  if (docVencido) {
+    return {
+      ...tecnico,
+      statusBlindagem: 'BLOQUEADO_DOC',
+      motivoBlindagem: `${docVencido.tipo} vencido há ${Math.abs(docVencido.status.diasRestantes!)} dias`,
+      docsGlobais,
+    };
+  }
+
+  // 4. Verificar atenção (< 30 dias para vencer)
+  const alertas: string[] = [];
+  if (diasIntegracao <= 30) {
+    alertas.push(`Integração vence em ${diasIntegracao}d`);
+  }
+  docsGlobais.forEach(d => {
+    if (d.status.diasRestantes !== null && d.status.diasRestantes <= 30 && d.status.diasRestantes >= 0) {
+      alertas.push(`${d.tipo} vence em ${d.status.diasRestantes}d`);
     }
-    setSelectedFile(null);
-    setDialogOpen(true);
+  });
+  
+  if (alertas.length > 0) {
+    return {
+      ...tecnico,
+      statusBlindagem: 'ATENCAO',
+      motivoBlindagem: alertas.join(' | '),
+      docsGlobais,
+    };
+  }
+
+  // 5. Tudo OK
+  return {
+    ...tecnico,
+    statusBlindagem: 'LIBERADO',
+    motivoBlindagem: 'Integração e documentos em dia',
+    docsGlobais,
+  };
+}
+
+function StatusBadge({ status }: { status: StatusBlindagem }) {
+  const config = {
+    LIBERADO: { label: '🟢 LIBERADO', className: 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20' },
+    BLOQUEADO_DOC: { label: '🔴 BLOQUEADO (DOC)', className: 'bg-destructive/10 text-destructive border-destructive/20' },
+    BLOQUEADO_INT: { label: '🔴 BLOQUEADO (INT)', className: 'bg-destructive/10 text-destructive border-destructive/20' },
+    BLOQUEADO_MANUAL: { label: '🔴 BLOQUEADO', className: 'bg-destructive/10 text-destructive border-destructive/20' },
+    ATENCAO: { label: '⚠️ ATENÇÃO', className: 'bg-amber-500/10 text-amber-600 border-amber-500/20' },
   };
 
-  const handleSubmit = async () => {
-    if (!formData.colaborador_id || !formData.data_validade) return;
+  const { label, className } = config[status];
 
-    setUploading(true);
+  return (
+    <Badge variant="outline" className={`${className} font-semibold px-3 py-1`}>
+      {label}
+    </Badge>
+  );
+}
+
+export function ClienteFormTecnicosIntegrados({
+  clienteId,
+  exigeIntegracao,
+  regrasAcesso,
+  onConfigChange,
+}: Props) {
+  const { 
+    tecnicos, isLoading, addTecnico, updateTecnico, 
+    revogarAcesso, reativarAcesso, deleteTecnico, 
+    colaboradoresDisponiveis, allColaboradores 
+  } = useClienteAcesso(clienteId);
+  const { documentos: todosDocumentos } = useAllColaboradorDocs();
+  
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [editingTecnico, setEditingTecnico] = useState<TecnicoAcesso | null>(null);
+  const [tecnicoToDelete, setTecnicoToDelete] = useState<string | null>(null);
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+  const [uploading, setUploading] = useState(false);
+  const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
+  
+  // Form state
+  const [selectedColaborador, setSelectedColaborador] = useState('');
+  const [dataValidade, setDataValidade] = useState('');
+  const [observacoes, setObservacoes] = useState('');
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+
+  // Enriquecer técnicos com dados de blindagem (Dual-Layer)
+  const tecnicosComBlindagem: TecnicoComBlindagem[] = tecnicos.map(t => {
+    const docsColaborador = todosDocumentos.filter(d => d.colaborador_id === t.colaborador_id);
+    return calcularBlindagem(t, docsColaborador);
+  });
+
+  // Estatísticas
+  const stats = {
+    liberados: tecnicosComBlindagem.filter(t => t.statusBlindagem === 'LIBERADO').length,
+    atencao: tecnicosComBlindagem.filter(t => t.statusBlindagem === 'ATENCAO').length,
+    bloqueados: tecnicosComBlindagem.filter(t => 
+      ['BLOQUEADO_DOC', 'BLOQUEADO_INT', 'BLOQUEADO_MANUAL'].includes(t.statusBlindagem)
+    ).length,
+  };
+
+  // Verificar docs do colaborador selecionado (para o dialog)
+  const docsColaboradorSelecionado = todosDocumentos.filter(d => d.colaborador_id === selectedColaborador);
+  const docsSummary = DOCS_OBRIGATORIOS.map(tipo => {
+    const doc = docsColaboradorSelecionado.find(d => d.tipo === tipo);
+    return {
+      tipo,
+      existe: !!doc,
+      validade: doc?.data_vencimento,
+      status: getDocStatus(doc?.data_vencimento || null),
+    };
+  });
+
+  const toggleRow = (id: string) => {
+    setExpandedRows(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  const handleAddOrEdit = async () => {
+    if (!selectedColaborador || !dataValidade) {
+      toast.error('Preencha todos os campos obrigatórios');
+      return;
+    }
+
     try {
-      if (editingId) {
+      if (editingTecnico) {
         await updateTecnico.mutateAsync({
-          id: editingId,
-          data: {
-            data_validade: formData.data_validade,
-            observacoes: formData.observacoes || null,
-          },
+          id: editingTecnico.id,
+          data: { data_validade: dataValidade, observacoes: observacoes || null },
         });
-        
-        // Upload de arquivo se selecionado
-        if (selectedFile) {
-          await uploadComprovante(selectedFile, editingId);
-        }
       } else {
-        // Primeiro criar o registro
         await addTecnico.mutateAsync({
-          colaborador_id: formData.colaborador_id,
-          data_validade: formData.data_validade,
-          observacoes: formData.observacoes,
+          colaborador_id: selectedColaborador,
+          data_validade: dataValidade,
+          observacoes,
         });
       }
+      resetForm();
       setDialogOpen(false);
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  const handleUploadComprovante = async (tecnicoId: string, file: File) => {
+    setUploading(true);
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${clienteId}/${tecnicoId}/${Date.now()}.${fileExt}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('integracao-comprovantes')
+        .upload(fileName, file, { upsert: true });
+
+      if (uploadError) throw uploadError;
+
+      const { data: urlData } = supabase.storage
+        .from('integracao-comprovantes')
+        .getPublicUrl(fileName);
+
+      await updateTecnico.mutateAsync({
+        id: tecnicoId,
+        data: { comprovante_url: urlData.publicUrl, nome_arquivo: file.name },
+      });
+      
+      toast.success('Comprovante enviado!');
+    } catch (error) {
+      console.error(error);
+      toast.error('Erro ao enviar arquivo');
     } finally {
       setUploading(false);
     }
   };
 
-  const handleDownload = (url: string, fileName: string) => {
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = fileName;
-    link.target = '_blank';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  const handleBaixarKit = async (tecnico: TecnicoComBlindagem) => {
+    const urls: { url: string; nome: string }[] = [];
+    
+    // Comprovante da integração local
+    if (tecnico.comprovante_url) {
+      urls.push({ url: tecnico.comprovante_url, nome: `Integracao_${tecnico.nome_arquivo || 'comprovante'}` });
+    }
+    
+    // Documentos globais
+    tecnico.docsGlobais.forEach(doc => {
+      if (doc.arquivoUrl) {
+        urls.push({ url: doc.arquivoUrl, nome: `${doc.tipo}_${tecnico.colaborador?.razao_social || 'tecnico'}` });
+      }
+    });
+
+    if (urls.length === 0) {
+      toast.error('Nenhum documento disponível para download');
+      return;
+    }
+
+    // Abrir cada documento em nova aba
+    urls.forEach(u => window.open(u.url, '_blank'));
+    toast.success(`${urls.length} documento(s) aberto(s) para download`);
   };
 
-  const handleRevogar = async (id: string) => {
-    const motivo = prompt('Motivo do bloqueio (opcional):');
-    await revogarAcesso.mutateAsync({ id, motivo: motivo || undefined });
+  const resetForm = () => {
+    setSelectedColaborador('');
+    setDataValidade('');
+    setObservacoes('');
+    setPendingFile(null);
+    setEditingTecnico(null);
   };
 
-  const handleDelete = async (id: string) => {
-    if (confirm('Remover este registro de acesso?')) {
-      await deleteTecnico.mutateAsync(id);
+  const openEditDialog = (tecnico: TecnicoAcesso) => {
+    setEditingTecnico(tecnico);
+    setSelectedColaborador(tecnico.colaborador_id);
+    setDataValidade(tecnico.data_validade);
+    setObservacoes(tecnico.observacoes || '');
+    setDialogOpen(true);
+  };
+
+  const confirmDelete = (id: string) => {
+    setTecnicoToDelete(id);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleDelete = async () => {
+    if (tecnicoToDelete) {
+      await deleteTecnico.mutateAsync(tecnicoToDelete);
+      setDeleteDialogOpen(false);
+      setTecnicoToDelete(null);
     }
   };
 
-  // Contadores
-  const autorizados = tecnicos.filter(t => t.statusAcesso === 'AUTORIZADO').length;
-  const aVencer = tecnicos.filter(t => t.statusAcesso === 'A_VENCER').length;
-  const bloqueados = tecnicos.filter(t => t.statusAcesso === 'BLOQUEADO').length;
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
       {/* Configuração da Unidade */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">Configuração de Acesso</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <Label className="text-base">Esta unidade exige integração?</Label>
-              <p className="text-sm text-muted-foreground">
-                Se ativado, apenas técnicos integrados poderão ser alocados
-              </p>
-            </div>
-            <Switch
-              checked={exigeIntegracao}
-              onCheckedChange={(checked) => onConfigChange(checked, regrasAcesso)}
+      <div className="space-y-4 p-4 rounded-lg border bg-muted/30">
+        <div className="flex items-center justify-between">
+          <div className="space-y-0.5">
+            <Label className="text-base font-medium">Esta unidade exige integração?</Label>
+            <p className="text-sm text-muted-foreground">
+              Se habilitado, apenas técnicos com integração válida poderão atender este cliente.
+            </p>
+          </div>
+          <Switch
+            checked={exigeIntegracao}
+            onCheckedChange={(checked) => onConfigChange(checked, regrasAcesso)}
+          />
+        </div>
+
+        {!exigeIntegracao && (
+          <Alert className="border-emerald-500/50 bg-emerald-500/10">
+            <ShieldCheck className="h-4 w-4 text-emerald-600" />
+            <AlertDescription className="text-emerald-600">
+              <strong>Acesso Livre</strong> — Qualquer técnico com ASO em dia pode atender esta unidade.
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {exigeIntegracao && (
+          <div className="space-y-2">
+            <Label>Instruções/Regras de Acesso</Label>
+            <Textarea
+              placeholder="Ex: Portaria pede ASO e CNH impressos. Procurar Sr. Carlos."
+              value={regrasAcesso}
+              onChange={(e) => onConfigChange(exigeIntegracao, e.target.value)}
+              rows={3}
             />
           </div>
+        )}
+      </div>
 
-          {!exigeIntegracao ? (
-            <Alert className="border-green-200 bg-green-50">
-              <CheckCircle className="h-4 w-4 text-green-600" />
-              <AlertTitle className="text-green-800">Acesso Livre</AlertTitle>
-              <AlertDescription className="text-green-700">
-                Qualquer técnico com documentação em dia pode atender esta unidade
-              </AlertDescription>
-            </Alert>
-          ) : (
-            <div className="space-y-2">
-              <Label>Instruções / Regras de Acesso</Label>
-              <Textarea
-                placeholder="Ex: Portaria exige ASO e CNH impressos. Procurar Sr. Carlos na recepção."
-                value={regrasAcesso}
-                onChange={(e) => onConfigChange(exigeIntegracao, e.target.value)}
-                rows={3}
-              />
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      <Separator />
 
-      {/* Grid de Técnicos (só mostra se exige integração) */}
-      {exigeIntegracao && (
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <div>
-              <CardTitle className="flex items-center gap-2">
-                <User className="h-5 w-5" />
-                Técnicos Autorizados
-              </CardTitle>
-              <div className="flex gap-4 mt-2 text-sm">
-                <span className="text-green-600">✓ {autorizados} autorizados</span>
-                <span className="text-yellow-600">⚠ {aVencer} a vencer</span>
-                <span className="text-red-600">✕ {bloqueados} bloqueados</span>
-              </div>
-            </div>
-            <Button onClick={() => handleOpenDialog()}>
-              <Plus className="h-4 w-4 mr-2" />
-              Adicionar Técnico
-            </Button>
-          </CardHeader>
-          <CardContent>
-            {isLoading ? (
-              <div className="text-center py-10">
-                <Loader2 className="h-8 w-8 animate-spin mx-auto text-muted-foreground" />
-              </div>
-            ) : tecnicos.length === 0 ? (
-              <div className="text-center py-10 text-muted-foreground">
-                <User className="h-12 w-12 mx-auto mb-4 opacity-30" />
-                <p>Nenhum técnico integrado nesta unidade</p>
-                <Button className="mt-4" onClick={() => handleOpenDialog()}>
-                  <Plus className="h-4 w-4 mr-2" />
-                  Adicionar Primeiro Técnico
-                </Button>
-              </div>
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Técnico</TableHead>
-                    <TableHead className="text-center">Status</TableHead>
-                    <TableHead>Validade</TableHead>
-                    <TableHead>Comprovante</TableHead>
-                    <TableHead className="w-[150px]">Ações</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {tecnicos.map(tecnico => (
-                    <TableRow key={tecnico.id} className={tecnico.statusAcesso === 'BLOQUEADO' ? 'bg-red-50' : ''}>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
-                            <User className="h-4 w-4 text-primary" />
+      {/* Cabeçalho com estatísticas e botão de adicionar */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-lg font-semibold">Controle de Acesso</h3>
+          <div className="flex gap-4 mt-1 text-sm">
+            <span className="text-emerald-600">🟢 {stats.liberados} liberados</span>
+            <span className="text-amber-600">⚠️ {stats.atencao} atenção</span>
+            <span className="text-destructive">🔴 {stats.bloqueados} bloqueados</span>
+          </div>
+        </div>
+        <Button onClick={() => { resetForm(); setDialogOpen(true); }}>
+          <UserPlus className="h-4 w-4 mr-2" />
+          Vincular Técnico
+        </Button>
+      </div>
+
+      {/* Lista de técnicos com Accordion Expansível */}
+      {tecnicosComBlindagem.length === 0 ? (
+        <div className="text-center py-12 text-muted-foreground border rounded-lg bg-muted/20">
+          <Shield className="h-12 w-12 mx-auto mb-3 opacity-50" />
+          <p>Nenhum técnico vinculado a esta unidade.</p>
+          <p className="text-sm">Clique em "Vincular Técnico" para adicionar.</p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {tecnicosComBlindagem.map((tecnico) => (
+            <Collapsible
+              key={tecnico.id}
+              open={expandedRows.has(tecnico.id)}
+              onOpenChange={() => toggleRow(tecnico.id)}
+            >
+              <div className="border rounded-lg overflow-hidden">
+                {/* Linha Principal */}
+                <CollapsibleTrigger asChild>
+                  <div className="flex items-center gap-4 p-4 cursor-pointer hover:bg-muted/50 transition-colors">
+                    <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0">
+                      {expandedRows.has(tecnico.id) ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                    </Button>
+                    
+                    <Avatar className="h-10 w-10 shrink-0">
+                      <AvatarFallback className="bg-primary/10 text-primary font-semibold">
+                        {tecnico.colaborador?.razao_social?.slice(0, 2).toUpperCase() || <User className="h-4 w-4" />}
+                      </AvatarFallback>
+                    </Avatar>
+                    
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium truncate">
+                        {tecnico.colaborador?.razao_social || tecnico.colaborador?.nome_fantasia || 'Técnico'}
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        Integração válida até: {format(new Date(tecnico.data_validade), "dd/MM/yyyy", { locale: ptBR })}
+                      </p>
+                    </div>
+
+                    <StatusBadge status={tecnico.statusBlindagem} />
+
+                    {/* Botão Baixar KIT */}
+                    <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleBaixarKit(tecnico)}
+                        title="Baixar KIT (Integração + ASO + NRs)"
+                      >
+                        <Download className="h-4 w-4 mr-1" />
+                        Baixar KIT
+                      </Button>
+                    </div>
+                  </div>
+                </CollapsibleTrigger>
+
+                {/* Conteúdo Expandido - Detalhes dos Requisitos */}
+                <CollapsibleContent>
+                  <div className="border-t bg-muted/30 p-4 space-y-4">
+                    {/* Motivo do status */}
+                    <Alert className={
+                      tecnico.statusBlindagem === 'LIBERADO' ? 'border-emerald-500/50 bg-emerald-500/10' :
+                      tecnico.statusBlindagem === 'ATENCAO' ? 'border-amber-500/50 bg-amber-500/10' :
+                      'border-destructive/50 bg-destructive/10'
+                    }>
+                      <AlertCircle className={`h-4 w-4 ${
+                        tecnico.statusBlindagem === 'LIBERADO' ? 'text-emerald-600' :
+                        tecnico.statusBlindagem === 'ATENCAO' ? 'text-amber-600' : 
+                        'text-destructive'
+                      }`} />
+                      <AlertDescription className={
+                        tecnico.statusBlindagem === 'LIBERADO' ? 'text-emerald-600' :
+                        tecnico.statusBlindagem === 'ATENCAO' ? 'text-amber-600' : 
+                        'text-destructive'
+                      }>
+                        <strong>Diagnóstico:</strong> {tecnico.motivoBlindagem}
+                      </AlertDescription>
+                    </Alert>
+
+                    {/* Grid de documentos */}
+                    <div className="grid gap-3">
+                      {/* Integração Local */}
+                      <div className="flex items-center justify-between p-3 rounded-lg border bg-background">
+                        <div className="flex items-center gap-3">
+                          <FileText className="h-5 w-5 text-primary" />
+                          <div>
+                            <p className="font-medium">📄 Integração Local</p>
+                            <p className="text-sm text-muted-foreground">
+                              Vence: {format(new Date(tecnico.data_validade), "dd/MM/yyyy", { locale: ptBR })}
+                            </p>
                           </div>
-                          <span className="font-medium">
-                            {tecnico.colaborador?.nome_fantasia || tecnico.colaborador?.razao_social || 'N/A'}
-                          </span>
                         </div>
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <StatusBadge status={tecnico.statusAcesso} />
-                      </TableCell>
-                      <TableCell>
-                        <div>
-                          <span className="font-medium">
-                            {format(new Date(tecnico.data_validade), 'dd/MM/yyyy', { locale: ptBR })}
-                          </span>
-                          {tecnico.diasParaVencer > 0 && tecnico.diasParaVencer <= 30 && (
-                            <p className="text-xs text-yellow-600">
-                              {tecnico.diasParaVencer} dias restantes
-                            </p>
-                          )}
-                          {tecnico.diasParaVencer < 0 && (
-                            <p className="text-xs text-red-600">
-                              Vencido há {Math.abs(tecnico.diasParaVencer)} dias
-                            </p>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        {tecnico.comprovante_url ? (
-                          <Button 
-                            variant="outline" 
-                            size="sm"
-                            onClick={() => handleDownload(tecnico.comprovante_url!, tecnico.nome_arquivo || 'comprovante.pdf')}
-                          >
-                            <Download className="h-4 w-4 mr-1" />
-                            {tecnico.nome_arquivo?.substring(0, 15) || 'Baixar'}
-                          </Button>
-                        ) : (
-                          <span className="text-sm text-muted-foreground">Sem arquivo</span>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex gap-1">
-                          <Button variant="ghost" size="sm" onClick={() => handleOpenDialog(tecnico)}>
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          {tecnico.is_blocked ? (
-                            <Button 
-                              variant="ghost" 
-                              size="sm" 
-                              onClick={() => reativarAcesso.mutate(tecnico.id)}
-                              title="Reativar acesso"
-                            >
-                              <RotateCcw className="h-4 w-4 text-green-600" />
+                        <div className="flex items-center gap-2">
+                          {tecnico.comprovante_url ? (
+                            <Button variant="outline" size="sm" onClick={() => window.open(tecnico.comprovante_url!, '_blank')}>
+                              <Paperclip className="h-4 w-4 mr-1" />
+                              Ver Anexo
                             </Button>
                           ) : (
-                            <Button 
-                              variant="ghost" 
-                              size="sm" 
-                              onClick={() => handleRevogar(tecnico.id)}
-                              title="Revogar acesso"
-                            >
-                              <Ban className="h-4 w-4 text-red-600" />
-                            </Button>
+                            <span className="text-sm text-muted-foreground italic">Sem anexo</span>
                           )}
-                          <Button 
-                            variant="ghost" 
-                            size="sm" 
-                            onClick={() => handleDelete(tecnico.id)}
-                            title="Excluir registro"
+                          <input
+                            type="file"
+                            className="hidden"
+                            accept=".pdf,.jpg,.jpeg,.png"
+                            ref={(el) => { fileInputRefs.current[tecnico.id] = el; }}
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) handleUploadComprovante(tecnico.id, file);
+                            }}
+                          />
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => fileInputRefs.current[tecnico.id]?.click()}
+                            disabled={uploading}
+                            title="Enviar/Atualizar comprovante"
                           >
-                            <Trash2 className="h-4 w-4 text-red-600" />
+                            <Upload className="h-4 w-4" />
                           </Button>
                         </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            )}
-          </CardContent>
-        </Card>
+                      </div>
+
+                      {/* Documentos Globais (ASO, NR10, NR35) */}
+                      {tecnico.docsGlobais.map((doc) => (
+                        <div key={doc.tipo} className="flex items-center justify-between p-3 rounded-lg border bg-background">
+                          <div className="flex items-center gap-3">
+                            <Shield className={`h-5 w-5 ${
+                              doc.status.color === 'green' ? 'text-emerald-600' :
+                              doc.status.color === 'yellow' ? 'text-amber-600' :
+                              doc.status.color === 'red' ? 'text-destructive' :
+                              'text-muted-foreground'
+                            }`} />
+                            <div>
+                              <p className="font-medium">📄 {doc.tipo} <span className="text-xs text-muted-foreground">(Global)</span></p>
+                              <p className="text-sm text-muted-foreground">
+                                {doc.dataVencimento
+                                  ? `Vence: ${format(new Date(doc.dataVencimento), "dd/MM/yyyy", { locale: ptBR })}`
+                                  : 'Não cadastrado no RH'}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Badge variant="outline" className={
+                              doc.status.color === 'green' ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20' :
+                              doc.status.color === 'yellow' ? 'bg-amber-500/10 text-amber-600 border-amber-500/20' :
+                              doc.status.color === 'red' ? 'bg-destructive/10 text-destructive border-destructive/20' :
+                              'bg-muted text-muted-foreground'
+                            }>
+                              {doc.status.label}
+                            </Badge>
+                            {doc.arquivoUrl && (
+                              <Button variant="outline" size="sm" onClick={() => window.open(doc.arquivoUrl!, '_blank')}>
+                                <Paperclip className="h-4 w-4 mr-1" />
+                                Ver
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Observações */}
+                    {tecnico.observacoes && (
+                      <div className="text-sm text-muted-foreground p-2 bg-muted/50 rounded">
+                        <strong>Obs:</strong> {tecnico.observacoes}
+                      </div>
+                    )}
+
+                    {/* Ações */}
+                    <div className="flex items-center gap-2 pt-2 border-t">
+                      <Button variant="outline" size="sm" onClick={() => openEditDialog(tecnico)}>
+                        <Edit2 className="h-4 w-4 mr-1" />
+                        Editar
+                      </Button>
+                      
+                      {tecnico.is_blocked ? (
+                        <Button variant="outline" size="sm" onClick={() => reativarAcesso.mutateAsync(tecnico.id)}>
+                          <RefreshCcw className="h-4 w-4 mr-1" />
+                          Reativar
+                        </Button>
+                      ) : (
+                        <Button variant="outline" size="sm" onClick={() => revogarAcesso.mutateAsync({ id: tecnico.id, motivo: 'Acesso revogado pelo gestor' })}>
+                          <Ban className="h-4 w-4 mr-1" />
+                          Revogar
+                        </Button>
+                      )}
+
+                      <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={() => confirmDelete(tecnico.id)}>
+                        <Trash2 className="h-4 w-4 mr-1" />
+                        Excluir
+                      </Button>
+                    </div>
+                  </div>
+                </CollapsibleContent>
+              </div>
+            </Collapsible>
+          ))}
+        </div>
       )}
 
-      {/* Dialog de Adicionar/Editar */}
+      {/* Dialog de adicionar/editar técnico */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>{editingId ? 'Editar Acesso' : 'Adicionar Técnico'}</DialogTitle>
+            <DialogTitle>{editingTecnico ? 'Editar Integração' : 'Vincular Técnico'}</DialogTitle>
             <DialogDescription>
-              {editingId ? 'Atualize a validade e documentos' : 'Cadastre um técnico integrado nesta unidade'}
+              {editingTecnico ? 'Atualize os dados da integração.' : 'Adicione um técnico com permissão de acesso a esta unidade.'}
             </DialogDescription>
           </DialogHeader>
 
-          <div className="grid gap-4 py-4">
-            <div className="grid gap-2">
-              <Label>Técnico</Label>
-              <Select 
-                value={formData.colaborador_id} 
-                onValueChange={(v) => setFormData({ ...formData, colaborador_id: v })}
-                disabled={!!editingId}
-              >
+          <div className="space-y-4">
+            {/* Seleção de técnico */}
+            <div className="space-y-2">
+              <Label>Técnico *</Label>
+              <Select value={selectedColaborador} onValueChange={setSelectedColaborador} disabled={!!editingTecnico}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Selecione o técnico" />
+                  <SelectValue placeholder="Selecione o técnico..." />
                 </SelectTrigger>
                 <SelectContent>
-                  {(editingId ? allColaboradores : colaboradoresDisponiveis).map(c => (
+                  {(editingTecnico
+                    ? allColaboradores.filter(c => c.id === editingTecnico.colaborador_id)
+                    : colaboradoresDisponiveis
+                  ).map((c) => (
                     <SelectItem key={c.id} value={c.id}>
-                      {c.nome_fantasia || c.razao_social}
+                      {c.razao_social || c.nome_fantasia || 'Sem nome'}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
 
-            <div className="grid gap-2">
-              <Label>Data de Validade</Label>
-              <Input 
-                type="date"
-                value={formData.data_validade}
-                onChange={(e) => setFormData({ ...formData, data_validade: e.target.value })}
-              />
-            </div>
-
-            <div className="grid gap-2">
-              <Label>Comprovante/Certificado</Label>
-              <div className="flex gap-2">
-                <Input
-                  type="file"
-                  accept=".pdf,.jpg,.jpeg,.png"
-                  ref={fileInputRef}
-                  onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
-                  className="flex-1"
-                />
-              </div>
-              {selectedFile && (
-                <p className="text-sm text-muted-foreground">
-                  Arquivo selecionado: {selectedFile.name}
+            {/* Verificação automática de documentos */}
+            {selectedColaborador && !editingTecnico && (
+              <div className="p-3 rounded-lg border bg-muted/30 space-y-2">
+                <p className="text-sm font-medium flex items-center gap-2">
+                  <Shield className="h-4 w-4" />
+                  Verificação Automática de Documentos
                 </p>
-              )}
+                {docsSummary.map((doc) => (
+                  <div key={doc.tipo} className="flex items-center justify-between text-sm">
+                    <span className="flex items-center gap-2">
+                      {doc.existe ? (
+                        <CheckCircle className={`h-4 w-4 ${
+                          doc.status.color === 'green' ? 'text-emerald-600' :
+                          doc.status.color === 'yellow' ? 'text-amber-600' :
+                          'text-destructive'
+                        }`} />
+                      ) : (
+                        <AlertCircle className="h-4 w-4 text-muted-foreground" />
+                      )}
+                      {doc.tipo}
+                    </span>
+                    <span className={
+                      !doc.existe ? 'text-muted-foreground' :
+                      doc.status.color === 'green' ? 'text-emerald-600' :
+                      doc.status.color === 'yellow' ? 'text-amber-600' :
+                      'text-destructive'
+                    }>
+                      {doc.existe && doc.validade
+                        ? `Válido até ${format(new Date(doc.validade), "dd/MM/yyyy")}`
+                        : 'Não cadastrado'}
+                    </span>
+                  </div>
+                ))}
+                {docsSummary.some(d => !d.existe || d.status.color === 'red') && (
+                  <Alert className="mt-2 border-amber-500/50 bg-amber-500/10">
+                    <AlertCircle className="h-4 w-4 text-amber-600" />
+                    <AlertDescription className="text-amber-600 text-xs">
+                      Atenção: Alguns documentos estão faltando ou vencidos. O técnico poderá ser bloqueado.
+                    </AlertDescription>
+                  </Alert>
+                )}
+              </div>
+            )}
+
+            {/* Data de validade */}
+            <div className="space-y-2">
+              <Label>Validade da Integração *</Label>
+              <div className="relative">
+                <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input type="date" value={dataValidade} onChange={(e) => setDataValidade(e.target.value)} className="pl-10" />
+              </div>
             </div>
 
-            <div className="grid gap-2">
+            {/* Observações */}
+            <div className="space-y-2">
               <Label>Observações</Label>
-              <Textarea
-                value={formData.observacoes}
-                onChange={(e) => setFormData({ ...formData, observacoes: e.target.value })}
-                placeholder="Observações opcionais"
-                rows={2}
-              />
+              <Textarea value={observacoes} onChange={(e) => setObservacoes(e.target.value)} placeholder="Informações adicionais..." rows={2} />
             </div>
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>
-              Cancelar
-            </Button>
-            <Button 
-              onClick={handleSubmit}
-              disabled={!formData.colaborador_id || !formData.data_validade || uploading || addTecnico.isPending || updateTecnico.isPending}
-            >
-              {uploading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
-              {editingId ? 'Atualizar' : 'Adicionar'}
+            <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
+            <Button onClick={handleAddOrEdit} disabled={!selectedColaborador || !dataValidade || addTecnico.isPending || updateTecnico.isPending}>
+              {(addTecnico.isPending || updateTecnico.isPending) && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              {editingTecnico ? 'Salvar Alterações' : 'Vincular Técnico'}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Dialog de confirmação de exclusão */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmar Exclusão</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja remover o vínculo deste técnico com esta unidade? Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

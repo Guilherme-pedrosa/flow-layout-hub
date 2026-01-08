@@ -6,3 +6,4 @@ export { ClienteFormContatos } from "./ClienteFormContatos";
 export { ClienteFormComercial } from "./ClienteFormComercial";
 export { ClienteFormOperacional } from "./ClienteFormOperacional";
 export { ClienteFormFiscal } from "./ClienteFormFiscal";
+export { ClienteFormTecnicosIntegrados } from "./ClienteFormTecnicosIntegrados";
