@@ -12,12 +12,12 @@ export type ChamadoStatus =
   | 'atendido_ag_fechamento' 
   | 'fechado';
 
-export const STATUS_CONFIG: Record<ChamadoStatus, { label: string; className: string }> = {
-  aguardando_agendamento: { label: 'Aguardando agendamento', className: 'bg-yellow-500 text-white' },
-  agendado: { label: 'Agendado - ag atendimento', className: 'bg-blue-500 text-white' },
-  ag_retorno: { label: 'Ag retorno', className: 'bg-red-800 text-white' },
-  atendido_ag_fechamento: { label: 'Atendido - Ag fechamento', className: 'bg-green-400 text-white' },
-  fechado: { label: 'Fechado', className: 'bg-green-800 text-white' },
+export const STATUS_CONFIG: Record<ChamadoStatus, { label: string; className: string; color: string }> = {
+  aguardando_agendamento: { label: 'Aguardando agendamento', className: 'bg-yellow-500 text-white', color: '#eab308' },
+  agendado: { label: 'Agendado - ag atendimento', className: 'bg-orange-500 text-white', color: '#f97316' },
+  ag_retorno: { label: 'Ag retorno', className: 'bg-red-800 text-white', color: '#991b1b' },
+  atendido_ag_fechamento: { label: 'Atendido - Ag fechamento', className: 'bg-green-400 text-white', color: '#4ade80' },
+  fechado: { label: 'Fechado', className: 'bg-green-600 text-white', color: '#16a34a' },
 };
 
 export interface Chamado {
@@ -33,6 +33,7 @@ export interface Chamado {
   cliente_codigo: string | null;
   cliente_nome: string | null;
   tra_nome: string | null;
+  tecnico_nome: string | null;
   observacao: string | null;
   client_id: string | null;
   service_order_id: string | null;
