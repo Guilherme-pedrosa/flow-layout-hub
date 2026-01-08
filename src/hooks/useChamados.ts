@@ -112,17 +112,24 @@ export function parseExcelChamado(file: File): Promise<ExcelChamadoData> {
           return;
         }
         
-        // Extrair células fixas conforme template
-        const os_numero = getCellValue(sheet, 'B5');
-        const os_data = getDateValue(sheet, 'F5');
-        const distrito = getCellValue(sheet, 'B8');
-        const tecnico_nome = getCellValue(sheet, 'F8');
-        const cliente_codigo = getCellValue(sheet, 'B11');
-        const cliente_nome = getCellValue(sheet, 'B12');
-        const tra_nome = getCellValue(sheet, 'F11');
+        // Extrair células conforme template real do Excel Ecolab
+        // Nº OS: linha 7, coluna H
+        const os_numero = getCellValue(sheet, 'H7');
+        // DATA ABERTURA: linha 8, coluna G
+        const os_data = getDateValue(sheet, 'G8');
+        // CÓD. DISTRITO: linha 10, coluna I
+        const distrito = getCellValue(sheet, 'I10');
+        // NOME DO SOLICITANTE (técnico): linha 11, coluna F
+        const tecnico_nome = getCellValue(sheet, 'F11');
+        // CÓD. JDE DO CLIENTE: linha 19, coluna F
+        const cliente_codigo = getCellValue(sheet, 'F19');
+        // NOME DO CLIENTE: linha 20, coluna F
+        const cliente_nome = getCellValue(sheet, 'F20');
+        // NOME DO TRA: linha 36, coluna H
+        const tra_nome = getCellValue(sheet, 'H36');
         
         if (!os_numero) {
-          reject(new Error('Campo OS Número (B5) é obrigatório e está vazio'));
+          reject(new Error('Campo Nº OS (H7) é obrigatório e está vazio'));
           return;
         }
         
