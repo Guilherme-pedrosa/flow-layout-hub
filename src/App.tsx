@@ -30,6 +30,7 @@ import OrcamentoView from "./pages/public/OrcamentoView";
 // Chamados
 import ChamadosList from "./pages/chamados/ChamadosList";
 import ChamadoDetail from "./pages/chamados/ChamadoDetail";
+import NovoChamado from "./pages/chamados/NovoChamado";
 
 // Compras
 import PedidosCompra from "./pages/compras/PedidosCompra";
@@ -124,6 +125,7 @@ const App = () => (
             <Route path="/ordens-servico/:id" element={<OrdemServicoFormPage />} />
             <Route path="/equipamentos" element={<Equipamentos />} />
             <Route path="/chamados" element={<ChamadosList />} />
+            <Route path="/chamados/novo" element={<NovoChamado />} />
             <Route path="/chamados/:id" element={<ChamadoDetail />} />
             <Route path="/ordens-servico-config" element={<ConfiguracoesOS />} />
             
