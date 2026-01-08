@@ -303,11 +303,16 @@ export function ServiceOrderFormProdutos({ items, onChange }: ServiceOrderFormPr
       }
     }
 
-    const price = item.unit_price * item.quantity;
+    // Cálculo com fallback para 0 (não no estado, só no cálculo)
+    const unitPrice = item.unit_price ?? 0;
+    const qty = item.quantity ?? 0;
+    const discountVal = item.discount_value ?? 0;
+    
+    const price = unitPrice * qty;
     if (item.discount_type === 'percent') {
-      item.subtotal = price - (price * (item.discount_value / 100));
+      item.subtotal = Math.round((price - (price * (discountVal / 100))) * 100) / 100;
     } else {
-      item.subtotal = price - item.discount_value;
+      item.subtotal = Math.round((price - discountVal) * 100) / 100;
     }
 
     newItems[index] = item;
@@ -400,10 +405,10 @@ export function ServiceOrderFormProdutos({ items, onChange }: ServiceOrderFormPr
           <div>
             <Label className="text-xs text-muted-foreground">Valor Unit.</Label>
             <CurrencyInput
-              value={item.unit_price ?? null}
-              onChange={(val) => updateItem(index, 'unit_price', val ?? 0)}
+              value={item.unit_price}
+              onChange={(val) => updateItem(index, 'unit_price', val)}
               className="h-9"
-              decimals={4}
+              decimals={2}
             />
           </div>
           <div>
@@ -551,10 +556,10 @@ export function ServiceOrderFormProdutos({ items, onChange }: ServiceOrderFormPr
                     </TableCell>
                     <TableCell>
                       <CurrencyInput
-                        value={item.unit_price ?? null}
-                        onChange={(val) => updateItem(index, 'unit_price', val ?? 0)}
+                        value={item.unit_price}
+                        onChange={(val) => updateItem(index, 'unit_price', val)}
                         className="text-sm min-w-[100px]"
-                        decimals={4}
+                        decimals={2}
                       />
                     </TableCell>
                     <TableCell>

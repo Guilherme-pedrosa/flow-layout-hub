@@ -63,6 +63,7 @@ const CurrencyInput = React.forwardRef<HTMLInputElement, CurrencyInputProps>(
       
       const numValue = parseBRNumber(displayValue);
       
+      // Se vazio/inválido e allowEmpty, manter null
       if (numValue === null) {
         if (allowEmpty) {
           setDisplayValue('');
@@ -74,11 +75,17 @@ const CurrencyInput = React.forwardRef<HTMLInputElement, CurrencyInputProps>(
         return;
       }
 
+      // Aplicar constraints
       let finalValue = numValue;
       if (min !== undefined && numValue < min) finalValue = min;
       if (max !== undefined && numValue > max) finalValue = max;
       
-      // Formatar para exibição no blur
+      // ARREDONDAR antes de setar state (mata o 96.6985)
+      finalValue = decimals === 4 
+        ? Math.round(finalValue * 10000) / 10000
+        : Math.round(finalValue * 100) / 100;
+      
+      // Formatar para exibição e atualizar state
       setDisplayValue(formatForInput(finalValue, decimals));
       onChange(finalValue);
     };
