@@ -188,8 +188,8 @@ serve(async (req) => {
     }
     console.log('[field-sync-equipment] Total customers após clientes:', customerMap.size);
 
-    // FASE 3: Processar equipamentos usando UPSERT (muito mais rápido)
-    let processed = 0, errors = 0;
+    // FASE 3: Processar equipamentos separando INSERT e UPDATE
+    let processed = 0, errors = 0, inserted = 0, updated = 0;
     const BATCH_SIZE = 100;
     const missingCustomers = new Set<string>();
 
@@ -200,7 +200,8 @@ serve(async (req) => {
       }
 
       const batch = allEquipments.slice(i, i + BATCH_SIZE);
-      const records: any[] = [];
+      const toInsert: any[] = [];
+      const toUpdate: { id: string; data: any }[] = [];
 
       for (const eq of batch) {
         const fieldEquipmentId = String(eq.id);
@@ -220,8 +221,7 @@ serve(async (req) => {
         // Mapear tipo pelo ID se existir
         const typeName = eq.type?.id ? typeMap.get(String(eq.type.id)) : eq.type?.name;
 
-        const record: any = {
-          company_id,
+        const baseData = {
           serial_number: eq.number || `FIELD-${fieldEquipmentId}`,
           model: eq.name || null,
           brand: eq.brand || null,
@@ -240,31 +240,54 @@ serve(async (req) => {
           updated_at: new Date().toISOString(),
         };
 
-        // Se existe, incluir ID para upsert
         if (existingId) {
-          record.id = existingId;
+          toUpdate.push({ id: existingId, data: baseData });
+        } else {
+          toInsert.push({ ...baseData, company_id });
         }
-
-        records.push(record);
       }
 
-      // UPSERT em batch (muito mais rápido que insert/update individual)
-      const { error: upsertError } = await supabase
-        .from('equipments')
-        .upsert(records, { 
-          onConflict: 'company_id,field_equipment_id',
-          ignoreDuplicates: false 
-        });
+      // INSERT em batch
+      if (toInsert.length > 0) {
+        const { error: insertError, data: insertedData } = await supabase
+          .from('equipments')
+          .insert(toInsert)
+          .select('id, field_equipment_id');
 
-      if (upsertError) {
-        console.error('[field-sync-equipment] Erro batch upsert:', upsertError.message);
-        errors += records.length;
-      } else {
-        processed += records.length;
+        if (insertError) {
+          console.error('[field-sync-equipment] Erro batch insert:', insertError.message);
+          errors += toInsert.length;
+        } else {
+          inserted += toInsert.length;
+          processed += toInsert.length;
+          // Atualizar mapa de existentes para evitar duplicatas
+          for (const eq of insertedData || []) {
+            if (eq.field_equipment_id) {
+              existingMap.set(eq.field_equipment_id, eq.id);
+            }
+          }
+        }
+      }
+
+      // UPDATE em batch (por ID individual mas em paralelo)
+      if (toUpdate.length > 0) {
+        const updatePromises = toUpdate.map(({ id, data }) =>
+          supabase.from('equipments').update(data).eq('id', id)
+        );
+        
+        const results = await Promise.all(updatePromises);
+        const updateErrors = results.filter(r => r.error).length;
+        
+        if (updateErrors > 0) {
+          console.error('[field-sync-equipment] Erros em updates:', updateErrors);
+          errors += updateErrors;
+        }
+        updated += toUpdate.length - updateErrors;
+        processed += toUpdate.length - updateErrors;
       }
 
       if ((i + BATCH_SIZE) % 500 === 0 || i + BATCH_SIZE >= allEquipments.length) {
-        console.log(`[field-sync-equipment] Processados ${Math.min(i + BATCH_SIZE, allEquipments.length)}/${allEquipments.length}`);
+        console.log(`[field-sync-equipment] Processados ${Math.min(i + BATCH_SIZE, allEquipments.length)}/${allEquipments.length} (${inserted} novos, ${updated} atualizados)`);
       }
     }
 
