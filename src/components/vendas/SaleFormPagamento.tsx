@@ -34,7 +34,7 @@ const paymentMethods = [
   { value: 'cheque', label: 'Cheque' },
 ];
 
-// Componente para input de valor monetário
+// Componente para input de valor monetário - simplificado para funcionar corretamente
 function CurrencyInput({ 
   value, 
   onChange 
@@ -42,50 +42,44 @@ function CurrencyInput({
   value: number; 
   onChange: (value: number) => void;
 }) {
-  const [isFocused, setIsFocused] = useState(false);
-  const [displayValue, setDisplayValue] = useState('');
+  // Usar estado local para controle total do input
+  const [inputValue, setInputValue] = useState(() => 
+    value === 0 ? '' : value.toFixed(2).replace('.', ',')
+  );
 
+  // Sincronizar quando o valor externo mudar (ex: recalcular parcelas)
   useEffect(() => {
-    if (!isFocused) {
-      // Quando não está em foco, mostra o valor formatado (apenas números)
-      setDisplayValue(value === 0 ? '' : value.toFixed(2).replace('.', ','));
-    }
-  }, [value, isFocused]);
-
-  const handleFocus = () => {
-    setIsFocused(true);
-    // Ao focar, mostra o valor numérico para edição
-    setDisplayValue(value === 0 ? '' : value.toFixed(2).replace('.', ','));
-  };
-
-  const handleBlur = () => {
-    setIsFocused(false);
-    // Ao sair, converte para número
-    const numericValue = parseFloat(displayValue.replace(',', '.')) || 0;
-    onChange(numericValue);
-  };
+    setInputValue(value === 0 ? '' : value.toFixed(2).replace('.', ','));
+  }, [value]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
+    
+    // Permite campo vazio
+    if (val === '') {
+      setInputValue('');
+      onChange(0);
+      return;
+    }
+    
     // Permite apenas números, vírgula e ponto
-    if (val === '' || /^[\d.,]*$/.test(val)) {
-      setDisplayValue(val);
+    if (/^[\d.,]*$/.test(val)) {
+      setInputValue(val);
+      // Converter para número imediatamente
+      const numericValue = parseFloat(val.replace(',', '.')) || 0;
+      onChange(numericValue);
     }
   };
 
   return (
-    <div className="relative">
-      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">R$</span>
-      <Input
-        type="text"
-        inputMode="decimal"
-        value={displayValue}
-        onChange={handleChange}
-        onFocus={handleFocus}
-        onBlur={handleBlur}
-        className="pl-9"
-      />
-    </div>
+    <Input
+      type="text"
+      inputMode="decimal"
+      value={inputValue}
+      onChange={handleChange}
+      placeholder="0,00"
+      className="min-w-[120px] text-right font-mono"
+    />
   );
 }
 
@@ -173,40 +167,38 @@ export function SaleFormPagamento({
             {installments.length > 0 && (
               <div className="mt-4">
                 <Label className="mb-2 block">Detalhamento das parcelas</Label>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="w-[80px]">Parcela</TableHead>
-                      <TableHead className="w-[150px]">Vencimento</TableHead>
-                      <TableHead className="w-[180px]">Valor</TableHead>
-                      <TableHead>Forma de Pagamento</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {installments.map((inst, index) => (
-                      <TableRow key={index}>
-                        <TableCell className="font-medium">
-                          {inst.installment_number}/{installmentsCount}
-                        </TableCell>
-                        <TableCell>
+                <div className="space-y-3">
+                  {installments.map((inst, index) => (
+                    <div key={index} className="border rounded-lg p-3 bg-muted/30">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="font-semibold text-sm">
+                          Parcela {inst.installment_number}/{installmentsCount}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div className="space-y-1">
+                          <Label className="text-xs text-muted-foreground">Vencimento</Label>
                           <Input
                             type="date"
                             value={inst.due_date}
                             onChange={(e) => updateInstallment(index, 'due_date', e.target.value)}
+                            className="h-9"
                           />
-                        </TableCell>
-                        <TableCell>
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-xs text-muted-foreground">Valor (R$)</Label>
                           <CurrencyInput
                             value={inst.amount}
                             onChange={(value) => updateInstallment(index, 'amount', value)}
                           />
-                        </TableCell>
-                        <TableCell>
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-xs text-muted-foreground">Forma de Pagamento</Label>
                           <Select
                             value={inst.payment_method}
                             onValueChange={(value) => updateInstallment(index, 'payment_method', value)}
                           >
-                            <SelectTrigger>
+                            <SelectTrigger className="h-9">
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
@@ -215,11 +207,11 @@ export function SaleFormPagamento({
                               ))}
                             </SelectContent>
                           </Select>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
                 <div className="mt-2 text-right">
                   <span className="text-sm text-muted-foreground">
                     Total das parcelas: {formatCurrency(installments.reduce((sum, i) => sum + i.amount, 0))}
