@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
-import { Save, ShoppingCart, FileText, Loader2, Shield } from "lucide-react";
+import { Save, ShoppingCart, FileText, Loader2, Shield, Users } from "lucide-react";
 import { usePessoas, PessoaInsert } from "@/hooks/usePessoas";
 import { ClienteFormDadosGerais } from "./ClienteFormDadosGerais";
 import { ClienteFormEndereco } from "./ClienteFormEndereco";
@@ -11,6 +11,7 @@ import { ClienteFormContatos, Contato } from "./ClienteFormContatos";
 import { ClienteFormComercial } from "./ClienteFormComercial";
 import { ClienteFormOperacional } from "./ClienteFormOperacional";
 import { ClienteFormFiscal } from "./ClienteFormFiscal";
+import { ClienteFormTecnicosIntegrados } from "./ClienteFormTecnicosIntegrados";
 import { HistoricoAlteracoes } from "@/components/shared/HistoricoAlteracoes";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -75,6 +76,10 @@ export function ClienteForm({ clienteId, onSave }: ClienteFormProps) {
     message?: string;
     data?: any;
   }>({ status: 'idle' });
+  
+  // Estado para controle de acesso de técnicos
+  const [exigeIntegracao, setExigeIntegracao] = useState(false);
+  const [regrasAcesso, setRegrasAcesso] = useState('');
 
   // Carregar dados se for edição
   useEffect(() => {
@@ -205,6 +210,18 @@ export function ClienteForm({ clienteId, onSave }: ClienteFormProps) {
           is_colaborador: pessoa.is_colaborador,
         });
         
+        // Carregar dados de integração do cliente
+        const { data: clienteData } = await supabase
+          .from('clientes')
+          .select('exige_integracao, regras_acesso')
+          .eq('id', id)
+          .single();
+        
+        if (clienteData) {
+          setExigeIntegracao(clienteData.exige_integracao || false);
+          setRegrasAcesso(clienteData.regras_acesso || '');
+        }
+        
         const contatosData = await getContatos(id);
         setContatos(contatosData.map(c => ({
           id: c.id,
@@ -265,6 +282,15 @@ export function ClienteForm({ clienteId, onSave }: ClienteFormProps) {
             }))
           );
         }
+
+        // Salvar configuração de integração
+        await supabase
+          .from('clientes')
+          .update({ 
+            exige_integracao: exigeIntegracao, 
+            regras_acesso: regrasAcesso 
+          })
+          .eq('id', result.id);
 
         onSave?.(result);
 
@@ -335,13 +361,17 @@ export function ClienteForm({ clienteId, onSave }: ClienteFormProps) {
       )}
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-6">
+        <TabsList className="grid w-full grid-cols-7">
           <TabsTrigger value="dados-gerais">Dados Gerais</TabsTrigger>
           <TabsTrigger value="endereco">Endereço</TabsTrigger>
           <TabsTrigger value="contatos">Contatos</TabsTrigger>
           <TabsTrigger value="comercial">Comercial</TabsTrigger>
           <TabsTrigger value="operacional">Operacional</TabsTrigger>
           <TabsTrigger value="fiscal">Fiscal</TabsTrigger>
+          <TabsTrigger value="tecnicos" disabled={!clienteId}>
+            <Users className="h-4 w-4 mr-1" />
+            Técnicos
+          </TabsTrigger>
         </TabsList>
 
         <Card className="mt-4">
@@ -387,6 +417,20 @@ export function ClienteForm({ clienteId, onSave }: ClienteFormProps) {
                 formData={formData}
                 setFormData={setFormData}
               />
+            </TabsContent>
+
+            <TabsContent value="tecnicos" className="mt-0">
+              {clienteId && (
+                <ClienteFormTecnicosIntegrados
+                  clienteId={clienteId}
+                  exigeIntegracao={exigeIntegracao}
+                  regrasAcesso={regrasAcesso}
+                  onConfigChange={(exige, regras) => {
+                    setExigeIntegracao(exige);
+                    setRegrasAcesso(regras);
+                  }}
+                />
+              )}
             </TabsContent>
           </CardContent>
         </Card>
