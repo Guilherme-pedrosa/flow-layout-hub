@@ -36,6 +36,8 @@ import NovoChamado from "./pages/chamados/NovoChamado";
 import RhColaboradoresPage from "./pages/rh/Colaboradores";
 import ColaboradorDetailPage from "./pages/rh/ColaboradorDetail";
 import MatrizIntegracoesPage from "./pages/rh/MatrizIntegracoes";
+import TiposDocumentoPage from "./pages/rh/TiposDocumento";
+import DocumentosEmpresaPage from "./pages/rh/DocumentosEmpresa";
 
 import PedidosCompra from "./pages/compras/PedidosCompra";
 import Recebimento from "./pages/compras/Recebimento";
@@ -138,6 +140,8 @@ const App = () => (
             <Route path="/rh/colaboradores" element={<RhColaboradoresPage />} />
             <Route path="/rh/colaboradores/:id" element={<ColaboradorDetailPage />} />
             <Route path="/rh/integracoes" element={<MatrizIntegracoesPage />} />
+            <Route path="/rh/tipos-documento" element={<TiposDocumentoPage />} />
+            <Route path="/rh/documentos-empresa" element={<DocumentosEmpresaPage />} />
             
             {/* Compras */}
             <Route path="/pedidos-compra" element={<PedidosCompra />} />
