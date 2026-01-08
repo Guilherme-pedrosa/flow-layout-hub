@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { ShieldCheck, ShieldX, Download, Mail, Building2, Users, FileCheck, FileX, 
   AlertTriangle, CheckCircle, Clock, Loader2 
 } from "lucide-react";
@@ -53,6 +54,7 @@ export default function NovaIntegracao() {
   
   const [selectedClientId, setSelectedClientId] = useState<string>('');
   const [selectedTechnicianIds, setSelectedTechnicianIds] = useState<string[]>([]);
+  const [docScope, setDocScope] = useState<'both' | 'company' | 'technician'>('both');
   const [preview, setPreview] = useState<PreviewResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
@@ -83,8 +85,12 @@ export default function NovaIntegracao() {
   };
 
   const handlePreview = async () => {
-    if (!selectedClientId || selectedTechnicianIds.length === 0) {
-      toast.error('Selecione um cliente e ao menos um técnico');
+    if (!selectedClientId) {
+      toast.error('Selecione um cliente');
+      return;
+    }
+    if (docScope !== 'company' && selectedTechnicianIds.length === 0) {
+      toast.error('Selecione ao menos um técnico');
       return;
     }
     setLoading(true);
@@ -92,77 +98,81 @@ export default function NovaIntegracao() {
       const client = activeClients.find(c => c.id === selectedClientId);
       const blockReasons: { scope: string; doc_type: string; reason: string }[] = [];
 
-      // Build company checklist
-      const companyChecklist: DocItem[] = companyRequirements.map(req => {
-        const doc = companyDocs.find(d => d.document_type_id === req.document_type_id);
-        const docType = req.document_type;
-        
-        let state: DocState = 'MISSING';
-        let expiresAt: string | undefined;
-        let fileUrl: string | undefined;
-        let fileName: string | undefined;
+      // Build company checklist (only if scope includes company)
+      const companyChecklist: DocItem[] = docScope !== 'technician' 
+        ? companyRequirements.map(req => {
+            const doc = companyDocs.find(d => d.document_type_id === req.document_type_id);
+            const docType = req.document_type;
+            
+            let state: DocState = 'MISSING';
+            let expiresAt: string | undefined;
+            let fileUrl: string | undefined;
+            let fileName: string | undefined;
 
-        if (doc) {
-          fileUrl = doc.file_url;
-          fileName = doc.file_name;
-          expiresAt = doc.expires_at || undefined;
-          
-          const statusInfo = getDocumentStatus(doc.expires_at, docType?.requires_expiry ?? false);
-          state = statusInfo.status;
-        }
+            if (doc) {
+              fileUrl = doc.file_url;
+              fileName = doc.file_name;
+              expiresAt = doc.expires_at || undefined;
+              
+              const statusInfo = getDocumentStatus(doc.expires_at, docType?.requires_expiry ?? false);
+              state = statusInfo.status;
+            }
 
-        if (req.is_required && state !== 'OK') {
-          blockReasons.push({
-            scope: 'COMPANY',
-            doc_type: docType?.name || 'Documento',
-            reason: state === 'MISSING' ? 'Não anexado' : 'Vencido'
-          });
-        }
+            if (req.is_required && state !== 'OK') {
+              blockReasons.push({
+                scope: 'COMPANY',
+                doc_type: docType?.name || 'Documento',
+                reason: state === 'MISSING' ? 'Não anexado' : 'Vencido'
+              });
+            }
 
-        return {
-          doc_type_id: req.document_type_id,
-          doc_type_code: docType?.code || '',
-          doc_type_name: docType?.name || '',
-          state,
-          file_url: fileUrl,
-          file_name: fileName,
-          expires_at: expiresAt,
-          is_required: req.is_required,
-        };
-      });
+            return {
+              doc_type_id: req.document_type_id,
+              doc_type_code: docType?.code || '',
+              doc_type_name: docType?.name || '',
+              state,
+              file_url: fileUrl,
+              file_name: fileName,
+              expires_at: expiresAt,
+              is_required: req.is_required,
+            };
+          })
+        : [];
 
-      // Build technician checklists
-      const techChecklists: TechChecklist[] = selectedTechnicianIds.map(techId => {
-        const tech = activeTechnicians.find(t => t.id === techId);
-        
-        const techDocs: DocItem[] = technicianRequirements.map(req => {
-          const docType = req.document_type;
-          // TODO: Fetch actual docs for each technician from colaborador_docs
-          const state: DocState = 'MISSING';
+      // Build technician checklists (only if scope includes technician)
+      const techChecklists: TechChecklist[] = docScope !== 'company' 
+        ? selectedTechnicianIds.map(techId => {
+            const tech = activeTechnicians.find(t => t.id === techId);
+            
+            const techDocs: DocItem[] = technicianRequirements.map(req => {
+              const docType = req.document_type;
+              // TODO: Fetch actual docs for each technician from colaborador_docs
+              const state: DocState = 'MISSING';
 
-          if (req.is_required) {
-            blockReasons.push({
-              scope: 'TECHNICIAN',
-              doc_type: `${tech?.nome_fantasia || tech?.razao_social}: ${docType?.name}`,
-              reason: 'Não anexado'
+              if (req.is_required) {
+                blockReasons.push({
+                  scope: 'TECHNICIAN',
+                  doc_type: `${tech?.nome_fantasia || tech?.razao_social}: ${docType?.name}`,
+                  reason: 'Não anexado'
+                });
+              }
+
+              return {
+                doc_type_id: req.document_type_id,
+                doc_type_code: docType?.code || '',
+                doc_type_name: docType?.name || '',
+                state,
+                is_required: req.is_required,
+              };
             });
-          }
 
-          return {
-            doc_type_id: req.document_type_id,
-            doc_type_code: docType?.code || '',
-            doc_type_name: docType?.name || '',
-            state,
-            is_required: req.is_required,
-          };
-        });
-
-        return {
-          technician_id: techId,
-          technician_name: tech?.nome_fantasia || tech?.razao_social || 'Técnico',
-          docs: techDocs,
-        };
-      });
+            return {
+              technician_id: techId,
+              technician_name: tech?.nome_fantasia || tech?.razao_social || 'Técnico',
+              docs: techDocs,
+            };
+          })
+        : [];
 
       setPreview({
         client_name: client?.nome_fantasia || client?.razao_social || 'Cliente',
@@ -301,8 +311,39 @@ export default function NovaIntegracao() {
               </div>
             )}
 
-            {/* Technicians - Searchable Multi-select */}
+            {/* Document scope selection */}
             {selectedClientId && hasRequirements && (
+              <div>
+                <Label className="mb-2 block">Tipo de Documentação</Label>
+                <RadioGroup
+                  value={docScope}
+                  onValueChange={(v) => setDocScope(v as 'both' | 'company' | 'technician')}
+                  className="flex flex-col gap-2"
+                >
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="both" id="scope-both" />
+                    <Label htmlFor="scope-both" className="font-normal cursor-pointer">
+                      Empresa + Técnico
+                    </Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="company" id="scope-company" />
+                    <Label htmlFor="scope-company" className="font-normal cursor-pointer">
+                      Somente Empresa
+                    </Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="technician" id="scope-technician" />
+                    <Label htmlFor="scope-technician" className="font-normal cursor-pointer">
+                      Somente Técnico
+                    </Label>
+                  </div>
+                </RadioGroup>
+              </div>
+            )}
+
+            {/* Technicians - Searchable Multi-select */}
+            {selectedClientId && hasRequirements && docScope !== 'company' && (
               <div>
                 <Label>Técnicos</Label>
                 <SearchableMultiSelect
@@ -319,7 +360,7 @@ export default function NovaIntegracao() {
             <Button 
               className="w-full" 
               onClick={handlePreview}
-              disabled={!selectedClientId || !hasRequirements || selectedTechnicianIds.length === 0 || loading}
+              disabled={!selectedClientId || !hasRequirements || (docScope !== 'company' && selectedTechnicianIds.length === 0) || loading}
             >
               {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
               Validar Documentação
