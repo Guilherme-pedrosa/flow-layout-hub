@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useDocumentTypes, DocumentType, DocumentScope } from "@/hooks/useDocumentTypes";
+import { useDocumentTypes, DocumentType, DocumentScope, ExpiryMode } from "@/hooks/useDocumentTypes";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,7 +22,8 @@ export default function TiposDocumentoPage() {
     code: '',
     name: '',
     scope: 'COMPANY' as DocumentScope,
-    requires_expiry: false,
+    expiry_mode: 'EXPIRES_AT' as ExpiryMode,
+    requires_expiry: true,
     default_validity_days: null as number | null,
     is_active: true,
     sort_order: 0,
@@ -35,6 +36,7 @@ export default function TiposDocumentoPage() {
         code: docType.code,
         name: docType.name,
         scope: docType.scope,
+        expiry_mode: docType.expiry_mode || 'EXPIRES_AT',
         requires_expiry: docType.requires_expiry,
         default_validity_days: docType.default_validity_days,
         is_active: docType.is_active,
@@ -46,7 +48,8 @@ export default function TiposDocumentoPage() {
         code: '',
         name: '',
         scope: 'COMPANY',
-        requires_expiry: false,
+        expiry_mode: 'EXPIRES_AT',
+        requires_expiry: true,
         default_validity_days: null,
         is_active: true,
         sort_order: documentTypes.length + 1,
@@ -107,12 +110,16 @@ export default function TiposDocumentoPage() {
               </TableCell>
               <TableCell className="font-medium">{dt.name}</TableCell>
               <TableCell>
-                {dt.requires_expiry ? (
+                {dt.expiry_mode === 'NONE' ? (
+                  <span className="text-muted-foreground">Não controla</span>
+                ) : dt.expiry_mode === 'ISSUE_PLUS_DAYS' ? (
                   <Badge variant="outline">
-                    {dt.default_validity_days ? `${dt.default_validity_days} dias` : 'Sim'}
+                    Emissão + {dt.default_validity_days || '?'} dias
                   </Badge>
                 ) : (
-                  <span className="text-muted-foreground">Não expira</span>
+                  <Badge variant="outline" className="bg-blue-50">
+                    Data de vencimento
+                  </Badge>
                 )}
               </TableCell>
               <TableCell>
@@ -245,20 +252,39 @@ export default function TiposDocumentoPage() {
               />
             </div>
 
-            <div className="flex items-center justify-between">
-              <div>
-                <Label>Exige Validade</Label>
-                <p className="text-xs text-muted-foreground">O documento tem data de vencimento?</p>
-              </div>
-              <Switch 
-                checked={formData.requires_expiry}
-                onCheckedChange={(v) => setFormData({ ...formData, requires_expiry: v })}
-              />
+            <div className="grid gap-2">
+              <Label>Controle de Vencimento</Label>
+              <Select 
+                value={formData.expiry_mode} 
+                onValueChange={(v) => {
+                  const mode = v as ExpiryMode;
+                  setFormData({ 
+                    ...formData, 
+                    expiry_mode: mode,
+                    requires_expiry: mode !== 'NONE',
+                    default_validity_days: mode === 'ISSUE_PLUS_DAYS' ? (formData.default_validity_days || 365) : null
+                  });
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="NONE">Não controla vencimento</SelectItem>
+                  <SelectItem value="EXPIRES_AT">Por data de vencimento (padrão)</SelectItem>
+                  <SelectItem value="ISSUE_PLUS_DAYS">Por emissão + dias</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                {formData.expiry_mode === 'NONE' && 'Documento não tem prazo de validade'}
+                {formData.expiry_mode === 'EXPIRES_AT' && 'Usuário informa a data de vencimento ao anexar'}
+                {formData.expiry_mode === 'ISSUE_PLUS_DAYS' && 'Sistema calcula vencimento = emissão + dias'}
+              </p>
             </div>
 
-            {formData.requires_expiry && (
+            {formData.expiry_mode === 'ISSUE_PLUS_DAYS' && (
               <div className="grid gap-2">
-                <Label>Validade Padrão (dias)</Label>
+                <Label>Validade Padrão (dias após emissão)</Label>
                 <Input 
                   type="number"
                   value={formData.default_validity_days || ''}
