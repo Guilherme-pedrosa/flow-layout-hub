@@ -41,22 +41,17 @@ serve(async (req) => {
 
     console.log(`[field-service-types] Buscando tipos de OS para empresa ${company_id}`);
 
-    // Buscar API key do system_settings
-    const { data: settings, error: settingsError } = await supabaseClient
-      .from('system_settings')
-      .select('field_control_api_key')
-      .eq('company_id', company_id)
-      .single();
-
-    if (settingsError || !settings?.field_control_api_key) {
-      console.log('[field-service-types] API Key não configurada');
+    // Buscar API key da variável de ambiente (mesmo padrão das outras funções Field)
+    const apiKey = Deno.env.get('FIELD_CONTROL_API_KEY');
+    if (!apiKey) {
+      console.log('[field-service-types] API Key não configurada no ambiente');
       return new Response(
-        JSON.stringify({ success: false, error: 'API Key do Field Control não configurada', services: [] }),
+        JSON.stringify({ success: false, error: 'FIELD_CONTROL_API_KEY não configurada', services: [] }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    const apiKey = settings.field_control_api_key;
+    console.log('[field-service-types] API Key encontrada, buscando task-types...');
 
     // Buscar TASK-TYPES do Field Control (tipos de OS)
     // /task-types = tipos de tarefa/OS
