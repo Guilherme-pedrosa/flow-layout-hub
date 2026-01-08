@@ -165,33 +165,35 @@ serve(async (req) => {
             .single();
 
           if (existing) {
-            // Atualizar
+            // Atualizar - incluindo field_task_type_id
             await supabaseClient
               .from('service_types')
               .update({
                 name: serviceName,
                 color: serviceColor,
                 default_duration: defaultDuration,
+                field_task_type_id: fieldServiceId, // Salvar também como task_type_id
                 is_active: true,
                 updated_at: new Date().toISOString()
               })
               .eq('id', existing.id);
             
-            console.log(`[field-service-types] Atualizado: ${serviceName}`);
+            console.log(`[field-service-types] Atualizado: ${serviceName} (field_task_type_id: ${fieldServiceId})`);
           } else {
-            // Inserir novo
+            // Inserir novo - incluindo field_task_type_id
             await supabaseClient
               .from('service_types')
               .insert({
                 company_id,
                 name: serviceName,
                 field_service_id: fieldServiceId,
+                field_task_type_id: fieldServiceId, // Salvar também como task_type_id
                 color: serviceColor,
                 default_duration: defaultDuration,
                 is_active: true
               });
             
-            console.log(`[field-service-types] Criado: ${serviceName}`);
+            console.log(`[field-service-types] Criado: ${serviceName} (field_task_type_id: ${fieldServiceId})`);
           }
           syncedCount++;
         } catch (upsertError) {

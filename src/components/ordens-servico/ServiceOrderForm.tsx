@@ -132,9 +132,9 @@ export function ServiceOrderForm({ onClose, initialData }: ServiceOrderFormProps
     if (!formData.service_type_id) {
       errors.push('Tipo de OS é obrigatório');
     } else {
-      // Verificar se tipo tem field_service_id
+      // Verificar se tipo tem field_task_type_id ou field_service_id
       const selectedType = activeServiceTypes.find(t => t.id === formData.service_type_id);
-      if (!selectedType?.field_service_id) {
+      if (!selectedType?.field_task_type_id && !selectedType?.field_service_id) {
         errors.push('Tipo de OS não está sincronizado com Field Control (sincronize os tipos primeiro)');
       }
     }
