@@ -400,9 +400,10 @@ export function ServiceOrderFormProdutos({ items, onChange }: ServiceOrderFormPr
           <div>
             <Label className="text-xs text-muted-foreground">Valor Unit.</Label>
             <CurrencyInput
-              value={item.unit_price}
-              onChange={(val) => updateItem(index, 'unit_price', val)}
+              value={item.unit_price ?? null}
+              onChange={(val) => updateItem(index, 'unit_price', val ?? 0)}
               className="h-9"
+              decimals={4}
             />
           </div>
           <div>
@@ -550,9 +551,10 @@ export function ServiceOrderFormProdutos({ items, onChange }: ServiceOrderFormPr
                     </TableCell>
                     <TableCell>
                       <CurrencyInput
-                        value={item.unit_price}
-                        onChange={(val) => updateItem(index, 'unit_price', val)}
+                        value={item.unit_price ?? null}
+                        onChange={(val) => updateItem(index, 'unit_price', val ?? 0)}
                         className="text-sm min-w-[100px]"
+                        decimals={4}
                       />
                     </TableCell>
                     <TableCell>
