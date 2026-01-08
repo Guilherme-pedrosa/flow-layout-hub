@@ -42,14 +42,14 @@ interface ExcelChamadoData {
   os_data: Date | null;
   distrito: string | null;
   tecnico_nome: string | null;
-  cliente_codigo: string | null;
-  cliente_nome: string | null;
+  unidade_atendimento: string | null; // Renomeado: cliente é sempre Ecolab
   tra_nome: string | null;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
 // ESTRATÉGIA ANCHOR-BASED - Buscar Rótulo → Extrair Valor Vizinho
 // Resiliente a deslocamento de colunas no template Excel
+// NOTA: O cliente do WAI é sempre Ecolab. O campo relevante é "Unidade de atendimento"
 // ═══════════════════════════════════════════════════════════════════════════
 
 interface CellCoords {
@@ -63,8 +63,7 @@ const ANCHOR_MAP = {
   os_data: { anchor: "DATA ABERTURA:", fallback: "F3", direction: "right" },
   distrito: { anchor: "CÓD. DISTRITO", fallback: "H5", direction: "right" },
   tecnico_nome: { anchor: "NOME DO SOLICITANTE", fallback: "E6", direction: "right" },
-  cliente_codigo: { anchor: "CÓD. JDE DO CLIENTE", fallback: "E14", direction: "right" },
-  cliente_nome: { anchor: "NOME DO CLIENTE", fallback: "E15", direction: "right" },
+  unidade_atendimento: { anchor: "UNIDADE DE ATENDIMENTO", fallback: "E15", direction: "right" },
   tra_nome: { anchor: "NOME DO TRA:", fallback: "G31", direction: "right" },
 } as const;
 
@@ -228,11 +227,10 @@ export function parseExcelChamado(file: File): Promise<ExcelChamadoData> {
         const os_data = extractDateByAnchor(sheet, ANCHOR_MAP.os_data.anchor, ANCHOR_MAP.os_data.fallback);
         const distrito = extractValueByAnchor(sheet, ANCHOR_MAP.distrito.anchor, ANCHOR_MAP.distrito.fallback);
         const tecnico_nome = extractValueByAnchor(sheet, ANCHOR_MAP.tecnico_nome.anchor, ANCHOR_MAP.tecnico_nome.fallback);
-        const cliente_codigo = extractValueByAnchor(sheet, ANCHOR_MAP.cliente_codigo.anchor, ANCHOR_MAP.cliente_codigo.fallback);
-        const cliente_nome = extractValueByAnchor(sheet, ANCHOR_MAP.cliente_nome.anchor, ANCHOR_MAP.cliente_nome.fallback);
+        const unidade_atendimento = extractValueByAnchor(sheet, ANCHOR_MAP.unidade_atendimento.anchor, ANCHOR_MAP.unidade_atendimento.fallback);
         const tra_nome = extractValueByAnchor(sheet, ANCHOR_MAP.tra_nome.anchor, ANCHOR_MAP.tra_nome.fallback);
         
-        console.log('[ANCHOR] Dados extraídos:', { os_numero, os_data, distrito, tecnico_nome, cliente_codigo, cliente_nome, tra_nome });
+        console.log('[ANCHOR] Dados extraídos:', { os_numero, os_data, distrito, tecnico_nome, unidade_atendimento, tra_nome });
         
         // Validação obrigatória
         if (!os_numero) {
@@ -245,8 +243,7 @@ export function parseExcelChamado(file: File): Promise<ExcelChamadoData> {
           os_data,
           distrito,
           tecnico_nome,
-          cliente_codigo,
-          cliente_nome,
+          unidade_atendimento,
           tra_nome,
         });
       } catch (err) {
@@ -360,34 +357,18 @@ export function useChamados() {
         throw new Error(`Chamado OS ${excelData.os_numero} já existe. Duplicados não são permitidos.`);
       }
       
-      // Tentar encontrar cliente
+      // Tentar encontrar cliente pela unidade de atendimento
       let clientId: string | null = null;
-      if (excelData.cliente_codigo || excelData.cliente_nome) {
-        // Primeiro por código
-        if (excelData.cliente_codigo) {
-          const { data: clientByCodigo } = await supabase
-            .from('clientes')
-            .select('id')
-            .eq('company_id', currentCompany.id)
-            .or(`cpf_cnpj.eq.${excelData.cliente_codigo},inscricao_estadual.eq.${excelData.cliente_codigo}`)
-            .limit(1)
-            .maybeSingle();
-          
-          if (clientByCodigo) clientId = clientByCodigo.id;
-        }
+      if (excelData.unidade_atendimento) {
+        const { data: clientByUnidade } = await supabase
+          .from('clientes')
+          .select('id')
+          .eq('company_id', currentCompany.id)
+          .or(`razao_social.ilike.%${excelData.unidade_atendimento}%,nome_fantasia.ilike.%${excelData.unidade_atendimento}%`)
+          .limit(1)
+          .maybeSingle();
         
-        // Fallback por nome
-        if (!clientId && excelData.cliente_nome) {
-          const { data: clientByNome } = await supabase
-            .from('clientes')
-            .select('id')
-            .eq('company_id', currentCompany.id)
-            .or(`razao_social.ilike.%${excelData.cliente_nome}%,nome_fantasia.ilike.%${excelData.cliente_nome}%`)
-            .limit(1)
-            .maybeSingle();
-          
-          if (clientByNome) clientId = clientByNome.id;
-        }
+        if (clientByUnidade) clientId = clientByUnidade.id;
       }
       
       // Buscar usuário atual
@@ -412,8 +393,7 @@ export function useChamados() {
           os_data: excelData.os_data?.toISOString().split('T')[0] || null,
           distrito: excelData.distrito,
           tecnico_nome: excelData.tecnico_nome,
-          cliente_codigo: excelData.cliente_codigo,
-          cliente_nome: excelData.cliente_nome,
+          cliente_nome: excelData.unidade_atendimento, // Unidade de atendimento vai no campo cliente_nome
           tra_nome: excelData.tra_nome,
           client_id: clientId,
           imported_by: userId,
