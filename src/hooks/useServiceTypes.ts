@@ -24,15 +24,27 @@ export function useServiceTypes() {
   const query = useQuery({
     queryKey: ["service_types", currentCompany?.id],
     queryFn: async () => {
-      if (!currentCompany) return [];
+      if (!currentCompany) {
+        console.info("[useServiceTypes] ❌ currentCompany is null/undefined");
+        return [];
+      }
       
-      const { data, error } = await supabase
+      console.info("[useServiceTypes] 🔍 Querying service_types for company_id:", currentCompany.id);
+      
+      const { data, error, count } = await supabase
         .from("service_types")
-        .select("*")
+        .select("*", { count: "exact" })
         .eq("company_id", currentCompany.id)
         .order("name");
 
-      if (error) throw error;
+      if (error) {
+        console.error("[useServiceTypes] ❌ Query error:", error);
+        throw error;
+      }
+      
+      console.info("[useServiceTypes] ✅ Query result - count:", count, "data:", data?.length, "records");
+      console.info("[useServiceTypes] 📋 Data sample:", data?.slice(0, 3).map(d => ({ id: d.id, name: d.name, field_task_type_id: d.field_task_type_id })));
+      
       return data as ServiceType[];
     },
     enabled: !!currentCompany,
