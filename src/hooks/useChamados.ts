@@ -98,12 +98,17 @@ export function parseExcelChamado(file: File): Promise<ExcelChamadoData> {
         const data = new Uint8Array(e.target?.result as ArrayBuffer);
         const workbook = XLSX.read(data, { type: 'array', cellDates: true });
         
-        // Usar primeira sheet
-        const sheetName = workbook.SheetNames[0];
-        const sheet = workbook.Sheets[sheetName];
+        // Usar aba OS_Terceiro conforme template Ecolab
+        let sheet: XLSX.WorkSheet | undefined;
+        if (workbook.SheetNames.includes('OS_Terceiro')) {
+          sheet = workbook.Sheets['OS_Terceiro'];
+        } else {
+          // Fallback para primeira aba
+          sheet = workbook.Sheets[workbook.SheetNames[0]];
+        }
         
         if (!sheet) {
-          reject(new Error('Planilha vazia ou inválida'));
+          reject(new Error('Planilha vazia ou inválida. Aba "OS_Terceiro" não encontrada.'));
           return;
         }
         
