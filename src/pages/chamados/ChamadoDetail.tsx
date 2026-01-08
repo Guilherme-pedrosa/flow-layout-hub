@@ -1,10 +1,12 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { useChamados, Chamado, ChamadoLog } from "@/hooks/useChamados";
-import { PageHeader } from "@/components/shared/PageHeader";
+import { useChamados, Chamado, ChamadoEvolucao, STATUS_CONFIG, ChamadoStatus } from "@/hooks/useChamados";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Select,
   SelectContent,
@@ -12,44 +14,35 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { 
-  ArrowLeft, 
-  FileSpreadsheet, 
-  Loader2, 
-  ExternalLink,
-  Clock,
-  User,
-  Building,
-  MapPin,
-  Wrench,
-  ClipboardList,
-  Plus,
-} from "lucide-react";
+import { ArrowLeft, Plus, Trash2, Loader2 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-
-const STATUS_CONFIG: Record<Chamado['status'], { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
-  aberto: { label: 'Aberto', variant: 'default' },
-  em_execucao: { label: 'Em Execução', variant: 'secondary' },
-  concluido: { label: 'Concluído', variant: 'outline' },
-  cancelado: { label: 'Cancelado', variant: 'destructive' },
-};
-
-const ACTION_LABELS: Record<string, string> = {
-  imported: 'Importado do Excel',
-  linked_os: 'OS Vinculada',
-  status_changed: 'Status Alterado',
-  edited: 'Editado',
-};
 
 export default function ChamadoDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { getChamadoById, getChamadoLogs, updateStatus, gerarOS } = useChamados();
+  const { 
+    getChamadoById, 
+    getEvolucoes, 
+    addEvolucao, 
+    updateChamado, 
+    deleteChamado,
+    calcularDias 
+  } = useChamados();
   
   const [chamado, setChamado] = useState<Chamado | null>(null);
-  const [logs, setLogs] = useState<ChamadoLog[]>([]);
+  const [evolucoes, setEvolucoes] = useState<ChamadoEvolucao[]>([]);
   const [loading, setLoading] = useState(true);
+  
+  const [novaEvolucao, setNovaEvolucao] = useState("");
+  const [novoStatus, setNovoStatus] = useState<string>("");
+  const [isEditing, setIsEditing] = useState(false);
+  const [editData, setEditData] = useState({
+    numero_tarefa: "",
+    data_atendimento: "",
+    data_fechamento: "",
+    observacao: "",
+  });
   
   useEffect(() => {
     if (id) {
@@ -61,27 +54,72 @@ export default function ChamadoDetail() {
     if (!id) return;
     setLoading(true);
     
-    const [chamadoData, logsData] = await Promise.all([
+    const [chamadoData, evolucoesData] = await Promise.all([
       getChamadoById(id),
-      getChamadoLogs(id),
+      getEvolucoes(id),
     ]);
     
     setChamado(chamadoData);
-    setLogs(logsData);
+    setEvolucoes(evolucoesData);
+    
+    if (chamadoData) {
+      setEditData({
+        numero_tarefa: chamadoData.numero_tarefa || "",
+        data_atendimento: chamadoData.data_atendimento || "",
+        data_fechamento: chamadoData.data_fechamento || "",
+        observacao: chamadoData.observacao || "",
+      });
+    }
+    
     setLoading(false);
   };
   
-  const handleStatusChange = async (newStatus: Chamado['status']) => {
-    if (!id) return;
-    await updateStatus.mutateAsync({ id, status: newStatus });
+  const handleAddEvolucao = async () => {
+    if (!novaEvolucao.trim() || !id || !chamado) return;
+    
+    await addEvolucao.mutateAsync({
+      chamadoId: id,
+      descricao: novaEvolucao,
+      statusAnterior: chamado.status,
+      statusNovo: novoStatus || chamado.status,
+    });
+    
+    setNovaEvolucao("");
+    setNovoStatus("");
     loadData();
   };
   
-  const handleGerarOS = async () => {
+  const handleSaveEdit = async () => {
     if (!id) return;
-    const os = await gerarOS.mutateAsync(id);
+    
+    await updateChamado.mutateAsync({
+      id,
+      numero_tarefa: editData.numero_tarefa || null,
+      data_atendimento: editData.data_atendimento || null,
+      data_fechamento: editData.data_fechamento || null,
+      observacao: editData.observacao || null,
+    });
+    
+    setIsEditing(false);
     loadData();
-    navigate(`/ordens-servico/${os.id}`);
+  };
+  
+  const handleDelete = async () => {
+    if (!id || !chamado) return;
+    
+    if (confirm(`Tem certeza que deseja excluir o chamado ${chamado.os_numero}?`)) {
+      await deleteChamado.mutateAsync(id);
+      navigate("/chamados");
+    }
+  };
+  
+  const getStatusBadge = (status: string) => {
+    const config = STATUS_CONFIG[status as ChamadoStatus] || { label: status, className: '' };
+    return (
+      <Badge className={config.className}>
+        {config.label}
+      </Badge>
+    );
   };
   
   if (loading) {
@@ -99,7 +137,7 @@ export default function ChamadoDetail() {
           <ArrowLeft className="mr-2 h-4 w-4" />
           Voltar
         </Button>
-        <div className="text-center text-muted-foreground">
+        <div className="text-center py-8 text-muted-foreground">
           Chamado não encontrado
         </div>
       </div>
@@ -108,232 +146,233 @@ export default function ChamadoDetail() {
   
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-4">
-        <Button variant="ghost" onClick={() => navigate('/chamados')}>
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          Voltar
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <Button variant="ghost" size="icon" onClick={() => navigate("/chamados")}>
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">Chamado #{chamado.os_numero}</h1>
+            <p className="text-muted-foreground">
+              Aberto há {calcularDias(chamado.os_data)} dias
+            </p>
+          </div>
+        </div>
+        <Button
+          variant="destructive"
+          onClick={handleDelete}
+          disabled={deleteChamado.isPending}
+        >
+          <Trash2 className="mr-2 h-4 w-4" />
+          {deleteChamado.isPending ? "Excluindo..." : "Excluir"}
         </Button>
-        <PageHeader
-          title={`Chamado OS ${chamado.os_numero}`}
-          description={`Importado em ${format(new Date(chamado.imported_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}`}
-        />
       </div>
-      
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Coluna principal */}
-        <div className="lg:col-span-2 space-y-6">
-          {/* Dados do Chamado */}
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle className="flex items-center gap-2">
-                  <ClipboardList className="h-5 w-5" />
-                  Dados do Chamado
-                </CardTitle>
-                <Badge variant="secondary">
-                  <FileSpreadsheet className="mr-1 h-3 w-3" />
-                  Excel
-                </Badge>
-              </div>
-            </CardHeader>
-            <CardContent className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="text-sm font-medium text-muted-foreground">OS Número</label>
-                <p className="font-medium">{chamado.os_numero}</p>
-              </div>
-              <div>
-                <label className="text-sm font-medium text-muted-foreground">Data</label>
-                <p>
-                  {chamado.os_data 
-                    ? format(new Date(chamado.os_data), 'dd/MM/yyyy', { locale: ptBR })
+
+      {/* Informações do Chamado */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle>Informações do Chamado</CardTitle>
+            {getStatusBadge(chamado.status)}
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-4 md:grid-cols-2">
+            <div>
+              <Label className="text-muted-foreground">Número OS</Label>
+              <p className="font-medium">{chamado.os_numero}</p>
+            </div>
+            <div>
+              <Label className="text-muted-foreground">Número da Tarefa</Label>
+              {isEditing ? (
+                <Input
+                  value={editData.numero_tarefa}
+                  onChange={(e) => setEditData({ ...editData, numero_tarefa: e.target.value })}
+                  placeholder="Digite o número da tarefa"
+                />
+              ) : (
+                <p className="font-medium">{chamado.numero_tarefa || "-"}</p>
+              )}
+            </div>
+            <div>
+              <Label className="text-muted-foreground">Data OS</Label>
+              <p className="font-medium">
+                {chamado.os_data 
+                  ? format(new Date(chamado.os_data), 'dd/MM/yyyy', { locale: ptBR })
+                  : '-'
+                }
+              </p>
+            </div>
+            <div>
+              <Label className="text-muted-foreground">Data do Atendimento</Label>
+              {isEditing ? (
+                <Input
+                  type="date"
+                  value={editData.data_atendimento}
+                  onChange={(e) => setEditData({ ...editData, data_atendimento: e.target.value })}
+                />
+              ) : (
+                <p className="font-medium">
+                  {chamado.data_atendimento 
+                    ? format(new Date(chamado.data_atendimento), 'dd/MM/yyyy', { locale: ptBR })
                     : '-'
                   }
                 </p>
-              </div>
-              <div>
-                <label className="text-sm font-medium text-muted-foreground flex items-center gap-1">
-                  <MapPin className="h-3 w-3" /> Distrito
-                </label>
-                <p>{chamado.distrito || '-'}</p>
-              </div>
-              <div>
-                <label className="text-sm font-medium text-muted-foreground flex items-center gap-1">
-                  <Wrench className="h-3 w-3" /> Técnico
-                </label>
-                <p>{chamado.tecnico_nome || '-'}</p>
-              </div>
-              <div>
-                <label className="text-sm font-medium text-muted-foreground">TRA</label>
-                <p>{chamado.tra_nome || '-'}</p>
-              </div>
-            </CardContent>
-          </Card>
-          
-          {/* Cliente */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Building className="h-5 w-5" />
-                Cliente
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-sm font-medium text-muted-foreground">Código</label>
-                  <p>{chamado.cliente_codigo || '-'}</p>
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-muted-foreground">Nome (Excel)</label>
-                  <p>{chamado.cliente_nome || '-'}</p>
-                </div>
-                {chamado.client_id && chamado.cliente && (
-                  <div className="col-span-2">
-                    <label className="text-sm font-medium text-muted-foreground">Cliente WAI Vinculado</label>
-                    <p className="flex items-center gap-2">
-                      {chamado.cliente.nome_fantasia || chamado.cliente.razao_social}
-                      <Button
-                        variant="link"
-                        size="sm"
-                        className="p-0 h-auto"
-                        onClick={() => navigate(`/clientes/${chamado.client_id}`)}
-                      >
-                        <ExternalLink className="h-3 w-3" />
-                      </Button>
-                    </p>
-                  </div>
-                )}
-                {!chamado.client_id && (
-                  <div className="col-span-2">
-                    <Badge variant="outline" className="text-amber-600 border-amber-300">
-                      Cliente não vinculado ao WAI
-                    </Badge>
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-          
-          {/* Logs */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Clock className="h-5 w-5" />
-                Histórico de Ações
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {logs.length === 0 ? (
-                <p className="text-muted-foreground text-sm">Nenhum registro</p>
-              ) : (
-                <div className="space-y-4">
-                  {logs.map(log => (
-                    <div key={log.id} className="flex gap-4 text-sm">
-                      <div className="flex-shrink-0 w-36 text-muted-foreground">
-                        {format(new Date(log.created_at), "dd/MM/yy HH:mm", { locale: ptBR })}
-                      </div>
-                      <div className="flex-1">
-                        <span className="font-medium">{ACTION_LABELS[log.action] || log.action}</span>
-                        {log.user?.name && (
-                          <span className="text-muted-foreground ml-2 flex items-center gap-1 inline-flex">
-                            <User className="h-3 w-3" />
-                            {log.user.name}
-                          </span>
-                        )}
-                        {log.metadata && (
-                          <div className="mt-1 text-xs text-muted-foreground">
-                            {log.action === 'status_changed' && (
-                              <span>
-                                {STATUS_CONFIG[log.metadata.from as Chamado['status']]?.label || String(log.metadata.from)} →{' '}
-                                {STATUS_CONFIG[log.metadata.to as Chamado['status']]?.label || String(log.metadata.to)}
-                              </span>
-                            )}
-                            {log.action === 'linked_os' && (
-                              <span>OS {String(log.metadata.order_number)}</span>
-                            )}
-                            {log.action === 'imported' && log.metadata.file_name && (
-                              <span>Arquivo: {String(log.metadata.file_name)}</span>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
               )}
-            </CardContent>
-          </Card>
-        </div>
-        
-        {/* Coluna lateral */}
-        <div className="space-y-6">
-          {/* Status */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Status</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Select
-                value={chamado.status}
-                onValueChange={handleStatusChange}
-                disabled={updateStatus.isPending}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="aberto">Aberto</SelectItem>
-                  <SelectItem value="em_execucao">Em Execução</SelectItem>
-                  <SelectItem value="concluido">Concluído</SelectItem>
-                  <SelectItem value="cancelado">Cancelado</SelectItem>
-                </SelectContent>
-              </Select>
-            </CardContent>
-          </Card>
-          
-          {/* OS Vinculada */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Ordem de Serviço</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {chamado.service_order_id && chamado.service_order ? (
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <span className="font-medium">{chamado.service_order.order_number}</span>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => navigate(`/ordens-servico/${chamado.service_order_id}`)}
-                    >
-                      Abrir OS
-                      <ExternalLink className="ml-2 h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
+            </div>
+            <div>
+              <Label className="text-muted-foreground">Data do Fechamento</Label>
+              {isEditing ? (
+                <Input
+                  type="date"
+                  value={editData.data_fechamento}
+                  onChange={(e) => setEditData({ ...editData, data_fechamento: e.target.value })}
+                />
               ) : (
-                <div className="space-y-4">
-                  <p className="text-sm text-muted-foreground">
-                    Nenhuma OS vinculada a este chamado.
-                  </p>
-                  <Button 
-                    onClick={handleGerarOS}
-                    disabled={gerarOS.isPending}
-                    className="w-full"
-                  >
-                    {gerarOS.isPending ? (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    ) : (
-                      <Plus className="mr-2 h-4 w-4" />
+                <p className="font-medium">
+                  {chamado.data_fechamento 
+                    ? format(new Date(chamado.data_fechamento), 'dd/MM/yyyy', { locale: ptBR })
+                    : '-'
+                  }
+                </p>
+              )}
+            </div>
+            <div>
+              <Label className="text-muted-foreground">Distrito</Label>
+              <p className="font-medium">{chamado.distrito || "-"}</p>
+            </div>
+            <div>
+              <Label className="text-muted-foreground">Nome GT</Label>
+              <p className="font-medium">{chamado.nome_gt || "-"}</p>
+            </div>
+            <div>
+              <Label className="text-muted-foreground">Código Cliente</Label>
+              <p className="font-medium">{chamado.cliente_codigo || "-"}</p>
+            </div>
+            <div>
+              <Label className="text-muted-foreground">Nome TRA</Label>
+              <p className="font-medium">{chamado.tra_nome || "-"}</p>
+            </div>
+            <div className="md:col-span-2">
+              <Label className="text-muted-foreground">Cliente</Label>
+              <p className="font-medium">{chamado.cliente_nome || "-"}</p>
+            </div>
+            <div className="md:col-span-2">
+              <Label className="text-muted-foreground">Observação</Label>
+              {isEditing ? (
+                <Textarea
+                  value={editData.observacao}
+                  onChange={(e) => setEditData({ ...editData, observacao: e.target.value })}
+                  placeholder="Digite observações sobre o chamado"
+                  rows={3}
+                />
+              ) : (
+                <p className="font-medium whitespace-pre-wrap">{chamado.observacao || "-"}</p>
+              )}
+            </div>
+          </div>
+          <div className="flex gap-2 mt-4">
+            {isEditing ? (
+              <>
+                <Button
+                  onClick={handleSaveEdit}
+                  disabled={updateChamado.isPending}
+                >
+                  {updateChamado.isPending ? "Salvando..." : "Salvar"}
+                </Button>
+                <Button variant="outline" onClick={() => setIsEditing(false)}>
+                  Cancelar
+                </Button>
+              </>
+            ) : (
+              <Button onClick={() => setIsEditing(true)}>
+                Editar Informações
+              </Button>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Nova Evolução */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Adicionar Evolução</CardTitle>
+          <CardDescription>
+            Registre uma nova atualização para este chamado
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="descricao">Descrição</Label>
+            <Textarea
+              id="descricao"
+              placeholder="Descreva o que foi feito ou a situação atual..."
+              value={novaEvolucao}
+              onChange={(e) => setNovaEvolucao(e.target.value)}
+              rows={4}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="status">Atualizar Status (opcional)</Label>
+            <Select value={novoStatus} onValueChange={setNovoStatus}>
+              <SelectTrigger>
+                <SelectValue placeholder="Manter status atual" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="aguardando_agendamento">Aguardando agendamento</SelectItem>
+                <SelectItem value="agendado">Agendado - ag atendimento</SelectItem>
+                <SelectItem value="ag_retorno">Ag retorno</SelectItem>
+                <SelectItem value="atendido_ag_fechamento">Atendido - Ag fechamento</SelectItem>
+                <SelectItem value="fechado">Fechado</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <Button
+            onClick={handleAddEvolucao}
+            disabled={addEvolucao.isPending || !novaEvolucao.trim()}
+          >
+            <Plus className="mr-2 h-4 w-4" />
+            Adicionar Evolução
+          </Button>
+        </CardContent>
+      </Card>
+
+      {/* Histórico de Evoluções */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Histórico de Evoluções</CardTitle>
+          <CardDescription>
+            {evolucoes.length} evolução(ões) registrada(s)
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {evolucoes.length === 0 ? (
+            <p className="text-muted-foreground text-center py-4">
+              Nenhuma evolução registrada ainda
+            </p>
+          ) : (
+            <div className="space-y-4">
+              {evolucoes.map((evolucao) => (
+                <div key={evolucao.id} className="border-l-2 border-primary pl-4 pb-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-sm text-muted-foreground">
+                      {format(new Date(evolucao.created_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                    </span>
+                    {evolucao.status_novo && evolucao.status_anterior !== evolucao.status_novo && (
+                      <div className="flex items-center gap-2">
+                        {getStatusBadge(evolucao.status_anterior || "")}
+                        <span className="text-muted-foreground">→</span>
+                        {getStatusBadge(evolucao.status_novo)}
+                      </div>
                     )}
-                    Gerar OS
-                  </Button>
+                  </div>
+                  <p className="text-sm">{evolucao.descricao}</p>
                 </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-      </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

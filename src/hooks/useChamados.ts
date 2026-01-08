@@ -4,19 +4,39 @@ import { useCompany } from "@/contexts/CompanyContext";
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
 
+// Status do ecolab-chamados
+export type ChamadoStatus = 
+  | 'aguardando_agendamento' 
+  | 'agendado' 
+  | 'ag_retorno' 
+  | 'atendido_ag_fechamento' 
+  | 'fechado';
+
+export const STATUS_CONFIG: Record<ChamadoStatus, { label: string; className: string }> = {
+  aguardando_agendamento: { label: 'Aguardando agendamento', className: 'bg-yellow-500 text-white' },
+  agendado: { label: 'Agendado - ag atendimento', className: 'bg-blue-500 text-white' },
+  ag_retorno: { label: 'Ag retorno', className: 'bg-red-800 text-white' },
+  atendido_ag_fechamento: { label: 'Atendido - Ag fechamento', className: 'bg-green-400 text-white' },
+  fechado: { label: 'Fechado', className: 'bg-green-800 text-white' },
+};
+
 export interface Chamado {
   id: string;
   company_id: string;
   os_numero: string;
+  numero_tarefa: string | null;
   os_data: string | null;
+  data_atendimento: string | null;
+  data_fechamento: string | null;
   distrito: string | null;
-  tecnico_nome: string | null;
+  nome_gt: string | null;
   cliente_codigo: string | null;
   cliente_nome: string | null;
   tra_nome: string | null;
+  observacao: string | null;
   client_id: string | null;
   service_order_id: string | null;
-  status: 'aberto' | 'em_execucao' | 'concluido' | 'cancelado';
+  status: ChamadoStatus;
   imported_from: string;
   imported_at: string;
   imported_by: string | null;
@@ -25,6 +45,18 @@ export interface Chamado {
   // Joins
   cliente?: { razao_social: string | null; nome_fantasia: string | null } | null;
   service_order?: { order_number: number | null; status_id: string | null } | null;
+}
+
+export interface ChamadoEvolucao {
+  id: string;
+  chamado_id: string;
+  descricao: string;
+  status_anterior: string | null;
+  status_novo: string | null;
+  created_at: string;
+  created_by: string | null;
+  company_id: string;
+  user?: { name: string | null } | null;
 }
 
 export interface ChamadoLog {
@@ -41,15 +73,14 @@ interface ExcelChamadoData {
   os_numero: string;
   os_data: Date | null;
   distrito: string | null;
-  tecnico_nome: string | null;
-  unidade_atendimento: string | null; // Renomeado: cliente é sempre Ecolab
+  nome_gt: string | null;
+  cliente_codigo: string | null;
+  cliente_nome: string | null;
   tra_nome: string | null;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
 // ESTRATÉGIA ANCHOR-BASED - Buscar Rótulo → Extrair Valor Vizinho
-// Resiliente a deslocamento de colunas no template Excel
-// NOTA: O cliente do WAI é sempre Ecolab. O campo relevante é "Unidade de atendimento"
 // ═══════════════════════════════════════════════════════════════════════════
 
 interface CellCoords {
@@ -57,17 +88,16 @@ interface CellCoords {
   col: number;
 }
 
-// Mapeamento de âncoras conforme documentação oficial
 const ANCHOR_MAP = {
   os_numero: { anchor: "Nº", fallback: "H2", direction: "right" },
   os_data: { anchor: "DATA ABERTURA:", fallback: "F3", direction: "right" },
   distrito: { anchor: "CÓD. DISTRITO", fallback: "H5", direction: "right" },
-  tecnico_nome: { anchor: "NOME DO SOLICITANTE", fallback: "E6", direction: "right" },
-  unidade_atendimento: { anchor: "UNIDADE DE ATENDIMENTO", fallback: "E15", direction: "right" },
+  nome_gt: { anchor: "NOME DO GT", fallback: "E6", direction: "right" },
+  cliente_codigo: { anchor: "CÓD. CLIENTE", fallback: "E8", direction: "right" },
+  cliente_nome: { anchor: "UNIDADE DE ATENDIMENTO", fallback: "E15", direction: "right" },
   tra_nome: { anchor: "NOME DO TRA:", fallback: "G31", direction: "right" },
 } as const;
 
-// Helper para converter endereço de célula (ex: "A1") para coordenadas
 function cellToCoords(cell: string): CellCoords {
   const match = cell.match(/^([A-Z]+)(\d+)$/);
   if (!match) return { row: 0, col: 0 };
@@ -79,7 +109,6 @@ function cellToCoords(cell: string): CellCoords {
   return { row: parseInt(match[2], 10) - 1, col: col - 1 };
 }
 
-// Helper para converter coordenadas para endereço de célula
 function coordsToCell(row: number, col: number): string {
   let colStr = '';
   let c = col + 1;
@@ -91,12 +120,11 @@ function coordsToCell(row: number, col: number): string {
   return `${colStr}${row + 1}`;
 }
 
-// Buscar coordenadas de uma célula que contém o texto âncora (case insensitive)
 function findAnchorCell(sheet: XLSX.WorkSheet, anchorText: string): CellCoords | null {
   const range = XLSX.utils.decode_range(sheet['!ref'] || 'A1:Z100');
   const searchText = anchorText.toLowerCase().trim();
   
-  for (let row = range.s.r; row <= Math.min(range.e.r, 50); row++) { // Limitar a 50 linhas
+  for (let row = range.s.r; row <= Math.min(range.e.r, 50); row++) {
     for (let col = range.s.c; col <= range.e.c; col++) {
       const cellAddr = coordsToCell(row, col);
       const cell = sheet[cellAddr];
@@ -111,29 +139,24 @@ function findAnchorCell(sheet: XLSX.WorkSheet, anchorText: string): CellCoords |
   return null;
 }
 
-// Extrair valor usando estratégia ANCHOR-BASED com fallback
 function extractValueByAnchor(
   sheet: XLSX.WorkSheet, 
   anchorText: string, 
   fallbackCell: string,
   direction: "right" | "below" = "right"
 ): string | null {
-  // Tentar encontrar âncora
   const anchorCoords = findAnchorCell(sheet, anchorText);
   
   let targetCell: string;
   
   if (anchorCoords) {
-    // Âncora encontrada - pegar valor vizinho
     if (direction === "right") {
       targetCell = coordsToCell(anchorCoords.row, anchorCoords.col + 1);
     } else {
       targetCell = coordsToCell(anchorCoords.row + 1, anchorCoords.col);
     }
   } else {
-    // Fallback para célula fixa
     targetCell = fallbackCell;
-    console.warn(`[ANCHOR] Âncora "${anchorText}" não encontrada, usando fallback: ${fallbackCell}`);
   }
   
   const cell = sheet[targetCell];
@@ -143,7 +166,6 @@ function extractValueByAnchor(
   return String(cell.v).trim();
 }
 
-// Extrair data com tratamento especial (string ISO ou serial Excel)
 function extractDateByAnchor(
   sheet: XLSX.WorkSheet,
   anchorText: string,
@@ -161,7 +183,6 @@ function extractDateByAnchor(
   const cell = sheet[targetCell];
   if (!cell || cell.v === undefined || cell.v === null) return null;
   
-  // Se é número (serial date do Excel)
   if (typeof cell.v === 'number') {
     const date = XLSX.SSF.parse_date_code(cell.v);
     if (date) {
@@ -169,22 +190,17 @@ function extractDateByAnchor(
     }
   }
   
-  // Se é Date
   if (cell.v instanceof Date) {
     return cell.v;
   }
   
-  // Se é string
   if (typeof cell.v === 'string') {
     const str = cell.v.trim();
-    
-    // Tentar ISO 8601 primeiro (2025-01-07)
     const isoDate = new Date(str);
     if (!isNaN(isoDate.getTime()) && str.includes('-')) {
       return isoDate;
     }
     
-    // Tentar formato BR dd/mm/yyyy
     const parts = str.split('/');
     if (parts.length === 3) {
       const d = parseInt(parts[0], 10);
@@ -198,7 +214,6 @@ function extractDateByAnchor(
   return null;
 }
 
-// Função principal para extrair dados do Excel usando ANCHOR-BASED
 export function parseExcelChamado(file: File): Promise<ExcelChamadoData> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -207,8 +222,6 @@ export function parseExcelChamado(file: File): Promise<ExcelChamadoData> {
       try {
         const data = new Uint8Array(e.target?.result as ArrayBuffer);
         const workbook = XLSX.read(data, { type: 'array', cellDates: true });
-        
-        // Usar primeira aba disponível
         const sheet = workbook.Sheets[workbook.SheetNames[0]];
         
         if (!sheet) {
@@ -216,25 +229,16 @@ export function parseExcelChamado(file: File): Promise<ExcelChamadoData> {
           return;
         }
         
-        console.log('[ANCHOR] Iniciando extração anchor-based...');
-        console.log('[ANCHOR] Aba:', workbook.SheetNames[0]);
-        
-        // ═══════════════════════════════════════════════════════════════
-        // EXTRAÇÃO ANCHOR-BASED - Conforme mapeamento oficial
-        // ═══════════════════════════════════════════════════════════════
-        
         const os_numero = extractValueByAnchor(sheet, ANCHOR_MAP.os_numero.anchor, ANCHOR_MAP.os_numero.fallback);
         const os_data = extractDateByAnchor(sheet, ANCHOR_MAP.os_data.anchor, ANCHOR_MAP.os_data.fallback);
         const distrito = extractValueByAnchor(sheet, ANCHOR_MAP.distrito.anchor, ANCHOR_MAP.distrito.fallback);
-        const tecnico_nome = extractValueByAnchor(sheet, ANCHOR_MAP.tecnico_nome.anchor, ANCHOR_MAP.tecnico_nome.fallback);
-        const unidade_atendimento = extractValueByAnchor(sheet, ANCHOR_MAP.unidade_atendimento.anchor, ANCHOR_MAP.unidade_atendimento.fallback);
+        const nome_gt = extractValueByAnchor(sheet, ANCHOR_MAP.nome_gt.anchor, ANCHOR_MAP.nome_gt.fallback);
+        const cliente_codigo = extractValueByAnchor(sheet, ANCHOR_MAP.cliente_codigo.anchor, ANCHOR_MAP.cliente_codigo.fallback);
+        const cliente_nome = extractValueByAnchor(sheet, ANCHOR_MAP.cliente_nome.anchor, ANCHOR_MAP.cliente_nome.fallback);
         const tra_nome = extractValueByAnchor(sheet, ANCHOR_MAP.tra_nome.anchor, ANCHOR_MAP.tra_nome.fallback);
         
-        console.log('[ANCHOR] Dados extraídos:', { os_numero, os_data, distrito, tecnico_nome, unidade_atendimento, tra_nome });
-        
-        // Validação obrigatória
         if (!os_numero) {
-          reject(new Error('Campo obrigatório "Nº" (os_numero) não encontrado. Verifique se o Excel segue o template oficial Ecolab.'));
+          reject(new Error('Campo obrigatório "Nº" (os_numero) não encontrado.'));
           return;
         }
         
@@ -242,8 +246,9 @@ export function parseExcelChamado(file: File): Promise<ExcelChamadoData> {
           os_numero,
           os_data,
           distrito,
-          tecnico_nome,
-          unidade_atendimento,
+          nome_gt,
+          cliente_codigo,
+          cliente_nome,
           tra_nome,
         });
       } catch (err) {
@@ -298,10 +303,10 @@ export function useChamados() {
     return data as Chamado;
   };
   
-  // Buscar logs do chamado
-  const getChamadoLogs = async (chamadoId: string): Promise<ChamadoLog[]> => {
+  // Buscar evoluções do chamado
+  const getEvolucoes = async (chamadoId: string): Promise<ChamadoEvolucao[]> => {
     const { data, error } = await supabase
-      .from('chamado_logs')
+      .from('chamado_evolucoes')
       .select(`
         *,
         user:users(name)
@@ -310,68 +315,24 @@ export function useChamados() {
       .order('created_at', { ascending: false });
     
     if (error) return [];
-    return data as ChamadoLog[];
+    return data as ChamadoEvolucao[];
   };
   
-  // Adicionar log
-  const addLog = async (chamadoId: string, action: string, metadata?: Record<string, unknown>) => {
-    if (!currentCompany?.id) return;
-    
-    const { data: userData } = await supabase.auth.getUser();
-    let userId: string | null = null;
-    
-    if (userData.user?.id) {
-      const { data: user } = await supabase
-        .from('users')
-        .select('id')
-        .eq('auth_id', userData.user.id)
-        .single();
-      userId = user?.id || null;
-    }
-    
-    await supabase.from('chamado_logs').insert({
-      chamado_id: chamadoId,
-      action,
-      metadata: metadata || null,
-      created_by: userId,
-    } as any);
-  };
-  
-  // Importar chamado do Excel
-  const importChamado = useMutation({
-    mutationFn: async (file: File) => {
+  // Adicionar evolução
+  const addEvolucao = useMutation({
+    mutationFn: async ({ 
+      chamadoId, 
+      descricao, 
+      statusAnterior, 
+      statusNovo 
+    }: { 
+      chamadoId: string; 
+      descricao: string; 
+      statusAnterior?: string | null; 
+      statusNovo?: string | null;
+    }) => {
       if (!currentCompany?.id) throw new Error('Empresa não selecionada');
       
-      // Parsear Excel
-      const excelData = await parseExcelChamado(file);
-      
-      // Verificar duplicado
-      const { data: existing } = await supabase
-        .from('chamados')
-        .select('id')
-        .eq('company_id', currentCompany.id)
-        .eq('os_numero', excelData.os_numero)
-        .single();
-      
-      if (existing) {
-        throw new Error(`Chamado OS ${excelData.os_numero} já existe. Duplicados não são permitidos.`);
-      }
-      
-      // Tentar encontrar cliente pela unidade de atendimento
-      let clientId: string | null = null;
-      if (excelData.unidade_atendimento) {
-        const { data: clientByUnidade } = await supabase
-          .from('clientes')
-          .select('id')
-          .eq('company_id', currentCompany.id)
-          .or(`razao_social.ilike.%${excelData.unidade_atendimento}%,nome_fantasia.ilike.%${excelData.unidade_atendimento}%`)
-          .limit(1)
-          .maybeSingle();
-        
-        if (clientByUnidade) clientId = clientByUnidade.id;
-      }
-      
-      // Buscar usuário atual
       const { data: userData } = await supabase.auth.getUser();
       let userId: string | null = null;
       
@@ -384,7 +345,96 @@ export function useChamados() {
         userId = user?.id || null;
       }
       
-      // Inserir chamado
+      // Inserir evolução
+      const { error: evolucaoError } = await supabase
+        .from('chamado_evolucoes')
+        .insert({
+          chamado_id: chamadoId,
+          descricao,
+          status_anterior: statusAnterior || null,
+          status_novo: statusNovo || null,
+          created_by: userId,
+          company_id: currentCompany.id,
+        });
+      
+      if (evolucaoError) throw evolucaoError;
+      
+      // Se tem status novo diferente, atualizar o chamado
+      if (statusNovo && statusNovo !== statusAnterior) {
+        const { error: updateError } = await supabase
+          .from('chamados')
+          .update({ status: statusNovo })
+          .eq('id', chamadoId);
+        
+        if (updateError) throw updateError;
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['chamados'] });
+      toast.success('Evolução adicionada com sucesso!');
+    },
+    onError: (error: Error) => {
+      toast.error('Erro ao adicionar evolução: ' + error.message);
+    },
+  });
+  
+  // Importar chamado do Excel
+  const importChamado = useMutation({
+    mutationFn: async (file: File) => {
+      if (!currentCompany?.id) throw new Error('Empresa não selecionada');
+      
+      const excelData = await parseExcelChamado(file);
+      
+      // Verificar duplicado
+      const { data: existing } = await supabase
+        .from('chamados')
+        .select('id')
+        .eq('company_id', currentCompany.id)
+        .eq('os_numero', excelData.os_numero)
+        .single();
+      
+      if (existing) {
+        throw new Error(`Chamado OS ${excelData.os_numero} já existe.`);
+      }
+      
+      // Tentar encontrar cliente
+      let clientId: string | null = null;
+      if (excelData.cliente_codigo) {
+        const { data: clientByCodigo } = await supabase
+          .from('clientes')
+          .select('id')
+          .eq('company_id', currentCompany.id)
+          .ilike('cpf_cnpj', `%${excelData.cliente_codigo}%`)
+          .limit(1)
+          .maybeSingle();
+        
+        if (clientByCodigo) clientId = clientByCodigo.id;
+      }
+      
+      if (!clientId && excelData.cliente_nome) {
+        const { data: clientByNome } = await supabase
+          .from('clientes')
+          .select('id')
+          .eq('company_id', currentCompany.id)
+          .or(`razao_social.ilike.%${excelData.cliente_nome}%,nome_fantasia.ilike.%${excelData.cliente_nome}%`)
+          .limit(1)
+          .maybeSingle();
+        
+        if (clientByNome) clientId = clientByNome.id;
+      }
+      
+      const { data: userData } = await supabase.auth.getUser();
+      let userId: string | null = null;
+      
+      if (userData.user?.id) {
+        const { data: user } = await supabase
+          .from('users')
+          .select('id')
+          .eq('auth_id', userData.user.id)
+          .single();
+        userId = user?.id || null;
+      }
+      
       const { data: chamado, error: insertError } = await supabase
         .from('chamados')
         .insert({
@@ -392,132 +442,129 @@ export function useChamados() {
           os_numero: excelData.os_numero,
           os_data: excelData.os_data?.toISOString().split('T')[0] || null,
           distrito: excelData.distrito,
-          tecnico_nome: excelData.tecnico_nome,
-          cliente_nome: excelData.unidade_atendimento, // Unidade de atendimento vai no campo cliente_nome
+          nome_gt: excelData.nome_gt,
+          cliente_codigo: excelData.cliente_codigo,
+          cliente_nome: excelData.cliente_nome,
           tra_nome: excelData.tra_nome,
           client_id: clientId,
           imported_by: userId,
+          status: 'aguardando_agendamento',
         })
         .select()
         .single();
       
       if (insertError) throw insertError;
       
-      // Log de importação
-      await addLog(chamado.id, 'imported', {
-        file_name: file.name,
-        excel_data: excelData,
-        client_matched: !!clientId,
-      });
-      
       return { chamado, clientMatched: !!clientId, excelData };
     },
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ['chamados'] });
-      
-      if (result.clientMatched) {
-        toast.success(`Chamado OS ${result.excelData.os_numero} importado com sucesso!`);
-      } else {
-        toast.warning(`Chamado OS ${result.excelData.os_numero} importado, mas cliente não foi encontrado no WAI.`);
-      }
+      toast.success(`Chamado OS ${result.excelData.os_numero} importado com sucesso!`);
     },
     onError: (error: Error) => {
       toast.error(error.message);
     },
   });
   
-  // Atualizar status
-  const updateStatus = useMutation({
-    mutationFn: async ({ id, status }: { id: string; status: Chamado['status'] }) => {
-      const { data: chamadoAntes } = await supabase
-        .from('chamados')
-        .select('status')
-        .eq('id', id)
-        .single();
-      
+  // Atualizar chamado
+  const updateChamado = useMutation({
+    mutationFn: async ({ 
+      id, 
+      ...data 
+    }: { 
+      id: string; 
+      numero_tarefa?: string | null;
+      data_atendimento?: string | null;
+      data_fechamento?: string | null;
+      observacao?: string | null;
+    }) => {
       const { error } = await supabase
         .from('chamados')
-        .update({ status })
+        .update(data)
         .eq('id', id);
       
       if (error) throw error;
-      
-      await addLog(id, 'status_changed', {
-        from: chamadoAntes?.status,
-        to: status,
-      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['chamados'] });
-      toast.success('Status atualizado');
+      toast.success('Chamado atualizado com sucesso!');
     },
     onError: () => {
-      toast.error('Erro ao atualizar status');
+      toast.error('Erro ao atualizar chamado');
     },
   });
   
-  // Gerar OS vinculada
-  const gerarOS = useMutation({
-    mutationFn: async (chamadoId: string) => {
-      if (!currentCompany?.id) throw new Error('Empresa não selecionada');
-      
-      // Buscar chamado
-      const chamado = await getChamadoById(chamadoId);
-      if (!chamado) throw new Error('Chamado não encontrado');
-      
-      if (chamado.service_order_id) {
-        throw new Error('Este chamado já possui uma OS vinculada');
-      }
-      
-      // Criar OS
-      const { data: os, error: osError } = await supabase
-        .from('service_orders')
-        .insert({
-          company_id: currentCompany.id,
-          client_id: chamado.client_id,
-          description: `Chamado Ecolab OS ${chamado.os_numero} - ${chamado.tra_nome || 'Sem TRA'}`,
-          notes: `Importado do Excel\nDistrito: ${chamado.distrito || '-'}\nTécnico: ${chamado.tecnico_nome || '-'}`,
-          scheduled_date: chamado.os_data || null,
-        })
-        .select('id, order_number')
-        .single();
-      
-      if (osError) throw osError;
-      
-      // Vincular OS ao chamado
-      const { error: updateError } = await supabase
+  // Excluir chamado
+  const deleteChamado = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
         .from('chamados')
-        .update({ service_order_id: os.id })
-        .eq('id', chamadoId);
+        .delete()
+        .eq('id', id);
       
-      if (updateError) throw updateError;
-      
-      // Log
-      await addLog(chamadoId, 'linked_os', {
-        service_order_id: os.id,
-        order_number: os.order_number,
-      });
-      
-      return os;
+      if (error) throw error;
     },
-    onSuccess: (os) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['chamados'] });
-      queryClient.invalidateQueries({ queryKey: ['service-orders'] });
-      toast.success(`OS ${os.order_number} criada e vinculada`);
+      toast.success('Chamado excluído com sucesso!');
     },
-    onError: (error: Error) => {
-      toast.error(error.message);
+    onError: () => {
+      toast.error('Erro ao excluir chamado');
     },
   });
+  
+  // Exportar para Excel
+  const exportToExcel = async () => {
+    if (!chamados.length) {
+      toast.error('Nenhum chamado para exportar');
+      return;
+    }
+    
+    const exportData = chamados.map(c => ({
+      'Nº OS': c.os_numero,
+      'Nº Tarefa': c.numero_tarefa || '',
+      'Data OS': c.os_data || '',
+      'Data Atendimento': c.data_atendimento || '',
+      'Data Fechamento': c.data_fechamento || '',
+      'Distrito': c.distrito || '',
+      'Nome GT': c.nome_gt || '',
+      'Cód. Cliente': c.cliente_codigo || '',
+      'Cliente': c.cliente_nome || '',
+      'Nome TRA': c.tra_nome || '',
+      'Observação': c.observacao || '',
+      'Status': STATUS_CONFIG[c.status]?.label || c.status,
+    }));
+    
+    const ws = XLSX.utils.json_to_sheet(exportData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Chamados');
+    
+    const fileName = `chamados_${new Date().toISOString().split('T')[0]}.xlsx`;
+    XLSX.writeFile(wb, fileName);
+    
+    toast.success('Planilha exportada com sucesso!');
+  };
+  
+  // Calcular dias desde abertura
+  const calcularDias = (dataOS: string | null): number => {
+    if (!dataOS) return 0;
+    const data = new Date(dataOS);
+    const hoje = new Date();
+    const diff = hoje.getTime() - data.getTime();
+    return Math.floor(diff / (1000 * 60 * 60 * 24));
+  };
   
   return {
     chamados,
     isLoading,
     refetch,
     getChamadoById,
-    getChamadoLogs,
+    getEvolucoes,
+    addEvolucao,
     importChamado,
-    updateStatus,
-    gerarOS,
+    updateChamado,
+    deleteChamado,
+    exportToExcel,
+    calcularDias,
   };
 }

@@ -1240,6 +1240,61 @@ export type Database = {
           },
         ]
       }
+      chamado_evolucoes: {
+        Row: {
+          chamado_id: string
+          company_id: string
+          created_at: string
+          created_by: string | null
+          descricao: string
+          id: string
+          status_anterior: string | null
+          status_novo: string | null
+        }
+        Insert: {
+          chamado_id: string
+          company_id: string
+          created_at?: string
+          created_by?: string | null
+          descricao: string
+          id?: string
+          status_anterior?: string | null
+          status_novo?: string | null
+        }
+        Update: {
+          chamado_id?: string
+          company_id?: string
+          created_at?: string
+          created_by?: string | null
+          descricao?: string
+          id?: string
+          status_anterior?: string | null
+          status_novo?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chamado_evolucoes_chamado_id_fkey"
+            columns: ["chamado_id"]
+            isOneToOne: false
+            referencedRelation: "chamados"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chamado_evolucoes_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chamado_evolucoes_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       chamado_logs: {
         Row: {
           action: string
@@ -1299,6 +1354,8 @@ export type Database = {
           cliente_nome: string | null
           company_id: string
           created_at: string | null
+          data_atendimento: string | null
+          data_fechamento: string | null
           distrito: string | null
           external_reference: string | null
           id: string
@@ -1306,6 +1363,9 @@ export type Database = {
           imported_at: string | null
           imported_by: string | null
           imported_from: string
+          nome_gt: string | null
+          numero_tarefa: string | null
+          observacao: string | null
           os_data: string | null
           os_numero: string
           prioridade: string | null
@@ -1322,6 +1382,8 @@ export type Database = {
           cliente_nome?: string | null
           company_id: string
           created_at?: string | null
+          data_atendimento?: string | null
+          data_fechamento?: string | null
           distrito?: string | null
           external_reference?: string | null
           id?: string
@@ -1329,6 +1391,9 @@ export type Database = {
           imported_at?: string | null
           imported_by?: string | null
           imported_from?: string
+          nome_gt?: string | null
+          numero_tarefa?: string | null
+          observacao?: string | null
           os_data?: string | null
           os_numero: string
           prioridade?: string | null
@@ -1345,6 +1410,8 @@ export type Database = {
           cliente_nome?: string | null
           company_id?: string
           created_at?: string | null
+          data_atendimento?: string | null
+          data_fechamento?: string | null
           distrito?: string | null
           external_reference?: string | null
           id?: string
@@ -1352,6 +1419,9 @@ export type Database = {
           imported_at?: string | null
           imported_by?: string | null
           imported_from?: string
+          nome_gt?: string | null
+          numero_tarefa?: string | null
+          observacao?: string | null
           os_data?: string | null
           os_numero?: string
           prioridade?: string | null
