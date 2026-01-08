@@ -41,9 +41,9 @@ export interface ServiceOrderProductItem {
   };
   details?: string;
   quantity: number;
-  unit_price: number;
+  unit_price: number | null;
   purchase_price: number;
-  discount_value: number;
+  discount_value: number | null;
   discount_type: 'value' | 'percent';
   subtotal: number;
   price_table_id?: string;

@@ -53,52 +53,46 @@ export function formatBRNumber(value: number | null | undefined, decimals: 2 | 4
 
 /**
  * Parse de string BR para número
- * Aceita: "1.234,56", "1234,56", "1234.56", "R$ 1.234,56"
+ * Aceita: "1.234,56", "1234,56", "1234.56", "R$ 1.234,56", "1,234.56"
  * Retorna null se vazio ou inválido
  * 
  * NUNCA usar parseFloat direto no input sem esta função!
  */
 export function parseBRNumber(input: string | null | undefined): number | null {
-  if (!input || typeof input !== 'string') {
-    return null;
-  }
+  if (!input || typeof input !== "string") return null;
 
-  // Remove R$, espaços e caracteres não numéricos (exceto . , -)
   let cleaned = input
-    .replace(/R\$\s*/g, '')
-    .replace(/\s/g, '')
+    .replace(/R\$\s*/g, "")
+    .replace(/\s/g, "")
     .trim();
 
-  if (cleaned === '' || cleaned === '-') {
-    return null;
-  }
+  if (cleaned === "" || cleaned === "-") return null;
 
-  // Detecta formato pelo ÚLTIMO separador (que é sempre o decimal)
-  const lastComma = cleaned.lastIndexOf(',');
-  const lastDot = cleaned.lastIndexOf('.');
+  const lastComma = cleaned.lastIndexOf(",");
+  const lastDot = cleaned.lastIndexOf(".");
 
-  // Se ambos existem, o último é o decimal
-  if (lastComma !== -1 && lastDot !== -1) {
-    if (lastComma > lastDot) {
-      // Formato BR: 1.234,56 → remove pontos de milhar, troca vírgula por ponto
-      cleaned = cleaned.replace(/\./g, '').replace(',', '.');
+  const hasComma = lastComma !== -1;
+  const hasDot = lastDot !== -1;
+
+  // Se tem os dois, o separador decimal é o ÚLTIMO que aparece
+  if (hasComma && hasDot) {
+    const decimalIsComma = lastComma > lastDot;
+
+    if (decimalIsComma) {
+      // 1.234,56  -> remove milhares "." e troca decimal "," por "."
+      cleaned = cleaned.replace(/\./g, "").replace(",", ".");
     } else {
-      // Formato EN: 1,234.56 → remove vírgulas de milhar
-      cleaned = cleaned.replace(/,/g, '');
+      // 1,234.56  -> remove milhares "," e mantém decimal "."
+      cleaned = cleaned.replace(/,/g, "");
     }
-  } else if (lastComma !== -1) {
-    // Só vírgula: 1234,56 → troca vírgula por ponto
-    cleaned = cleaned.replace(',', '.');
+  } else if (hasComma && !hasDot) {
+    // 1234,56 -> decimal ","
+    cleaned = cleaned.replace(",", ".");
   }
-  // Se só ponto ou nenhum, já está correto para parseFloat
+  // só ponto ou nenhum -> parseFloat resolve
 
-  const parsed = parseFloat(cleaned);
-  
-  if (isNaN(parsed)) {
-    return null;
-  }
-
-  return parsed;
+  const parsed = Number.parseFloat(cleaned);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 /**
