@@ -31,26 +31,22 @@ export function useEquipments(clientId?: string) {
   const query = useQuery({
     queryKey: ["equipments", currentCompany?.id, clientId || null],
     queryFn: async () => {
-      if (!currentCompany) return [];
+      if (!currentCompany || !clientId) return [];
       
-      let queryBuilder = supabase
+      // Buscar APENAS equipamentos do cliente selecionado E sincronizados com Field
+      const { data, error } = await supabase
         .from("equipments")
         .select("*")
         .eq("company_id", currentCompany.id)
+        .eq("client_id", clientId)
         .eq("is_active", true)
+        .not("field_equipment_id", "is", null) // Apenas equipamentos sincronizados
         .order("serial_number");
-
-      // Filtrar por cliente se especificado
-      if (clientId) {
-        queryBuilder = queryBuilder.eq("client_id", clientId);
-      }
-
-      const { data, error } = await queryBuilder;
 
       if (error) throw error;
       return data as Equipment[];
     },
-    enabled: !!currentCompany && !!clientId, // Só executa se tiver cliente selecionado
+    enabled: !!currentCompany && !!clientId,
   });
 
   const createEquipment = useMutation({

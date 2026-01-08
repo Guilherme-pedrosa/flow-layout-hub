@@ -34,52 +34,63 @@ const paymentMethods = [
   { value: 'cheque', label: 'Cheque' },
 ];
 
-// Componente para input de valor monetário - simplificado para funcionar corretamente
+// Componente para input de valor monetário - SEM valor default, totalmente editável
 function CurrencyInput({ 
   value, 
   onChange 
 }: { 
-  value: number; 
-  onChange: (value: number) => void;
+  value: number | null; 
+  onChange: (value: number | null) => void;
 }) {
-  // Usar estado local para controle total do input
-  const [inputValue, setInputValue] = useState(() => 
-    value === 0 ? '' : value.toFixed(2).replace('.', ',')
-  );
+  // Estado local para controle total - valor pode ser null
+  const [inputValue, setInputValue] = useState('');
+  const [isFocused, setIsFocused] = useState(false);
 
-  // Sincronizar quando o valor externo mudar (ex: recalcular parcelas)
+  // Atualizar input quando valor externo mudar (apenas se não estiver focado)
   useEffect(() => {
-    setInputValue(value === 0 ? '' : value.toFixed(2).replace('.', ','));
-  }, [value]);
+    if (!isFocused) {
+      if (value === null || value === 0) {
+        setInputValue('');
+      } else {
+        setInputValue(value.toFixed(2).replace('.', ','));
+      }
+    }
+  }, [value, isFocused]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
     
-    // Permite campo vazio
+    // Permite campo completamente vazio
     if (val === '') {
       setInputValue('');
-      onChange(0);
+      onChange(null); // Retorna null, não 0
       return;
     }
     
     // Permite apenas números, vírgula e ponto
     if (/^[\d.,]*$/.test(val)) {
       setInputValue(val);
-      // Converter para número imediatamente
-      const numericValue = parseFloat(val.replace(',', '.')) || 0;
-      onChange(numericValue);
+      const numericValue = parseFloat(val.replace(',', '.'));
+      onChange(isNaN(numericValue) ? null : numericValue);
     }
   };
 
   return (
-    <Input
-      type="text"
-      inputMode="decimal"
-      value={inputValue}
-      onChange={handleChange}
-      placeholder="0,00"
-      className="min-w-[120px] text-right font-mono"
-    />
+    <div className="relative">
+      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">
+        R$
+      </span>
+      <Input
+        type="text"
+        inputMode="decimal"
+        value={inputValue}
+        onChange={handleChange}
+        onFocus={() => setIsFocused(true)}
+        onBlur={() => setIsFocused(false)}
+        placeholder="0,00"
+        className="pl-9 min-w-[140px] text-right font-mono text-base"
+      />
+    </div>
   );
 }
 
@@ -92,11 +103,9 @@ export function SaleFormPagamento({
   onInstallmentsChange 
 }: SaleFormPagamentoProps) {
 
-  // Gerar parcelas quando mudar o número de parcelas ou o valor total
+  // Gerar parcelas quando mudar o número de parcelas - SEM valor default
   useEffect(() => {
     if (paymentType === 'parcelado' && installmentsCount >= 2) {
-      // Arredonda o valor de cada parcela para 2 casas decimais
-      const installmentValue = Math.round((totalValue / installmentsCount) * 100) / 100;
       const today = new Date();
       
       const newInstallments: Installment[] = [];
@@ -107,14 +116,14 @@ export function SaleFormPagamento({
         newInstallments.push({
           installment_number: i,
           due_date: dueDate.toISOString().split('T')[0],
-          amount: installmentValue,
+          amount: 0, // Começa zerado - usuário preenche
           payment_method: 'boleto'
         });
       }
       
       onInstallmentsChange(newInstallments);
     }
-  }, [paymentType, installmentsCount, totalValue]);
+  }, [paymentType, installmentsCount]); // Removido totalValue - NÃO recalcula automaticamente
 
   const updateInstallment = (index: number, field: keyof Installment, value: any) => {
     const newInstallments = [...installments];
@@ -212,11 +221,24 @@ export function SaleFormPagamento({
                     </div>
                   ))}
                 </div>
-                <div className="mt-2 text-right">
-                  <span className="text-sm text-muted-foreground">
-                    Total das parcelas: {formatCurrency(installments.reduce((sum, i) => sum + i.amount, 0))}
-                  </span>
-                </div>
+                {(() => {
+                  const filledInstallments = installments.filter(i => i.amount > 0);
+                  const emptyCount = installments.length - filledInstallments.length;
+                  const total = filledInstallments.reduce((sum, i) => sum + i.amount, 0);
+                  
+                  return (
+                    <div className="flex flex-col items-end gap-1">
+                      {emptyCount > 0 && (
+                        <span className="text-xs text-amber-600">
+                          ⚠️ {emptyCount} parcela(s) sem valor
+                        </span>
+                      )}
+                      <span className="text-sm font-medium">
+                        Total das parcelas: {formatCurrency(total)}
+                      </span>
+                    </div>
+                  );
+                })()}
               </div>
             )}
           </div>
