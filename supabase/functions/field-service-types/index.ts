@@ -11,13 +11,14 @@ const FIELD_CONTROL_BASE_URL = 'https://carchost.fieldcontrol.com.br';
 /**
  * FIELD-SERVICE-TYPES
  * 
- * Busca e sincroniza tipos de OS (task-types) do Field Control
+ * Busca e sincroniza tipos de OS (task-types/services) do Field Control
  * 
- * Endpoints do Field:
- * - GET /task-types - lista tipos de tarefas
- * - GET /services - lista serviços (diferente de task-types!)
+ * Endpoints possíveis do Field Control:
+ * - GET /services - lista serviços/tipos de tarefa
+ * - GET /activities - lista tipos de atividades
+ * - GET /categories - lista categorias
  * 
- * Usamos /task-types pois é o que define o tipo de OS
+ * Vamos tentar múltiplos endpoints até encontrar o correto
  */
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -41,7 +42,7 @@ serve(async (req) => {
 
     console.log(`[field-service-types] Buscando tipos de OS para empresa ${company_id}`);
 
-    // Buscar API key da variável de ambiente (mesmo padrão das outras funções Field)
+    // Buscar API key da variável de ambiente
     const apiKey = Deno.env.get('FIELD_CONTROL_API_KEY');
     if (!apiKey) {
       console.log('[field-service-types] API Key não configurada no ambiente');
@@ -51,33 +52,96 @@ serve(async (req) => {
       );
     }
 
-    console.log('[field-service-types] API Key encontrada, buscando task-types...');
+    console.log('[field-service-types] API Key encontrada, buscando tipos...');
 
-    // Buscar TASK-TYPES do Field Control (tipos de OS)
-    // /task-types = tipos de tarefa/OS
-    // /services = serviços prestados (diferente!)
-    const response = await fetch(`${FIELD_CONTROL_BASE_URL}/task-types`, {
-      method: 'GET',
-      headers: {
-        'x-api-key': apiKey,
-        'Content-Type': 'application/json',
-      },
-    });
+    // Lista de endpoints para tentar buscar tipos de tarefa
+    const endpointsToTry = [
+      '/services',           // Serviços (mais comum)
+      '/activities',         // Atividades
+      '/activity-types',     // Tipos de atividade
+      '/categories',         // Categorias
+      '/order-types',        // Tipos de ordem
+      '/work-order-types',   // Tipos de ordem de trabalho
+    ];
 
-    if (!response.ok) {
-      console.error(`[field-service-types] Erro ao buscar services: ${response.status}`);
-      const errorText = await response.text();
-      console.error(`[field-service-types] Response: ${errorText}`);
-      return new Response(
-        JSON.stringify({ success: false, error: `Erro ao buscar tipos: ${response.status}`, services: [] }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+    let services: any[] = [];
+    let successEndpoint = '';
+
+    for (const endpoint of endpointsToTry) {
+      try {
+        console.log(`[field-service-types] Tentando endpoint: ${endpoint}`);
+        
+        const response = await fetch(`${FIELD_CONTROL_BASE_URL}${endpoint}`, {
+          method: 'GET',
+          headers: {
+            'X-Api-Key': apiKey,
+            'Content-Type': 'application/json',
+          },
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          const items = data.items || data.data || data.services || data.activities || data || [];
+          
+          if (Array.isArray(items) && items.length > 0) {
+            services = items;
+            successEndpoint = endpoint;
+            console.log(`[field-service-types] Sucesso! Endpoint ${endpoint} retornou ${items.length} tipos`);
+            break;
+          } else {
+            console.log(`[field-service-types] Endpoint ${endpoint} retornou dados vazios ou formato inválido`);
+          }
+        } else {
+          console.log(`[field-service-types] Endpoint ${endpoint} retornou status ${response.status}`);
+        }
+      } catch (endpointError) {
+        console.log(`[field-service-types] Erro ao tentar ${endpoint}:`, endpointError);
+      }
     }
 
-    const data = await response.json();
-    const services = data.items || data.data || data || [];
+    if (services.length === 0) {
+      console.log('[field-service-types] Nenhum endpoint retornou tipos válidos');
+      
+      // Último recurso: buscar uma task existente para ver o formato do taskType
+      console.log('[field-service-types] Tentando buscar tasks para extrair tipos...');
+      
+      try {
+        const tasksResponse = await fetch(`${FIELD_CONTROL_BASE_URL}/tasks?limit=50`, {
+          method: 'GET',
+          headers: {
+            'X-Api-Key': apiKey,
+            'Content-Type': 'application/json',
+          },
+        });
 
-    console.log(`[field-service-types] ${services.length} tipos de OS encontrados`);
+        if (tasksResponse.ok) {
+          const tasksData = await tasksResponse.json();
+          const tasks = tasksData.items || tasksData.data || tasksData || [];
+          console.log(`[field-service-types] Encontradas ${tasks.length} tasks`);
+          
+          // Extrair tipos únicos das tasks
+          const typesMap = new Map();
+          for (const task of tasks) {
+            const taskType = task.taskType || task.service || task.activityType || task.type;
+            if (taskType && taskType.id) {
+              typesMap.set(taskType.id, {
+                id: taskType.id,
+                name: taskType.name || taskType.title || `Tipo ${taskType.id}`,
+                color: taskType.color
+              });
+            }
+          }
+          
+          services = Array.from(typesMap.values());
+          successEndpoint = '/tasks (extraído)';
+          console.log(`[field-service-types] Extraídos ${services.length} tipos das tasks`);
+        }
+      } catch (tasksError) {
+        console.error('[field-service-types] Erro ao buscar tasks:', tasksError);
+      }
+    }
+
+    console.log(`[field-service-types] ${services.length} tipos de OS encontrados via ${successEndpoint}`);
 
     // Se sync=true, sincronizar com tabela service_types
     if (sync && services.length > 0) {
@@ -140,7 +204,7 @@ serve(async (req) => {
         company_id,
         entity: 'service_types',
         action: 'service_types_synced',
-        metadata_json: { synced_count: syncedCount, source: 'field_control' }
+        metadata_json: { synced_count: syncedCount, source: 'field_control', endpoint: successEndpoint }
       });
       
       console.log(`[field-service-types] Sincronização concluída: ${syncedCount} tipos`);
@@ -155,7 +219,8 @@ serve(async (req) => {
           color: s.color,
           duration: s.duration || s.defaultDuration
         })),
-        synced: sync ? services.length : 0
+        synced: sync ? services.length : 0,
+        endpoint: successEndpoint
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
