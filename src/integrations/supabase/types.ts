@@ -6388,7 +6388,7 @@ export type Database = {
       }
       service_order_installments: {
         Row: {
-          amount: number
+          amount: number | null
           company_id: string | null
           created_at: string
           due_date: string
@@ -6400,7 +6400,7 @@ export type Database = {
           service_order_id: string
         }
         Insert: {
-          amount: number
+          amount?: number | null
           company_id?: string | null
           created_at?: string
           due_date: string
@@ -6412,7 +6412,7 @@ export type Database = {
           service_order_id: string
         }
         Update: {
-          amount?: number
+          amount?: number | null
           company_id?: string | null
           created_at?: string
           due_date?: string
@@ -6454,7 +6454,7 @@ export type Database = {
           quantity: number
           service_order_id: string
           subtotal: number
-          unit_price: number
+          unit_price: number | null
         }
         Insert: {
           company_id?: string | null
@@ -6469,7 +6469,7 @@ export type Database = {
           quantity?: number
           service_order_id: string
           subtotal?: number
-          unit_price?: number
+          unit_price?: number | null
         }
         Update: {
           company_id?: string | null
@@ -6484,7 +6484,7 @@ export type Database = {
           quantity?: number
           service_order_id?: string
           subtotal?: number
-          unit_price?: number
+          unit_price?: number | null
         }
         Relationships: [
           {
