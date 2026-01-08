@@ -32,7 +32,10 @@ import ChamadosList from "./pages/chamados/ChamadosList";
 import ChamadoDetail from "./pages/chamados/ChamadoDetail";
 import NovoChamado from "./pages/chamados/NovoChamado";
 
-// Compras
+// RH
+import RhColaboradoresPage from "./pages/rh/Colaboradores";
+import RhControleIntegracoes from "./pages/rh/ControleIntegracoes";
+
 import PedidosCompra from "./pages/compras/PedidosCompra";
 import Recebimento from "./pages/compras/Recebimento";
 import Solicitacoes from "./pages/compras/Solicitacoes";
@@ -129,6 +132,10 @@ const App = () => (
             <Route path="/chamados/:id" element={<ChamadoDetail />} />
             <Route path="/chamados/:id/editar" element={<ChamadoDetail />} />
             <Route path="/ordens-servico-config" element={<ConfiguracoesOS />} />
+            
+            {/* RH */}
+            <Route path="/rh/colaboradores" element={<RhColaboradoresPage />} />
+            <Route path="/rh/integracoes" element={<RhControleIntegracoes />} />
             
             {/* Compras */}
             <Route path="/pedidos-compra" element={<PedidosCompra />} />
