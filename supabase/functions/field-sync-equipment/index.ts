@@ -221,18 +221,24 @@ serve(async (req) => {
         // Mapear tipo pelo ID se existir
         const typeName = eq.type?.id ? typeMap.get(String(eq.type.id)) : eq.type?.name;
 
+        // Helper para truncar strings (segurança extra)
+        const truncate = (str: string | null | undefined, max: number): string | null => {
+          if (!str) return null;
+          return str.length > max ? str.substring(0, max) : str;
+        };
+
         const baseData = {
-          serial_number: eq.number || `FIELD-${fieldEquipmentId}`,
-          model: eq.name || null,
-          brand: eq.brand || null,
-          equipment_type: typeName || null,
+          serial_number: truncate(eq.number, 255) || `FIELD-${fieldEquipmentId}`,
+          model: truncate(eq.name, 255),
+          brand: truncate(eq.brand, 255),
+          equipment_type: truncate(typeName, 255),
           notes: eq.notes || null,
           field_equipment_id: fieldEquipmentId,
           is_active: !eq.archived,
-          sector: eq.locationSector || null,
-          environment: eq.locationEnvironment || null,
-          location_description: eq.location || null,
-          qr_code: eq.qrCode || null,
+          sector: truncate(eq.locationSector, 255),
+          environment: truncate(eq.locationEnvironment, 255),
+          location_description: eq.location || null, // text, sem limite
+          qr_code: truncate(eq.qrCode, 500),
           image_url: eq.avatarUrl || null,
           client_id: clientId,
           sync_status: 'synced',
