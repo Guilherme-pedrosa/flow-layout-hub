@@ -1740,6 +1740,64 @@ export type Database = {
           },
         ]
       }
+      client_document_requirements: {
+        Row: {
+          client_id: string
+          company_id: string
+          created_at: string
+          document_type_id: string
+          id: string
+          is_required: boolean
+          required_for: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          client_id: string
+          company_id: string
+          created_at?: string
+          document_type_id: string
+          id?: string
+          is_required?: boolean
+          required_for: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          client_id?: string
+          company_id?: string
+          created_at?: string
+          document_type_id?: string
+          id?: string
+          is_required?: boolean
+          required_for?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_document_requirements_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "pessoas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_document_requirements_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_document_requirements_document_type_id_fkey"
+            columns: ["document_type_id"]
+            isOneToOne: false
+            referencedRelation: "document_types"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       client_units: {
         Row: {
           access_email_cc: string[] | null

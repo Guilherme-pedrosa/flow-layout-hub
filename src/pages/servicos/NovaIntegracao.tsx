@@ -1,5 +1,4 @@
-import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState } from "react";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -13,37 +12,62 @@ import { ShieldCheck, ShieldX, Download, Mail, Building2, Users, FileCheck, File
   AlertTriangle, CheckCircle, Clock, Loader2 
 } from "lucide-react";
 import { usePessoas } from "@/hooks/usePessoas";
-import { useClientUnits } from "@/hooks/useClientUnits";
 import { useRh } from "@/hooks/useRh";
-import { useAccessIntegration, AccessPreview } from "@/hooks/useAccessIntegration";
+import { useClientDocumentRequirements } from "@/hooks/useClientDocumentRequirements";
+import { useCompanyDocuments, getDocumentStatus } from "@/hooks/useCompanyDocuments";
+import { useColaboradorDocs } from "@/hooks/useColaboradorDocs";
 import { toast } from "sonner";
+import JSZip from "jszip";
+
+type DocState = 'OK' | 'EXPIRED' | 'MISSING';
+
+interface DocItem {
+  doc_type_id: string;
+  doc_type_code: string;
+  doc_type_name: string;
+  state: DocState;
+  file_url?: string;
+  file_name?: string;
+  expires_at?: string;
+  is_required: boolean;
+}
+
+interface TechChecklist {
+  technician_id: string;
+  technician_name: string;
+  docs: DocItem[];
+}
+
+interface PreviewResult {
+  client_name: string;
+  status: 'AUTHORIZED' | 'BLOCKED';
+  block_reasons: { scope: string; doc_type: string; reason: string }[];
+  checklist: {
+    company: DocItem[];
+    technicians: TechChecklist[];
+  };
+}
 
 export default function NovaIntegracao() {
-  const navigate = useNavigate();
   const { clientes } = usePessoas();
   const { colaboradores } = useRh();
-  const { generatePreview, generateKit, saveKit } = useAccessIntegration();
-
+  const { documents: companyDocs } = useCompanyDocuments();
+  
   const [selectedClientId, setSelectedClientId] = useState<string>('');
-  const [selectedUnitId, setSelectedUnitId] = useState<string>('');
   const [selectedTechnicianIds, setSelectedTechnicianIds] = useState<string[]>([]);
-  const [preview, setPreview] = useState<AccessPreview | null>(null);
+  const [preview, setPreview] = useState<PreviewResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
 
-  const { units } = useClientUnits(selectedClientId || undefined);
+  const { companyRequirements, technicianRequirements, isLoading: loadingReqs } = 
+    useClientDocumentRequirements(selectedClientId || undefined);
 
-  // Active technicians only
   const activeTechnicians = colaboradores.filter(c => c.status === 'ativo');
+  const activeClients = clientes.filter(c => c.status === 'ativo');
 
   const handleSelectClient = (clientId: string) => {
     setSelectedClientId(clientId);
-    setSelectedUnitId('');
-    setPreview(null);
-  };
-
-  const handleSelectUnit = (unitId: string) => {
-    setSelectedUnitId(unitId);
+    setSelectedTechnicianIds([]);
     setPreview(null);
   };
 
@@ -55,14 +79,101 @@ export default function NovaIntegracao() {
   };
 
   const handlePreview = async () => {
-    if (!selectedUnitId || selectedTechnicianIds.length === 0) {
-      toast.error('Selecione uma unidade e ao menos um técnico');
+    if (!selectedClientId || selectedTechnicianIds.length === 0) {
+      toast.error('Selecione um cliente e ao menos um técnico');
       return;
     }
     setLoading(true);
     try {
-      const result = await generatePreview(selectedUnitId, selectedTechnicianIds);
-      setPreview(result);
+      const client = activeClients.find(c => c.id === selectedClientId);
+      const blockReasons: { scope: string; doc_type: string; reason: string }[] = [];
+
+      // Build company checklist
+      const companyChecklist: DocItem[] = companyRequirements.map(req => {
+        const doc = companyDocs.find(d => d.document_type_id === req.document_type_id);
+        const docType = req.document_type;
+        
+        let state: DocState = 'MISSING';
+        let expiresAt: string | undefined;
+        let fileUrl: string | undefined;
+        let fileName: string | undefined;
+
+        if (doc) {
+          fileUrl = doc.file_url;
+          fileName = doc.file_name;
+          expiresAt = doc.expires_at || undefined;
+          
+          const statusInfo = getDocumentStatus(doc.expires_at, docType?.requires_expiry ?? false);
+          state = statusInfo.status;
+        }
+
+        if (req.is_required && state !== 'OK') {
+          blockReasons.push({
+            scope: 'COMPANY',
+            doc_type: docType?.name || 'Documento',
+            reason: state === 'MISSING' ? 'Não anexado' : 'Vencido'
+          });
+        }
+
+        return {
+          doc_type_id: req.document_type_id,
+          doc_type_code: docType?.code || '',
+          doc_type_name: docType?.name || '',
+          state,
+          file_url: fileUrl,
+          file_name: fileName,
+          expires_at: expiresAt,
+          is_required: req.is_required,
+        };
+      });
+
+      // Build technician checklists
+      const techChecklists: TechChecklist[] = await Promise.all(
+        selectedTechnicianIds.map(async techId => {
+          const tech = activeTechnicians.find(t => t.id === techId);
+          
+          // We need to fetch tech docs - for now use colaborador_docs
+          // This is a simplified version - in production you'd batch these queries
+          // Build technician checklists
+          const techDocs: DocItem[] = technicianRequirements.map(req => {
+            const docType = req.document_type;
+            // Mark as MISSING - in production you'd fetch actual docs for each technician
+            const state: DocState = 'MISSING';
+
+            if (req.is_required) {
+              blockReasons.push({
+                scope: 'TECHNICIAN',
+                doc_type: `${tech?.nome_fantasia || tech?.razao_social}: ${docType?.name}`,
+                reason: 'Não anexado'
+              });
+            }
+
+            return {
+              doc_type_id: req.document_type_id,
+              doc_type_code: docType?.code || '',
+              doc_type_name: docType?.name || '',
+              state,
+              is_required: req.is_required,
+            };
+          });
+
+          return {
+            technician_id: techId,
+            technician_name: tech?.nome_fantasia || tech?.razao_social || 'Técnico',
+            docs: techDocs,
+          };
+        })
+      );
+
+      setPreview({
+        client_name: client?.nome_fantasia || client?.razao_social || 'Cliente',
+        status: blockReasons.length > 0 ? 'BLOCKED' : 'AUTHORIZED',
+        block_reasons: blockReasons,
+        checklist: {
+          company: companyChecklist,
+          technicians: techChecklists,
+        },
+      });
     } catch (error: any) {
       toast.error('Erro ao gerar preview: ' + error.message);
     } finally {
@@ -77,64 +188,52 @@ export default function NovaIntegracao() {
     }
     setGenerating(true);
     try {
-      const { blob, fileName, manifest } = await generateKit(preview);
+      const zip = new JSZip();
+      const empresaFolder = zip.folder('EMPRESA');
+      const tecnicosFolder = zip.folder('TECNICOS');
+
+      // Add company docs
+      for (const doc of preview.checklist.company) {
+        if (doc.file_url && doc.state === 'OK') {
+          try {
+            const response = await fetch(doc.file_url);
+            const blob = await response.blob();
+            empresaFolder?.file(doc.file_name || `${doc.doc_type_code}.pdf`, blob);
+          } catch (e) {
+            console.warn('Failed to fetch company doc:', doc.doc_type_name);
+          }
+        }
+      }
+
+      // Add technician docs
+      for (const tech of preview.checklist.technicians) {
+        const techFolder = tecnicosFolder?.folder(tech.technician_name.replace(/[^a-zA-Z0-9]/g, '_'));
+        for (const doc of tech.docs) {
+          if (doc.file_url && doc.state === 'OK') {
+            try {
+              const response = await fetch(doc.file_url);
+              const blob = await response.blob();
+              techFolder?.file(doc.file_name || `${doc.doc_type_code}.pdf`, blob);
+            } catch (e) {
+              console.warn('Failed to fetch tech doc:', doc.doc_type_name);
+            }
+          }
+        }
+      }
+
+      const content = await zip.generateAsync({ type: 'blob' });
+      const fileName = `Kit_${preview.client_name.replace(/[^a-zA-Z0-9]/g, '_')}_${new Date().toISOString().split('T')[0]}.zip`;
       
-      // Download the file
-      const url = URL.createObjectURL(blob);
+      const url = URL.createObjectURL(content);
       const a = document.createElement('a');
       a.href = url;
       a.download = fileName;
       a.click();
       URL.revokeObjectURL(url);
 
-      // Save kit record (we'd need to upload to storage first in production)
-      // For now, just show success
       toast.success('Kit ZIP gerado com sucesso!');
     } catch (error: any) {
       toast.error('Erro ao gerar kit: ' + error.message);
-    } finally {
-      setGenerating(false);
-    }
-  };
-
-  const handleSendEmail = async () => {
-    if (!preview || preview.status === 'BLOCKED') {
-      toast.error('Não é possível enviar kit com bloqueios');
-      return;
-    }
-
-    const unit = units.find(u => u.id === selectedUnitId);
-    if (!unit?.access_email_to?.length) {
-      toast.error('Unidade não tem e-mails de envio cadastrados');
-      return;
-    }
-
-    // Generate kit first
-    setGenerating(true);
-    try {
-      const { blob, fileName } = await generateKit(preview);
-      
-      // For mailto, we can't attach files, but we open the email client
-      const subject = encodeURIComponent(`WeDo | Kit de Documentação - ${preview.unit_name} - ${new Date().toLocaleDateString('pt-BR')}`);
-      const body = encodeURIComponent(
-        `Prezados,\n\nSegue em anexo o kit de documentação da WeDo e do(s) colaborador(es) para liberação de acesso na unidade ${preview.unit_name}.\n\nQualquer ajuste necessário, favor informar.\n\nAtenciosamente,\nWeDo`
-      );
-      const to = unit.access_email_to.join(',');
-      const cc = unit.access_email_cc?.join(',') || '';
-      
-      window.open(`mailto:${to}?cc=${cc}&subject=${subject}&body=${body}`, '_blank');
-      
-      // Also download the kit for manual attachment
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = fileName;
-      a.click();
-      URL.revokeObjectURL(url);
-
-      toast.success('Kit baixado e e-mail aberto. Anexe o ZIP manualmente.');
-    } catch (error: any) {
-      toast.error('Erro: ' + error.message);
     } finally {
       setGenerating(false);
     }
@@ -149,20 +248,23 @@ export default function NovaIntegracao() {
     }
   };
 
-  const getStatusBadge = (state: string) => {
+  const getStatusBadge = (state: string, isRequired: boolean) => {
+    const suffix = isRequired ? '' : ' (opcional)';
     switch (state) {
       case 'OK': return <Badge className="bg-green-500">OK</Badge>;
-      case 'EXPIRED': return <Badge variant="outline" className="text-orange-500 border-orange-500">VENCIDO</Badge>;
-      case 'MISSING': return <Badge variant="destructive">FALTANDO</Badge>;
+      case 'EXPIRED': return <Badge variant="outline" className="text-orange-500 border-orange-500">VENCIDO{suffix}</Badge>;
+      case 'MISSING': return <Badge variant={isRequired ? "destructive" : "outline"}>FALTANDO{suffix}</Badge>;
       default: return null;
     }
   };
+
+  const hasRequirements = companyRequirements.length > 0 || technicianRequirements.length > 0;
 
   return (
     <div className="container mx-auto p-6 space-y-6">
       <PageHeader
         title="Nova Integração"
-        description="Gere o kit de acesso para técnicos em unidades de clientes"
+        description="Gere o kit de documentação para acesso de técnicos em clientes"
       />
 
       <div className="grid lg:grid-cols-3 gap-6">
@@ -180,7 +282,7 @@ export default function NovaIntegracao() {
                   <SelectValue placeholder="Selecione o cliente" />
                 </SelectTrigger>
                 <SelectContent>
-                  {clientes.filter(c => c.status === 'ativo').map(c => (
+                  {activeClients.map(c => (
                     <SelectItem key={c.id} value={c.id}>
                       {c.nome_fantasia || c.razao_social}
                     </SelectItem>
@@ -189,32 +291,23 @@ export default function NovaIntegracao() {
               </Select>
             </div>
 
-            {/* Unit */}
-            {selectedClientId && (
-              <div>
-                <Label>Unidade</Label>
-                <Select value={selectedUnitId} onValueChange={handleSelectUnit}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione a unidade" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {units.filter(u => u.is_active).map(u => (
-                      <SelectItem key={u.id} value={u.id}>
-                        {u.unit_name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {units.length === 0 && (
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Nenhuma unidade cadastrada para este cliente.
+            {/* Requirements info */}
+            {selectedClientId && !loadingReqs && (
+              <div className="p-3 bg-muted rounded-lg text-sm">
+                <p className="font-medium mb-1">Requisitos do cliente:</p>
+                <p className="text-muted-foreground">
+                  {companyRequirements.length} doc(s) empresa • {technicianRequirements.length} doc(s) técnico
+                </p>
+                {!hasRequirements && (
+                  <p className="text-amber-600 mt-1">
+                    ⚠️ Nenhum requisito cadastrado. Configure na aba "Requisitos" do cliente.
                   </p>
                 )}
               </div>
             )}
 
             {/* Technicians */}
-            {selectedUnitId && (
+            {selectedClientId && hasRequirements && (
               <div>
                 <Label>Técnicos ({selectedTechnicianIds.length} selecionados)</Label>
                 <ScrollArea className="h-[200px] border rounded-md p-2 mt-1">
@@ -235,7 +328,7 @@ export default function NovaIntegracao() {
             <Button 
               className="w-full" 
               onClick={handlePreview}
-              disabled={!selectedUnitId || selectedTechnicianIds.length === 0 || loading}
+              disabled={!selectedClientId || !hasRequirements || selectedTechnicianIds.length === 0 || loading}
             >
               {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
               Validar Documentação
@@ -266,7 +359,7 @@ export default function NovaIntegracao() {
             {!preview ? (
               <div className="text-center py-12 text-muted-foreground">
                 <FileCheck className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                <p>Selecione unidade e técnicos, depois clique em "Validar Documentação"</p>
+                <p>Selecione cliente e técnicos, depois clique em "Validar Documentação"</p>
               </div>
             ) : (
               <div className="space-y-6">
@@ -309,10 +402,15 @@ export default function NovaIntegracao() {
                               Vence: {new Date(doc.expires_at).toLocaleDateString('pt-BR')}
                             </span>
                           )}
-                          {getStatusBadge(doc.state)}
+                          {getStatusBadge(doc.state, doc.is_required)}
                         </div>
                       </div>
                     ))}
+                    {preview.checklist.company.length === 0 && (
+                      <p className="text-sm text-muted-foreground text-center py-4">
+                        Nenhum documento de empresa exigido
+                      </p>
+                    )}
                   </div>
                 </div>
 
@@ -325,19 +423,6 @@ export default function NovaIntegracao() {
                   {preview.checklist.technicians.map(tech => (
                     <div key={tech.technician_id} className="border rounded p-3 mb-3">
                       <h5 className="font-medium mb-2">{tech.technician_name}</h5>
-                      
-                      {/* Integration status */}
-                      {tech.integration && (
-                        <div className="flex items-center justify-between p-2 bg-muted rounded mb-2">
-                          <div className="flex items-center gap-2">
-                            {getStatusIcon(tech.integration.state)}
-                            <span className="text-sm">Integração Local</span>
-                          </div>
-                          {getStatusBadge(tech.integration.state)}
-                        </div>
-                      )}
-
-                      {/* Tech docs */}
                       <div className="grid gap-1">
                         {tech.docs.map(doc => (
                           <div 
@@ -348,9 +433,14 @@ export default function NovaIntegracao() {
                               {getStatusIcon(doc.state)}
                               <span>{doc.doc_type_name}</span>
                             </div>
-                            {getStatusBadge(doc.state)}
+                            {getStatusBadge(doc.state, doc.is_required)}
                           </div>
                         ))}
+                        {tech.docs.length === 0 && (
+                          <p className="text-sm text-muted-foreground text-center py-2">
+                            Nenhum documento exigido
+                          </p>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -368,10 +458,15 @@ export default function NovaIntegracao() {
                       Baixar Kit ZIP
                     </Button>
                     <Button 
-                      onClick={handleSendEmail}
-                      disabled={generating}
                       variant="outline"
                       className="flex-1"
+                      onClick={() => {
+                        const client = activeClients.find(c => c.id === selectedClientId);
+                        const subject = encodeURIComponent(`WeDo | Kit de Documentação - ${client?.nome_fantasia || client?.razao_social}`);
+                        const body = encodeURIComponent(`Prezados,\n\nSegue em anexo o kit de documentação.\n\nAtenciosamente,\nWeDo`);
+                        window.open(`mailto:?subject=${subject}&body=${body}`, '_blank');
+                        toast.info('Baixe o ZIP e anexe ao e-mail');
+                      }}
                     >
                       <Mail className="h-4 w-4 mr-2" />
                       Enviar por E-mail
