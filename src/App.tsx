@@ -127,6 +127,7 @@ const App = () => (
             <Route path="/chamados" element={<ChamadosList />} />
             <Route path="/chamados/novo" element={<NovoChamado />} />
             <Route path="/chamados/:id" element={<ChamadoDetail />} />
+            <Route path="/chamados/:id/editar" element={<ChamadoDetail />} />
             <Route path="/ordens-servico-config" element={<ConfiguracoesOS />} />
             
             {/* Compras */}
