@@ -113,8 +113,13 @@ export function useCompanyDocuments() {
     }) => {
       if (!currentCompany?.id) throw new Error('Empresa não selecionada');
       
+      // Sanitize filename - remove special characters that break storage
+      const sanitizedFileName = file.name
+        .replace(/\.{2,}/g, '.') // Replace multiple dots with single dot
+        .replace(/[^a-zA-Z0-9._-]/g, '_'); // Replace special chars with underscore
+      
       // Upload file
-      const filePath = `${currentCompany.id}/${documentTypeId}/${Date.now()}_${file.name}`;
+      const filePath = `${currentCompany.id}/${documentTypeId}/${Date.now()}_${sanitizedFileName}`;
       const { error: uploadError } = await supabase.storage
         .from('company-documents')
         .upload(filePath, file);
