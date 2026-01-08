@@ -69,8 +69,12 @@ export function useFieldServiceTypes() {
     },
     onSuccess: (data) => {
       setIsSyncing(false);
-      queryClient.invalidateQueries({ queryKey: ['service_types'] });
-      queryClient.invalidateQueries({ queryKey: ['field-service-types'] });
+      // Invalidar com queryKey EXATA para garantir que o cache é limpo
+      console.info("[syncServiceTypes] 🔄 Invalidating cache for company_id:", currentCompany?.id);
+      queryClient.invalidateQueries({ queryKey: ['service_types', currentCompany?.id] });
+      queryClient.invalidateQueries({ queryKey: ['field-service-types', currentCompany?.id] });
+      // Também invalidar todas as queries que começam com service_types (fallback)
+      queryClient.invalidateQueries({ queryKey: ['service_types'], exact: false });
       console.info("[syncServiceTypes] ✅ Sync complete - synced:", data?.synced, "verified in DB:", data?.verifiedCount);
       toast.success(`${data?.synced || 0} tipos sincronizados (${data?.verifiedCount || 0} verificados no banco)`);
     },
