@@ -71,28 +71,54 @@ serve(async (req) => {
       try {
         console.log(`[field-service-types] Tentando endpoint: ${endpoint}`);
         
-        const response = await fetch(`${FIELD_CONTROL_BASE_URL}${endpoint}`, {
-          method: 'GET',
-          headers: {
-            'X-Api-Key': apiKey,
-            'Content-Type': 'application/json',
-          },
-        });
-
-        if (response.ok) {
-          const data = await response.json();
-          const items = data.items || data.data || data.services || data.activities || data || [];
+        // Buscar com paginação - limite alto para pegar tudo
+        let allItems: any[] = [];
+        let page = 1;
+        let hasMore = true;
+        const perPage = 100;
+        
+        while (hasMore && page <= 10) { // máximo 10 páginas (1000 items)
+          const url = `${FIELD_CONTROL_BASE_URL}${endpoint}?page=${page}&per_page=${perPage}&limit=${perPage}`;
+          console.log(`[field-service-types] Buscando página ${page}: ${url}`);
           
-          if (Array.isArray(items) && items.length > 0) {
-            services = items;
-            successEndpoint = endpoint;
-            console.log(`[field-service-types] Sucesso! Endpoint ${endpoint} retornou ${items.length} tipos`);
-            break;
+          const response = await fetch(url, {
+            method: 'GET',
+            headers: {
+              'X-Api-Key': apiKey,
+              'Content-Type': 'application/json',
+            },
+          });
+
+          if (response.ok) {
+            const data = await response.json();
+            const items = data.items || data.data || data.services || data.activities || [];
+            
+            if (Array.isArray(items) && items.length > 0) {
+              allItems = [...allItems, ...items];
+              console.log(`[field-service-types] Página ${page}: ${items.length} items (total acumulado: ${allItems.length})`);
+              
+              // Verificar se há mais páginas
+              const total = data.total || data.totalCount || data.count || 0;
+              const totalPages = data.pages || data.totalPages || Math.ceil(total / perPage) || 0;
+              
+              hasMore = items.length === perPage || page < totalPages;
+              page++;
+            } else {
+              hasMore = false;
+            }
           } else {
-            console.log(`[field-service-types] Endpoint ${endpoint} retornou dados vazios ou formato inválido`);
+            console.log(`[field-service-types] Endpoint ${endpoint} página ${page} retornou status ${response.status}`);
+            hasMore = false;
           }
+        }
+        
+        if (allItems.length > 0) {
+          services = allItems;
+          successEndpoint = endpoint;
+          console.log(`[field-service-types] Sucesso! Endpoint ${endpoint} retornou ${allItems.length} tipos no total`);
+          break;
         } else {
-          console.log(`[field-service-types] Endpoint ${endpoint} retornou status ${response.status}`);
+          console.log(`[field-service-types] Endpoint ${endpoint} retornou dados vazios`);
         }
       } catch (endpointError) {
         console.log(`[field-service-types] Erro ao tentar ${endpoint}:`, endpointError);
