@@ -130,6 +130,81 @@ export function useColaboradorDocs(colaboradorId?: string) {
     onError: (error: Error) => toast.error('Erro: ' + error.message),
   });
 
+  // Upload de arquivo para o Storage
+  const uploadArquivo = async (file: File, colaboradorId: string, tipo: string): Promise<{ url: string; nome: string }> => {
+    const fileExt = file.name.split('.').pop();
+    const timestamp = Date.now();
+    const fileName = `${colaboradorId}/${tipo}_${timestamp}.${fileExt}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from('colaborador-docs')
+      .upload(fileName, file, { upsert: true });
+
+    if (uploadError) throw uploadError;
+
+    const { data: urlData } = supabase.storage
+      .from('colaborador-docs')
+      .getPublicUrl(fileName);
+
+    return { url: urlData.publicUrl, nome: file.name };
+  };
+
+  // Criar ou atualizar documento com arquivo (sempre substitui pelo mais recente)
+  const upsertDocComArquivo = useMutation({
+    mutationFn: async (data: {
+      colaborador_id: string;
+      tipo: TipoDocumento;
+      tipo_customizado?: string;
+      data_emissao?: string | null;
+      data_vencimento: string;
+      arquivo: File;
+    }) => {
+      if (!currentCompany?.id) throw new Error('Empresa não selecionada');
+
+      // Upload do arquivo
+      const { url, nome } = await uploadArquivo(data.arquivo, data.colaborador_id, data.tipo);
+
+      // Verificar se já existe documento deste tipo
+      const docExistente = documentos.find(d => d.tipo === data.tipo);
+
+      if (docExistente) {
+        // Atualizar o existente (substituir pelo válido)
+        const { error } = await supabase
+          .from('colaborador_docs')
+          .update({
+            data_emissao: data.data_emissao || null,
+            data_vencimento: data.data_vencimento,
+            arquivo_url: url,
+            arquivo_nome: nome,
+            tipo_customizado: data.tipo === 'OUTROS' ? data.tipo_customizado : null,
+          })
+          .eq('id', docExistente.id);
+        if (error) throw error;
+      } else {
+        // Criar novo
+        const { error } = await supabase
+          .from('colaborador_docs')
+          .insert({
+            colaborador_id: data.colaborador_id,
+            company_id: currentCompany.id,
+            tipo: data.tipo,
+            tipo_customizado: data.tipo === 'OUTROS' ? data.tipo_customizado : null,
+            data_emissao: data.data_emissao || null,
+            data_vencimento: data.data_vencimento,
+            arquivo_url: url,
+            arquivo_nome: nome,
+          });
+        if (error) throw error;
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['colaborador_docs'] });
+      queryClient.invalidateQueries({ queryKey: ['all_colaborador_docs'] });
+      toast.success('Documento salvo com sucesso!');
+    },
+    onError: (error: Error) => toast.error('Erro: ' + error.message),
+  });
+
   return {
     documentos,
     isLoading,
@@ -137,6 +212,8 @@ export function useColaboradorDocs(colaboradorId?: string) {
     createDoc,
     updateDoc,
     deleteDoc,
+    uploadArquivo,
+    upsertDocComArquivo,
   };
 }
 

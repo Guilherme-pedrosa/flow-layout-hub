@@ -1,5 +1,7 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import { format } from "date-fns";
+import { ptBR } from "date-fns/locale";
 import { usePessoas } from "@/hooks/usePessoas";
 import { useColaboradorDocs, TIPOS_DOCUMENTO, TipoDocumento, getDocStatus } from "@/hooks/useColaboradorDocs";
 import { useIntegracoes } from "@/hooks/useIntegracoes";
@@ -13,26 +15,28 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PageHeader } from "@/components/shared";
-import { ArrowLeft, Upload, RefreshCw, FileText, User, Calendar, CheckCircle, AlertTriangle, XCircle, Plus, Building2, Edit, Trash2 } from "lucide-react";
-import { format } from "date-fns";
-import { ptBR } from "date-fns/locale";
+import { 
+  ArrowLeft, Upload, RefreshCw, FileText, User, Calendar, 
+  CheckCircle, AlertTriangle, XCircle, Plus, Building2, Edit, 
+  Trash2, Download, Loader2, Paperclip
+} from "lucide-react";
 
 const DOC_OBRIGATORIOS: TipoDocumento[] = ['ASO', 'NR10', 'NR35'];
 
 function getStatusIcon(color: 'green' | 'yellow' | 'red' | 'gray') {
   switch (color) {
-    case 'green': return <CheckCircle className="h-5 w-5 text-green-600" />;
-    case 'yellow': return <AlertTriangle className="h-5 w-5 text-yellow-600" />;
-    case 'red': return <XCircle className="h-5 w-5 text-red-600" />;
+    case 'green': return <CheckCircle className="h-5 w-5 text-emerald-600" />;
+    case 'yellow': return <AlertTriangle className="h-5 w-5 text-amber-600" />;
+    case 'red': return <XCircle className="h-5 w-5 text-destructive" />;
     default: return <FileText className="h-5 w-5 text-muted-foreground" />;
   }
 }
 
 function getStatusBg(color: 'green' | 'yellow' | 'red' | 'gray') {
   switch (color) {
-    case 'green': return 'bg-green-50 border-green-200';
-    case 'yellow': return 'bg-yellow-50 border-yellow-200';
-    case 'red': return 'bg-red-50 border-red-200';
+    case 'green': return 'bg-emerald-500/10 border-emerald-500/30';
+    case 'yellow': return 'bg-amber-500/10 border-amber-500/30';
+    case 'red': return 'bg-destructive/10 border-destructive/30';
     default: return 'bg-muted/50 border-border';
   }
 }
@@ -47,7 +51,9 @@ export default function ColaboradorDetailPage() {
   const [docCustomizado, setDocCustomizado] = useState('');
   const [docEmissao, setDocEmissao] = useState('');
   const [docVencimento, setDocVencimento] = useState('');
-  const [editingDocId, setEditingDocId] = useState<string | null>(null);
+  const [docArquivo, setDocArquivo] = useState<File | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Estados para integrações
   const [intDialogOpen, setIntDialogOpen] = useState(false);
@@ -58,22 +64,18 @@ export default function ColaboradorDetailPage() {
   const [editingIntId, setEditingIntId] = useState<string | null>(null);
 
   const { colaboradores, isLoadingColaboradores } = usePessoas();
-  const { documentos, isLoading: isLoadingDocs, createDoc, updateDoc, deleteDoc } = useColaboradorDocs(id);
-  const { 
-    integracoes, 
-    clientes, 
-    createIntegracao, 
-    updateIntegracao, 
-    deleteIntegracao 
-  } = useIntegracoes();
+  const { documentos, isLoading: isLoadingDocs, upsertDocComArquivo, deleteDoc } = useColaboradorDocs(id);
+  const { integracoes, clientes, createIntegracao, updateIntegracao, deleteIntegracao } = useIntegracoes();
 
   const colaborador = colaboradores.find(c => c.id === id);
-  
-  // Filtrar integrações apenas deste colaborador
   const integracoesColaborador = integracoes.filter(i => i.colaborador_id === id);
 
   if (isLoadingColaboradores) {
-    return <div className="flex items-center justify-center h-96">Carregando...</div>;
+    return (
+      <div className="flex items-center justify-center h-96">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
   }
 
   if (!colaborador) {
@@ -91,56 +93,33 @@ export default function ColaboradorDetailPage() {
   const nome = colaborador.nome_fantasia || colaborador.razao_social || 'Sem nome';
 
   // Handlers para documentos
-  const handleOpenDocDialog = (tipo?: TipoDocumento, docId?: string) => {
-    if (tipo && docId) {
-      const doc = documentos.find(d => d.id === docId);
-      if (doc) {
-        setEditingDocId(docId);
-        setDocTipo(doc.tipo);
-        setDocCustomizado(doc.tipo_customizado || '');
-        setDocEmissao(doc.data_emissao ? doc.data_emissao.split('T')[0] : '');
-        setDocVencimento(doc.data_vencimento ? doc.data_vencimento.split('T')[0] : '');
-      }
-    } else if (tipo) {
-      setEditingDocId(null);
-      setDocTipo(tipo);
-      setDocCustomizado('');
-      setDocEmissao('');
-      setDocVencimento('');
-    } else {
-      setEditingDocId(null);
-      setDocTipo('');
-      setDocCustomizado('');
-      setDocEmissao('');
-      setDocVencimento('');
-    }
+  const handleOpenDocDialog = (tipo?: TipoDocumento) => {
+    setDocTipo(tipo || '');
+    setDocCustomizado('');
+    setDocEmissao('');
+    setDocVencimento('');
+    setDocArquivo(null);
     setDialogOpen(true);
   };
 
   const handleSubmitDoc = async () => {
-    if (!docTipo) return;
+    if (!docTipo || !docVencimento || !docArquivo) return;
     if (docTipo === 'OUTROS' && !docCustomizado.trim()) return;
 
-    if (editingDocId) {
-      await updateDoc.mutateAsync({
-        id: editingDocId,
-        data: {
-          tipo: docTipo,
-          tipo_customizado: docTipo === 'OUTROS' ? docCustomizado : null,
-          data_emissao: docEmissao || null,
-          data_vencimento: docVencimento || null,
-        },
-      });
-    } else {
-      await createDoc.mutateAsync({
+    setUploading(true);
+    try {
+      await upsertDocComArquivo.mutateAsync({
         colaborador_id: id!,
         tipo: docTipo,
         tipo_customizado: docTipo === 'OUTROS' ? docCustomizado : undefined,
         data_emissao: docEmissao || null,
-        data_vencimento: docVencimento || null,
+        data_vencimento: docVencimento,
+        arquivo: docArquivo,
       });
+      setDialogOpen(false);
+    } finally {
+      setUploading(false);
     }
-    setDialogOpen(false);
   };
 
   const handleDeleteDoc = async (docId: string) => {
@@ -272,11 +251,11 @@ export default function ColaboradorDetailPage() {
                   const status = doc ? getDocStatus(doc.data_vencimento) : { label: 'Não cadastrado', color: 'gray' as const, diasRestantes: null };
 
                   return (
-                    <Card key={tipo} className={`border ${getStatusBg(status.color)}`}>
+                    <Card key={tipo} className={`border-2 ${getStatusBg(status.color)}`}>
                       <CardContent className="pt-4">
                         <div className="flex items-start justify-between">
-                          <div>
-                            <h4 className="font-semibold">{tipo}</h4>
+                          <div className="flex-1">
+                            <h4 className="font-semibold text-lg">{tipo}</h4>
                             {doc?.data_vencimento && (
                               <p className="text-sm text-muted-foreground mt-1">
                                 <Calendar className="h-3 w-3 inline mr-1" />
@@ -286,25 +265,40 @@ export default function ColaboradorDetailPage() {
                           </div>
                           {getStatusIcon(status.color)}
                         </div>
+                        
                         <p className="text-sm font-medium mt-2">{status.label}</p>
-                        <Button 
-                          variant="outline" 
-                          size="sm" 
-                          className="w-full mt-3"
-                          onClick={() => doc ? handleOpenDocDialog(tipo, doc.id) : handleOpenDocDialog(tipo)}
-                        >
-                          {doc ? (
-                            <>
-                              <RefreshCw className="h-3 w-3 mr-2" />
-                              Renovar
-                            </>
-                          ) : (
-                            <>
-                              <Upload className="h-3 w-3 mr-2" />
-                              Cadastrar
-                            </>
+                        
+                        {/* Botões de ação */}
+                        <div className="flex gap-2 mt-3">
+                          {doc?.arquivo_url && (
+                            <Button 
+                              variant="outline" 
+                              size="sm"
+                              onClick={() => window.open(doc.arquivo_url!, '_blank')}
+                            >
+                              <Download className="h-3 w-3 mr-1" />
+                              Baixar
+                            </Button>
                           )}
-                        </Button>
+                          <Button 
+                            variant={doc ? "outline" : "default"}
+                            size="sm" 
+                            className="flex-1"
+                            onClick={() => handleOpenDocDialog(tipo)}
+                          >
+                            {doc ? (
+                              <>
+                                <RefreshCw className="h-3 w-3 mr-1" />
+                                Renovar
+                              </>
+                            ) : (
+                              <>
+                                <Upload className="h-3 w-3 mr-1" />
+                                Anexar
+                              </>
+                            )}
+                          </Button>
+                        </div>
                       </CardContent>
                     </Card>
                   );
@@ -324,7 +318,9 @@ export default function ColaboradorDetailPage() {
             </CardHeader>
             <CardContent>
               {isLoadingDocs ? (
-                <p className="text-muted-foreground">Carregando...</p>
+                <div className="flex items-center justify-center py-6">
+                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                </div>
               ) : documentos.filter(d => !DOC_OBRIGATORIOS.includes(d.tipo as TipoDocumento)).length === 0 ? (
                 <p className="text-muted-foreground text-center py-6">Nenhum documento adicional cadastrado</p>
               ) : (
@@ -348,10 +344,20 @@ export default function ColaboradorDetailPage() {
                               {getStatusIcon(status.color)}
                             </div>
                             <div className="flex gap-2 mt-3">
+                              {doc.arquivo_url && (
+                                <Button 
+                                  variant="outline" 
+                                  size="sm"
+                                  onClick={() => window.open(doc.arquivo_url!, '_blank')}
+                                >
+                                  <Download className="h-3 w-3 mr-1" />
+                                  Baixar
+                                </Button>
+                              )}
                               <Button 
                                 variant="outline" 
                                 size="sm"
-                                onClick={() => handleOpenDocDialog(doc.tipo as TipoDocumento, doc.id)}
+                                onClick={() => handleOpenDocDialog(doc.tipo as TipoDocumento)}
                               >
                                 <RefreshCw className="h-3 w-3 mr-1" />
                                 Renovar
@@ -359,10 +365,10 @@ export default function ColaboradorDetailPage() {
                               <Button 
                                 variant="ghost" 
                                 size="sm"
-                                className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                                className="text-destructive hover:text-destructive"
                                 onClick={() => handleDeleteDoc(doc.id)}
                               >
-                                Remover
+                                <Trash2 className="h-3 w-3" />
                               </Button>
                             </div>
                           </CardContent>
@@ -424,7 +430,10 @@ export default function ColaboradorDetailPage() {
                         <TableCell>
                           <Badge 
                             variant={int.statusFinal === 'ATIVO' ? 'default' : 'destructive'}
-                            className={int.statusFinal === 'ATIVO' ? 'bg-green-600' : int.statusFinal === 'A_VENCER' ? 'bg-yellow-600' : ''}
+                            className={
+                              int.statusFinal === 'ATIVO' ? 'bg-emerald-600' : 
+                              int.statusFinal === 'A_VENCER' ? 'bg-amber-600' : ''
+                            }
                           >
                             {int.statusFinal === 'ATIVO' && 'Ativo'}
                             {int.statusFinal === 'A_VENCER' && 'A Vencer'}
@@ -438,7 +447,7 @@ export default function ColaboradorDetailPage() {
                               <Edit className="h-4 w-4" />
                             </Button>
                             <Button variant="ghost" size="sm" onClick={() => handleDeleteInt(int.id)}>
-                              <Trash2 className="h-4 w-4 text-red-600" />
+                              <Trash2 className="h-4 w-4 text-destructive" />
                             </Button>
                           </div>
                         </TableCell>
@@ -452,23 +461,28 @@ export default function ColaboradorDetailPage() {
         </TabsContent>
       </Tabs>
 
-      {/* Dialog de Documento */}
+      {/* Dialog de Documento com Upload */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{editingDocId ? 'Renovar Documento' : 'Novo Documento'}</DialogTitle>
+            <DialogTitle>
+              {docTipo && DOC_OBRIGATORIOS.includes(docTipo as TipoDocumento) 
+                ? `Anexar/Renovar ${docTipo}` 
+                : 'Novo Documento'}
+            </DialogTitle>
             <DialogDescription>
-              {editingDocId ? 'Atualize as informações do documento' : 'Cadastre um novo documento'}
+              Anexe o arquivo PDF/imagem do documento válido. O arquivo anterior será substituído.
             </DialogDescription>
           </DialogHeader>
 
           <div className="grid gap-4 py-4">
+            {/* Tipo de documento */}
             <div className="grid gap-2">
-              <Label>Tipo de Documento</Label>
+              <Label>Tipo de Documento *</Label>
               <Select 
                 value={docTipo} 
                 onValueChange={(v) => setDocTipo(v as TipoDocumento)}
-                disabled={!!editingDocId}
+                disabled={!!docTipo && DOC_OBRIGATORIOS.includes(docTipo as TipoDocumento)}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Selecione" />
@@ -483,7 +497,7 @@ export default function ColaboradorDetailPage() {
 
             {docTipo === 'OUTROS' && (
               <div className="grid gap-2">
-                <Label>Nome do Documento</Label>
+                <Label>Nome do Documento *</Label>
                 <Input 
                   value={docCustomizado}
                   onChange={(e) => setDocCustomizado(e.target.value)}
@@ -492,6 +506,7 @@ export default function ColaboradorDetailPage() {
               </div>
             )}
 
+            {/* Datas */}
             <div className="grid grid-cols-2 gap-4">
               <div className="grid gap-2">
                 <Label>Data de Emissão</Label>
@@ -502,7 +517,7 @@ export default function ColaboradorDetailPage() {
                 />
               </div>
               <div className="grid gap-2">
-                <Label>Data de Vencimento</Label>
+                <Label>Data de Vencimento *</Label>
                 <Input 
                   type="date"
                   value={docVencimento}
@@ -510,17 +525,44 @@ export default function ColaboradorDetailPage() {
                 />
               </div>
             </div>
+
+            {/* Upload de arquivo */}
+            <div className="grid gap-2">
+              <Label>Arquivo (PDF/Imagem) *</Label>
+              <div className="flex gap-2">
+                <Input
+                  type="file"
+                  accept=".pdf,.jpg,.jpeg,.png"
+                  ref={fileInputRef}
+                  onChange={(e) => setDocArquivo(e.target.files?.[0] || null)}
+                  className="flex-1"
+                />
+              </div>
+              {docArquivo && (
+                <p className="text-sm text-muted-foreground flex items-center gap-1">
+                  <Paperclip className="h-3 w-3" />
+                  {docArquivo.name}
+                </p>
+              )}
+            </div>
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>
+            <Button variant="outline" onClick={() => setDialogOpen(false)} disabled={uploading}>
               Cancelar
             </Button>
             <Button 
               onClick={handleSubmitDoc}
-              disabled={!docTipo || (docTipo === 'OUTROS' && !docCustomizado.trim()) || createDoc.isPending || updateDoc.isPending}
+              disabled={
+                !docTipo || 
+                !docVencimento || 
+                !docArquivo ||
+                (docTipo === 'OUTROS' && !docCustomizado.trim()) || 
+                uploading
+              }
             >
-              {editingDocId ? 'Atualizar' : 'Cadastrar'}
+              {uploading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Salvar Documento
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -538,12 +580,8 @@ export default function ColaboradorDetailPage() {
 
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
-              <Label>Cliente/Unidade</Label>
-              <Select 
-                value={intClienteId} 
-                onValueChange={setIntClienteId}
-                disabled={!!editingIntId}
-              >
+              <Label>Cliente/Unidade *</Label>
+              <Select value={intClienteId} onValueChange={setIntClienteId} disabled={!!editingIntId}>
                 <SelectTrigger>
                   <SelectValue placeholder="Selecione a unidade" />
                 </SelectTrigger>
@@ -567,7 +605,7 @@ export default function ColaboradorDetailPage() {
                 />
               </div>
               <div className="grid gap-2">
-                <Label>Data Validade</Label>
+                <Label>Data Validade *</Label>
                 <Input 
                   type="date"
                   value={intDataVencimento}
@@ -594,6 +632,9 @@ export default function ColaboradorDetailPage() {
               onClick={handleSubmitInt}
               disabled={!intClienteId || !intDataVencimento || createIntegracao.isPending || updateIntegracao.isPending}
             >
+              {(createIntegracao.isPending || updateIntegracao.isPending) && (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              )}
               {editingIntId ? 'Atualizar' : 'Cadastrar'}
             </Button>
           </DialogFooter>
