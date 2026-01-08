@@ -3,10 +3,10 @@ import { useParams, useNavigate } from "react-router-dom";
 import { useChamados, Chamado, ChamadoEvolucao, STATUS_CONFIG, ChamadoStatus } from "@/hooks/useChamados";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Badge } from "@/components/ui/badge";
-import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -15,10 +15,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ArrowLeft, Plus, Trash2, Loader2 } from "lucide-react";
-import { format } from "date-fns";
-import { ptBR } from "date-fns/locale";
+import { toast } from "sonner";
 
-export default function ChamadoDetail() {
+export default function ChamadoDetalhes() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { 
@@ -26,33 +25,32 @@ export default function ChamadoDetail() {
     getEvolucoes, 
     addEvolucao, 
     updateChamado, 
-    deleteChamado,
-    calcularDias 
+    deleteChamado 
   } = useChamados();
-  
+
   const [chamado, setChamado] = useState<Chamado | null>(null);
   const [evolucoes, setEvolucoes] = useState<ChamadoEvolucao[]>([]);
-  const [loading, setLoading] = useState(true);
-  
+  const [isLoading, setIsLoading] = useState(true);
+
   const [novaEvolucao, setNovaEvolucao] = useState("");
   const [novoStatus, setNovoStatus] = useState<string>("");
   const [isEditing, setIsEditing] = useState(false);
   const [editData, setEditData] = useState({
-    numero_tarefa: "",
-    data_atendimento: "",
-    data_fechamento: "",
+    numeroTarefa: "",
+    dataAtendimento: "",
+    dataFechamento: "",
     observacao: "",
   });
-  
+
   useEffect(() => {
     if (id) {
       loadData();
     }
   }, [id]);
-  
+
   const loadData = async () => {
     if (!id) return;
-    setLoading(true);
+    setIsLoading(true);
     
     const [chamadoData, evolucoesData] = await Promise.all([
       getChamadoById(id),
@@ -64,88 +62,107 @@ export default function ChamadoDetail() {
     
     if (chamadoData) {
       setEditData({
-        numero_tarefa: chamadoData.numero_tarefa || "",
-        data_atendimento: chamadoData.data_atendimento || "",
-        data_fechamento: chamadoData.data_fechamento || "",
+        numeroTarefa: chamadoData.numero_tarefa || "",
+        dataAtendimento: chamadoData.data_atendimento
+          ? new Date(chamadoData.data_atendimento).toISOString().split('T')[0]
+          : "",
+        dataFechamento: chamadoData.data_fechamento
+          ? new Date(chamadoData.data_fechamento).toISOString().split('T')[0]
+          : "",
         observacao: chamadoData.observacao || "",
       });
     }
     
-    setLoading(false);
+    setIsLoading(false);
   };
-  
-  const handleAddEvolucao = async () => {
-    if (!novaEvolucao.trim() || !id || !chamado) return;
-    
-    await addEvolucao.mutateAsync({
-      chamadoId: id,
-      descricao: novaEvolucao,
-      statusAnterior: chamado.status,
-      statusNovo: novoStatus || chamado.status,
-    });
-    
-    setNovaEvolucao("");
-    setNovoStatus("");
-    loadData();
+
+  const handleDelete = async () => {
+    if (!id || !chamado) return;
+    if (confirm(`Tem certeza que deseja excluir o chamado ${chamado.os_numero}?`)) {
+      await deleteChamado.mutateAsync(id);
+      toast.success("Chamado excluído com sucesso!");
+      navigate("/chamados");
+    }
   };
-  
-  const handleSaveEdit = async () => {
+
+  const handleSave = async () => {
     if (!id) return;
     
     await updateChamado.mutateAsync({
       id,
-      numero_tarefa: editData.numero_tarefa || null,
-      data_atendimento: editData.data_atendimento || null,
-      data_fechamento: editData.data_fechamento || null,
+      numero_tarefa: editData.numeroTarefa || null,
+      data_atendimento: editData.dataAtendimento || null,
+      data_fechamento: editData.dataFechamento || null,
       observacao: editData.observacao || null,
     });
     
     setIsEditing(false);
     loadData();
   };
-  
-  const handleDelete = async () => {
-    if (!id || !chamado) return;
-    
-    if (confirm(`Tem certeza que deseja excluir o chamado ${chamado.os_numero}?`)) {
-      await deleteChamado.mutateAsync(id);
-      navigate("/chamados");
+
+  const handleAddEvolucao = async () => {
+    if (!novaEvolucao.trim()) {
+      toast.error("Por favor, descreva a evolução");
+      return;
     }
+
+    if (!id || !chamado) return;
+
+    await addEvolucao.mutateAsync({
+      chamadoId: id,
+      descricao: novaEvolucao,
+      statusAnterior: chamado.status,
+      statusNovo: novoStatus || chamado.status,
+    });
+
+    setNovaEvolucao("");
+    setNovoStatus("");
+    loadData();
   };
-  
+
+  const calcularDias = (dataOS: Date | string | null | undefined) => {
+    if (!dataOS) return 0;
+    const data = new Date(dataOS);
+    const hoje = new Date();
+    const diff = hoje.getTime() - data.getTime();
+    return Math.floor(diff / (1000 * 60 * 60 * 24));
+  };
+
   const getStatusBadge = (status: string) => {
-    const config = STATUS_CONFIG[status as ChamadoStatus] || { label: status, className: '' };
+    const config = STATUS_CONFIG[status as ChamadoStatus];
+    if (!config) {
+      return <Badge>{status}</Badge>;
+    }
     return (
-      <Badge className={config.className}>
+      <Badge 
+        style={{ backgroundColor: config.color, color: 'white' }}
+      >
         {config.label}
       </Badge>
     );
   };
-  
-  if (loading) {
+
+  if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-64">
+      <div className="flex items-center justify-center py-8">
         <Loader2 className="h-8 w-8 animate-spin" />
       </div>
     );
   }
-  
+
   if (!chamado) {
     return (
-      <div className="space-y-6">
-        <Button variant="ghost" onClick={() => navigate('/chamados')}>
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          Voltar
+      <div className="text-center py-8">
+        <p className="text-muted-foreground">Chamado não encontrado</p>
+        <Button onClick={() => navigate("/chamados")} className="mt-4">
+          Voltar para lista
         </Button>
-        <div className="text-center py-8 text-muted-foreground">
-          Chamado não encontrado
-        </div>
       </div>
     );
   }
-  
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 p-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <Button variant="ghost" size="icon" onClick={() => navigate("/chamados")}>
@@ -186,8 +203,8 @@ export default function ChamadoDetail() {
               <Label className="text-muted-foreground">Número da Tarefa</Label>
               {isEditing ? (
                 <Input
-                  value={editData.numero_tarefa}
-                  onChange={(e) => setEditData({ ...editData, numero_tarefa: e.target.value })}
+                  value={editData.numeroTarefa}
+                  onChange={(e) => setEditData({ ...editData, numeroTarefa: e.target.value })}
                   placeholder="Digite o número da tarefa"
                 />
               ) : (
@@ -197,10 +214,7 @@ export default function ChamadoDetail() {
             <div>
               <Label className="text-muted-foreground">Data OS</Label>
               <p className="font-medium">
-                {chamado.os_data 
-                  ? format(new Date(chamado.os_data), 'dd/MM/yyyy', { locale: ptBR })
-                  : '-'
-                }
+                {chamado.os_data ? new Date(chamado.os_data).toLocaleDateString('pt-BR') : "-"}
               </p>
             </div>
             <div>
@@ -208,15 +222,12 @@ export default function ChamadoDetail() {
               {isEditing ? (
                 <Input
                   type="date"
-                  value={editData.data_atendimento}
-                  onChange={(e) => setEditData({ ...editData, data_atendimento: e.target.value })}
+                  value={editData.dataAtendimento}
+                  onChange={(e) => setEditData({ ...editData, dataAtendimento: e.target.value })}
                 />
               ) : (
                 <p className="font-medium">
-                  {chamado.data_atendimento 
-                    ? format(new Date(chamado.data_atendimento), 'dd/MM/yyyy', { locale: ptBR })
-                    : '-'
-                  }
+                  {chamado.data_atendimento ? new Date(chamado.data_atendimento).toLocaleDateString('pt-BR') : "-"}
                 </p>
               )}
             </div>
@@ -225,15 +236,12 @@ export default function ChamadoDetail() {
               {isEditing ? (
                 <Input
                   type="date"
-                  value={editData.data_fechamento}
-                  onChange={(e) => setEditData({ ...editData, data_fechamento: e.target.value })}
+                  value={editData.dataFechamento}
+                  onChange={(e) => setEditData({ ...editData, dataFechamento: e.target.value })}
                 />
               ) : (
                 <p className="font-medium">
-                  {chamado.data_fechamento 
-                    ? format(new Date(chamado.data_fechamento), 'dd/MM/yyyy', { locale: ptBR })
-                    : '-'
-                  }
+                  {chamado.data_fechamento ? new Date(chamado.data_fechamento).toLocaleDateString('pt-BR') : "-"}
                 </p>
               )}
             </div>
@@ -275,7 +283,7 @@ export default function ChamadoDetail() {
             {isEditing ? (
               <>
                 <Button
-                  onClick={handleSaveEdit}
+                  onClick={handleSave}
                   disabled={updateChamado.isPending}
                 >
                   {updateChamado.isPending ? "Salvando..." : "Salvar"}
@@ -329,7 +337,7 @@ export default function ChamadoDetail() {
           </div>
           <Button
             onClick={handleAddEvolucao}
-            disabled={addEvolucao.isPending || !novaEvolucao.trim()}
+            disabled={addEvolucao.isPending}
           >
             <Plus className="mr-2 h-4 w-4" />
             Adicionar Evolução
@@ -342,11 +350,11 @@ export default function ChamadoDetail() {
         <CardHeader>
           <CardTitle>Histórico de Evoluções</CardTitle>
           <CardDescription>
-            {evolucoes.length} evolução(ões) registrada(s)
+            {evolucoes?.length || 0} evolução(ões) registrada(s)
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {evolucoes.length === 0 ? (
+          {!evolucoes || evolucoes.length === 0 ? (
             <p className="text-muted-foreground text-center py-4">
               Nenhuma evolução registrada ainda
             </p>
@@ -356,7 +364,7 @@ export default function ChamadoDetail() {
                 <div key={evolucao.id} className="border-l-2 border-primary pl-4 pb-4">
                   <div className="flex items-center gap-2 mb-2">
                     <span className="text-sm text-muted-foreground">
-                      {format(new Date(evolucao.created_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                      {new Date(evolucao.created_at).toLocaleString('pt-BR')}
                     </span>
                     {evolucao.status_novo && evolucao.status_anterior !== evolucao.status_novo && (
                       <div className="flex items-center gap-2">
