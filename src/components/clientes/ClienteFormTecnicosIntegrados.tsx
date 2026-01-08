@@ -4,7 +4,8 @@ import { ptBR } from "date-fns/locale";
 import { 
   UserPlus, Download, Upload, Edit2, Trash2, ChevronDown, ChevronRight,
   FileText, Shield, ShieldCheck, ShieldAlert, ShieldX, AlertCircle,
-  Calendar, Paperclip, Ban, CheckCircle, RefreshCcw, Loader2, User
+  Calendar, Paperclip, Ban, CheckCircle, RefreshCcw, Loader2, User,
+  Mail, Send, Clock, ExternalLink
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -14,6 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter,
   DialogHeader, DialogTitle
@@ -28,9 +30,13 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle
 } from "@/components/ui/alert-dialog";
+import {
+  Tooltip, TooltipContent, TooltipProvider, TooltipTrigger
+} from "@/components/ui/tooltip";
 import { Separator } from "@/components/ui/separator";
 import { useClienteAcesso, TecnicoAcesso } from "@/hooks/useClienteAcesso";
 import { useAllColaboradorDocs, ColaboradorDoc, getDocStatus } from "@/hooks/useColaboradorDocs";
+import { useClienteEnviosDocs, EnvioDoc } from "@/hooks/useClienteEnviosDocs";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -38,6 +44,7 @@ interface Props {
   clienteId: string;
   exigeIntegracao: boolean;
   regrasAcesso: string;
+  emailPortaria?: string;
   onConfigChange: (exige: boolean, regras: string) => void;
 }
 
@@ -53,6 +60,13 @@ interface TecnicoComBlindagem extends TecnicoAcesso {
     arquivoUrl: string | null;
     status: ReturnType<typeof getDocStatus>;
   }[];
+}
+
+interface DocEnvio {
+  tipo: string;
+  nome: string;
+  url: string;
+  selecionado: boolean;
 }
 
 const DOCS_OBRIGATORIOS = ['ASO', 'NR10', 'NR35'];
@@ -159,6 +173,7 @@ export function ClienteFormTecnicosIntegrados({
   clienteId,
   exigeIntegracao,
   regrasAcesso,
+  emailPortaria,
   onConfigChange,
 }: Props) {
   const { 
@@ -167,20 +182,29 @@ export function ClienteFormTecnicosIntegrados({
     colaboradoresDisponiveis, allColaboradores 
   } = useClienteAcesso(clienteId);
   const { documentos: todosDocumentos } = useAllColaboradorDocs();
+  const { registrarEnvio, getUltimoEnvio } = useClienteEnviosDocs(clienteId);
   
   const [dialogOpen, setDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [envioDialogOpen, setEnvioDialogOpen] = useState(false);
   const [editingTecnico, setEditingTecnico] = useState<TecnicoAcesso | null>(null);
   const [tecnicoToDelete, setTecnicoToDelete] = useState<string | null>(null);
+  const [tecnicoParaEnvio, setTecnicoParaEnvio] = useState<TecnicoComBlindagem | null>(null);
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   const [uploading, setUploading] = useState(false);
+  const [enviando, setEnviando] = useState(false);
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
   
-  // Form state
+  // Form state (add/edit)
   const [selectedColaborador, setSelectedColaborador] = useState('');
   const [dataValidade, setDataValidade] = useState('');
   const [observacoes, setObservacoes] = useState('');
   const [pendingFile, setPendingFile] = useState<File | null>(null);
+
+  // Form state (envio)
+  const [emailDestinatario, setEmailDestinatario] = useState('');
+  const [assuntoEmail, setAssuntoEmail] = useState('');
+  const [docsParaEnvio, setDocsParaEnvio] = useState<DocEnvio[]>([]);
 
   // Enriquecer técnicos com dados de blindagem (Dual-Layer)
   const tecnicosComBlindagem: TecnicoComBlindagem[] = tecnicos.map(t => {
@@ -327,6 +351,119 @@ export function ClienteFormTecnicosIntegrados({
     }
   };
 
+  // === FUNÇÕES DE ENVIO ===
+  const abrirModalEnvio = (tecnico: TecnicoComBlindagem) => {
+    // Verificar se há docs bloqueados
+    const docVencido = tecnico.docsGlobais.find(d => d.status.diasRestantes !== null && d.status.diasRestantes < 0);
+    const intVencida = (() => {
+      const hoje = new Date();
+      hoje.setHours(0, 0, 0, 0);
+      const validade = new Date(tecnico.data_validade);
+      validade.setHours(0, 0, 0, 0);
+      return validade < hoje;
+    })();
+
+    if (docVencido || intVencida || tecnico.is_blocked) {
+      toast.error('Não é possível enviar: técnico está bloqueado ou com documentos vencidos.');
+      return;
+    }
+
+    // Preparar lista de documentos disponíveis
+    const docs: DocEnvio[] = [];
+    
+    // Comprovante integração
+    if (tecnico.comprovante_url) {
+      docs.push({
+        tipo: 'Integração',
+        nome: tecnico.nome_arquivo || 'Comprovante de Integração',
+        url: tecnico.comprovante_url,
+        selecionado: true,
+      });
+    }
+
+    // Documentos globais
+    tecnico.docsGlobais.forEach(doc => {
+      if (doc.arquivoUrl) {
+        docs.push({
+          tipo: doc.tipo,
+          nome: `${doc.tipo}.pdf`,
+          url: doc.arquivoUrl,
+          selecionado: true,
+        });
+      }
+    });
+
+    if (docs.length === 0) {
+      toast.error('Nenhum documento disponível para envio. Anexe os documentos primeiro.');
+      return;
+    }
+
+    setTecnicoParaEnvio(tecnico);
+    setDocsParaEnvio(docs);
+    setEmailDestinatario(emailPortaria || '');
+    setAssuntoEmail(`Documentação de Acesso - ${tecnico.colaborador?.razao_social || 'Técnico'} - ${format(new Date(), "dd/MM/yyyy", { locale: ptBR })}`);
+    setEnvioDialogOpen(true);
+  };
+
+  const toggleDocEnvio = (idx: number) => {
+    setDocsParaEnvio(prev => prev.map((d, i) => 
+      i === idx ? { ...d, selecionado: !d.selecionado } : d
+    ));
+  };
+
+  const handleEnviarEmail = async () => {
+    if (!tecnicoParaEnvio) return;
+    
+    const docsSelecionados = docsParaEnvio.filter(d => d.selecionado);
+    if (docsSelecionados.length === 0) {
+      toast.error('Selecione pelo menos um documento.');
+      return;
+    }
+
+    if (!emailDestinatario.trim()) {
+      toast.error('Informe o e-mail do destinatário.');
+      return;
+    }
+
+    setEnviando(true);
+    try {
+      // Montar corpo do e-mail
+      const corpoEmail = `Prezados,
+
+Seguem os documentos para liberação de acesso do técnico ${tecnicoParaEnvio.colaborador?.razao_social || 'Técnico'}:
+
+${docsSelecionados.map(d => `• ${d.tipo}: ${d.nome}`).join('\n')}
+
+LINKS PARA DOWNLOAD:
+${docsSelecionados.map(d => `${d.tipo}: ${d.url}`).join('\n')}
+
+Atenciosamente,
+Equipe WeDo`;
+
+      // Abrir cliente de e-mail via mailto
+      const mailtoUrl = `mailto:${encodeURIComponent(emailDestinatario)}?subject=${encodeURIComponent(assuntoEmail)}&body=${encodeURIComponent(corpoEmail)}`;
+      window.open(mailtoUrl, '_blank');
+
+      // Registrar o envio no banco
+      const { data: user } = await supabase.auth.getUser();
+      await registrarEnvio.mutateAsync({
+        colaborador_id: tecnicoParaEnvio.colaborador_id,
+        destinatario_email: emailDestinatario,
+        assunto: assuntoEmail,
+        documentos_enviados: docsSelecionados.map(d => ({ tipo: d.tipo, nome: d.nome })),
+        enviado_por_nome: user?.user?.email || null,
+      });
+
+      toast.success('E-mail preparado! Complete o envio no seu cliente de e-mail.');
+      setEnvioDialogOpen(false);
+    } catch (error) {
+      console.error(error);
+      toast.error('Erro ao registrar o envio.');
+    } finally {
+      setEnviando(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -432,8 +569,45 @@ export function ClienteFormTecnicosIntegrados({
 
                     <StatusBadge status={tecnico.statusBlindagem} />
 
-                    {/* Botão Baixar KIT */}
+                    {/* Indicador de último envio */}
+                    {(() => {
+                      const ultimoEnvio = getUltimoEnvio(tecnico.colaborador_id);
+                      if (ultimoEnvio) {
+                        return (
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Badge variant="outline" className="gap-1 text-xs bg-blue-500/10 text-blue-600 border-blue-500/20">
+                                  <Clock className="h-3 w-3" />
+                                  Enviado
+                                </Badge>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p className="text-xs">
+                                  Enviado em {format(new Date(ultimoEnvio.created_at), "dd/MM/yy 'às' HH:mm", { locale: ptBR })}
+                                  {ultimoEnvio.enviado_por_nome && ` por ${ultimoEnvio.enviado_por_nome}`}
+                                  <br />Para: {ultimoEnvio.destinatario_email}
+                                </p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        );
+                      }
+                      return null;
+                    })()}
+
+                    {/* Botões de ação */}
                     <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => abrirModalEnvio(tecnico)}
+                        title="Enviar documentos para portaria"
+                        disabled={['BLOQUEADO_DOC', 'BLOQUEADO_INT', 'BLOQUEADO_MANUAL'].includes(tecnico.statusBlindagem)}
+                      >
+                        <Mail className="h-4 w-4 mr-1" />
+                        Enviar
+                      </Button>
                       <Button
                         variant="outline"
                         size="sm"
@@ -441,7 +615,7 @@ export function ClienteFormTecnicosIntegrados({
                         title="Baixar KIT (Integração + ASO + NRs)"
                       >
                         <Download className="h-4 w-4 mr-1" />
-                        Baixar KIT
+                        KIT
                       </Button>
                     </div>
                   </div>
@@ -710,6 +884,98 @@ export function ClienteFormTecnicosIntegrados({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Dialog de Envio de Documentos */}
+      <Dialog open={envioDialogOpen} onOpenChange={setEnvioDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Mail className="h-5 w-5" />
+              Enviar Kit de Acesso
+            </DialogTitle>
+            <DialogDescription>
+              Envie os documentos do técnico {tecnicoParaEnvio?.colaborador?.razao_social} para a portaria do cliente.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            {/* Destinatário */}
+            <div className="space-y-2">
+              <Label>E-mail do Destinatário *</Label>
+              <Input
+                type="email"
+                placeholder="portaria@cliente.com"
+                value={emailDestinatario}
+                onChange={(e) => setEmailDestinatario(e.target.value)}
+              />
+            </div>
+
+            {/* Assunto */}
+            <div className="space-y-2">
+              <Label>Assunto</Label>
+              <Input
+                value={assuntoEmail}
+                onChange={(e) => setAssuntoEmail(e.target.value)}
+              />
+            </div>
+
+            {/* Documentos a enviar */}
+            <div className="space-y-2">
+              <Label>Documentos a Enviar</Label>
+              <div className="border rounded-lg p-3 space-y-2 bg-muted/30">
+                {docsParaEnvio.map((doc, idx) => (
+                  <div key={idx} className="flex items-center gap-3">
+                    <Checkbox
+                      id={`doc-${idx}`}
+                      checked={doc.selecionado}
+                      onCheckedChange={() => toggleDocEnvio(idx)}
+                    />
+                    <label htmlFor={`doc-${idx}`} className="flex items-center gap-2 cursor-pointer flex-1">
+                      <FileText className="h-4 w-4 text-muted-foreground" />
+                      <span className="font-medium">{doc.tipo}</span>
+                      <span className="text-sm text-muted-foreground">({doc.nome})</span>
+                    </label>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6"
+                      onClick={() => window.open(doc.url, '_blank')}
+                      title="Visualizar documento"
+                    >
+                      <ExternalLink className="h-3 w-3" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <Alert className="border-blue-500/50 bg-blue-500/10">
+              <Mail className="h-4 w-4 text-blue-600" />
+              <AlertDescription className="text-blue-600 text-sm">
+                O seu cliente de e-mail será aberto com os links dos documentos. 
+                Complete o envio no seu aplicativo de e-mail.
+              </AlertDescription>
+            </Alert>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEnvioDialogOpen(false)}>
+              Cancelar
+            </Button>
+            <Button 
+              onClick={handleEnviarEmail} 
+              disabled={enviando || !emailDestinatario.trim() || docsParaEnvio.filter(d => d.selecionado).length === 0}
+            >
+              {enviando ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Send className="h-4 w-4 mr-2" />
+              )}
+              Enviar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

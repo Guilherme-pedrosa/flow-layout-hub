@@ -425,6 +425,7 @@ export function ClienteForm({ clienteId, onSave }: ClienteFormProps) {
                   clienteId={clienteId}
                   exigeIntegracao={exigeIntegracao}
                   regrasAcesso={regrasAcesso}
+                  emailPortaria={formData.email || undefined}
                   onConfigChange={(exige, regras) => {
                     setExigeIntegracao(exige);
                     setRegrasAcesso(regras);
