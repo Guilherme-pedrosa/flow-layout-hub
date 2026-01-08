@@ -1,69 +1,86 @@
 import * as React from "react";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { parseBRNumber, formatForInput } from "@/lib/brMoney";
 
 interface CurrencyInputProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange'> {
-  value: number;
-  onChange: (value: number) => void;
+  value: number | null;
+  onChange: (value: number | null) => void;
   min?: number;
   max?: number;
+  decimals?: 2 | 4;
+  allowEmpty?: boolean;
 }
 
+/**
+ * Input monetário no padrão BR
+ * - Aceita vírgula como decimal (96,70)
+ * - Aceita ponto como milhar (1.234,56)
+ * - Permite apagar e deixar vazio
+ * - NÃO reescreve enquanto usuário digita
+ */
 const CurrencyInput = React.forwardRef<HTMLInputElement, CurrencyInputProps>(
-  ({ value, onChange, min, max, className, disabled, ...props }, ref) => {
-    const [displayValue, setDisplayValue] = React.useState<string>(value?.toString() ?? '');
+  ({ value, onChange, min, max, decimals = 2, allowEmpty = true, className, disabled, ...props }, ref) => {
+    const [displayValue, setDisplayValue] = React.useState<string>(() => 
+      formatForInput(value, decimals)
+    );
     const [isFocused, setIsFocused] = React.useState(false);
     
-    // Sync display value when external value changes (but not when user is typing)
+    // Sync display value when external value changes (but NEVER when user is typing)
     React.useEffect(() => {
       if (!isFocused) {
-        setDisplayValue(value?.toString() ?? '');
+        setDisplayValue(formatForInput(value, decimals));
       }
-    }, [value, isFocused]);
+    }, [value, isFocused, decimals]);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
       const inputValue = e.target.value;
       
-      // Allow empty input for editing
-      if (inputValue === '' || inputValue === '-') {
-        setDisplayValue(inputValue);
-        return;
-      }
-
-      // Validate numeric input (positive numbers only for currency)
-      const regex = /^\d*\.?\d*$/;
-      if (!regex.test(inputValue)) {
-        return;
-      }
-
+      // Sempre permitir edição livre - usuário manda
       setDisplayValue(inputValue);
       
-      const numValue = parseFloat(inputValue);
-      if (!isNaN(numValue)) {
+      // Se vazio, reportar null (se allowEmpty) ou manter
+      if (inputValue.trim() === '') {
+        if (allowEmpty) {
+          onChange(null);
+        }
+        return;
+      }
+
+      // Parse usando o módulo BR
+      const numValue = parseBRNumber(inputValue);
+      
+      if (numValue !== null) {
         let constrainedValue = numValue;
         if (min !== undefined && numValue < min) constrainedValue = min;
         if (max !== undefined && numValue > max) constrainedValue = max;
-        
         onChange(constrainedValue);
       }
     };
 
     const handleBlur = () => {
       setIsFocused(false);
-      const numValue = parseFloat(displayValue);
-      if (isNaN(numValue) || displayValue === '' || displayValue === '-') {
-        setDisplayValue('0');
-        onChange(0);
-      } else {
-        let finalValue = numValue;
-        if (min !== undefined && numValue < min) finalValue = min;
-        if (max !== undefined && numValue > max) finalValue = max;
-        
-        finalValue = parseFloat(finalValue.toFixed(2));
-        
-        setDisplayValue(finalValue.toString());
-        onChange(finalValue);
+      
+      const numValue = parseBRNumber(displayValue);
+      
+      if (numValue === null) {
+        if (allowEmpty) {
+          setDisplayValue('');
+          onChange(null);
+        } else {
+          setDisplayValue('0,00');
+          onChange(0);
+        }
+        return;
       }
+
+      let finalValue = numValue;
+      if (min !== undefined && numValue < min) finalValue = min;
+      if (max !== undefined && numValue > max) finalValue = max;
+      
+      // Formatar para exibição no blur
+      setDisplayValue(formatForInput(finalValue, decimals));
+      onChange(finalValue);
     };
 
     const handleFocus = () => {
@@ -72,7 +89,7 @@ const CurrencyInput = React.forwardRef<HTMLInputElement, CurrencyInputProps>(
 
     return (
       <div className={cn("relative flex items-center", disabled && "opacity-50")}>
-        <span className="absolute left-3 text-muted-foreground text-sm pointer-events-none">
+        <span className="absolute left-3 text-muted-foreground text-sm pointer-events-none select-none">
           R$
         </span>
         <Input
@@ -84,7 +101,8 @@ const CurrencyInput = React.forwardRef<HTMLInputElement, CurrencyInputProps>(
           onBlur={handleBlur}
           onFocus={handleFocus}
           disabled={disabled}
-          className={cn("pl-9", className)}
+          className={cn("pl-9 min-w-[140px] text-right", className)}
+          placeholder="0,00"
           {...props}
         />
       </div>
