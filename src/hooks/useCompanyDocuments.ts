@@ -114,14 +114,14 @@ export function useCompanyDocuments() {
       if (!currentCompany?.id) throw new Error('Empresa não selecionada');
       
       // Upload file
-      const filePath = `company-docs/${currentCompany.id}/${documentTypeId}/${Date.now()}_${file.name}`;
+      const filePath = `${currentCompany.id}/${documentTypeId}/${Date.now()}_${file.name}`;
       const { error: uploadError } = await supabase.storage
-        .from('documentos')
+        .from('company-documents')
         .upload(filePath, file);
       if (uploadError) throw uploadError;
 
       const { data: urlData } = supabase.storage
-        .from('documentos')
+        .from('company-documents')
         .getPublicUrl(filePath);
 
       // Check if document already exists
