@@ -27,6 +27,7 @@ export default function DocumentosEmpresaPage() {
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
   const [selectedTypeId, setSelectedTypeId] = useState<string>('');
   const [expiresAt, setExpiresAt] = useState('');
+  const [issueDate, setIssueDate] = useState('');
   const [notes, setNotes] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -34,16 +35,27 @@ export default function DocumentosEmpresaPage() {
   const handleUpload = async () => {
     if (!selectedTypeId || !selectedFile) return;
     
+    const docType = companyTypes.find(dt => dt.id === selectedTypeId);
+    let finalExpiresAt = expiresAt;
+    
+    // Se modo é ISSUE_PLUS_DAYS, calcular vencimento
+    if (docType?.expiry_mode === 'ISSUE_PLUS_DAYS' && issueDate && docType.default_validity_days) {
+      const issue = new Date(issueDate);
+      issue.setDate(issue.getDate() + docType.default_validity_days);
+      finalExpiresAt = issue.toISOString().split('T')[0];
+    }
+    
     await uploadDocument.mutateAsync({
       documentTypeId: selectedTypeId,
       file: selectedFile,
-      expiresAt: expiresAt || undefined,
+      expiresAt: finalExpiresAt || undefined,
       notes: notes || undefined,
     });
     
     setUploadDialogOpen(false);
     setSelectedTypeId('');
     setExpiresAt('');
+    setIssueDate('');
     setNotes('');
     setSelectedFile(null);
   };
@@ -57,13 +69,16 @@ export default function DocumentosEmpresaPage() {
   const openUploadForType = (typeId: string) => {
     setSelectedTypeId(typeId);
     const docType = companyTypes.find(dt => dt.id === typeId);
-    if (docType?.default_validity_days) {
-      const date = new Date();
-      date.setDate(date.getDate() + docType.default_validity_days);
-      setExpiresAt(date.toISOString().split('T')[0]);
-    } else {
-      setExpiresAt('');
+    
+    // Reset dates
+    setExpiresAt('');
+    setIssueDate('');
+    
+    // Se modo ISSUE_PLUS_DAYS, pré-preencher data de emissão com hoje
+    if (docType?.expiry_mode === 'ISSUE_PLUS_DAYS') {
+      setIssueDate(new Date().toISOString().split('T')[0]);
     }
+    
     setUploadDialogOpen(true);
   };
 
@@ -247,16 +262,39 @@ export default function DocumentosEmpresaPage() {
               />
             </div>
 
-            {companyTypes.find(dt => dt.id === selectedTypeId)?.requires_expiry && (
-              <div className="grid gap-2">
-                <Label>Data de Validade</Label>
-                <Input 
-                  type="date"
-                  value={expiresAt}
-                  onChange={(e) => setExpiresAt(e.target.value)}
-                />
-              </div>
-            )}
+            {/* Campos de data baseados no modo */}
+            {(() => {
+              const docType = companyTypes.find(dt => dt.id === selectedTypeId);
+              if (!docType || docType.expiry_mode === 'NONE') return null;
+              
+              if (docType.expiry_mode === 'ISSUE_PLUS_DAYS') {
+                return (
+                  <div className="grid gap-2">
+                    <Label>Data de Emissão *</Label>
+                    <Input 
+                      type="date"
+                      value={issueDate}
+                      onChange={(e) => setIssueDate(e.target.value)}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Vencimento será calculado: emissão + {docType.default_validity_days} dias
+                    </p>
+                  </div>
+                );
+              }
+              
+              // EXPIRES_AT mode
+              return (
+                <div className="grid gap-2">
+                  <Label>Data de Vencimento *</Label>
+                  <Input 
+                    type="date"
+                    value={expiresAt}
+                    onChange={(e) => setExpiresAt(e.target.value)}
+                  />
+                </div>
+              );
+            })()}
 
             <div className="grid gap-2">
               <Label>Observações (opcional)</Label>

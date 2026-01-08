@@ -4,6 +4,7 @@ import { useCompany } from "@/contexts/CompanyContext";
 import { toast } from "sonner";
 
 export type DocumentScope = 'COMPANY' | 'TECHNICIAN';
+export type ExpiryMode = 'NONE' | 'EXPIRES_AT' | 'ISSUE_PLUS_DAYS';
 
 export interface DocumentType {
   id: string;
@@ -11,6 +12,7 @@ export interface DocumentType {
   name: string;
   scope: DocumentScope;
   requires_expiry: boolean;
+  expiry_mode: ExpiryMode;
   default_validity_days: number | null;
   is_active: boolean;
   sort_order: number;

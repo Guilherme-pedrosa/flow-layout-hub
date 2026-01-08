@@ -2330,6 +2330,7 @@ export type Database = {
           file_name: string
           file_url: string
           id: string
+          issue_date: string | null
           notes: string | null
           updated_at: string
           uploaded_by: string | null
@@ -2343,6 +2344,7 @@ export type Database = {
           file_name: string
           file_url: string
           id?: string
+          issue_date?: string | null
           notes?: string | null
           updated_at?: string
           uploaded_by?: string | null
@@ -2356,6 +2358,7 @@ export type Database = {
           file_name?: string
           file_url?: string
           id?: string
+          issue_date?: string | null
           notes?: string | null
           updated_at?: string
           uploaded_by?: string | null
@@ -2429,6 +2432,7 @@ export type Database = {
           company_id: string | null
           created_at: string
           default_validity_days: number | null
+          expiry_mode: string | null
           id: string
           is_active: boolean
           name: string
@@ -2442,6 +2446,7 @@ export type Database = {
           company_id?: string | null
           created_at?: string
           default_validity_days?: number | null
+          expiry_mode?: string | null
           id?: string
           is_active?: boolean
           name: string
@@ -2455,6 +2460,7 @@ export type Database = {
           company_id?: string | null
           created_at?: string
           default_validity_days?: number | null
+          expiry_mode?: string | null
           id?: string
           is_active?: boolean
           name?: string
@@ -8347,6 +8353,7 @@ export type Database = {
           file_name: string
           file_url: string
           id: string
+          issue_date: string | null
           notes: string | null
           technician_id: string
           updated_at: string
@@ -8360,6 +8367,7 @@ export type Database = {
           file_name: string
           file_url: string
           id?: string
+          issue_date?: string | null
           notes?: string | null
           technician_id: string
           updated_at?: string
@@ -8373,6 +8381,7 @@ export type Database = {
           file_name?: string
           file_url?: string
           id?: string
+          issue_date?: string | null
           notes?: string | null
           technician_id?: string
           updated_at?: string
