@@ -12,12 +12,13 @@ import { FileEdit, Wrench, Plus, Clock, Monitor, RefreshCw } from "lucide-react"
 import { useServiceOrderStatuses } from "@/hooks/useServiceOrders";
 import { useCostCenters } from "@/hooks/useFinanceiro";
 import { useSystemUsers } from "@/hooks/useServices";
-import { usePessoas } from "@/hooks/usePessoas";
+import { useClientes } from "@/hooks/useClientes";
 import { useServiceTypes } from "@/hooks/useServiceTypes";
 import { useEquipments } from "@/hooks/useEquipments";
 import { useFieldServiceTypes } from "@/hooks/useFieldServiceTypes";
 import { CadastrarPessoaDialog } from "@/components/shared/CadastrarPessoaDialog";
 import { useCompany } from "@/contexts/CompanyContext";
+import { useQuery } from "@tanstack/react-query";
 
 interface ServiceOrderFormDadosGeraisProps {
   formData: {
@@ -56,10 +57,17 @@ export function ServiceOrderFormDadosGerais({ formData, onChange }: ServiceOrder
   const { statuses } = useServiceOrderStatuses();
   const { costCenters } = useCostCenters();
   const { data: users } = useSystemUsers();
-  const { activePessoas, refetch: refetchPessoas } = usePessoas();
+  const { fetchClientes } = useClientes();
   const { activeServiceTypes, createServiceType, refetch: refetchServiceTypes } = useServiceTypes();
   const { equipments: clientEquipments, createEquipment, refetch: refetchEquipments } = useEquipments(formData.client_id || undefined);
   const { syncServiceTypes, isSyncing } = useFieldServiceTypes();
+
+  // Buscar clientes da tabela clientes (não pessoas) para vincular com equipamentos
+  const { data: clientes = [], refetch: refetchClientes } = useQuery({
+    queryKey: ['clientes-for-os', currentCompany?.id],
+    queryFn: fetchClientes,
+    enabled: !!currentCompany?.id,
+  });
 
   const [showCadastrarCliente, setShowCadastrarCliente] = useState(false);
   const [showCadastrarEquipamento, setShowCadastrarEquipamento] = useState(false);
@@ -140,7 +148,7 @@ export function ServiceOrderFormDadosGerais({ formData, onChange }: ServiceOrder
             <div className="space-y-2">
               <Label>Cliente <span className="text-destructive">*</span></Label>
               <SearchableSelect
-                options={activePessoas.map(c => ({
+                options={clientes.map(c => ({
                   value: c.id,
                   label: c.razao_social || c.nome_fantasia || "Sem nome",
                   sublabel: c.cpf_cnpj ? formatCpfCnpj(c.cpf_cnpj, c.cpf_cnpj.replace(/\D/g, '').length > 11 ? "PJ" : "PF") : undefined
@@ -374,7 +382,7 @@ export function ServiceOrderFormDadosGerais({ formData, onChange }: ServiceOrder
     <CadastrarPessoaDialog
       open={showCadastrarCliente}
       onOpenChange={setShowCadastrarCliente}
-      onSuccess={refetchPessoas}
+      onSuccess={() => refetchClientes()}
       tipo="cliente"
       title="Cadastrar Novo Cliente"
     />
