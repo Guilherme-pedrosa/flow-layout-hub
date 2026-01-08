@@ -1754,6 +1754,7 @@ export type Database = {
           data_abertura: string | null
           email: string | null
           estado: string | null
+          exige_integracao: boolean | null
           field_customer_id: string | null
           id: string
           inscricao_estadual: string | null
@@ -1769,6 +1770,7 @@ export type Database = {
           regime_tributario:
             | Database["public"]["Enums"]["regime_tributario"]
             | null
+          regras_acesso: string | null
           responsavel_comercial: string | null
           responsavel_tecnico: string | null
           retencao_impostos: boolean | null
@@ -1801,6 +1803,7 @@ export type Database = {
           data_abertura?: string | null
           email?: string | null
           estado?: string | null
+          exige_integracao?: boolean | null
           field_customer_id?: string | null
           id?: string
           inscricao_estadual?: string | null
@@ -1816,6 +1819,7 @@ export type Database = {
           regime_tributario?:
             | Database["public"]["Enums"]["regime_tributario"]
             | null
+          regras_acesso?: string | null
           responsavel_comercial?: string | null
           responsavel_tecnico?: string | null
           retencao_impostos?: boolean | null
@@ -1848,6 +1852,7 @@ export type Database = {
           data_abertura?: string | null
           email?: string | null
           estado?: string | null
+          exige_integracao?: boolean | null
           field_customer_id?: string | null
           id?: string
           inscricao_estadual?: string | null
@@ -1863,6 +1868,7 @@ export type Database = {
           regime_tributario?:
             | Database["public"]["Enums"]["regime_tributario"]
             | null
+          regras_acesso?: string | null
           responsavel_comercial?: string | null
           responsavel_tecnico?: string | null
           retencao_impostos?: boolean | null
@@ -1883,6 +1889,76 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "clientes_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      clientes_tecnicos_acesso: {
+        Row: {
+          client_id: string
+          colaborador_id: string
+          company_id: string
+          comprovante_url: string | null
+          created_at: string | null
+          data_inicio: string | null
+          data_validade: string
+          id: string
+          is_blocked: boolean | null
+          motivo_bloqueio: string | null
+          nome_arquivo: string | null
+          observacoes: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          client_id: string
+          colaborador_id: string
+          company_id: string
+          comprovante_url?: string | null
+          created_at?: string | null
+          data_inicio?: string | null
+          data_validade: string
+          id?: string
+          is_blocked?: boolean | null
+          motivo_bloqueio?: string | null
+          nome_arquivo?: string | null
+          observacoes?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          client_id?: string
+          colaborador_id?: string
+          company_id?: string
+          comprovante_url?: string | null
+          created_at?: string | null
+          data_inicio?: string | null
+          data_validade?: string
+          id?: string
+          is_blocked?: boolean | null
+          motivo_bloqueio?: string | null
+          nome_arquivo?: string | null
+          observacoes?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "clientes_tecnicos_acesso_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "clientes_tecnicos_acesso_colaborador_id_fkey"
+            columns: ["colaborador_id"]
+            isOneToOne: false
+            referencedRelation: "pessoas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "clientes_tecnicos_acesso_company_id_fkey"
             columns: ["company_id"]
             isOneToOne: false
             referencedRelation: "companies"
