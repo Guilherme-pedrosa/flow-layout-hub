@@ -170,3 +170,9 @@ verify_jwt = false
 
 [functions.field-service-types]
 verify_jwt = false
+
+[functions.bank-sync]
+verify_jwt = false
+
+[functions.bank-connect]
+verify_jwt = false

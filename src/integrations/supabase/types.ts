@@ -1028,6 +1028,137 @@ export type Database = {
           },
         ]
       }
+      bank_accounts_synced: {
+        Row: {
+          account_type: string | null
+          available_balance: number | null
+          bank_name: string | null
+          company_id: string
+          connection_id: string
+          created_at: string
+          credit_limit: number | null
+          currency: string | null
+          current_balance: number | null
+          external_account_id: string
+          id: string
+          is_active: boolean | null
+          last_refreshed_at: string | null
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          account_type?: string | null
+          available_balance?: number | null
+          bank_name?: string | null
+          company_id: string
+          connection_id: string
+          created_at?: string
+          credit_limit?: number | null
+          currency?: string | null
+          current_balance?: number | null
+          external_account_id: string
+          id?: string
+          is_active?: boolean | null
+          last_refreshed_at?: string | null
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          account_type?: string | null
+          available_balance?: number | null
+          bank_name?: string | null
+          company_id?: string
+          connection_id?: string
+          created_at?: string
+          credit_limit?: number | null
+          currency?: string | null
+          current_balance?: number | null
+          external_account_id?: string
+          id?: string
+          is_active?: boolean | null
+          last_refreshed_at?: string | null
+          name?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bank_accounts_synced_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bank_accounts_synced_connection_id_fkey"
+            columns: ["connection_id"]
+            isOneToOne: false
+            referencedRelation: "bank_connections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      bank_connections: {
+        Row: {
+          access_token_encrypted: string | null
+          company_id: string
+          connector_name: string | null
+          created_at: string
+          created_by: string | null
+          external_item_id: string | null
+          id: string
+          last_sync_at: string | null
+          last_sync_error: string | null
+          last_sync_status: string | null
+          provider: string
+          refresh_token_encrypted: string | null
+          status: string
+          sync_frequency_hours: number | null
+          updated_at: string
+        }
+        Insert: {
+          access_token_encrypted?: string | null
+          company_id: string
+          connector_name?: string | null
+          created_at?: string
+          created_by?: string | null
+          external_item_id?: string | null
+          id?: string
+          last_sync_at?: string | null
+          last_sync_error?: string | null
+          last_sync_status?: string | null
+          provider?: string
+          refresh_token_encrypted?: string | null
+          status?: string
+          sync_frequency_hours?: number | null
+          updated_at?: string
+        }
+        Update: {
+          access_token_encrypted?: string | null
+          company_id?: string
+          connector_name?: string | null
+          created_at?: string
+          created_by?: string | null
+          external_item_id?: string | null
+          id?: string
+          last_sync_at?: string | null
+          last_sync_error?: string | null
+          last_sync_status?: string | null
+          provider?: string
+          refresh_token_encrypted?: string | null
+          status?: string
+          sync_frequency_hours?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bank_connections_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       bank_reconciliation_items: {
         Row: {
           amount_used: number
@@ -1143,6 +1274,63 @@ export type Database = {
           },
         ]
       }
+      bank_sync_logs: {
+        Row: {
+          accounts_synced: number | null
+          company_id: string
+          connection_id: string | null
+          error_message: string | null
+          finished_at: string | null
+          id: string
+          started_at: string
+          status: string
+          transactions_synced: number | null
+          triggered_by: string | null
+          triggered_by_user: string | null
+        }
+        Insert: {
+          accounts_synced?: number | null
+          company_id: string
+          connection_id?: string | null
+          error_message?: string | null
+          finished_at?: string | null
+          id?: string
+          started_at?: string
+          status?: string
+          transactions_synced?: number | null
+          triggered_by?: string | null
+          triggered_by_user?: string | null
+        }
+        Update: {
+          accounts_synced?: number | null
+          company_id?: string
+          connection_id?: string | null
+          error_message?: string | null
+          finished_at?: string | null
+          id?: string
+          started_at?: string
+          status?: string
+          transactions_synced?: number | null
+          triggered_by?: string | null
+          triggered_by_user?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bank_sync_logs_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bank_sync_logs_connection_id_fkey"
+            columns: ["connection_id"]
+            isOneToOne: false
+            referencedRelation: "bank_connections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       bank_transactions: {
         Row: {
           amount: number
@@ -1224,6 +1412,78 @@ export type Database = {
             columns: ["reconciled_by"]
             isOneToOne: false
             referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      bank_transactions_synced: {
+        Row: {
+          account_id: string
+          amount: number
+          category: string | null
+          company_id: string
+          created_at: string
+          description: string | null
+          direction: string
+          external_tx_id: string
+          id: string
+          is_reconciled: boolean | null
+          merchant: string | null
+          payment_method: string | null
+          posted_at: string
+          raw_data: Json | null
+          reconciled_with_id: string | null
+          reconciled_with_type: string | null
+        }
+        Insert: {
+          account_id: string
+          amount: number
+          category?: string | null
+          company_id: string
+          created_at?: string
+          description?: string | null
+          direction: string
+          external_tx_id: string
+          id?: string
+          is_reconciled?: boolean | null
+          merchant?: string | null
+          payment_method?: string | null
+          posted_at: string
+          raw_data?: Json | null
+          reconciled_with_id?: string | null
+          reconciled_with_type?: string | null
+        }
+        Update: {
+          account_id?: string
+          amount?: number
+          category?: string | null
+          company_id?: string
+          created_at?: string
+          description?: string | null
+          direction?: string
+          external_tx_id?: string
+          id?: string
+          is_reconciled?: boolean | null
+          merchant?: string | null
+          payment_method?: string | null
+          posted_at?: string
+          raw_data?: Json | null
+          reconciled_with_id?: string | null
+          reconciled_with_type?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bank_transactions_synced_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "bank_accounts_synced"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bank_transactions_synced_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
             referencedColumns: ["id"]
           },
         ]
