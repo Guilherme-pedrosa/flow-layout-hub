@@ -108,8 +108,14 @@ export default function MatrizIntegracoesPage() {
   };
 
   const handleRevalidate = (int: typeof enrichedIntegrations[0]) => {
-    // Navigate to nova-integracao with pre-filled data (could be enhanced with state)
-    navigate('/servicos/nova-integracao');
+    // Navigate to nova-integracao with state to pre-fill data
+    navigate('/servicos/nova-integracao', { 
+      state: { 
+        clientId: int.client_id, 
+        technicianIds: int.technician_ids,
+        integrationId: int.id,
+      } 
+    });
   };
 
   if (isLoading) {
