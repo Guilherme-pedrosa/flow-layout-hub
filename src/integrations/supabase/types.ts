@@ -3047,6 +3047,157 @@ export type Database = {
           },
         ]
       }
+      integration_audit_logs: {
+        Row: {
+          company_id: string
+          event_data: Json | null
+          event_type: string
+          id: string
+          integration_id: string | null
+          performed_at: string
+          performed_by: string | null
+        }
+        Insert: {
+          company_id: string
+          event_data?: Json | null
+          event_type: string
+          id?: string
+          integration_id?: string | null
+          performed_at?: string
+          performed_by?: string | null
+        }
+        Update: {
+          company_id?: string
+          event_data?: Json | null
+          event_type?: string
+          id?: string
+          integration_id?: string | null
+          performed_at?: string
+          performed_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "integration_audit_logs_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "integration_audit_logs_integration_id_fkey"
+            columns: ["integration_id"]
+            isOneToOne: false
+            referencedRelation: "integrations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "integration_audit_logs_performed_by_fkey"
+            columns: ["performed_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      integrations: {
+        Row: {
+          blocked_reasons: Json
+          client_id: string
+          company_id: string
+          created_at: string
+          earliest_expiry_date: string | null
+          id: string
+          manifest: Json | null
+          sent_at: string | null
+          sent_by: string | null
+          sent_to: string[] | null
+          status: string
+          technician_ids: string[]
+          unit_id: string | null
+          updated_at: string
+          validated_at: string | null
+          validated_by: string | null
+          zip_file_name: string | null
+          zip_url: string | null
+        }
+        Insert: {
+          blocked_reasons?: Json
+          client_id: string
+          company_id: string
+          created_at?: string
+          earliest_expiry_date?: string | null
+          id?: string
+          manifest?: Json | null
+          sent_at?: string | null
+          sent_by?: string | null
+          sent_to?: string[] | null
+          status?: string
+          technician_ids?: string[]
+          unit_id?: string | null
+          updated_at?: string
+          validated_at?: string | null
+          validated_by?: string | null
+          zip_file_name?: string | null
+          zip_url?: string | null
+        }
+        Update: {
+          blocked_reasons?: Json
+          client_id?: string
+          company_id?: string
+          created_at?: string
+          earliest_expiry_date?: string | null
+          id?: string
+          manifest?: Json | null
+          sent_at?: string | null
+          sent_by?: string | null
+          sent_to?: string[] | null
+          status?: string
+          technician_ids?: string[]
+          unit_id?: string | null
+          updated_at?: string
+          validated_at?: string | null
+          validated_by?: string | null
+          zip_file_name?: string | null
+          zip_url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "integrations_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "pessoas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "integrations_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "integrations_sent_by_fkey"
+            columns: ["sent_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "integrations_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "client_units"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "integrations_validated_by_fkey"
+            columns: ["validated_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       inter_company_transfers: {
         Row: {
           amount: number
@@ -9150,6 +9301,16 @@ export type Database = {
       get_user_company_id: { Args: never; Returns: string }
       increment_rule_usage: { Args: { rule_id: string }; Returns: undefined }
       is_admin: { Args: never; Returns: boolean }
+      log_integration_event: {
+        Args: {
+          p_company_id: string
+          p_event_data?: Json
+          p_event_type: string
+          p_integration_id: string
+          p_performed_by?: string
+        }
+        Returns: undefined
+      }
       reap_stuck_sync_jobs: {
         Args: { p_stuck_minutes?: number }
         Returns: number
