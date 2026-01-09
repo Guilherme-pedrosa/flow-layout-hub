@@ -1,0 +1,1 @@
+export { IntegrationDetailModal } from './IntegrationDetailModal';

@@ -18,6 +18,9 @@ import {
 } from "lucide-react";
 import { format, formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { IntegrationDetailModal } from "@/components/integracoes/IntegrationDetailModal";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 function StatusBadge({ status, expiryDate }: { status: Integration['status']; expiryDate?: string | null }) {
   // Check if expired
@@ -45,12 +48,15 @@ export default function MatrizIntegracoesPage() {
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('todos');
+  const [detailModalOpen, setDetailModalOpen] = useState(false);
+  const [selectedIntegration, setSelectedIntegration] = useState<(Integration & { clientName: string; techNames: string }) | null>(null);
 
   const { 
     integrations, 
     stats,
     isLoading, 
     deleteIntegration,
+    updateIntegration,
     refetch,
   } = useIntegrationsModule();
 
@@ -108,7 +114,6 @@ export default function MatrizIntegracoesPage() {
   };
 
   const handleRevalidate = (int: typeof enrichedIntegrations[0]) => {
-    // Navigate to nova-integracao with state to pre-fill data
     navigate('/servicos/nova-integracao', { 
       state: { 
         clientId: int.client_id, 
@@ -116,6 +121,56 @@ export default function MatrizIntegracoesPage() {
         integrationId: int.id,
       } 
     });
+  };
+
+  const handleViewDetail = (int: typeof enrichedIntegrations[0]) => {
+    setSelectedIntegration(int);
+    setDetailModalOpen(true);
+  };
+
+  const handleDownloadZip = async (int: typeof enrichedIntegrations[0]) => {
+    if (!int.zip_url && !int.zip_file_name) {
+      // No ZIP yet, redirect to form
+      navigate('/servicos/nova-integracao', { 
+        state: { 
+          clientId: int.client_id, 
+          technicianIds: int.technician_ids,
+          integrationId: int.id,
+        } 
+      });
+      toast.info('Gere o ZIP na tela de integração');
+      return;
+    }
+
+    // Try to fetch from storage
+    if (int.zip_file_name) {
+      // Generate ZIP on demand (simplified - in real app would fetch from storage)
+      toast.info(`Baixando ${int.zip_file_name}...`);
+      navigate('/servicos/nova-integracao', { 
+        state: { 
+          clientId: int.client_id, 
+          technicianIds: int.technician_ids,
+          integrationId: int.id,
+        } 
+      });
+    }
+  };
+
+  const handleSendEmail = async (int: typeof enrichedIntegrations[0]) => {
+    const subject = encodeURIComponent(`WeDo | Kit de Documentação - ${int.clientName}`);
+    const body = encodeURIComponent(`Prezados,\n\nSegue em anexo o kit de documentação.\n\nAtenciosamente,\nWeDo`);
+    window.open(`mailto:?subject=${subject}&body=${body}`, '_blank');
+    
+    // Update status to sent
+    await updateIntegration.mutateAsync({
+      id: int.id,
+      data: {
+        status: 'sent',
+        sent_at: new Date().toISOString(),
+      }
+    });
+    toast.success('Integração marcada como enviada');
+    refetch();
   };
 
   if (isLoading) {
@@ -280,13 +335,26 @@ export default function MatrizIntegracoesPage() {
                         <Button 
                           variant="ghost" 
                           size="sm" 
+                          title="Ver Detalhes"
+                          onClick={() => handleViewDetail(int)}
+                        >
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
                           title="Revalidar"
                           onClick={() => handleRevalidate(int)}
                         >
                           <RefreshCw className="h-4 w-4" />
                         </Button>
-                        {int.zip_file_name && (
-                          <Button variant="ghost" size="sm" title="Baixar ZIP">
+                        {(int.status === 'authorized' || int.status === 'sent') && (
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            title={int.zip_file_name ? "Baixar ZIP" : "Gerar ZIP"}
+                            onClick={() => handleDownloadZip(int)}
+                          >
                             <Download className="h-4 w-4" />
                           </Button>
                         )}
@@ -307,6 +375,25 @@ export default function MatrizIntegracoesPage() {
           </Table>
         </CardContent>
       </Card>
+
+      {/* Detail Modal */}
+      <IntegrationDetailModal
+        open={detailModalOpen}
+        onClose={() => setDetailModalOpen(false)}
+        integration={selectedIntegration}
+        onRevalidate={() => {
+          setDetailModalOpen(false);
+          if (selectedIntegration) handleRevalidate(selectedIntegration);
+        }}
+        onDownloadZip={() => {
+          setDetailModalOpen(false);
+          if (selectedIntegration) handleDownloadZip(selectedIntegration);
+        }}
+        onSendEmail={() => {
+          setDetailModalOpen(false);
+          if (selectedIntegration) handleSendEmail(selectedIntegration);
+        }}
+      />
     </div>
   );
 }
