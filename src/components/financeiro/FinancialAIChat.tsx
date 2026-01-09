@@ -7,13 +7,15 @@
  * @see src/ai/systemPrompt.ts para regras e formatação
  */
 import { useState, useRef, useEffect } from "react";
-import { Bot, Send, X, AlertTriangle, TrendingDown, TrendingUp, DollarSign, Clock, FileText, Users, PieChart, Loader2, ArrowLeft, RefreshCw } from "lucide-react";
+import { Bot, Send, X, AlertTriangle, TrendingDown, TrendingUp, DollarSign, Clock, FileText, Users, PieChart, Loader2, ArrowLeft, RefreshCw, Database } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useCompany } from "@/contexts/CompanyContext";
+import { useLocation } from "react-router-dom";
+import { AIContextStatus } from "@/components/ai/AIContextStatus";
 
 interface Message {
   role: "user" | "assistant";
@@ -34,15 +36,19 @@ interface FinancialAIChatProps {
 
 export function FinancialAIChat({ onClose }: FinancialAIChatProps = {}) {
   const { currentCompany } = useCompany();
+  const location = useLocation();
   const [isOpen, setIsOpen] = useState(!onClose);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [insights, setInsights] = useState<Insight[]>([]);
   const [isLoadingInsights, setIsLoadingInsights] = useState(false);
+  const [dataSources, setDataSources] = useState<string[]>([]);
+  const [lastContextUpdate, setLastContextUpdate] = useState<Date | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const companyId = currentCompany?.id;
+  const currentRoute = location.pathname;
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -147,6 +153,9 @@ Responda APENAS com o JSON array, sem markdown ou explicações.` }],
       } else {
         setInsights(getDefaultInsights());
       }
+      // Set data sources based on what the financial-ai function queries
+      setDataSources(["payables", "accounts_receivable", "bank_accounts", "bank_transactions", "products", "sales", "service_orders"]);
+      setLastContextUpdate(new Date());
     } catch (error) {
       console.error("Erro ao carregar insights:", error);
       setInsights(getDefaultInsights());
@@ -412,6 +421,15 @@ Responda APENAS com o JSON array, sem markdown ou explicações.` }],
           </div>
         </div>
       </div>
+
+      {/* Context Status Badge */}
+      <AIContextStatus
+        companyName={currentCompany?.name}
+        currentRoute={currentRoute}
+        dataSources={dataSources}
+        lastUpdated={lastContextUpdate || undefined}
+        className="mx-4 mt-3"
+      />
 
       {/* Content */}
       <ScrollArea className="flex-1" ref={scrollRef}>
