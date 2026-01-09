@@ -13,23 +13,27 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue 
 } from "@/components/ui/select";
 import { 
-  Plus, Trash2, Building2, Users, FileCheck, AlertCircle, GripVertical
+  Plus, Trash2, Building2, Users, FileCheck, AlertCircle, Download, Loader2
 } from "lucide-react";
 import { usePessoas } from "@/hooks/usePessoas";
 import { useClientDocumentRequirements, RequiredFor } from "@/hooks/useClientDocumentRequirements";
 import { useDocumentTypes } from "@/hooks/useDocumentTypes";
+import { useCompany } from "@/contexts/CompanyContext";
+import { supabase } from "@/integrations/supabase/client";
 import { SearchableSelect } from "@/components/shared/SearchableSelect";
 import { toast } from "sonner";
 
 export default function GerenciarRequisitos() {
   const { clientes } = usePessoas();
   const { documentTypes } = useDocumentTypes();
+  const { currentCompany } = useCompany();
   
   const [selectedClientId, setSelectedClientId] = useState<string>('');
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [addScope, setAddScope] = useState<RequiredFor>('COMPANY');
   const [selectedDocTypeId, setSelectedDocTypeId] = useState<string>('');
   const [isRequired, setIsRequired] = useState(true);
+  const [loadingTemplate, setLoadingTemplate] = useState(false);
 
   const activeClients = clientes.filter(c => c.status === 'ativo');
   
@@ -98,6 +102,64 @@ export default function GerenciarRequisitos() {
 
   const selectedClient = activeClients.find(c => c.id === selectedClientId);
 
+  // Template padrão - adiciona requisitos comuns de uma vez
+  const handleApplyTemplate = async () => {
+    if (!selectedClientId || !currentCompany?.id) return;
+    
+    setLoadingTemplate(true);
+    try {
+      // Template padrão para técnicos: ASO, NR10, NR35, NR33, CNH, FICHA_REGISTRO
+      const techDocCodes = ['ASO', 'NR10', 'NR35', 'NR33', 'CNH', 'FICHA_REGISTRO'];
+      const companyDocCodes = ['CONTRATO_SOCIAL', 'CERTIFICADO_NR', 'ALVARA'];
+      
+      const techDocs = documentTypes.filter(dt => 
+        dt.scope === 'TECHNICIAN' && 
+        techDocCodes.includes(dt.code.toUpperCase()) &&
+        !technicianRequirements.find(r => r.document_type_id === dt.id)
+      );
+      
+      const compDocs = documentTypes.filter(dt => 
+        dt.scope === 'COMPANY' && 
+        companyDocCodes.includes(dt.code.toUpperCase()) &&
+        !companyRequirements.find(r => r.document_type_id === dt.id)
+      );
+
+      // Insert all in parallel
+      const allInserts = [
+        ...techDocs.map(dt => ({
+          client_id: selectedClientId,
+          document_type_id: dt.id,
+          required_for: 'TECHNICIAN' as RequiredFor,
+          is_required: true,
+          company_id: currentCompany.id,
+        })),
+        ...compDocs.map(dt => ({
+          client_id: selectedClientId,
+          document_type_id: dt.id,
+          required_for: 'COMPANY' as RequiredFor,
+          is_required: true,
+          company_id: currentCompany.id,
+        })),
+      ];
+
+      if (allInserts.length > 0) {
+        const { error } = await supabase
+          .from('client_document_requirements')
+          .insert(allInserts);
+        
+        if (error) throw error;
+        await refetch();
+        toast.success(`${allInserts.length} requisito(s) adicionado(s) do template`);
+      } else {
+        toast.info('Nenhum requisito novo para adicionar do template');
+      }
+    } catch (error: any) {
+      toast.error('Erro ao aplicar template: ' + error.message);
+    } finally {
+      setLoadingTemplate(false);
+    }
+  };
+
   return (
     <div className="container mx-auto py-6 space-y-6">
       <PageHeader
@@ -132,10 +194,23 @@ export default function GerenciarRequisitos() {
       {/* Requisitos do Cliente Selecionado */}
       {selectedClientId && (
         <>
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between flex-wrap gap-2">
             <h2 className="text-lg font-semibold">
               Requisitos de: {selectedClient?.nome_fantasia || selectedClient?.razao_social}
             </h2>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={handleApplyTemplate}
+              disabled={loadingTemplate}
+            >
+              {loadingTemplate ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Download className="h-4 w-4 mr-2" />
+              )}
+              Aplicar Template Padrão
+            </Button>
           </div>
 
           <div className="grid lg:grid-cols-2 gap-6">
