@@ -56,7 +56,7 @@ export function SearchableSelect({
 
   // Custom filter that matches any word in the search term
   const filteredOptions = useMemo(() => {
-    if (!search.trim()) return options;
+    if (!search.trim()) return options.slice(0, 100);
     
     const searchLower = search.toLowerCase().trim();
     const searchWords = searchLower.split(/\s+/).filter(Boolean);
@@ -66,12 +66,13 @@ export function SearchableSelect({
       const sublabel = (option.sublabel || "").toLowerCase();
       const combined = `${label} ${sublabel}`;
       
-      // Match if ALL words in search are found anywhere in label or sublabel
-      return searchWords.every(word => combined.includes(word));
+      // Match if ANY word in search is found anywhere in label or sublabel
+      return searchWords.some(word => combined.includes(word));
     });
   }, [options, search]);
 
   const displayOptions = filteredOptions.slice(0, 100);
+  const hasMore = search.trim() ? filteredOptions.length > 100 : options.length > 100;
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -175,9 +176,9 @@ export function SearchableSelect({
                     </div>
                   </div>
                 ))}
-                {filteredOptions.length > 100 && (
+                {hasMore && (
                   <div className="p-2 text-center text-xs text-muted-foreground">
-                    Mostrando 100 de {filteredOptions.length}. Digite mais para filtrar.
+                    Mostrando 100 de {search.trim() ? filteredOptions.length : options.length}. Digite para filtrar.
                   </div>
                 )}
               </div>
