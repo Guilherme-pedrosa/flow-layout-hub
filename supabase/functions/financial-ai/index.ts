@@ -154,10 +154,12 @@ serve(async (req) => {
 
     try {
       // ======== BUSCAR RESUMOS VIA RPC (FONTE OFICIAL PARA TOTAIS) ========
-      const [resumoHoje, resumo7d, resumoMes] = await Promise.all([
+      const thirtyDaysAgo = daysAgoYMDinSP(29);
+      const [resumoHoje, resumo7d, resumoMes, resumo30d] = await Promise.all([
         getBankTxSummary(supabase, companyId, todayStr, todayStr),
         getBankTxSummary(supabase, companyId, sevenDaysAgo, todayStr),
-        getBankTxSummary(supabase, companyId, firstDayOfMonth, todayStr)
+        getBankTxSummary(supabase, companyId, firstDayOfMonth, todayStr),
+        getBankTxSummary(supabase, companyId, thirtyDaysAgo, todayStr)
       ]);
 
       // Fetch ALL business data in parallel
@@ -334,7 +336,14 @@ ${resumoMes && resumoMes.tx_count > 0 ? `- Período: ${formatDateBR(resumoMes.fi
 - Transações: ${resumoMes.tx_count}
 - Entradas: ${formatBRL(resumoMes.total_in)}
 - Saídas: ${formatBRL(resumoMes.total_out)}
-- Saldo Período: ${formatBRL(resumoMes.net)}` : `⚠️ tx_count: 0 - Sem transações bancárias sincronizadas no mês.`}
+- Saldo Período: ${formatBRL(resumoMes.net)}` : `⚠️ tx_count: 0 - Sem transações bancárias sincronizadas no mês atual.`}
+
+### RESUMO ÚLTIMOS 30 DIAS - FONTE: RPC get_bank_tx_summary
+${resumo30d && resumo30d.tx_count > 0 ? `- Período: ${formatDateBR(resumo30d.first_date)} → ${formatDateBR(resumo30d.last_date)}
+- Transações: ${resumo30d.tx_count}
+- Entradas: ${formatBRL(resumo30d.total_in)}
+- Saídas: ${formatBRL(resumo30d.total_out)}
+- Saldo Período: ${formatBRL(resumo30d.net)}` : `⚠️ tx_count: 0 - Sem transações bancárias nos últimos 30 dias.`}
 
 ### 👥 CADASTROS
 - Total de Clientes: ${clients?.length || 0}
@@ -444,19 +453,22 @@ Seu único trabalho é:
 Ler dados reais do sistema, declarar exatamente o que foi lido, e só então operar sobre isso.
 
 ═══════════════════════════════════════════════════════════════
-REGRA ZERO (ABSOLUTA)
+REGRA ZERO (VERIFICAÇÃO DE DADOS)
 ═══════════════════════════════════════════════════════════════
-🚫 É PROIBIDO responder qualquer análise financeira se tx_count = 0 nos resumos.
+Verifique os resumos disponíveis em ordem de prioridade:
+1. RESUMO ÚLTIMOS 30 DIAS (mais abrangente)
+2. RESUMO ÚLTIMOS 7 DIAS
+3. RESUMO MÊS ATUAL
+4. RESUMO HOJE
 
-Se tx_count for 0 ou null em RESUMO HOJE / RESUMO 7 DIAS / RESUMO MÊS:
-👉 VOCÊ DEVE PARAR e responder:
-
-"Não há transações bancárias sincronizadas no período solicitado.
+Se TODOS os resumos tiverem tx_count = 0, responda:
+"Não há transações bancárias sincronizadas.
 - Fonte: bank_transactions
 - tx_count: 0
 - Ação necessária: Sincronizar extrato bancário via integração antes de qualquer análise."
 
-Texto fora disso quando tx_count = 0 = ERRO DE EXECUÇÃO.
+Se pelo menos um resumo tiver tx_count > 0, USE esses dados para análise.
+Não é problema se "hoje" não tiver transações - use os dados do período mais recente disponível.
 
 ═══════════════════════════════════════════════════════════════
 FONTES DE DADOS (OBRIGATÓRIAS)
@@ -464,7 +476,7 @@ FONTES DE DADOS (OBRIGATÓRIAS)
 Você só pode usar dados vindos explicitamente do contexto.
 
 Fontes válidas para extrato bancário:
-- RESUMO HOJE / 7 DIAS / MÊS (via RPC get_bank_tx_summary) ← FONTE OFICIAL PARA TOTAIS
+- RESUMO HOJE / 7 DIAS / MÊS / 30 DIAS (via RPC get_bank_tx_summary) ← FONTE OFICIAL PARA TOTAIS
 - bank_accounts (saldos)
 - bank_transactions (lista para evidência, NUNCA para totais)
 
