@@ -270,13 +270,14 @@ serve(async (req) => {
           .select("id, name, bank_name, current_balance, account_number, is_active")
           .eq("company_id", companyId)
           .eq("is_active", true),
-        // Transações bancárias (apenas para evidência, NÃO para totais - totais vêm do RPC)
+        // Transações bancárias COMPLETAS (para análise detalhada pela IA)
+        // A IA precisa de TODOS os campos para atuar como "gerente do negócio"
         supabase
           .from("bank_transactions")
-          .select("id, description, amount, transaction_date, type, is_reconciled")
+          .select("id, description, amount, transaction_date, type, is_reconciled, nsu, raw_data, category, created_at, updated_at")
           .eq("company_id", companyId)
           .order("transaction_date", { ascending: false })
-          .limit(50),
+          .limit(200),  // Aumentado de 50 para 200 para análise mais abrangente
         // Conexões bancárias
         supabase
           .from("bank_connections")
@@ -463,14 +464,29 @@ ${JSON.stringify(overdueReceivables.slice(0, 15).map(r => ({
   dias_atraso: Math.floor((new Date().getTime() - new Date(r.due_date).getTime()) / (1000 * 60 * 60 * 24))
 })), null, 2)}
 
-### 📋 DETALHES - Transações Bancárias (últimas 30 - APENAS PARA EVIDÊNCIA, NÃO USAR PARA TOTAIS)
-${JSON.stringify(bankTransactionsSynced?.slice(0, 30).map(t => ({
+### 📋 DETALHES - Transações Bancárias COMPLETAS (últimas 100 - PARA ANÁLISE DETALHADA)
+**IMPORTANTE:** Use estes dados para identificar padrões, categorias de gastos, fornecedores recorrentes e anomalias.
+${JSON.stringify(bankTransactionsSynced?.slice(0, 100).map((t: any) => ({
   data: t.transaction_date,
   descricao: t.description,
   valor: t.amount,
   tipo: t.type,
-  conciliado: t.is_reconciled
+  conciliado: t.is_reconciled,
+  nsu: t.nsu || null,
+  categoria: t.category || null,
+  // Extrair informações relevantes do raw_data se disponível
+  tipo_transacao: t.raw_data?.tipoTransacao || t.raw_data?.tipo || t.raw_data?.tipoOperacao || null,
+  pagador_recebedor: t.raw_data?.nomePagador || t.raw_data?.nomeRecebedor || t.raw_data?.contraparte || t.raw_data?.nomeBeneficiario || null,
+  documento_cpf_cnpj: t.raw_data?.cpfCnpjPagador || t.raw_data?.cpfCnpjRecebedor || t.raw_data?.cpfCnpjBeneficiario || null,
+  chave_pix: t.raw_data?.chavePix || t.raw_data?.endToEndId || null
 })), null, 2)}
+
+### 📊 ANÁLISE DE PADRÕES (baseado nas últimas ${bankTransactionsSynced?.length || 0} transações)
+- Transações não conciliadas: ${bankTransactionsSynced?.filter((t: any) => !t.is_reconciled).length || 0}
+- Transações PIX: ${bankTransactionsSynced?.filter((t: any) => t.raw_data?.tipoTransacao === 'PIX' || t.raw_data?.tipo === 'PIX').length || 0}
+- Transações Boleto: ${bankTransactionsSynced?.filter((t: any) => t.raw_data?.tipoTransacao?.includes('BOLETO') || t.description?.toLowerCase().includes('boleto')).length || 0}
+- Transações TED/DOC: ${bankTransactionsSynced?.filter((t: any) => t.raw_data?.tipoTransacao?.includes('TED') || t.raw_data?.tipoTransacao?.includes('DOC')).length || 0}
+- Tarifas bancárias: ${bankTransactionsSynced?.filter((t: any) => t.description?.toLowerCase().includes('tarifa') || t.raw_data?.tipoTransacao?.includes('TARIFA')).length || 0}
 
 ### 📋 DETALHES - Clientes (${clients?.length || 0})
 ${JSON.stringify(clients?.slice(0, 50).map(c => ({
@@ -524,14 +540,15 @@ ${JSON.stringify(lowStockProducts?.map(p => ({
     // Verificar se há dados bancários
     const hasBankData = (resumo30d?.tx_count || 0) > 0 || (resumoMes?.tx_count || 0) > 0;
     
-    systemPrompt = `Você é o WAI Operator, um assistente técnico de análise financeira.
+    systemPrompt = `Você é o WAI Operator, um assistente técnico de análise financeira que atua como "gerente do negócio".
 
 ## REGRAS OBRIGATÓRIAS ANTI-ALUCINAÇÃO
 
 ### 1. FONTE ÚNICA PARA TOTAIS BANCÁRIOS
 - Totais de entradas/saídas/saldo DEVEM vir EXCLUSIVAMENTE do RPC get_bank_tx_summary
 - Use os campos: total_in (entradas), total_out (saídas), net (saldo), tx_count (qtd transações)
-- A lista de transações individuais é APENAS para exemplos (máximo 10 itens), NUNCA some esses valores
+- A lista de transações individuais é para ANÁLISE DETALHADA (identificar padrões, fornecedores, categorias)
+- NUNCA some valores de transações individuais para calcular totais - use sempre o RPC
 
 ### 2. ÚLTIMO DIA COM DADOS
 - O sistema ajustou automaticamente "hoje" para o último dia com dados no banco
@@ -546,7 +563,7 @@ Se perguntarem sobre extrato/despesas/gastos, responda EXATAMENTE:
 Fonte: RPC get_bank_tx_summary (tx_count: 0 em todos os períodos).
 Ação necessária: Sincronize o extrato bancário para continuar."
 NÃO INVENTE VALORES.` : `
-✅ Dados disponíveis:
+✅ Dados disponíveis para análise:
 - 30 dias: ${resumo30d?.tx_count || 0} transações | Saídas: ${formatBRL(resumo30d?.total_out)} | Entradas: ${formatBRL(resumo30d?.total_in)}
 - Mês: ${resumoMes?.tx_count || 0} transações | Saídas: ${formatBRL(resumoMes?.total_out)} | Entradas: ${formatBRL(resumoMes?.total_in)}
 - 7 dias: ${resumo7d?.tx_count || 0} transações`}
@@ -561,8 +578,32 @@ Ao responder sobre dados bancários, SEMPRE inclua:
 ### 5. PROIBIÇÕES
 - NÃO use "parece", "provavelmente", "indicando"
 - NÃO faça projeções sem dados reais
-- NÃO some valores de transações individuais para totais
+- NÃO some valores de transações individuais para totais (use RPC)
 - NÃO invente categorias ou análises sem dados
+
+### 6. ANÁLISE COMPLETA DO EXTRATO BANCÁRIO
+Você tem acesso a TODAS as transações bancárias sincronizadas (não apenas PIX).
+Use os dados completos (incluindo raw_data) para:
+- Identificar fornecedores recorrentes e padrões de pagamento
+- Categorizar despesas (folha de pagamento, fornecedores, tarifas bancárias, impostos)
+- Alertar sobre transações anormais ou suspeitas
+- Sugerir otimizações de fluxo de caixa
+- Identificar oportunidades de redução de custos
+
+Ao analisar transações, considere:
+- Tipo de transação (PIX, boleto, TED, tarifa, etc.) - disponível no raw_data
+- Pagador/Recebedor identificado no raw_data
+- Recorrência (mensal, semanal, pontual)
+- Categoria de despesa inferida pela descrição
+
+### 7. CAPACIDADES DE ANÁLISE AVANÇADA
+Com acesso completo ao extrato, você pode:
+1. **Identificar Padrões de Gastos:** Agrupe transações por fornecedor, categoria e periodicidade
+2. **Detectar Anomalias:** Compare valores e datas de transações recorrentes
+3. **Sugerir Categorização:** Proponha categorias para transações não classificadas
+4. **Alertar Duplicidades:** Identifique possíveis pagamentos duplicados
+5. **Analisar Fluxo de Caixa:** Correlacione entradas/saídas com contas a pagar/receber
+6. **Recomendar Ações:** Sugira renegociações, antecipações ou mudanças de fornecedor
 
 ### FORMATAÇÃO
 - Moeda BR: R$ 1.234,56
