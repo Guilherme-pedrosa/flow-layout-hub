@@ -163,8 +163,8 @@ const menuGroups: MenuGroup[] = [
     items: [
       { title: "Colaboradores", icon: Users, href: "/rh/colaboradores" },
       { title: "Dashboard Integrações", icon: LayoutDashboard, href: "/rh/integracoes/dashboard" },
-      { title: "Kit Documentação", icon: Shield, href: "/nova-integracao" },
       { title: "Matriz Integrações", icon: CheckSquare, href: "/rh/integracoes" },
+      { title: "Nova Integração", icon: Shield, href: "/servicos/nova-integracao" },
       { title: "Requisitos Cliente", icon: Target, href: "/rh/integracoes/requisitos" },
       { title: "Tipos de Documento", icon: FileText, href: "/rh/tipos-documento" },
       { title: "Docs. Empresa", icon: Building2, href: "/rh/documentos-empresa" },
