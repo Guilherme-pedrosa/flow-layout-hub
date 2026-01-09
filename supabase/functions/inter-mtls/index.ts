@@ -1,237 +1,101 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-const INTER_HOST = "cdpj.partners.bancointer.com.br";
-const INTER_PORT = 443;
+const INTER_BASE_URL = "https://cdpj.partners.bancointer.com.br";
 
-function concatUint8Arrays(arrays: Uint8Array[]): Uint8Array {
-  const totalLength = arrays.reduce((acc, arr) => acc + arr.length, 0);
-  const result = new Uint8Array(totalLength);
-  let offset = 0;
-  for (const arr of arrays) {
-    result.set(arr, offset);
-    offset += arr.length;
+/**
+ * Valida se o texto parece ser PEM válido
+ */
+function assertPemLike(label: string, pemText: string) {
+  if (!pemText.includes("BEGIN") || !pemText.includes("END")) {
+    throw new Error(`${label} inválido: não parece PEM (BEGIN/END ausentes)`);
   }
-  return result;
 }
 
 /**
- * Faz uma requisição HTTP sobre TLS com mTLS (certificado de cliente)
- * O Deno suporta mTLS via Deno.connectTls com cert e key
+ * Cria um cliente HTTP com mTLS usando Deno.createHttpClient
+ * Essa abordagem é mais robusta que Deno.connectTls direto
  */
-async function makeHttpsRequest(
-  method: string,
-  path: string,
-  headers: Record<string, string>,
-  body: string | null,
-  cert: string,
-  key: string
-): Promise<{ status: number; body: string }> {
-  console.log(`[inter-mtls] Making ${method} request to ${path}`);
-  
-  // Validar formato do certificado e chave
+function createMtlsClient(cert: string, key: string): Deno.HttpClient {
   const cleanCert = cert.trim();
   const cleanKey = key.trim();
   
-  console.log(`[inter-mtls] Cert starts with: ${cleanCert.substring(0, 50)}`);
-  console.log(`[inter-mtls] Key starts with: ${cleanKey.substring(0, 50)}`);
+  console.log(`[inter-mtls] Cert preview: ${cleanCert.substring(0, 60)}...`);
+  console.log(`[inter-mtls] Key preview: ${cleanKey.substring(0, 60)}...`);
+  console.log(`[inter-mtls] Cert length: ${cleanCert.length}, Key length: ${cleanKey.length}`);
   
-  if (!cleanCert.includes("-----BEGIN CERTIFICATE-----")) {
-    throw new Error("Certificado inválido: não contém BEGIN CERTIFICATE");
+  // Validação do certificado
+  assertPemLike("CERT", cleanCert);
+  
+  // Validação da chave
+  assertPemLike("KEY", cleanKey);
+  
+  // Verificar se a chave está encriptada (não suportado pelo Deno)
+  if (cleanKey.includes("ENCRYPTED PRIVATE KEY")) {
+    throw new Error("A chave privada está criptografada (ENCRYPTED PRIVATE KEY). Gere uma chave PEM sem senha para usar em mTLS.");
   }
   
-  if (!cleanKey.includes("-----BEGIN") || !cleanKey.includes("PRIVATE KEY-----")) {
-    throw new Error("Chave privada inválida: formato incorreto");
-  }
-  
-  // Verificar se a chave está encriptada (não suportado)
   if (cleanKey.includes("ENCRYPTED")) {
     throw new Error("Chave privada encriptada não é suportada. Use chave sem senha.");
   }
   
-  // Conectar com mTLS usando a API do Deno
-  const conn = await Deno.connectTls({
-    hostname: INTER_HOST,
-    port: INTER_PORT,
+  console.log(`[inter-mtls] Creating HttpClient with cert and key PEM strings`);
+  
+  // Criar cliente HTTP com mTLS usando PEM strings diretamente
+  // A API do Deno usa 'cert' e 'key' para TlsCertifiedKeyPem
+  return Deno.createHttpClient({
     cert: cleanCert,
     key: cleanKey,
   });
-
-  try {
-    // Construir request HTTP
-    const headerLines = Object.entries(headers)
-      .map(([k, v]) => `${k}: ${v}`)
-      .join("\r\n");
-
-    let request = `${method} ${path} HTTP/1.1\r\n`;
-    request += `Host: ${INTER_HOST}\r\n`;
-    request += headerLines + "\r\n";
-    
-    if (body) {
-      request += `Content-Length: ${new TextEncoder().encode(body).length}\r\n`;
-    }
-    request += "\r\n";
-    
-    if (body) {
-      request += body;
-    }
-
-    // Enviar request
-    const encoder = new TextEncoder();
-    await conn.write(encoder.encode(request));
-
-    // Ler resposta - usar buffer maior e múltiplas leituras
-    const decoder = new TextDecoder();
-    const chunks: Uint8Array[] = [];
-    let totalSize = 0;
-    
-    // Ler todos os dados disponíveis
-    let readAttempts = 0;
-    const maxAttempts = 50;
-    
-    while (readAttempts < maxAttempts) {
-      const buffer = new Uint8Array(131072); // 128KB buffer
-      const n = await conn.read(buffer);
-      if (n === null) break;
-      
-      chunks.push(buffer.subarray(0, n));
-      totalSize += n;
-      
-      // Verificar se temos a resposta completa
-      const tempResponse = decoder.decode(concatUint8Arrays(chunks));
-      
-      if (tempResponse.includes("\r\n\r\n")) {
-        const headerEndIndex = tempResponse.indexOf("\r\n\r\n");
-        const headersPart = tempResponse.substring(0, headerEndIndex);
-        
-        // Verificar Content-Length
-        const contentLengthMatch = headersPart.match(/Content-Length:\s*(\d+)/i);
-        if (contentLengthMatch) {
-          const contentLength = parseInt(contentLengthMatch[1]);
-          const bodyStart = headerEndIndex + 4;
-          const currentBodyLength = new TextEncoder().encode(tempResponse.substring(bodyStart)).length;
-          if (currentBodyLength >= contentLength) break;
-        } else if (headersPart.toLowerCase().includes("transfer-encoding: chunked")) {
-          // Para chunked, verificar se termina com 0\r\n\r\n
-          if (tempResponse.includes("\r\n0\r\n\r\n")) break;
-        }
-      }
-      
-      readAttempts++;
-      
-      // Pequena pausa para dar tempo de mais dados chegarem
-      if (readAttempts % 5 === 0) {
-        await new Promise(r => setTimeout(r, 50));
-      }
-    }
-    
-    const response = decoder.decode(concatUint8Arrays(chunks));
-    console.log(`[inter-mtls] Total bytes lidos: ${totalSize}`);
-
-    // Parsear resposta HTTP
-    const headerEndIndex = response.indexOf("\r\n\r\n");
-    if (headerEndIndex === -1) {
-      throw new Error("Invalid HTTP response - no header end found");
-    }
-
-    const headersPart = response.substring(0, headerEndIndex);
-    const bodyPart = response.substring(headerEndIndex + 4);
-
-    // Extrair status code
-    const statusLine = headersPart.split("\r\n")[0];
-    const statusMatch = statusLine.match(/HTTP\/[\d.]+\s+(\d+)/);
-    const status = statusMatch ? parseInt(statusMatch[1]) : 500;
-
-    // Lidar com chunked encoding se necessário
-    let finalBody = bodyPart;
-    if (headersPart.toLowerCase().includes("transfer-encoding: chunked")) {
-      finalBody = parseChunkedBody(bodyPart);
-    }
-
-    console.log(`[inter-mtls] Response status: ${status}, body length: ${finalBody.length}`);
-    return { status, body: finalBody };
-  } finally {
-    conn.close();
-  }
 }
 
-function parseChunkedBody(chunkedBody: string): string {
-  try {
-    // O chunked encoding usa bytes, não caracteres
-    // Vamos processar como bytes para maior precisão
-    const encoder = new TextEncoder();
-    const decoder = new TextDecoder();
-    const bodyBytes = encoder.encode(chunkedBody);
-    
-    const resultChunks: Uint8Array[] = [];
-    let offset = 0;
-    let iterations = 0;
-    const maxIterations = 500;
-    
-    while (offset < bodyBytes.length && iterations < maxIterations) {
-      iterations++;
-      
-      // Encontrar fim da linha do tamanho (procurar \r\n)
-      let lineEnd = -1;
-      for (let i = offset; i < bodyBytes.length - 1; i++) {
-        if (bodyBytes[i] === 0x0D && bodyBytes[i + 1] === 0x0A) { // \r\n
-          lineEnd = i;
-          break;
-        }
-      }
-      if (lineEnd === -1) break;
-      
-      // Ler o tamanho do chunk em hex
-      const sizeStr = decoder.decode(bodyBytes.subarray(offset, lineEnd)).trim();
-      if (!sizeStr || !/^[0-9a-fA-F]+$/.test(sizeStr)) break;
-      
-      const chunkSize = parseInt(sizeStr, 16);
-      if (isNaN(chunkSize) || chunkSize === 0) break;
-      if (chunkSize > 10000000) break;
-      
-      const chunkStart = lineEnd + 2; // após \r\n
-      const chunkEnd = chunkStart + chunkSize;
-      
-      if (chunkEnd > bodyBytes.length) {
-        console.log(`[inter-mtls] Chunk incompleto: esperado ${chunkSize} bytes a partir de ${chunkStart}, total ${bodyBytes.length}`);
-        break;
-      }
-      
-      resultChunks.push(bodyBytes.subarray(chunkStart, chunkEnd));
-      offset = chunkEnd + 2; // pular \r\n após o chunk
-    }
-    
-    console.log(`[inter-mtls] Parsed ${resultChunks.length} chunks em ${iterations} iterações`);
-    
-    // Concatenar todos os chunks
-    const totalLength = resultChunks.reduce((acc, chunk) => acc + chunk.length, 0);
-    const result = new Uint8Array(totalLength);
-    let pos = 0;
-    for (const chunk of resultChunks) {
-      result.set(chunk, pos);
-      pos += chunk.length;
-    }
-    
-    return decoder.decode(result);
-  } catch (e) {
-    console.error("[inter-mtls] Erro no parseChunkedBody:", e);
-    return "";
+/**
+ * Faz requisição HTTP com mTLS usando fetch + Deno.createHttpClient
+ */
+async function makeHttpsRequest(
+  client: Deno.HttpClient,
+  method: string,
+  path: string,
+  headers: Record<string, string>,
+  body: string | null
+): Promise<{ status: number; body: string }> {
+  const url = `${INTER_BASE_URL}${path}`;
+  console.log(`[inter-mtls] Making ${method} request to ${url}`);
+  
+  const fetchOptions: RequestInit & { client: Deno.HttpClient } = {
+    method,
+    headers: {
+      ...headers,
+      "User-Agent": "WAI-ERP/1.0",
+    },
+    client,
+  };
+  
+  if (body && (method === "POST" || method === "PUT" || method === "PATCH")) {
+    fetchOptions.body = body;
   }
+  
+  const response = await fetch(url, fetchOptions);
+  const responseBody = await response.text();
+  
+  console.log(`[inter-mtls] Response status: ${response.status}, body length: ${responseBody.length}`);
+  
+  return { status: response.status, body: responseBody };
 }
 
 /**
  * Obtém token OAuth do Banco Inter usando mTLS
  */
 async function getInterOAuthToken(
+  client: Deno.HttpClient,
   clientId: string,
   clientSecret: string,
-  cert: string,
-  key: string,
   scope: string
 ): Promise<string> {
   console.log(`[inter-mtls] Getting OAuth token with scope: ${scope}`);
@@ -247,7 +111,7 @@ async function getInterOAuthToken(
     "Content-Type": "application/x-www-form-urlencoded",
   };
 
-  const response = await makeHttpsRequest("POST", "/oauth/v2/token", headers, body, cert, key);
+  const response = await makeHttpsRequest(client, "POST", "/oauth/v2/token", headers, body);
   
   if (response.status !== 200) {
     console.error(`[inter-mtls] OAuth error: ${response.body}`);
@@ -267,24 +131,26 @@ async function getInterOAuthToken(
  * Busca extrato bancário do Banco Inter usando mTLS
  */
 async function getInterExtrato(
+  client: Deno.HttpClient,
   token: string,
   accountNumber: string,
   dateFrom: string,
-  dateTo: string,
-  cert: string,
-  key: string
+  dateTo: string
 ): Promise<unknown> {
   const path = `/banking/v2/extrato?dataInicio=${dateFrom}&dataFim=${dateTo}`;
   
   console.log(`[inter-mtls] Getting extrato: ${path}`);
   
-  const headers = {
+  const headers: Record<string, string> = {
     "Authorization": `Bearer ${token}`,
     "Content-Type": "application/json",
-    "x-conta-corrente": accountNumber,
   };
+  
+  if (accountNumber) {
+    headers["x-conta-corrente"] = accountNumber;
+  }
 
-  const response = await makeHttpsRequest("GET", path, headers, null, cert, key);
+  const response = await makeHttpsRequest(client, "GET", path, headers, null);
   
   console.log(`[inter-mtls] Extrato response status: ${response.status}`);
   
@@ -364,88 +230,94 @@ serve(async (req) => {
 
     console.log(`[inter-mtls] Certificados carregados: cert ${cert.length} chars, key ${key.length} chars`);
 
-    // Obter token OAuth via mTLS direto
-    const token = await getInterOAuthToken(
-      credentials.client_id,
-      credentials.client_secret,
-      cert,
-      key,
-      "extrato.read"
-    );
+    // Criar cliente mTLS uma vez e reusar
+    const mtlsClient = createMtlsClient(cert, key);
 
-    // Buscar extrato via mTLS direto
-    const extratoResult = await getInterExtrato(
-      token,
-      credentials.account_number || "",
-      date_from,
-      date_to,
-      cert,
-      key
-    );
-
-    // Log seguro da resposta
     try {
-      const resultStr = JSON.stringify(extratoResult);
-      console.log(`[inter-mtls] Estrutura da resposta (${resultStr.length} chars):`, resultStr.slice(0, 500));
-    } catch (e) {
-      console.log(`[inter-mtls] Resposta recebida (não serializável):`, typeof extratoResult);
-    }
+      // Obter token OAuth via mTLS
+      const token = await getInterOAuthToken(
+        mtlsClient,
+        credentials.client_id,
+        credentials.client_secret,
+        "extrato.read"
+      );
 
-    // A API do Inter retorna as transações em diferentes formatos
-    const transacoes = Array.isArray(extratoResult) 
-      ? extratoResult 
-      : (extratoResult as { transacoes?: unknown[] })?.transacoes || [];
+      // Buscar extrato via mTLS
+      const extratoResult = await getInterExtrato(
+        mtlsClient,
+        token,
+        credentials.account_number || "",
+        date_from,
+        date_to
+      );
 
-    console.log(`[inter-mtls] Recebidas ${transacoes.length} transações`);
-
-    // Importar transações
-    let importedCount = 0;
-    for (const tx of transacoes) {
-      const txData = tx as Record<string, unknown>;
-      
-      const dataMovimento = String(txData.dataMovimento || txData.dataEntrada || txData.data || "");
-      const descricao = String(txData.descricao || txData.titulo || txData.detalhe || "");
-      const valor = Number(txData.valor || 0);
-      const tipoOperacao = String(txData.tipoOperacao || txData.tipo || (valor >= 0 ? "C" : "D"));
-      const nsuOriginal = txData.nsu || txData.codigoTransacao || txData.idTransacao;
-      
-      const nsu = nsuOriginal 
-        ? String(nsuOriginal) 
-        : `INTER-${dataMovimento}-${descricao.substring(0, 20).replace(/[^a-zA-Z0-9]/g, '')}-${Math.abs(valor).toFixed(2)}`;
-      
-      const amount = tipoOperacao === "C" || tipoOperacao === "CREDITO" 
-        ? Math.abs(valor) 
-        : -Math.abs(valor);
-      
-      const { error } = await supabase
-        .from("bank_transactions")
-        .upsert({
-          company_id,
-          transaction_date: dataMovimento,
-          description: descricao,
-          amount: amount,
-          type: tipoOperacao === "C" || tipoOperacao === "CREDITO" ? "CREDIT" : "DEBIT",
-          nsu: nsu,
-          raw_data: txData,
-        }, { onConflict: "company_id,nsu", ignoreDuplicates: true });
-      
-      if (!error) {
-        importedCount++;
+      // Log seguro da resposta
+      try {
+        const resultStr = JSON.stringify(extratoResult);
+        console.log(`[inter-mtls] Estrutura da resposta (${resultStr.length} chars):`, resultStr.slice(0, 500));
+      } catch (e) {
+        console.log(`[inter-mtls] Resposta recebida (não serializável):`, typeof extratoResult);
       }
+
+      // A API do Inter retorna as transações em diferentes formatos
+      const transacoes = Array.isArray(extratoResult) 
+        ? extratoResult 
+        : (extratoResult as { transacoes?: unknown[] })?.transacoes || [];
+
+      console.log(`[inter-mtls] Recebidas ${transacoes.length} transações`);
+
+      // Importar transações
+      let importedCount = 0;
+      for (const tx of transacoes) {
+        const txData = tx as Record<string, unknown>;
+        
+        const dataMovimento = String(txData.dataMovimento || txData.dataEntrada || txData.data || "");
+        const descricao = String(txData.descricao || txData.titulo || txData.detalhe || "");
+        const valor = Number(txData.valor || 0);
+        const tipoOperacao = String(txData.tipoOperacao || txData.tipo || (valor >= 0 ? "C" : "D"));
+        const nsuOriginal = txData.nsu || txData.codigoTransacao || txData.idTransacao;
+        
+        const nsu = nsuOriginal 
+          ? String(nsuOriginal) 
+          : `INTER-${dataMovimento}-${descricao.substring(0, 20).replace(/[^a-zA-Z0-9]/g, '')}-${Math.abs(valor).toFixed(2)}`;
+        
+        const amount = tipoOperacao === "C" || tipoOperacao === "CREDITO" 
+          ? Math.abs(valor) 
+          : -Math.abs(valor);
+        
+        const { error } = await supabase
+          .from("bank_transactions")
+          .upsert({
+            company_id,
+            transaction_date: dataMovimento,
+            description: descricao,
+            amount: amount,
+            type: tipoOperacao === "C" || tipoOperacao === "CREDITO" ? "CREDIT" : "DEBIT",
+            nsu: nsu,
+            raw_data: txData,
+          }, { onConflict: "company_id,nsu", ignoreDuplicates: true });
+        
+        if (!error) {
+          importedCount++;
+        }
+      }
+
+      // Atualizar timestamp de sincronização
+      await supabase
+        .from("inter_credentials")
+        .update({ last_sync_at: new Date().toISOString() })
+        .eq("company_id", company_id);
+
+      console.log(`[inter-mtls] Importadas ${importedCount} transações`);
+
+      return new Response(
+        JSON.stringify({ success: true, imported: importedCount }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    } finally {
+      // Fechar cliente mTLS
+      mtlsClient.close();
     }
-
-    // Atualizar timestamp de sincronização
-    await supabase
-      .from("inter_credentials")
-      .update({ last_sync_at: new Date().toISOString() })
-      .eq("company_id", company_id);
-
-    console.log(`[inter-mtls] Importadas ${importedCount} transações`);
-
-    return new Response(
-      JSON.stringify({ success: true, imported: importedCount }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
 
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : "Erro interno";
