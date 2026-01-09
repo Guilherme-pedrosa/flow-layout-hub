@@ -15,6 +15,7 @@
 
 import { supabase } from "@/integrations/supabase/client";
 import { AIMode } from "./systemPrompt";
+import { todayYMDinSP, daysAgoYMDinSP, firstDayOfMonthYMDinSP } from "@/utils/datesSP";
 
 export interface AIContextOptions {
   companyId: string;
@@ -215,13 +216,11 @@ async function loadKPIs(context: AIContext, companyId: string) {
 }
 
 async function loadFinanceiroData(context: AIContext, companyId: string) {
-  const today = new Date();
-  const todayStr = today.toISOString().split("T")[0];
-  const in7Days = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
-  
-  // Datas para resumos
-  const sevenDaysAgo = new Date(Date.now() - 6 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
-  const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split("T")[0];
+  // Datas no timezone de São Paulo (evita problema de UTC vs horário local)
+  const todayStr = todayYMDinSP();
+  const sevenDaysAgo = daysAgoYMDinSP(6);
+  const firstDayOfMonth = firstDayOfMonthYMDinSP();
+  const in7Days = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
 
   context.financeiro = {};
 
