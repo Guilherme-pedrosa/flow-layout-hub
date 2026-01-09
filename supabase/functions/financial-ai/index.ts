@@ -169,18 +169,18 @@ serve(async (req) => {
           .eq("is_paid", false)
           .order("due_date", { ascending: true })
           .limit(100),
-        // Contas bancárias sincronizadas via API (FONTE OFICIAL)
+        // Contas bancárias (manuais + Inter)
         supabase
-          .from("bank_accounts_synced")
-          .select("id, name, bank_name, current_balance, available_balance, account_type, last_refreshed_at")
+          .from("bank_accounts")
+          .select("id, name, bank_name, current_balance, account_number, is_active")
           .eq("company_id", companyId)
           .eq("is_active", true),
-        // Transações bancárias sincronizadas via API (apenas para evidência, NÃO para totais)
+        // Transações bancárias (apenas para evidência, NÃO para totais - totais vêm do RPC)
         supabase
-          .from("bank_transactions_synced")
-          .select("id, description, amount, direction, posted_at, category, merchant, is_reconciled")
+          .from("bank_transactions")
+          .select("id, description, amount, transaction_date, type, is_reconciled")
           .eq("company_id", companyId)
-          .order("posted_at", { ascending: false })
+          .order("transaction_date", { ascending: false })
           .limit(50),
         // Conexões bancárias
         supabase
@@ -259,8 +259,8 @@ serve(async (req) => {
       const totalOverduePayables = overduePayables.reduce((sum, p) => sum + (p.amount || 0), 0);
       const totalOverdueReceivables = overdueReceivables.reduce((sum, r) => sum + (r.amount || 0), 0);
 
-      // Bank synced info
-      const totalBankBalanceSynced = bankAccountsSynced?.reduce((sum, a) => sum + (a.current_balance || 0), 0) || 0;
+      // Bank info (usando bank_accounts - tabela onde o Inter salva)
+      const totalBankBalance = bankAccountsSynced?.reduce((sum, a) => sum + (a.current_balance || 0), 0) || 0;
       const lastBankSync = bankConnections?.find(c => c.last_sync_at)?.last_sync_at;
       const bankSyncStatus = bankConnections?.length ? (bankConnections.some(c => c.status === 'error') ? 'error' : 'active') : 'none';
 
@@ -283,12 +283,12 @@ serve(async (req) => {
 - Contas a Receber Pendentes: ${receivables?.length || 0} títulos (${formatBRL(totalReceivables)})
 - Contas a Receber Vencidas: ${overdueReceivables.length} títulos (${formatBRL(totalOverdueReceivables)})
 
-### 🏦 BANCOS SINCRONIZADOS (FONTE OFICIAL: bank_transactions_synced)
+### 🏦 BANCOS (FONTE OFICIAL: bank_transactions via RPC get_bank_tx_summary)
 - Status das Conexões: ${bankSyncStatus} (${bankConnections?.length || 0} conexões)
-- Saldo Total Sincronizado: ${formatBRL(totalBankBalanceSynced)}
+- Saldo Total em Contas: ${formatBRL(totalBankBalance)}
 - Última Sincronização: ${lastBankSync ? formatDateBR(lastBankSync) : 'Nunca'}
-- Contas Sincronizadas: ${bankAccountsSynced?.length || 0}
-${bankAccountsSynced?.map(a => `  • ${a.name} (${a.bank_name}): ${formatBRL(a.current_balance)}`).join('\n') || '  Nenhuma conta sincronizada'}
+- Contas Cadastradas: ${bankAccountsSynced?.length || 0}
+${bankAccountsSynced?.map(a => `  • ${a.name} (${a.bank_name}): ${formatBRL(a.current_balance)}`).join('\n') || '  Nenhuma conta cadastrada'}
 
 ### ⚠️ RESUMO HOJE (${formatDateBR(todayStr)}) - FONTE: RPC get_bank_tx_summary
 ${resumoHoje && resumoHoje.tx_count > 0 ? `- Transações: ${resumoHoje.tx_count}
@@ -353,13 +353,12 @@ ${JSON.stringify(overdueReceivables.slice(0, 15).map(r => ({
   dias_atraso: Math.floor((new Date().getTime() - new Date(r.due_date).getTime()) / (1000 * 60 * 60 * 24))
 })), null, 2)}
 
-### 📋 DETALHES - Transações Bancárias Sincronizadas (últimas 30 - APENAS PARA EVIDÊNCIA, NÃO USAR PARA TOTAIS)
+### 📋 DETALHES - Transações Bancárias (últimas 30 - APENAS PARA EVIDÊNCIA, NÃO USAR PARA TOTAIS)
 ${JSON.stringify(bankTransactionsSynced?.slice(0, 30).map(t => ({
-  data: t.posted_at,
+  data: t.transaction_date,
   descricao: t.description,
   valor: t.amount,
-  direcao: t.direction,
-  categoria: t.category,
+  tipo: t.type,
   conciliado: t.is_reconciled
 })), null, 2)}
 

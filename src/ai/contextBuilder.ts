@@ -276,12 +276,12 @@ async function loadFinanceiroData(context: AIContext, companyId: string) {
     dias_atraso: Math.floor((Date.now() - new Date(r.due_date).getTime()) / (1000 * 60 * 60 * 24))
   })) || [];
 
-  // ======== BANCOS SINCRONIZADOS (FONTE OFICIAL) ========
+  // ======== BANCOS (FONTE OFICIAL: bank_transactions via RPC) ========
   
-  // Contas bancárias sincronizadas
-  const { data: bankAccountsSynced } = await supabase
-    .from("bank_accounts_synced")
-    .select("id, name, bank_name, current_balance, available_balance, last_refreshed_at")
+  // Contas bancárias
+  const { data: bankAccounts } = await supabase
+    .from("bank_accounts")
+    .select("id, name, bank_name, current_balance, is_active")
     .eq("company_id", companyId)
     .eq("is_active", true);
   
@@ -297,14 +297,14 @@ async function loadFinanceiroData(context: AIContext, companyId: string) {
     : 'none';
 
   context.financeiro.bancosSincronizados = {
-    contas: bankAccountsSynced?.map(a => ({
+    contas: bankAccounts?.map(a => ({
       id: a.id,
       nome: a.name,
       banco: a.bank_name,
       saldo: a.current_balance,
       saldo_formatted: formatBRL(a.current_balance),
-      disponivel: a.available_balance,
-      ultima_atualizacao: formatDate(a.last_refreshed_at)
+      disponivel: a.current_balance,
+      ultima_atualizacao: formatDate(lastSync)
     })) || [],
     ultimaSincronizacao: lastSync,
     statusConexao: connectionStatus
@@ -323,19 +323,19 @@ async function loadFinanceiroData(context: AIContext, companyId: string) {
   context.financeiro.resumo7d = resumo7d;
   context.financeiro.resumoMes = resumoMes;
 
-  // Últimas transações sincronizadas (apenas para evidência, NÃO para totais)
-  const { data: transacoesSynced } = await supabase
-    .from("bank_transactions_synced")
-    .select("id, description, amount, direction, posted_at, category, is_reconciled")
+  // Últimas transações (apenas para evidência, NÃO para totais)
+  const { data: transacoes } = await supabase
+    .from("bank_transactions")
+    .select("id, description, amount, transaction_date, type, is_reconciled")
     .eq("company_id", companyId)
-    .order("posted_at", { ascending: false })
+    .order("transaction_date", { ascending: false })
     .limit(20);
   
-  context.financeiro.ultimasTransacoesSynced = transacoesSynced?.map(t => ({
+  context.financeiro.ultimasTransacoesSynced = transacoes?.map(t => ({
     ...t,
     amount_formatted: formatBRL(Math.abs(t.amount)),
-    date_formatted: formatDate(t.posted_at),
-    tipo: t.direction === 'in' || t.direction === 'credit' ? 'entrada' : 'saida'
+    date_formatted: formatDate(t.transaction_date),
+    tipo: t.amount > 0 ? 'entrada' : 'saida'
   })) || [];
 }
 
