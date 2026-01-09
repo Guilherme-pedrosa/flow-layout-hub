@@ -1,10 +1,13 @@
 /**
- * WAI ERP - AI Context Builder v1.0
+ * WAI ERP - AI Context Builder v2.0
  * 
  * Constrói o contexto de dados do sistema para enviar à IA.
  * O contexto é a "fonte de verdade" que a IA usa para responder.
  * 
- * REGRAS:
+ * REGRAS v2.0:
+ * - FONTE OFICIAL para extrato: bank_transactions_synced / bank_accounts_synced
+ * - NUNCA usar bank_transactions / bank_accounts para extrato
+ * - Inclui SEMPRE resumo do período via RPC get_bank_tx_summary
  * - Coleta APENAS dados que o usuário tem permissão (via RLS)
  * - Limita quantidade de registros para não estourar tokens
  * - Formata valores em padrão BR
@@ -24,6 +27,15 @@ export interface AIContextOptions {
     supplierId?: string;
   };
   mode?: AIMode;
+}
+
+export interface BankTxSummary {
+  tx_count: number;
+  total_in: number;
+  total_out: number;
+  net: number;
+  first_date: string | null;
+  last_date: string | null;
 }
 
 export interface AIContext {
@@ -48,8 +60,18 @@ export interface AIContext {
     contasPagarVencidas?: any[];
     contasPagarProximas?: any[];
     contasReceberVencidas?: any[];
-    saldoBancario?: number;
-    ultimasTransacoes?: any[];
+    // BANCOS SINCRONIZADOS (fonte oficial)
+    bancosSincronizados?: {
+      contas: any[];
+      ultimaSincronizacao: string | null;
+      statusConexao: string;
+    };
+    // RESUMOS DO PERÍODO (via RPC - FONTE OFICIAL para totais)
+    resumoHoje?: BankTxSummary | null;
+    resumo7d?: BankTxSummary | null;
+    resumoMes?: BankTxSummary | null;
+    // Últimas transações (apenas para evidência, NÃO para totais)
+    ultimasTransacoesSynced?: any[];
   };
   estoque?: {
     itensNegativos?: any[];
@@ -78,6 +100,35 @@ function formatDate(dateStr: string | null | undefined): string {
   if (!dateStr) return "-";
   const date = new Date(dateStr);
   return date.toLocaleDateString("pt-BR");
+}
+
+/**
+ * Busca sumário de transações via RPC (fonte oficial para totais)
+ */
+async function getBankTxSummary(
+  companyId: string, 
+  dateFrom: string, 
+  dateTo: string
+): Promise<BankTxSummary | null> {
+  try {
+    const { data, error } = await supabase.rpc('get_bank_tx_summary', {
+      p_company_id: companyId,
+      p_date_from: dateFrom,
+      p_date_to: dateTo
+    });
+    
+    if (error) {
+      console.error('[contextBuilder] RPC get_bank_tx_summary error:', error);
+      return null;
+    }
+    
+    // RPC retorna array, pegar primeiro item
+    const result = Array.isArray(data) ? data[0] : data;
+    return result || null;
+  } catch (err) {
+    console.error('[contextBuilder] getBankTxSummary exception:', err);
+    return null;
+  }
 }
 
 /**
@@ -164,8 +215,13 @@ async function loadKPIs(context: AIContext, companyId: string) {
 }
 
 async function loadFinanceiroData(context: AIContext, companyId: string) {
-  const today = new Date().toISOString().split("T")[0];
+  const today = new Date();
+  const todayStr = today.toISOString().split("T")[0];
   const in7Days = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+  
+  // Datas para resumos
+  const sevenDaysAgo = new Date(Date.now() - 6 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+  const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split("T")[0];
 
   context.financeiro = {};
 
@@ -175,7 +231,7 @@ async function loadFinanceiroData(context: AIContext, companyId: string) {
     .select("id, description, amount, due_date, supplier_id")
     .eq("company_id", companyId)
     .eq("is_paid", false)
-    .lt("due_date", today)
+    .lt("due_date", todayStr)
     .order("due_date", { ascending: true })
     .limit(10);
   
@@ -192,7 +248,7 @@ async function loadFinanceiroData(context: AIContext, companyId: string) {
     .select("id, description, amount, due_date")
     .eq("company_id", companyId)
     .eq("is_paid", false)
-    .gte("due_date", today)
+    .gte("due_date", todayStr)
     .lte("due_date", in7Days)
     .order("due_date", { ascending: true })
     .limit(10);
@@ -209,7 +265,7 @@ async function loadFinanceiroData(context: AIContext, companyId: string) {
     .select("id, description, amount, due_date, client_id")
     .eq("company_id", companyId)
     .eq("is_paid", false)
-    .lt("due_date", today)
+    .lt("due_date", todayStr)
     .order("amount", { ascending: false })
     .limit(10);
   
@@ -220,27 +276,66 @@ async function loadFinanceiroData(context: AIContext, companyId: string) {
     dias_atraso: Math.floor((Date.now() - new Date(r.due_date).getTime()) / (1000 * 60 * 60 * 24))
   })) || [];
 
-  // Saldo bancário
-  const { data: bankAccounts } = await supabase
-    .from("bank_accounts")
-    .select("current_balance")
+  // ======== BANCOS SINCRONIZADOS (FONTE OFICIAL) ========
+  
+  // Contas bancárias sincronizadas
+  const { data: bankAccountsSynced } = await supabase
+    .from("bank_accounts_synced")
+    .select("id, name, bank_name, current_balance, available_balance, last_refreshed_at")
     .eq("company_id", companyId)
     .eq("is_active", true);
   
-  context.financeiro.saldoBancario = bankAccounts?.reduce((sum, b) => sum + (b.current_balance || 0), 0) || 0;
+  // Status das conexões
+  const { data: bankConnections } = await supabase
+    .from("bank_connections")
+    .select("id, status, last_sync_at, last_sync_status")
+    .eq("company_id", companyId);
+  
+  const lastSync = bankConnections?.find(c => c.last_sync_at)?.last_sync_at || null;
+  const connectionStatus = bankConnections?.length 
+    ? (bankConnections.some(c => c.status === 'error') ? 'error' : 'active')
+    : 'none';
 
-  // Últimas transações bancárias
-  const { data: transacoes } = await supabase
-    .from("bank_transactions")
-    .select("id, description, amount, transaction_date, is_reconciled")
+  context.financeiro.bancosSincronizados = {
+    contas: bankAccountsSynced?.map(a => ({
+      id: a.id,
+      nome: a.name,
+      banco: a.bank_name,
+      saldo: a.current_balance,
+      saldo_formatted: formatBRL(a.current_balance),
+      disponivel: a.available_balance,
+      ultima_atualizacao: formatDate(a.last_refreshed_at)
+    })) || [],
+    ultimaSincronizacao: lastSync,
+    statusConexao: connectionStatus
+  };
+
+  // ======== RESUMOS DO PERÍODO VIA RPC (FONTE OFICIAL PARA TOTAIS) ========
+  
+  // Buscar resumos em paralelo
+  const [resumoHoje, resumo7d, resumoMes] = await Promise.all([
+    getBankTxSummary(companyId, todayStr, todayStr),
+    getBankTxSummary(companyId, sevenDaysAgo, todayStr),
+    getBankTxSummary(companyId, firstDayOfMonth, todayStr)
+  ]);
+  
+  context.financeiro.resumoHoje = resumoHoje;
+  context.financeiro.resumo7d = resumo7d;
+  context.financeiro.resumoMes = resumoMes;
+
+  // Últimas transações sincronizadas (apenas para evidência, NÃO para totais)
+  const { data: transacoesSynced } = await supabase
+    .from("bank_transactions_synced")
+    .select("id, description, amount, direction, posted_at, category, is_reconciled")
     .eq("company_id", companyId)
-    .order("transaction_date", { ascending: false })
+    .order("posted_at", { ascending: false })
     .limit(20);
   
-  context.financeiro.ultimasTransacoes = transacoes?.map(t => ({
+  context.financeiro.ultimasTransacoesSynced = transacoesSynced?.map(t => ({
     ...t,
-    amount_formatted: formatBRL(t.amount),
-    date_formatted: formatDate(t.transaction_date)
+    amount_formatted: formatBRL(Math.abs(t.amount)),
+    date_formatted: formatDate(t.posted_at),
+    tipo: t.direction === 'in' || t.direction === 'credit' ? 'entrada' : 'saida'
   })) || [];
 }
 
@@ -350,10 +445,48 @@ export function serializeContext(context: AIContext): string {
   // Financeiro
   if (context.financeiro) {
     const fin = context.financeiro;
-    sections.push(`## Financeiro
-### Saldo Bancário Total
-${formatBRL(fin.saldoBancario)}
+    
+    // BANCOS SINCRONIZADOS (FONTE OFICIAL)
+    const bancos = fin.bancosSincronizados;
+    const saldoTotalSynced = bancos?.contas.reduce((sum, c) => sum + (c.saldo || 0), 0) || 0;
+    
+    sections.push(`## 🏦 BANCOS SINCRONIZADOS (FONTE OFICIAL)
+### Status da Integração
+- Status: ${bancos?.statusConexao || 'none'}
+- Última Sincronização: ${bancos?.ultimaSincronizacao ? formatDate(bancos.ultimaSincronizacao) : 'Nunca'}
+- Contas Ativas: ${bancos?.contas.length || 0}
+- Saldo Total: ${formatBRL(saldoTotalSynced)}
 
+### Contas Bancárias
+${bancos?.contas.map(c => `- ${c.nome} (${c.banco}): ${c.saldo_formatted}`).join('\n') || 'Nenhuma conta sincronizada'}
+
+### ⚠️ RESUMO HOJE (${new Date().toLocaleDateString('pt-BR')}) - FONTE: RPC get_bank_tx_summary
+${fin.resumoHoje ? `- Transações: ${fin.resumoHoje.tx_count}
+- Entradas: ${formatBRL(fin.resumoHoje.total_in)}
+- Saídas: ${formatBRL(fin.resumoHoje.total_out)}
+- Saldo do Dia: ${formatBRL(fin.resumoHoje.net)}` : '⚠️ Sem dados de transações para hoje'}
+
+### RESUMO ÚLTIMOS 7 DIAS - FONTE: RPC get_bank_tx_summary
+${fin.resumo7d ? `- Período: ${formatDate(fin.resumo7d.first_date)} → ${formatDate(fin.resumo7d.last_date)}
+- Transações: ${fin.resumo7d.tx_count}
+- Entradas: ${formatBRL(fin.resumo7d.total_in)}
+- Saídas: ${formatBRL(fin.resumo7d.total_out)}
+- Saldo Período: ${formatBRL(fin.resumo7d.net)}` : '⚠️ Sem dados de transações para os últimos 7 dias'}
+
+### RESUMO MÊS ATUAL - FONTE: RPC get_bank_tx_summary
+${fin.resumoMes ? `- Período: ${formatDate(fin.resumoMes.first_date)} → ${formatDate(fin.resumoMes.last_date)}
+- Transações: ${fin.resumoMes.tx_count}
+- Entradas: ${formatBRL(fin.resumoMes.total_in)}
+- Saídas: ${formatBRL(fin.resumoMes.total_out)}
+- Saldo Período: ${formatBRL(fin.resumoMes.net)}` : '⚠️ Sem dados de transações para o mês'}
+
+### Últimas 20 Transações (apenas evidência, NÃO usar para totais)
+${fin.ultimasTransacoesSynced?.map(t => 
+  `- ${t.date_formatted} | ${t.tipo.toUpperCase()} | ${t.amount_formatted} | ${t.description || 'Sem descrição'}`
+).join('\n') || 'Nenhuma transação sincronizada'}`);
+
+    // Contas a pagar/receber
+    sections.push(`## 📋 CONTAS A PAGAR/RECEBER
 ### Contas a Pagar Vencidas (${fin.contasPagarVencidas?.length || 0})
 ${fin.contasPagarVencidas?.map(p => 
   `- ${p.description || 'Sem descrição'}: ${p.amount_formatted} (vencido há ${p.dias_atraso} dias)`

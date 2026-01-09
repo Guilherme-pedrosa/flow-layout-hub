@@ -9521,6 +9521,17 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      get_bank_tx_summary: {
+        Args: { p_company_id: string; p_date_from: string; p_date_to: string }
+        Returns: {
+          first_date: string
+          last_date: string
+          net: number
+          total_in: number
+          total_out: number
+          tx_count: number
+        }[]
+      }
       get_pending_equipment_jobs_for_customer: {
         Args: { p_client_id: string; p_company_id: string }
         Returns: {
