@@ -76,12 +76,37 @@ function daysAgoYMDinSP(days: number): string {
 }
 
 /**
- * Retorna o primeiro dia do mês atual no formato YYYY-MM-DD no fuso de São Paulo
+ * Retorna o primeiro dia do mês de uma data específica no formato YYYY-MM-DD
  */
-function firstDayOfMonthYMDinSP(): string {
-  const now = new Date();
-  const spDate = new Date(now.toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
-  return `${spDate.getFullYear()}-${String(spDate.getMonth() + 1).padStart(2, '0')}-01`;
+function firstDayOfMonthFromDate(dateStr: string): string {
+  const date = new Date(dateStr + 'T12:00:00');
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-01`;
+}
+
+/**
+ * CRÍTICO: Busca a data da última transação no banco (latest_date)
+ * Isso resolve o problema de "hoje" não ter dados pois bancos usam D-1
+ */
+async function getLatestBankDate(supabase: any, companyId: string): Promise<string | null> {
+  try {
+    const { data, error } = await supabase
+      .from('bank_transactions')
+      .select('transaction_date')
+      .eq('company_id', companyId)
+      .order('transaction_date', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    
+    if (error) {
+      console.error('[financial-ai] getLatestBankDate error:', error);
+      return null;
+    }
+    
+    return data?.transaction_date || null;
+  } catch (err) {
+    console.error('[financial-ai] getLatestBankDate exception:', err);
+    return null;
+  }
 }
 
 serve(async (req) => {
@@ -146,24 +171,60 @@ serve(async (req) => {
 
     // Fetch data for context
     let fullContext = "";
+    let systemPrompt = "";
     
-    // Datas no timezone de São Paulo (evita problema UTC vs horário local brasileiro)
+    // Variáveis para resumos bancários (usadas no prompt)
+    let resumoHoje: BankTxSummary | null = null;
+    let resumo7d: BankTxSummary | null = null;
+    let resumoMes: BankTxSummary | null = null;
+    let resumo30d: BankTxSummary | null = null;
+    // CRÍTICO: Buscar último dia com dados no banco (resolve problema de bancos que usam D-1)
+    const latestBankDate = await getLatestBankDate(supabase, companyId);
     const todayStr = todayYMDinSP();
-    const sevenDaysAgo = daysAgoYMDinSP(6);
-    const firstDayOfMonth = firstDayOfMonthYMDinSP();
+    
+    // Se não há dados no banco, usar today como fallback
+    const baseDate = latestBankDate || todayStr;
+    const baseDateObj = new Date(baseDate + 'T12:00:00');
+    
+    // Calcular períodos baseados no último dia com dados
+    const sevenDaysBeforeBase = new Date(baseDateObj);
+    sevenDaysBeforeBase.setDate(sevenDaysBeforeBase.getDate() - 6);
+    const sevenDaysAgo = sevenDaysBeforeBase.toISOString().split('T')[0];
+    
+    const thirtyDaysBeforeBase = new Date(baseDateObj);
+    thirtyDaysBeforeBase.setDate(thirtyDaysBeforeBase.getDate() - 29);
+    const thirtyDaysAgo = thirtyDaysBeforeBase.toISOString().split('T')[0];
+    
+    const firstDayOfMonth = firstDayOfMonthFromDate(baseDate);
+    
+    console.log(`[financial-ai] Bank dates for ${company.name}:`, {
+      latestBankDate,
+      baseDate,
+      todayStr,
+      sevenDaysAgo,
+      thirtyDaysAgo,
+      firstDayOfMonth
+    });
 
     try {
       // ======== BUSCAR RESUMOS VIA RPC (FONTE OFICIAL PARA TOTAIS) ========
-      const thirtyDaysAgo = daysAgoYMDinSP(29);
-      const [resumoHoje, resumo7d, resumoMes, resumo30d] = await Promise.all([
-        getBankTxSummary(supabase, companyId, todayStr, todayStr),
-        getBankTxSummary(supabase, companyId, sevenDaysAgo, todayStr),
-        getBankTxSummary(supabase, companyId, firstDayOfMonth, todayStr),
-        getBankTxSummary(supabase, companyId, thirtyDaysAgo, todayStr)
+      // Usa baseDate (último dia com dados) ao invés de todayStr
+      const [rHoje, r7d, rMes, r30d] = await Promise.all([
+        getBankTxSummary(supabase, companyId, baseDate, baseDate),  // "Hoje" = último dia com dados
+        getBankTxSummary(supabase, companyId, sevenDaysAgo, baseDate),
+        getBankTxSummary(supabase, companyId, firstDayOfMonth, baseDate),
+        getBankTxSummary(supabase, companyId, thirtyDaysAgo, baseDate)
       ]);
+      
+      // Atribuir às variáveis externas
+      resumoHoje = rHoje;
+      resumo7d = r7d;
+      resumoMes = rMes;
+      resumo30d = r30d;
 
       // Debug log - mostrar resumos encontrados
       console.log(`[financial-ai] Bank summaries for ${company.name}:`, {
+        latestBankDate,
         hoje: resumoHoje?.tx_count || 0,
         '7d': resumo7d?.tx_count || 0,
         mes: resumoMes?.tx_count || 0,
@@ -309,7 +370,16 @@ serve(async (req) => {
       const openServiceOrders = serviceOrders?.filter(so => !['concluida', 'cancelada', 'faturada'].includes(so.status?.toLowerCase() || '')) || [];
 
       fullContext = `
-## 📊 CONTEXTO COMPLETO DO ERP (${formatDateBR(todayStr)})
+## 📊 CONTEXTO COMPLETO DO ERP 
+### ⚠️ ATENÇÃO: ÚLTIMO DIA COM DADOS NO BANCO: ${latestBankDate ? formatDateBR(latestBankDate) : 'SEM DADOS'}
+### Data de hoje do sistema: ${formatDateBR(todayStr)}
+
+${!latestBankDate ? `
+🚨 ALERTA CRÍTICO: Não há transações bancárias sincronizadas para esta empresa.
+Se o usuário perguntar sobre extrato/despesas/entradas, responda EXATAMENTE:
+"Não há transações bancárias sincronizadas. Fonte: bank_transactions (0 registros). Sincronize o extrato bancário para análise."
+NÃO INVENTE VALORES.
+` : ''}
 
 ### 💰 RESUMO FINANCEIRO
 - Contas a Pagar Pendentes: ${payables?.length || 0} títulos (${formatBRL(totalPayables)})
@@ -321,35 +391,36 @@ serve(async (req) => {
 - Status das Conexões: ${bankSyncStatus} (${bankConnections?.length || 0} conexões)
 - Saldo Total em Contas: ${formatBRL(totalBankBalance)}
 - Última Sincronização: ${lastBankSync ? formatDateBR(lastBankSync) : 'Nunca'}
+- **ÚLTIMO DIA COM DADOS: ${latestBankDate ? formatDateBR(latestBankDate) : 'NENHUM'}**
 - Contas Cadastradas: ${bankAccountsSynced?.length || 0}
 ${bankAccountsSynced?.map(a => `  • ${a.name} (${a.bank_name}): ${formatBRL(a.current_balance)}`).join('\n') || '  Nenhuma conta cadastrada'}
 
 ### ✅ RESUMO ÚLTIMOS 30 DIAS (PRINCIPAL) - FONTE: RPC get_bank_tx_summary
 ${resumo30d && resumo30d.tx_count > 0 ? `- Período: ${formatDateBR(resumo30d.first_date)} → ${formatDateBR(resumo30d.last_date)}
 - Transações: ${resumo30d.tx_count}
-- Entradas: ${formatBRL(resumo30d.total_in)}
-- Saídas: ${formatBRL(resumo30d.total_out)}
-- Saldo Período: ${formatBRL(resumo30d.net)}` : `tx_count: 0`}
+- Entradas (total_in): ${formatBRL(resumo30d.total_in)}
+- Saídas (total_out): ${formatBRL(resumo30d.total_out)}
+- Saldo Período (net): ${formatBRL(resumo30d.net)}` : `⚠️ tx_count: 0 - SEM TRANSAÇÕES NOS ÚLTIMOS 30 DIAS`}
 
 ### RESUMO MÊS ATUAL - FONTE: RPC get_bank_tx_summary
 ${resumoMes && resumoMes.tx_count > 0 ? `- Período: ${formatDateBR(resumoMes.first_date)} → ${formatDateBR(resumoMes.last_date)}
 - Transações: ${resumoMes.tx_count}
-- Entradas: ${formatBRL(resumoMes.total_in)}
-- Saídas: ${formatBRL(resumoMes.total_out)}
-- Saldo Período: ${formatBRL(resumoMes.net)}` : `tx_count: 0`}
+- Entradas (total_in): ${formatBRL(resumoMes.total_in)}
+- Saídas (total_out): ${formatBRL(resumoMes.total_out)}
+- Saldo Período (net): ${formatBRL(resumoMes.net)}` : `⚠️ tx_count: 0 - SEM TRANSAÇÕES NO MÊS ATUAL`}
 
 ### RESUMO ÚLTIMOS 7 DIAS - FONTE: RPC get_bank_tx_summary  
 ${resumo7d && resumo7d.tx_count > 0 ? `- Período: ${formatDateBR(resumo7d.first_date)} → ${formatDateBR(resumo7d.last_date)}
 - Transações: ${resumo7d.tx_count}
-- Entradas: ${formatBRL(resumo7d.total_in)}
-- Saídas: ${formatBRL(resumo7d.total_out)}
-- Saldo Período: ${formatBRL(resumo7d.net)}` : `tx_count: 0`}
+- Entradas (total_in): ${formatBRL(resumo7d.total_in)}
+- Saídas (total_out): ${formatBRL(resumo7d.total_out)}
+- Saldo Período (net): ${formatBRL(resumo7d.net)}` : `⚠️ tx_count: 0 - SEM TRANSAÇÕES NOS ÚLTIMOS 7 DIAS`}
 
-### RESUMO HOJE (${formatDateBR(todayStr)}) - FONTE: RPC get_bank_tx_summary
+### RESUMO "HOJE" (= ÚLTIMO DIA COM DADOS: ${latestBankDate ? formatDateBR(latestBankDate) : 'N/A'}) - FONTE: RPC get_bank_tx_summary
 ${resumoHoje && resumoHoje.tx_count > 0 ? `- Transações: ${resumoHoje.tx_count}
-- Entradas: ${formatBRL(resumoHoje.total_in)}
-- Saídas: ${formatBRL(resumoHoje.total_out)}
-- Saldo do Dia: ${formatBRL(resumoHoje.net)}` : `tx_count: 0 (sem transações hoje, use resumo de 30 dias ou mês)`}
+- Entradas (total_in): ${formatBRL(resumoHoje.total_in)}
+- Saídas (total_out): ${formatBRL(resumoHoje.total_out)}
+- Saldo do Dia (net): ${formatBRL(resumoHoje.net)}` : `⚠️ tx_count: 0 - SEM TRANSAÇÕES NO DIA ${latestBankDate ? formatDateBR(latestBankDate) : 'N/A'}`}
 
 ### 👥 CADASTROS
 - Total de Clientes: ${clients?.length || 0}
@@ -450,28 +521,52 @@ ${JSON.stringify(lowStockProducts?.map(p => ({
       fullContext = "## Dados não disponíveis\nNão foi possível carregar os dados do sistema.";
     }
 
-    const systemPrompt = `Você é o WAI Operator, um assistente técnico de análise financeira.
+    // Verificar se há dados bancários
+    const hasBankData = (resumo30d?.tx_count || 0) > 0 || (resumoMes?.tx_count || 0) > 0;
+    
+    systemPrompt = `Você é o WAI Operator, um assistente técnico de análise financeira.
 
-IMPORTANTE: Use SEMPRE os dados do contexto abaixo. Os resumos bancários contêm dados REAIS:
-- RESUMO ÚLTIMOS 30 DIAS: dados principais para análise
-- RESUMO MÊS ATUAL: dados do mês corrente
-- RESUMO 7 DIAS: dados recentes
-- RESUMO HOJE: pode estar zerado, não é problema
+## REGRAS OBRIGATÓRIAS ANTI-ALUCINAÇÃO
 
-Quando o usuário perguntar sobre despesas, extrato, gastos ou análise financeira:
-1. Olhe o RESUMO ÚLTIMOS 30 DIAS ou RESUMO MÊS ATUAL (os que tiverem tx_count > 0)
-2. Use os valores de total_out para despesas/saídas
-3. Use os valores de total_in para receitas/entradas
-4. Use o net para saldo do período
+### 1. FONTE ÚNICA PARA TOTAIS BANCÁRIOS
+- Totais de entradas/saídas/saldo DEVEM vir EXCLUSIVAMENTE do RPC get_bank_tx_summary
+- Use os campos: total_in (entradas), total_out (saídas), net (saldo), tx_count (qtd transações)
+- A lista de transações individuais é APENAS para exemplos (máximo 10 itens), NUNCA some esses valores
 
-FORMATAÇÃO:
+### 2. ÚLTIMO DIA COM DADOS
+- O sistema ajustou automaticamente "hoje" para o último dia com dados no banco
+- Último dia com dados: ${latestBankDate ? formatDateBR(latestBankDate) : 'NENHUM'}
+- Se o usuário perguntar "hoje" e não houver dados, explique que o último dado é de ${latestBankDate ? formatDateBR(latestBankDate) : 'nenhuma data'}
+
+### 3. TRAVA QUANDO NÃO HÁ DADOS
+${!hasBankData ? `
+⚠️ ALERTA: tx_count = 0 em TODOS os períodos. 
+Se perguntarem sobre extrato/despesas/gastos, responda EXATAMENTE:
+"Não há transações bancárias sincronizadas para análise.
+Fonte: RPC get_bank_tx_summary (tx_count: 0 em todos os períodos).
+Ação necessária: Sincronize o extrato bancário para continuar."
+NÃO INVENTE VALORES.` : `
+✅ Dados disponíveis:
+- 30 dias: ${resumo30d?.tx_count || 0} transações | Saídas: ${formatBRL(resumo30d?.total_out)} | Entradas: ${formatBRL(resumo30d?.total_in)}
+- Mês: ${resumoMes?.tx_count || 0} transações | Saídas: ${formatBRL(resumoMes?.total_out)} | Entradas: ${formatBRL(resumoMes?.total_in)}
+- 7 dias: ${resumo7d?.tx_count || 0} transações`}
+
+### 4. FORMATO DE RESPOSTA OBRIGATÓRIO
+Ao responder sobre dados bancários, SEMPRE inclua:
+- **Fonte:** RPC get_bank_tx_summary
+- **Período:** dd/mm/aaaa → dd/mm/aaaa
+- **Transações:** tx_count
+- **Totais:** total_in, total_out, net
+
+### 5. PROIBIÇÕES
+- NÃO use "parece", "provavelmente", "indicando"
+- NÃO faça projeções sem dados reais
+- NÃO some valores de transações individuais para totais
+- NÃO invente categorias ou análises sem dados
+
+### FORMATAÇÃO
 - Moeda BR: R$ 1.234,56
 - Datas: dd/mm/aaaa
-
-Ao responder sobre dados bancários, SEMPRE cite:
-- Fonte: bank_transactions via RPC
-- Período analisado
-- Quantidade de transações (tx_count)
 
 CONTEXTO COMPLETO (ÚNICA FONTE DE VERDADE):
 ${fullContext}`;
