@@ -231,8 +231,7 @@ Responda APENAS com o JSON array, sem markdown ou explicações.` }],
     if (!messageText.trim() || isLoading) return;
 
     const userMsg: Message = { role: "user", content: messageText };
-    const newMessages = [...messages, userMsg];
-    setMessages(newMessages);
+    setMessages(prev => [...prev, userMsg]);
     setInput("");
     setIsLoading(true);
 
@@ -241,8 +240,9 @@ Responda APENAS com o JSON array, sem markdown ou explicações.` }],
     const upsertAssistant = (nextChunk: string) => {
       assistantSoFar += nextChunk;
       setMessages(prev => {
-        const last = prev[prev.length - 1];
-        if (last?.role === "assistant") {
+        // Ensure we keep user message and update/add assistant message
+        const hasAssistantAtEnd = prev.length > 0 && prev[prev.length - 1]?.role === "assistant";
+        if (hasAssistantAtEnd) {
           return prev.map((m, i) => (i === prev.length - 1 ? { ...m, content: assistantSoFar } : m));
         }
         return [...prev, { role: "assistant", content: assistantSoFar }];
@@ -250,7 +250,7 @@ Responda APENAS com o JSON array, sem markdown ou explicações.` }],
     };
 
     try {
-      const resp = await streamChat(newMessages);
+      const resp = await streamChat([...messages, userMsg]);
       
       // CRITICAL: First get the raw text response
       const rawText = await resp.text();
@@ -344,7 +344,7 @@ Responda APENAS com o JSON array, sem markdown ou explicações.` }],
     } catch (error) {
       console.error("[FinancialAIChat] Error:", error);
       toast.error(error instanceof Error ? error.message : "Erro ao processar mensagem");
-      setMessages(prev => prev.filter(m => m !== userMsg));
+      setMessages(prev => prev.filter(m => m.content !== userMsg.content || m.role !== "user"));
     } finally {
       setIsLoading(false);
     }
