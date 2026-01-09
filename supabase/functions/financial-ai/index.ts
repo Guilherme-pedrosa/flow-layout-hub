@@ -7,7 +7,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
+const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -47,9 +47,9 @@ serve(async (req) => {
       });
     }
 
-    if (!OPENAI_API_KEY) {
-      console.error("[financial-ai] OPENAI_API_KEY is not configured");
-      throw new Error("OPENAI_API_KEY is not configured");
+    if (!LOVABLE_API_KEY) {
+      console.error("[financial-ai] LOVABLE_API_KEY is not configured");
+      throw new Error("LOVABLE_API_KEY is not configured");
     }
 
     // Verify company exists
@@ -73,11 +73,14 @@ serve(async (req) => {
     let fullContext = "";
 
     try {
-      // Fetch ALL business data in parallel
+      // Fetch ALL business data in parallel (including synced bank data)
       const [
         { data: payables },
         { data: receivables },
         { data: transactions },
+        { data: bankAccountsSynced },
+        { data: bankTransactionsSynced },
+        { data: bankConnections },
         { data: lowStockProducts },
         { data: allProducts },
         { data: clients },
@@ -104,13 +107,31 @@ serve(async (req) => {
           .eq("is_paid", false)
           .order("due_date", { ascending: true })
           .limit(100),
-        // Transações bancárias
+        // Transações bancárias (manuais)
         supabase
           .from("bank_transactions")
           .select("*, bank_account:bank_accounts(name, bank_name)")
           .eq("company_id", companyId)
           .order("transaction_date", { ascending: false })
           .limit(50),
+        // Contas bancárias sincronizadas via API
+        supabase
+          .from("bank_accounts_synced")
+          .select("id, name, bank_name, current_balance, available_balance, account_type, last_refreshed_at")
+          .eq("company_id", companyId)
+          .eq("is_active", true),
+        // Transações bancárias sincronizadas via API
+        supabase
+          .from("bank_transactions_synced")
+          .select("id, description, amount, direction, posted_at, category, merchant, is_reconciled")
+          .eq("company_id", companyId)
+          .order("posted_at", { ascending: false })
+          .limit(100),
+        // Conexões bancárias
+        supabase
+          .from("bank_connections")
+          .select("id, provider, status, connector_name, last_sync_at, last_sync_status, last_sync_error")
+          .eq("company_id", companyId),
         // Produtos com estoque baixo
         supabase
           .from("products")
@@ -184,6 +205,15 @@ serve(async (req) => {
       const totalOverduePayables = overduePayables.reduce((sum, p) => sum + (p.amount || 0), 0);
       const totalOverdueReceivables = overdueReceivables.reduce((sum, r) => sum + (r.amount || 0), 0);
 
+      // Bank synced totals
+      const totalBankBalanceSynced = bankAccountsSynced?.reduce((sum, a) => sum + (a.current_balance || 0), 0) || 0;
+      const lastBankSync = bankConnections?.find(c => c.last_sync_at)?.last_sync_at;
+      const bankSyncStatus = bankConnections?.length ? (bankConnections.some(c => c.status === 'error') ? 'error' : 'active') : 'none';
+
+      // Synced transactions summary
+      const syncedIn = bankTransactionsSynced?.filter(t => t.direction === 'in').reduce((sum, t) => sum + t.amount, 0) || 0;
+      const syncedOut = bankTransactionsSynced?.filter(t => t.direction === 'out').reduce((sum, t) => sum + Math.abs(t.amount), 0) || 0;
+
       // Sales stats
       const totalSales = sales?.reduce((sum, s) => sum + (s.total_amount || 0), 0) || 0;
       const salesByStatus = sales?.reduce((acc, s) => {
@@ -202,6 +232,15 @@ serve(async (req) => {
 - Contas a Pagar Vencidas: ${overduePayables.length} títulos (R$ ${totalOverduePayables.toFixed(2)})
 - Contas a Receber Pendentes: ${receivables?.length || 0} títulos (R$ ${totalReceivables.toFixed(2)})
 - Contas a Receber Vencidas: ${overdueReceivables.length} títulos (R$ ${totalOverdueReceivables.toFixed(2)})
+
+### 🏦 BANCOS INTEGRADOS (via API)
+- Status das Conexões: ${bankSyncStatus} (${bankConnections?.length || 0} conexões)
+- Saldo Total Sincronizado: R$ ${totalBankBalanceSynced.toFixed(2)}
+- Última Sincronização: ${lastBankSync || 'Nunca'}
+- Entradas (100 últimas tx): R$ ${syncedIn.toFixed(2)}
+- Saídas (100 últimas tx): R$ ${syncedOut.toFixed(2)}
+- Contas Sincronizadas: ${bankAccountsSynced?.length || 0}
+${bankAccountsSynced?.map(a => `  • ${a.name} (${a.bank_name}): R$ ${(a.current_balance || 0).toFixed(2)}`).join('\n') || '  Nenhuma conta sincronizada'}
 
 ### 👥 CADASTROS
 - Total de Clientes: ${clients?.length || 0}
@@ -242,6 +281,16 @@ ${JSON.stringify(overdueReceivables.slice(0, 15).map(r => ({
   vencimento: r.due_date,
   cliente: r.client?.razao_social || r.client?.nome_fantasia,
   dias_atraso: Math.floor((new Date().getTime() - new Date(r.due_date).getTime()) / (1000 * 60 * 60 * 24))
+})), null, 2)}
+
+### 📋 DETALHES - Transações Bancárias Sincronizadas (últimas 30)
+${JSON.stringify(bankTransactionsSynced?.slice(0, 30).map(t => ({
+  data: t.posted_at,
+  descricao: t.description,
+  valor: t.amount,
+  direcao: t.direction,
+  categoria: t.category,
+  conciliado: t.is_reconciled
 })), null, 2)}
 
 ### 📋 DETALHES - Clientes (${clients?.length || 0})
@@ -288,7 +337,7 @@ ${JSON.stringify(lowStockProducts?.map(p => ({
   estoque_minimo: p.minimum_stock
 })), null, 2)}
 
-### 📋 DETALHES - Transações Bancárias Recentes
+### 📋 DETALHES - Transações Bancárias Manuais Recentes
 ${JSON.stringify(transactions?.slice(0, 15).map(t => ({
   data: t.transaction_date,
   descricao: t.description,
@@ -303,11 +352,11 @@ ${JSON.stringify(transactions?.slice(0, 15).map(t => ({
       fullContext = "## Dados não disponíveis\nNão foi possível carregar os dados do sistema.";
     }
 
-    const systemPrompt = `Você é o Assistente Operacional do WAI ERP.
+    const systemPrompt = `Você é o WAI Operator, assistente operacional do WAI ERP.
 Seu trabalho é AJUDAR o usuário a operar, auditar e decidir usando SOMENTE os dados fornecidos no "CONTEXTO DO WAI" abaixo.
 
 IMPORTANTE (verdade operacional):
-- Você NÃO tem acesso ao banco, telas, arquivos, integrações ou internet.
+- Você NÃO tem acesso direto ao banco, telas, arquivos, integrações ou internet.
 - Você enxerga APENAS o que veio no CONTEXTO DO WAI nesta mensagem.
 - Se algo não estiver no contexto, diga "não tenho esse dado no contexto" e peça exatamente o que falta (sem chutar).
 
@@ -319,12 +368,12 @@ OBJETIVO:
 REGRAS ANTI-ALUCINAÇÃO (obrigatórias):
 1) Nunca invente números, registros, status, regras, endpoints, células de Excel, tabelas ou campos.
 2) Se você não tiver certeza, pare e pergunte.
-3) Ao citar dados do contexto, referencie de onde veio: (ex: "CONTEXTO: Contas a pagar vencidas", "CONTEXTO: Últimas vendas").
+3) Ao citar dados do contexto, referencie de onde veio: (ex: "CONTEXTO: Contas a pagar vencidas", "CONTEXTO: Bancos integrados").
 4) Se o usuário pedir decisão sem dados suficientes, responda com hipóteses explícitas ("SE… ENTÃO…") e peça os dados mínimos para fechar.
 
 PERSONA E TOM:
 - Você NÃO é "CFO", "Controller" ou "Operações" por padrão.
-- Você é um assistente técnico/operacional.
+- Você é um assistente técnico/operacional chamado WAI Operator.
 - Só assuma um papel (ex: "modo CFO") se o usuário pedir explicitamente: "atuar como CFO agora".
 - Sem floreio, sem motivacional, sem texto longo. Objetivo.
 
@@ -338,6 +387,7 @@ PLAYBOOKS (como responder por tipo de pedido):
 A) Financeiro:
 - Comece com: saldo/atrasos/riscos (🚨, ⚠️, ✅).
 - Liste ações: "cobrar X", "negociar Y", "priorizar Z".
+- Para saldo bancário: use os dados de BANCOS INTEGRADOS (via API) se disponíveis.
 B) Estoque:
 - Mostre itens críticos (baixo/negativo) e impacto (OS bloqueada, faturamento travado).
 - Sugira ação: compra, ajuste, investigação.
@@ -365,23 +415,16 @@ ${fullContext}`;
     // Use streaming
     const useStreaming = type !== 'cfop_suggestion';
     
-    console.log("[financial-ai] Calling OpenAI GPT, streaming:", useStreaming);
+    console.log("[financial-ai] Calling Lovable AI, streaming:", useStreaming);
 
-    if (!OPENAI_API_KEY) {
-      console.error("[financial-ai] OPENAI_API_KEY is not configured");
-      throw new Error("OPENAI_API_KEY is not configured");
-    }
-
-    console.log("[financial-ai] Calling OpenAI, streaming:", useStreaming);
-
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${OPENAI_API_KEY}`,
+        Authorization: `Bearer ${LOVABLE_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "gpt-4o-mini",
+        model: "google/gemini-2.5-flash",
         messages: [
           { role: "system", content: systemPrompt },
           ...messages,
@@ -392,7 +435,7 @@ ${fullContext}`;
       }),
     });
     
-    console.log("[financial-ai] OpenAI response status:", response.status);
+    console.log("[financial-ai] Lovable AI response status:", response.status);
 
     if (!response.ok) {
       if (response.status === 429) {
@@ -401,9 +444,15 @@ ${fullContext}`;
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
+      if (response.status === 402) {
+        return new Response(JSON.stringify({ error: "Payment required, please add credits." }), {
+          status: 402,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
       const t = await response.text();
-      console.error("[financial-ai] OpenAI error:", response.status, t);
-      return new Response(JSON.stringify({ error: "OpenAI API error: " + t }), {
+      console.error("[financial-ai] AI error:", response.status, t);
+      return new Response(JSON.stringify({ error: "AI API error: " + t }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
