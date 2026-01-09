@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/contexts/CompanyContext";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { todayYMDinSP, daysAgoYMDinSP, firstDayOfMonthYMDinSP } from "@/utils/datesSP";
+
 
 interface BankTxSummary {
   tx_count: number;
@@ -31,6 +31,7 @@ export function BankSummaryBadge({ className, onRefresh }: BankSummaryBadgeProps
   const [summary7d, setSummary7d] = useState<BankTxSummary | null>(null);
   const [summaryMes, setSummaryMes] = useState<BankTxSummary | null>(null);
   const [lastSync, setLastSync] = useState<string | null>(null);
+  const [latestBankDate, setLatestBankDate] = useState<string | null>(null);
 
   const formatBRL = (value: number | null | undefined): string => {
     if (value === null || value === undefined) return "R$ 0,00";
@@ -42,27 +43,49 @@ export function BankSummaryBadge({ className, onRefresh }: BankSummaryBadgeProps
     
     setLoading(true);
     try {
-      // Datas no timezone de São Paulo
-      const todayStr = todayYMDinSP();
-      const sevenDaysAgo = daysAgoYMDinSP(6);
-      const firstDayOfMonth = firstDayOfMonthYMDinSP();
+      // CRÍTICO: Primeiro buscar último dia com dados
+      const { data: latestTx } = await supabase
+        .from('bank_transactions')
+        .select('transaction_date')
+        .eq('company_id', currentCompany.id)
+        .order('transaction_date', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      
+      const latestDate = latestTx?.transaction_date || null;
+      setLatestBankDate(latestDate);
+      
+      if (!latestDate) {
+        // Sem dados bancários
+        setSummaryHoje(null);
+        setSummary7d(null);
+        setSummaryMes(null);
+        setLoading(false);
+        return;
+      }
+      
+      // Calcular períodos baseados no último dia com dados (não hoje)
+      const baseDate = new Date(latestDate + 'T12:00:00');
+      const sevenDaysAgo = new Date(baseDate);
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
+      const firstDayOfMonth = `${baseDate.getFullYear()}-${String(baseDate.getMonth() + 1).padStart(2, '0')}-01`;
 
       // Buscar resumos em paralelo
       const [hojeResult, semanaResult, mesResult, connectionsResult] = await Promise.all([
         supabase.rpc('get_bank_tx_summary', {
           p_company_id: currentCompany.id,
-          p_date_from: todayStr,
-          p_date_to: todayStr
+          p_date_from: latestDate,
+          p_date_to: latestDate
         }),
         supabase.rpc('get_bank_tx_summary', {
           p_company_id: currentCompany.id,
-          p_date_from: sevenDaysAgo,
-          p_date_to: todayStr
+          p_date_from: sevenDaysAgo.toISOString().split('T')[0],
+          p_date_to: latestDate
         }),
         supabase.rpc('get_bank_tx_summary', {
           p_company_id: currentCompany.id,
           p_date_from: firstDayOfMonth,
-          p_date_to: todayStr
+          p_date_to: latestDate
         }),
         supabase
           .from("bank_connections")
@@ -106,7 +129,12 @@ export function BankSummaryBadge({ className, onRefresh }: BankSummaryBadgeProps
     onRefresh?.();
   };
 
-  const hasBankData = (summaryHoje?.tx_count || 0) > 0 || (summary7d?.tx_count || 0) > 0 || (summaryMes?.tx_count || 0) > 0;
+  const hasBankData = latestBankDate !== null;
+  
+  const formatLatestDate = (dateStr: string | null) => {
+    if (!dateStr) return 'Nenhum';
+    return new Date(dateStr + 'T12:00:00').toLocaleDateString('pt-BR');
+  };
 
   return (
     <TooltipProvider>
@@ -125,17 +153,22 @@ export function BankSummaryBadge({ className, onRefresh }: BankSummaryBadgeProps
           </button>
         </div>
 
+        {/* CRÍTICO: Mostrar último dia com dados */}
+        <div className="text-xs font-medium text-primary bg-primary/10 px-2 py-1.5 rounded mb-2">
+          📅 Último dia com dados: {formatLatestDate(latestBankDate)}
+        </div>
+
         {!hasBankData ? (
           <div className="text-xs text-amber-600 bg-amber-500/10 px-2 py-1.5 rounded">
             ⚠️ Sem transações sincronizadas
           </div>
         ) : (
           <div className="space-y-2">
-            {/* Hoje */}
+            {/* Último dia com dados (não "Hoje") */}
             <Tooltip>
               <TooltipTrigger asChild>
                 <div className="flex items-center justify-between text-xs">
-                  <span className="text-muted-foreground">Hoje:</span>
+                  <span className="text-muted-foreground">Dia base:</span>
                   <div className="flex items-center gap-2">
                     <span className="font-mono text-foreground">{summaryHoje?.tx_count || 0} tx</span>
                     {(summaryHoje?.net || 0) >= 0 ? (
