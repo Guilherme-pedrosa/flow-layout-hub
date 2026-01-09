@@ -7,7 +7,7 @@
  * @see src/ai/systemPrompt.ts para regras e formatação
  */
 import { useState, useRef, useEffect } from "react";
-import { Bot, Send, X, AlertTriangle, TrendingDown, TrendingUp, DollarSign, Clock, FileText, Users, PieChart, Loader2, ArrowLeft, RefreshCw, Database } from "lucide-react";
+import { Bot, Send, X, AlertTriangle, TrendingDown, TrendingUp, DollarSign, Clock, FileText, Users, PieChart, Loader2, ArrowLeft, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -16,6 +16,7 @@ import { toast } from "sonner";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useLocation } from "react-router-dom";
 import { AIContextStatus } from "@/components/ai/AIContextStatus";
+import { BankSummaryBadge } from "./BankSummaryBadge";
 
 interface Message {
   role: "user" | "assistant";
@@ -430,6 +431,9 @@ Responda APENAS com o JSON array, sem markdown ou explicações.` }],
         lastUpdated={lastContextUpdate || undefined}
         className="mx-4 mt-3"
       />
+      
+      {/* Bank Summary Badge - mostra período do extrato carregado */}
+      <BankSummaryBadge className="mx-4 mt-2" />
 
       {/* Content */}
       <ScrollArea className="flex-1" ref={scrollRef}>
