@@ -1,3 +1,11 @@
+/**
+ * WAI Operator - Assistente IA Global
+ * 
+ * Este componente usa o prompt central definido em src/ai/systemPrompt.ts
+ * A IA é um assistente operacional do sistema, NÃO um CFO/Controller.
+ * 
+ * @see src/ai/systemPrompt.ts para regras e formatação
+ */
 import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -12,6 +20,7 @@ interface AIAssistantProps {
   placeholder?: string;
   suggestions?: string[];
 }
+
 
 const defaultSuggestions = [
   'Como está meu fluxo de caixa?',
@@ -171,7 +180,7 @@ export function AIAssistant({
           <CardHeader className="pb-3 bg-gradient-to-r from-primary/10 to-primary/5 rounded-t-lg">
             <CardTitle className="flex items-center gap-2 text-base">
               <Sparkles className="h-5 w-5 text-primary" />
-              Assistente IA
+              WAI Operator
             </CardTitle>
           </CardHeader>
 
