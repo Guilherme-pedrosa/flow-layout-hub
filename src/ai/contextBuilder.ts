@@ -322,19 +322,22 @@ async function loadFinanceiroData(context: AIContext, companyId: string) {
   context.financeiro.resumo7d = resumo7d;
   context.financeiro.resumoMes = resumoMes;
 
-  // Últimas transações (apenas para evidência, NÃO para totais)
+  // Últimas transações COMPLETAS (para análise detalhada)
   const { data: transacoes } = await supabase
     .from("bank_transactions")
-    .select("id, description, amount, transaction_date, type, is_reconciled")
+    .select("id, description, amount, transaction_date, type, is_reconciled, nsu, raw_data, category, created_at")
     .eq("company_id", companyId)
     .order("transaction_date", { ascending: false })
-    .limit(20);
+    .limit(100);  // Aumentado de 20 para 100
   
-  context.financeiro.ultimasTransacoesSynced = transacoes?.map(t => ({
+  context.financeiro.ultimasTransacoesSynced = transacoes?.map((t: any) => ({
     ...t,
     amount_formatted: formatBRL(Math.abs(t.amount)),
     date_formatted: formatDate(t.transaction_date),
-    tipo: t.amount > 0 ? 'entrada' : 'saida'
+    tipo: t.amount > 0 ? 'entrada' : 'saida',
+    // Dados expandidos do raw_data
+    tipo_transacao: t.raw_data?.tipoTransacao || t.raw_data?.tipo || null,
+    pagador_recebedor: t.raw_data?.nomePagador || t.raw_data?.nomeRecebedor || t.raw_data?.contraparte || null
   })) || [];
 }
 
@@ -479,10 +482,16 @@ ${fin.resumoMes ? `- Período: ${formatDate(fin.resumoMes.first_date)} → ${for
 - Saídas: ${formatBRL(fin.resumoMes.total_out)}
 - Saldo Período: ${formatBRL(fin.resumoMes.net)}` : '⚠️ Sem dados de transações para o mês'}
 
-### Últimas 20 Transações (apenas evidência, NÃO usar para totais)
-${fin.ultimasTransacoesSynced?.map(t => 
-  `- ${t.date_formatted} | ${t.tipo.toUpperCase()} | ${t.amount_formatted} | ${t.description || 'Sem descrição'}`
+### Últimas 50 Transações (para análise de padrões)
+${fin.ultimasTransacoesSynced?.slice(0, 50).map((t: any) => 
+  `- ${t.date_formatted} | ${t.tipo.toUpperCase()} | ${t.amount_formatted} | ${t.description || 'Sem descrição'} | ${t.tipo_transacao || ''}`
 ).join('\n') || 'Nenhuma transação sincronizada'}`);
+    
+    // Estatísticas de transações
+    const naoReconciliadas = fin.ultimasTransacoesSynced?.filter((t: any) => !t.is_reconciled).length || 0;
+    if (naoReconciliadas > 0) {
+      sections.push(`### ⚠️ Transações Não Conciliadas: ${naoReconciliadas}`);
+    }
 
     // Contas a pagar/receber
     sections.push(`## 📋 CONTAS A PAGAR/RECEBER

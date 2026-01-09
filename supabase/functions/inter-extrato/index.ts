@@ -156,26 +156,30 @@ serve(async (req) => {
 
     console.log(`[inter-extrato] Total de transações: ${transacoes.length}`);
 
-    // Filtrar apenas transações PIX se necessário
-    const transacoesPix = transacoes.filter((t: Record<string, unknown>) => {
-      const tipoTransacao = String(t.tipoTransacao || "").toUpperCase();
-      return tipoTransacao === "PIX";
-    });
+    // RETORNAR TODAS AS TRANSAÇÕES (não filtrar apenas PIX)
+    // A IA precisa ter visibilidade completa do extrato bancário
+    
+    // Separar por tipo para estatísticas (mas retornar todas)
+    const transacoesPorTipo = transacoes.reduce((acc: Record<string, number>, t: Record<string, unknown>) => {
+      const tipoTransacao = String(t.tipoTransacao || t.tipo || "OUTROS").toUpperCase();
+      acc[tipoTransacao] = (acc[tipoTransacao] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
 
-    console.log(`[inter-extrato] Transações PIX: ${transacoesPix.length}`);
+    console.log(`[inter-extrato] Transações por tipo:`, transacoesPorTipo);
 
     // Log de exemplo de transação para debug
-    if (transacoesPix.length > 0) {
-      console.log(`[inter-extrato] Exemplo de transação PIX:`, JSON.stringify(transacoesPix[0]));
+    if (transacoes.length > 0) {
+      console.log(`[inter-extrato] Exemplo de transação:`, JSON.stringify(transacoes[0]));
     }
 
     return new Response(
       JSON.stringify({
         success: true,
         data: {
-          total: transacoesPix.length,
-          transacoes: transacoesPix,
-          todas_transacoes: transacoes.length,
+          total: transacoes.length,
+          transacoes: transacoes,  // Retornar TODAS as transações
+          transacoes_por_tipo: transacoesPorTipo,
         },
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
