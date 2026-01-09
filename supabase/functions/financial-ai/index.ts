@@ -452,7 +452,7 @@ Se tx_count for 0 ou null em RESUMO HOJE / RESUMO 7 DIAS / RESUMO MÊS:
 👉 VOCÊ DEVE PARAR e responder:
 
 "Não há transações bancárias sincronizadas no período solicitado.
-- Fonte: bank_transactions_synced
+- Fonte: bank_transactions
 - tx_count: 0
 - Ação necessária: Sincronizar extrato bancário via integração antes de qualquer análise."
 
@@ -465,8 +465,8 @@ Você só pode usar dados vindos explicitamente do contexto.
 
 Fontes válidas para extrato bancário:
 - RESUMO HOJE / 7 DIAS / MÊS (via RPC get_bank_tx_summary) ← FONTE OFICIAL PARA TOTAIS
-- bank_accounts_synced (saldos)
-- bank_transactions_synced (lista para evidência, NUNCA para totais)
+- bank_accounts (saldos)
+- bank_transactions (lista para evidência, NUNCA para totais)
 
 Se um número não estiver diretamente presente nessas fontes:
 ❌ não mencione
@@ -482,7 +482,7 @@ Somente se TODAS as condições forem verdadeiras:
 ✔️ total_in e total_out explícitos
 
 Ao responder, SEMPRE inclua:
-- "Fonte: bank_transactions_synced"
+- "Fonte: bank_transactions"
 - "Período: dd/mm/yyyy → dd/mm/yyyy"
 - "tx_count: N"
 
