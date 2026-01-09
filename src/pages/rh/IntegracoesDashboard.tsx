@@ -7,8 +7,10 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { 
   LayoutDashboard, Plus, Settings, ShieldCheck, ShieldX, Clock, 
-  AlertTriangle, TrendingUp, Users, Building2, FileWarning, CalendarClock
+  AlertTriangle, TrendingUp, Users, Building2, FileWarning, CalendarClock,
+  RefreshCw, FileSpreadsheet
 } from "lucide-react";
+import * as XLSX from "xlsx";
 import { useIntegrationsModule, useIntegrationsDashboard } from "@/hooks/useIntegrationsModule";
 import { usePessoas } from "@/hooks/usePessoas";
 import { useRh } from "@/hooks/useRh";
@@ -395,6 +397,25 @@ export default function IntegracoesDashboard() {
             <Button variant="outline" onClick={() => navigate('/rh/integracoes')}>
               <LayoutDashboard className="mr-2 h-4 w-4" />
               Ver Matriz Completa
+            </Button>
+            <Button variant="outline" onClick={() => {
+              const dataToExport = integrations.map(int => {
+                const client = clientes.find(c => c.id === int.client_id);
+                return {
+                  'Cliente': client?.nome_fantasia || client?.razao_social || '',
+                  'Status': int.status,
+                  'Validado Em': int.validated_at ? format(new Date(int.validated_at), 'dd/MM/yyyy') : '-',
+                  'Vencimento': int.earliest_expiry_date ? format(new Date(int.earliest_expiry_date), 'dd/MM/yyyy') : '-',
+                  'Enviado': int.sent_at ? 'Sim' : 'Não',
+                };
+              });
+              const ws = XLSX.utils.json_to_sheet(dataToExport);
+              const wb = XLSX.utils.book_new();
+              XLSX.utils.book_append_sheet(wb, ws, 'Dashboard');
+              XLSX.writeFile(wb, `Dashboard_Integracoes_${format(new Date(), 'yyyy-MM-dd')}.xlsx`);
+            }}>
+              <FileSpreadsheet className="mr-2 h-4 w-4" />
+              Exportar Relatório
             </Button>
           </div>
         </CardContent>

@@ -14,13 +14,14 @@ import {
 import { PageHeader } from "@/components/shared";
 import { 
   Plus, Search, Building2, User, RefreshCw, Download, Mail, 
-  Trash2, Eye, LayoutDashboard, Settings, ShieldCheck, ShieldX, Clock
+  Trash2, Eye, LayoutDashboard, Settings, ShieldCheck, ShieldX, Clock, FileSpreadsheet
 } from "lucide-react";
 import { format, formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { IntegrationDetailModal } from "@/components/integracoes/IntegrationDetailModal";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import * as XLSX from "xlsx";
 
 function StatusBadge({ status, expiryDate }: { status: Integration['status']; expiryDate?: string | null }) {
   // Check if expired
@@ -173,6 +174,28 @@ export default function MatrizIntegracoesPage() {
     refetch();
   };
 
+  const handleExportExcel = () => {
+    const dataToExport = integracoesFiltradas.map(int => ({
+      'Cliente': int.clientName,
+      'Técnico(s)': int.techNames,
+      'Status': int.status === 'authorized' ? 'Autorizado' :
+                int.status === 'sent' ? 'Enviado' :
+                int.status === 'blocked' ? 'Bloqueado' :
+                int.status === 'expired' ? 'Expirado' : 'Rascunho',
+      'Data Validação': int.validated_at ? format(new Date(int.validated_at), 'dd/MM/yyyy HH:mm') : '-',
+      'Próx. Vencimento': int.earliest_expiry_date ? format(new Date(int.earliest_expiry_date), 'dd/MM/yyyy') : '-',
+      'ZIP Gerado': int.zip_file_name ? 'Sim' : 'Não',
+      'Enviado Em': int.sent_at ? format(new Date(int.sent_at), 'dd/MM/yyyy HH:mm') : '-',
+      'Qtd Bloqueios': int.blocked_reasons?.length || 0,
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(dataToExport);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Integrações');
+    XLSX.writeFile(wb, `Integracoes_${format(new Date(), 'yyyy-MM-dd')}.xlsx`);
+    toast.success('Relatório exportado!');
+  };
+
   if (isLoading) {
     return <div className="flex items-center justify-center h-96">Carregando...</div>;
   }
@@ -266,8 +289,12 @@ export default function MatrizIntegracoesPage() {
                 <SelectItem value="expired">Expirados</SelectItem>
               </SelectContent>
             </Select>
-            <Button variant="outline" size="icon" onClick={() => refetch()}>
+            <Button variant="outline" size="icon" onClick={() => refetch()} title="Atualizar">
               <RefreshCw className="h-4 w-4" />
+            </Button>
+            <Button variant="outline" onClick={handleExportExcel} title="Exportar Excel">
+              <FileSpreadsheet className="mr-2 h-4 w-4" />
+              Exportar
             </Button>
           </div>
         </CardContent>
