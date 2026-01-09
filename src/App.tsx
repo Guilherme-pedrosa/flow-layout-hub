@@ -66,6 +66,7 @@ import ContasPagar from "./pages/financeiro/ContasPagar";
 import Renegociacoes from "./pages/financeiro/Renegociacoes";
 import Caixa from "./pages/financeiro/Caixa";
 import Bancos from "./pages/financeiro/Bancos";
+import BancosIntegrados from "./pages/financeiro/BancosIntegrados";
 import Conciliacao from "./pages/financeiro/Conciliacao";
 import PlanoContas from "./pages/financeiro/PlanoContas";
 import CentrosCusto from "./pages/financeiro/CentrosCusto";
@@ -186,6 +187,8 @@ const App = () => (
             <Route path="/caixa" element={<Caixa />} />
             <Route path="/fluxo-de-caixa" element={<Caixa />} />
             <Route path="/bancos" element={<Bancos />} />
+            <Route path="/bancos-integrados" element={<BancosIntegrados />} />
+            <Route path="/financeiro/bancos-integrados" element={<BancosIntegrados />} />
             <Route path="/conciliacao" element={<Conciliacao />} />
             <Route path="/plano-contas" element={<PlanoContas />} />
             <Route path="/centros-custo" element={<CentrosCusto />} />
