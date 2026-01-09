@@ -59,6 +59,31 @@ function formatDateBR(dateStr: string | null | undefined): string {
   return date.toLocaleDateString("pt-BR");
 }
 
+/**
+ * Retorna a data de hoje no formato YYYY-MM-DD no fuso de São Paulo
+ */
+function todayYMDinSP(): string {
+  return new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
+}
+
+/**
+ * Retorna uma data N dias atrás no formato YYYY-MM-DD no fuso de São Paulo
+ */
+function daysAgoYMDinSP(days: number): string {
+  const date = new Date();
+  date.setDate(date.getDate() - days);
+  return date.toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
+}
+
+/**
+ * Retorna o primeiro dia do mês atual no formato YYYY-MM-DD no fuso de São Paulo
+ */
+function firstDayOfMonthYMDinSP(): string {
+  const now = new Date();
+  const spDate = new Date(now.toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
+  return `${spDate.getFullYear()}-${String(spDate.getMonth() + 1).padStart(2, '0')}-01`;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -122,11 +147,10 @@ serve(async (req) => {
     // Fetch data for context
     let fullContext = "";
     
-    // Datas para os resumos
-    const today = new Date();
-    const todayStr = today.toISOString().split('T')[0];
-    const sevenDaysAgo = new Date(Date.now() - 6 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-    const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0];
+    // Datas no timezone de São Paulo (evita problema UTC vs horário local brasileiro)
+    const todayStr = todayYMDinSP();
+    const sevenDaysAgo = daysAgoYMDinSP(6);
+    const firstDayOfMonth = firstDayOfMonthYMDinSP();
 
     try {
       // ======== BUSCAR RESUMOS VIA RPC (FONTE OFICIAL PARA TOTAIS) ========

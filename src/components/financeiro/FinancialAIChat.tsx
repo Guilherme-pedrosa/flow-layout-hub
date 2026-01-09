@@ -155,7 +155,7 @@ Responda APENAS com o JSON array, sem markdown ou explicações.` }],
         setInsights(getDefaultInsights());
       }
       // Set data sources based on what the financial-ai function queries
-      setDataSources(["payables", "accounts_receivable", "bank_accounts", "bank_transactions", "products", "sales", "service_orders"]);
+      setDataSources(["payables", "accounts_receivable", "bank_accounts", "bank_transactions (via RPC)", "products", "sales", "service_orders"]);
       setLastContextUpdate(new Date());
     } catch (error) {
       console.error("Erro ao carregar insights:", error);

@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useCompany } from "@/contexts/CompanyContext";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { todayYMDinSP, daysAgoYMDinSP, firstDayOfMonthYMDinSP } from "@/utils/datesSP";
 
 interface BankTxSummary {
   tx_count: number;
@@ -41,10 +42,10 @@ export function BankSummaryBadge({ className, onRefresh }: BankSummaryBadgeProps
     
     setLoading(true);
     try {
-      const today = new Date();
-      const todayStr = today.toISOString().split("T")[0];
-      const sevenDaysAgo = new Date(Date.now() - 6 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
-      const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split("T")[0];
+      // Datas no timezone de São Paulo
+      const todayStr = todayYMDinSP();
+      const sevenDaysAgo = daysAgoYMDinSP(6);
+      const firstDayOfMonth = firstDayOfMonthYMDinSP();
 
       // Buscar resumos em paralelo
       const [hojeResult, semanaResult, mesResult, connectionsResult] = await Promise.all([
