@@ -57,6 +57,14 @@ export function FinancialAIChat({ onClose }: FinancialAIChatProps = {}) {
     }
   }, [messages]);
 
+  // Reset messages and insights when company changes
+  useEffect(() => {
+    setMessages([]);
+    setInsights([]);
+    setDataSources([]);
+    setLastContextUpdate(null);
+  }, [companyId]);
+
   useEffect(() => {
     if ((isOpen || onClose) && insights.length === 0 && !isLoadingInsights && companyId) {
       loadInitialInsights();
@@ -64,6 +72,9 @@ export function FinancialAIChat({ onClose }: FinancialAIChatProps = {}) {
   }, [isOpen, onClose, companyId]);
 
   const loadInitialInsights = async () => {
+    if (!companyId) return;
+    
+    console.log('[FinancialAIChat] Loading insights for company:', companyId, currentCompany?.name);
     setIsLoadingInsights(true);
     try {
       const response = await fetch(
