@@ -57,19 +57,33 @@ export function FinancialAIChat({ onClose }: FinancialAIChatProps = {}) {
     }
   }, [messages]);
 
+  // Track last loaded company to prevent duplicate calls
+  const lastLoadedCompanyRef = useRef<string | null>(null);
+
   // Reset messages and insights when company changes
   useEffect(() => {
-    setMessages([]);
-    setInsights([]);
-    setDataSources([]);
-    setLastContextUpdate(null);
+    if (companyId && companyId !== lastLoadedCompanyRef.current) {
+      console.log('[FinancialAIChat] Company changed, resetting state for:', companyId);
+      setMessages([]);
+      setInsights([]);
+      setDataSources([]);
+      setLastContextUpdate(null);
+      lastLoadedCompanyRef.current = null; // Will trigger reload
+    }
   }, [companyId]);
 
   useEffect(() => {
-    if ((isOpen || onClose) && insights.length === 0 && !isLoadingInsights && companyId) {
+    const shouldLoad = (isOpen || onClose) && 
+                       insights.length === 0 && 
+                       !isLoadingInsights && 
+                       companyId &&
+                       lastLoadedCompanyRef.current !== companyId;
+    
+    if (shouldLoad) {
+      lastLoadedCompanyRef.current = companyId;
       loadInitialInsights();
     }
-  }, [isOpen, onClose, companyId]);
+  }, [isOpen, onClose, companyId, insights.length, isLoadingInsights]);
 
   const loadInitialInsights = async () => {
     if (!companyId) return;
