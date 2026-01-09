@@ -10,19 +10,21 @@ import {
 } from "@/components/ui/dialog";
 import { 
   ShieldCheck, ShieldX, Download, Mail, Building2, Users, FileCheck, FileX, 
-  CheckCircle, Clock, Loader2, Upload, AlertCircle
+  CheckCircle, Clock, Loader2, Upload, AlertCircle, Save
 } from "lucide-react";
 import { usePessoas } from "@/hooks/usePessoas";
 import { useRh } from "@/hooks/useRh";
-import { useClientDocumentRequirements, ClientDocumentRequirement } from "@/hooks/useClientDocumentRequirements";
+import { useClientDocumentRequirements } from "@/hooks/useClientDocumentRequirements";
 import { useCompanyDocuments, getDocumentStatus } from "@/hooks/useCompanyDocuments";
-import { useTechnicianDocsByRequirement, DocState, TechnicianDocItem } from "@/hooks/useTechnicianDocsByRequirement";
+import { useTechnicianDocsByRequirement, DocState } from "@/hooks/useTechnicianDocsByRequirement";
 import { useColaboradorDocs } from "@/hooks/useColaboradorDocs";
+import { useIntegrationsModule, BlockReason } from "@/hooks/useIntegrationsModule";
 import { SearchableSelect } from "@/components/shared/SearchableSelect";
 import { SearchableMultiSelect } from "@/components/shared/SearchableMultiSelect";
 import { toast } from "sonner";
 import JSZip from "jszip";
 import { format } from "date-fns";
+import { useNavigate } from "react-router-dom";
 
 interface CompanyDocItem {
   doc_type_id: string;
@@ -36,19 +38,14 @@ interface CompanyDocItem {
   requires_expiry: boolean;
 }
 
-interface BlockReason {
-  scope: 'EMPRESA' | 'TÉCNICO';
-  entity_name?: string;
-  doc_type: string;
-  reason: string;
-}
-
 type ValidationStatus = 'INITIAL' | 'AUTHORIZED' | 'BLOCKED';
 
 export default function NovaIntegracao() {
+  const navigate = useNavigate();
   const { clientes } = usePessoas();
   const { colaboradores } = useRh();
   const { documents: companyDocs, uploadDocument, refetch: refetchCompanyDocs } = useCompanyDocuments();
+  const { createIntegration, updateIntegration } = useIntegrationsModule();
   
   const [selectedClientId, setSelectedClientId] = useState<string>('');
   const [selectedTechnicianIds, setSelectedTechnicianIds] = useState<string[]>([]);
@@ -56,6 +53,8 @@ export default function NovaIntegracao() {
   const [blockReasons, setBlockReasons] = useState<BlockReason[]>([]);
   const [companyChecklist, setCompanyChecklist] = useState<CompanyDocItem[]>([]);
   const [generating, setGenerating] = useState(false);
+  const [currentIntegrationId, setCurrentIntegrationId] = useState<string | null>(null);
+  const [earliestExpiry, setEarliestExpiry] = useState<string | null>(null);
 
   // Upload modal state
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
@@ -90,7 +89,6 @@ export default function NovaIntegracao() {
     activeTechnicians
   );
 
-  // For single technician upload
   const { upsertDocComArquivo } = useColaboradorDocs();
 
   const clientOptions = activeClients.map(c => ({
@@ -111,9 +109,11 @@ export default function NovaIntegracao() {
     setValidationStatus('INITIAL');
     setBlockReasons([]);
     setCompanyChecklist([]);
+    setCurrentIntegrationId(null);
+    setEarliestExpiry(null);
   };
 
-  const runValidation = () => {
+  const runValidation = async () => {
     if (!selectedClientId) {
       toast.error('Selecione um cliente');
       return;
@@ -124,6 +124,7 @@ export default function NovaIntegracao() {
     }
 
     const reasons: BlockReason[] = [];
+    let minExpiry: Date | null = null;
 
     // Build company checklist
     const companyList: CompanyDocItem[] = companyRequirements.map(req => {
@@ -143,6 +144,14 @@ export default function NovaIntegracao() {
         
         const statusInfo = getDocumentStatus(doc.expires_at, requiresExpiry);
         state = statusInfo.status;
+        
+        // Track earliest expiry
+        if (expiresAt && state === 'OK') {
+          const expDate = new Date(expiresAt);
+          if (!minExpiry || expDate < minExpiry) {
+            minExpiry = expDate;
+          }
+        }
       }
 
       if (req.is_required && state !== 'OK') {
@@ -177,12 +186,53 @@ export default function NovaIntegracao() {
             reason: doc.state === 'MISSING' ? 'Não anexado' : 'Vencido'
           });
         }
+        
+        // Track earliest expiry for technician docs
+        if (doc.state === 'OK' && doc.expires_at) {
+          const expDate = new Date(doc.expires_at);
+          if (!minExpiry || expDate < minExpiry) {
+            minExpiry = expDate;
+          }
+        }
       });
     });
 
     setCompanyChecklist(companyList);
     setBlockReasons(reasons);
-    setValidationStatus(reasons.length > 0 ? 'BLOCKED' : 'AUTHORIZED');
+    
+    const newStatus = reasons.length > 0 ? 'BLOCKED' : 'AUTHORIZED';
+    setValidationStatus(newStatus);
+    
+    const expiryStr = minExpiry ? format(minExpiry, 'yyyy-MM-dd') : null;
+    setEarliestExpiry(expiryStr);
+
+    // Create or update integration record
+    try {
+      if (currentIntegrationId) {
+        // Update existing
+        await updateIntegration.mutateAsync({
+          id: currentIntegrationId,
+          data: {
+            status: newStatus === 'AUTHORIZED' ? 'authorized' : 'blocked',
+            blocked_reasons: reasons,
+            earliest_expiry_date: expiryStr,
+            validated_at: new Date().toISOString(),
+          }
+        });
+      } else {
+        // Create new
+        const result = await createIntegration.mutateAsync({
+          client_id: selectedClientId,
+          technician_ids: selectedTechnicianIds,
+          status: newStatus === 'AUTHORIZED' ? 'authorized' : 'blocked',
+          blocked_reasons: reasons,
+          earliest_expiry_date: expiryStr,
+        });
+        setCurrentIntegrationId(result.id);
+      }
+    } catch (error) {
+      console.error('Failed to save integration:', error);
+    }
   };
 
   const handleOpenUploadModal = (
@@ -216,7 +266,6 @@ export default function NovaIntegracao() {
         });
         await refetchCompanyDocs();
       } else if (uploadTarget.technicianId) {
-        // Find the document type to get the code
         const docType = technicianRequirements.find(r => r.document_type_id === uploadTarget.docTypeId)?.document_type;
         const tipoCode = docType?.code?.toUpperCase() as any || 'OUTROS';
         
@@ -253,13 +302,23 @@ export default function NovaIntegracao() {
       const empresaFolder = zip.folder('EMPRESA');
       const tecnicosFolder = zip.folder('TECNICOS');
 
+      const manifest: Record<string, unknown> = {
+        generated_at: new Date().toISOString(),
+        client_id: selectedClientId,
+        technician_ids: selectedTechnicianIds,
+        company_docs: [] as string[],
+        technician_docs: {} as Record<string, string[]>,
+      };
+
       // Add company docs
       for (const doc of companyChecklist) {
         if (doc.file_url && doc.state === 'OK') {
           try {
             const response = await fetch(doc.file_url);
             const blob = await response.blob();
-            empresaFolder?.file(doc.file_name || `${doc.doc_type_code}.pdf`, blob);
+            const fileName = doc.file_name || `${doc.doc_type_code}.pdf`;
+            empresaFolder?.file(fileName, blob);
+            (manifest.company_docs as string[]).push(fileName);
           } catch (e) {
             console.warn('Failed to fetch company doc:', doc.doc_type_name);
           }
@@ -268,19 +327,28 @@ export default function NovaIntegracao() {
 
       // Add technician docs
       for (const tech of techniciansWithDocs) {
-        const techFolder = tecnicosFolder?.folder(tech.technician_name.replace(/[^a-zA-Z0-9]/g, '_'));
+        const techFolderName = tech.technician_name.replace(/[^a-zA-Z0-9 ]/g, '').replace(/\s+/g, '_');
+        const techFolder = tecnicosFolder?.folder(techFolderName);
+        const techDocs: string[] = [];
+        
         for (const doc of tech.docs) {
           if (doc.file_url && doc.state === 'OK') {
             try {
               const response = await fetch(doc.file_url);
               const blob = await response.blob();
-              techFolder?.file(doc.file_name || `${doc.doc_type_code}.pdf`, blob);
+              const fileName = doc.file_name || `${doc.doc_type_code}.pdf`;
+              techFolder?.file(fileName, blob);
+              techDocs.push(fileName);
             } catch (e) {
               console.warn('Failed to fetch tech doc:', doc.doc_type_name);
             }
           }
         }
+        (manifest.technician_docs as Record<string, string[]>)[tech.technician_id] = techDocs;
       }
+
+      // Add manifest
+      zip.file('manifest.json', JSON.stringify(manifest, null, 2));
 
       const client = activeClients.find(c => c.id === selectedClientId);
       const content = await zip.generateAsync({ type: 'blob' });
@@ -293,6 +361,17 @@ export default function NovaIntegracao() {
       a.click();
       URL.revokeObjectURL(url);
 
+      // Update integration with ZIP info
+      if (currentIntegrationId) {
+        await updateIntegration.mutateAsync({
+          id: currentIntegrationId,
+          data: {
+            zip_file_name: fileName,
+            manifest: manifest,
+          }
+        });
+      }
+
       toast.success('Kit ZIP gerado com sucesso!');
     } catch (error: any) {
       toast.error('Erro ao gerar kit: ' + error.message);
@@ -301,12 +380,25 @@ export default function NovaIntegracao() {
     }
   };
 
-  const handleSendEmail = () => {
+  const handleSendEmail = async () => {
     const client = activeClients.find(c => c.id === selectedClientId);
     const subject = encodeURIComponent(`WeDo | Kit de Documentação - ${client?.nome_fantasia || client?.razao_social}`);
     const body = encodeURIComponent(`Prezados,\n\nSegue em anexo o kit de documentação.\n\nAtenciosamente,\nWeDo`);
     window.open(`mailto:?subject=${subject}&body=${body}`, '_blank');
-    toast.info('Baixe o ZIP e anexe ao e-mail');
+    
+    // Mark as sent
+    if (currentIntegrationId) {
+      await updateIntegration.mutateAsync({
+        id: currentIntegrationId,
+        data: {
+          status: 'sent',
+          sent_at: new Date().toISOString(),
+        }
+      });
+      toast.success('Integração marcada como enviada');
+    } else {
+      toast.info('Baixe o ZIP e anexe ao e-mail');
+    }
   };
 
   const getStatusIcon = (state: DocState) => {
@@ -342,7 +434,6 @@ export default function NovaIntegracao() {
             <CardTitle className="text-lg">Seleção</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            {/* Cliente */}
             <div>
               <Label>Cliente</Label>
               <SearchableSelect
@@ -355,7 +446,6 @@ export default function NovaIntegracao() {
               />
             </div>
 
-            {/* Info de requisitos */}
             {selectedClientId && !loadingReqs && (
               <div className="p-3 bg-muted rounded-lg text-sm">
                 <p className="font-medium mb-1">Requisitos do cliente:</p>
@@ -373,7 +463,6 @@ export default function NovaIntegracao() {
               </div>
             )}
 
-            {/* Técnicos */}
             {selectedClientId && hasRequirements && (
               <div>
                 <Label>Técnicos</Label>
@@ -393,8 +482,15 @@ export default function NovaIntegracao() {
               onClick={runValidation}
               disabled={!canValidate}
             >
+              <Save className="h-4 w-4 mr-2" />
               Validar Documentação
             </Button>
+            
+            {currentIntegrationId && (
+              <p className="text-xs text-muted-foreground text-center">
+                ID: {currentIntegrationId.slice(0, 8)}...
+              </p>
+            )}
           </CardContent>
         </Card>
 
@@ -406,6 +502,11 @@ export default function NovaIntegracao() {
                 <>
                   <ShieldCheck className="h-5 w-5 text-green-500" />
                   <span className="text-green-600">AUTORIZADO</span>
+                  {earliestExpiry && (
+                    <span className="text-muted-foreground text-sm font-normal ml-2">
+                      (válido até {format(new Date(earliestExpiry), 'dd/MM/yyyy')})
+                    </span>
+                  )}
                 </>
               ) : validationStatus === 'BLOCKED' ? (
                 <>
@@ -421,7 +522,6 @@ export default function NovaIntegracao() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {/* ESTADO INICIAL */}
             {validationStatus === 'INITIAL' && (
               <div className="text-center py-12 text-muted-foreground">
                 <FileCheck className="h-12 w-12 mx-auto mb-4 opacity-50" />
@@ -430,10 +530,8 @@ export default function NovaIntegracao() {
               </div>
             )}
 
-            {/* ESTADO BLOQUEADO OU AUTORIZADO */}
             {validationStatus !== 'INITIAL' && (
               <div className="space-y-6">
-                {/* BLOCO 1 - RESUMO DE BLOQUEIOS */}
                 {blockReasons.length > 0 && (
                   <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4">
                     <div className="flex items-center gap-2 text-destructive font-medium mb-3">
@@ -450,7 +548,6 @@ export default function NovaIntegracao() {
                   </div>
                 )}
 
-                {/* BLOCO 2 - DOCUMENTOS DA EMPRESA */}
                 {companyChecklist.length > 0 && (
                   <div>
                     <h4 className="font-semibold flex items-center gap-2 mb-3">
@@ -497,7 +594,6 @@ export default function NovaIntegracao() {
                   </div>
                 )}
 
-                {/* BLOCO 3 - DOCUMENTOS DOS TÉCNICOS */}
                 {techniciansWithDocs.length > 0 && (
                   <div>
                     <h4 className="font-semibold flex items-center gap-2 mb-3">
@@ -553,7 +649,6 @@ export default function NovaIntegracao() {
                   </div>
                 )}
 
-                {/* AÇÕES FINAIS */}
                 {validationStatus === 'AUTHORIZED' && (
                   <div className="flex gap-3 pt-4 border-t">
                     <Button 
@@ -579,7 +674,6 @@ export default function NovaIntegracao() {
                   </div>
                 )}
 
-                {/* AÇÕES DESABILITADAS (BLOQUEADO) */}
                 {validationStatus === 'BLOCKED' && (
                   <div className="flex gap-3 pt-4 border-t opacity-50">
                     <Button disabled className="flex-1">
@@ -602,9 +696,7 @@ export default function NovaIntegracao() {
       <Dialog open={uploadModalOpen} onOpenChange={setUploadModalOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>
-              Enviar Documento
-            </DialogTitle>
+            <DialogTitle>Enviar Documento</DialogTitle>
           </DialogHeader>
           
           <div className="space-y-4 py-4">
