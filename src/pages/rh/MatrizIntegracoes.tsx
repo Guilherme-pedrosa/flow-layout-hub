@@ -1,150 +1,115 @@
 import { useState } from "react";
-import { useIntegracoes, IntegracaoComStatus } from "@/hooks/useIntegracoes";
-import { useAllColaboradorDocs, getDocStatus } from "@/hooks/useColaboradorDocs";
+import { useNavigate } from "react-router-dom";
+import { useIntegrationsModule, Integration } from "@/hooks/useIntegrationsModule";
+import { usePessoas } from "@/hooks/usePessoas";
+import { useRh } from "@/hooks/useRh";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { 
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue 
+} from "@/components/ui/select";
 import { PageHeader } from "@/components/shared";
-import { Plus, Edit, Trash2, CheckCircle, XCircle, AlertTriangle, Search, Building2, User } from "lucide-react";
-import { format } from "date-fns";
+import { 
+  Plus, Search, Building2, User, RefreshCw, Download, Mail, 
+  Trash2, Eye, LayoutDashboard, Settings, ShieldCheck, ShieldX, Clock
+} from "lucide-react";
+import { format, formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
-function StatusBadge({ status }: { status: IntegracaoComStatus['statusFinal'] }) {
+function StatusBadge({ status, expiryDate }: { status: Integration['status']; expiryDate?: string | null }) {
+  // Check if expired
+  if (expiryDate && new Date(expiryDate) < new Date()) {
+    return <Badge variant="destructive" className="bg-orange-600">EXPIRADO</Badge>;
+  }
+  
   switch (status) {
-    case 'ATIVO':
-      return <Badge className="bg-green-600">ATIVO</Badge>;
-    case 'A_VENCER':
-      return <Badge className="bg-yellow-600">A VENCER</Badge>;
-    case 'VENCIDO':
-      return <Badge variant="destructive">VENCIDO</Badge>;
-    case 'BLOQUEADO':
-      return <Badge variant="destructive" className="bg-red-800">⛔ BLOQUEADO</Badge>;
+    case 'authorized':
+      return <Badge className="bg-green-600">AUTORIZADO</Badge>;
+    case 'sent':
+      return <Badge className="bg-blue-600">ENVIADO</Badge>;
+    case 'blocked':
+      return <Badge variant="destructive">BLOQUEADO</Badge>;
+    case 'expired':
+      return <Badge variant="destructive" className="bg-orange-600">EXPIRADO</Badge>;
+    case 'draft':
+      return <Badge variant="outline">RASCUNHO</Badge>;
     default:
       return null;
   }
 }
 
-function DocsGlobaisIcon({ status, docsVencidos }: { status: 'ok' | 'alerta' | 'bloqueado'; docsVencidos: string[] }) {
-  if (status === 'ok') {
-    return <CheckCircle className="h-5 w-5 text-green-600" />;
-  }
-  return (
-    <div className="flex items-center gap-1">
-      <XCircle className="h-5 w-5 text-red-600" />
-      <span className="text-xs text-red-600">({docsVencidos.length})</span>
-    </div>
-  );
-}
-
 export default function MatrizIntegracoesPage() {
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('todos');
 
-  const [formData, setFormData] = useState({
-    colaborador_id: '',
-    cliente_id: '',
-    data_realizacao: '',
-    data_vencimento: '',
-    observacoes: '',
+  const { 
+    integrations, 
+    stats,
+    isLoading, 
+    deleteIntegration,
+    refetch,
+  } = useIntegrationsModule();
+
+  const { clientes } = usePessoas();
+  const { colaboradores } = useRh();
+
+  // Enrich integrations with names
+  const enrichedIntegrations = integrations.map(int => {
+    const client = clientes.find(c => c.id === int.client_id);
+    const techNames = int.technician_ids
+      .map(tid => {
+        const tech = colaboradores.find(c => c.id === tid);
+        return tech?.nome_fantasia || tech?.razao_social || 'Técnico';
+      })
+      .join(', ');
+
+    return {
+      ...int,
+      clientName: client?.nome_fantasia || client?.razao_social || 'Cliente',
+      techNames,
+    };
   });
 
-  const { 
-    integracoes, 
-    isLoading, 
-    createIntegracao, 
-    updateIntegracao, 
-    deleteIntegracao,
-    colaboradores,
-    clientes,
-    allDocs,
-  } = useIntegracoes();
-
-  // Verificar alertas de documentos do colaborador selecionado
-  const selectedColabDocs = allDocs.filter(d => d.colaborador_id === formData.colaborador_id);
-  const alertasDocumentos = selectedColabDocs
-    .filter(d => {
-      const status = getDocStatus(d.data_vencimento);
-      return status.color === 'red' || status.color === 'yellow';
-    })
-    .map(d => ({
-      tipo: d.tipo_customizado || d.tipo,
-      status: getDocStatus(d.data_vencimento),
-    }));
-
-  const handleOpenDialog = (integracao?: IntegracaoComStatus) => {
-    if (integracao) {
-      setEditingId(integracao.id);
-      setFormData({
-        colaborador_id: integracao.colaborador_id,
-        cliente_id: integracao.cliente_id,
-        data_realizacao: integracao.data_realizacao,
-        data_vencimento: integracao.data_vencimento,
-        observacoes: integracao.observacoes || '',
-      });
-    } else {
-      setEditingId(null);
-      setFormData({
-        colaborador_id: '',
-        cliente_id: '',
-        data_realizacao: new Date().toISOString().split('T')[0],
-        data_vencimento: '',
-        observacoes: '',
-      });
-    }
-    setDialogOpen(true);
-  };
-
-  const handleSubmit = async () => {
-    if (!formData.colaborador_id || !formData.cliente_id || !formData.data_vencimento) return;
-
-    if (editingId) {
-      await updateIntegracao.mutateAsync({
-        id: editingId,
-        data: {
-          data_realizacao: formData.data_realizacao,
-          data_vencimento: formData.data_vencimento,
-          observacoes: formData.observacoes || null,
-        },
-      });
-    } else {
-      await createIntegracao.mutateAsync(formData);
-    }
-    setDialogOpen(false);
-  };
-
-  const handleDelete = async (id: string) => {
-    if (confirm('Remover esta integração?')) {
-      await deleteIntegracao.mutateAsync(id);
-    }
-  };
-
-  // Filtrar integrações
-  const integracoesFiltradas = integracoes.filter(int => {
-    const nomeColab = int.colaborador?.nome_fantasia || int.colaborador?.razao_social || '';
-    const nomeCliente = int.cliente?.nome_fantasia || int.cliente?.razao_social || '';
+  // Filter integrations
+  const integracoesFiltradas = enrichedIntegrations.filter(int => {
     const matchSearch = !search || 
-      nomeColab.toLowerCase().includes(search.toLowerCase()) ||
-      nomeCliente.toLowerCase().includes(search.toLowerCase());
+      int.clientName.toLowerCase().includes(search.toLowerCase()) ||
+      int.techNames.toLowerCase().includes(search.toLowerCase());
     
-    const matchStatus = filterStatus === 'todos' || int.statusFinal === filterStatus;
+    let matchStatus = filterStatus === 'todos';
+    if (filterStatus === 'authorized') matchStatus = int.status === 'authorized';
+    if (filterStatus === 'sent') matchStatus = int.status === 'sent';
+    if (filterStatus === 'blocked') matchStatus = int.status === 'blocked';
+    if (filterStatus === 'expired') {
+      matchStatus = int.status === 'expired' || 
+        (int.earliest_expiry_date ? new Date(int.earliest_expiry_date) < new Date() : false);
+    }
+    if (filterStatus === 'expiring') {
+      if (!int.earliest_expiry_date) matchStatus = false;
+      else {
+        const exp = new Date(int.earliest_expiry_date);
+        const now = new Date();
+        const diffDays = Math.ceil((exp.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+        matchStatus = diffDays > 0 && diffDays <= 15;
+      }
+    }
     
     return matchSearch && matchStatus;
   });
 
-  // Contadores
-  const contadores = {
-    total: integracoes.length,
-    ativos: integracoes.filter(i => i.statusFinal === 'ATIVO').length,
-    aVencer: integracoes.filter(i => i.statusFinal === 'A_VENCER').length,
-    bloqueados: integracoes.filter(i => i.statusFinal === 'BLOQUEADO' || i.statusFinal === 'VENCIDO').length,
+  const handleDelete = async (id: string) => {
+    if (confirm('Remover esta integração?')) {
+      await deleteIntegration.mutateAsync(id);
+    }
+  };
+
+  const handleRevalidate = (int: typeof enrichedIntegrations[0]) => {
+    // Navigate to nova-integracao with pre-filled data (could be enhanced with state)
+    navigate('/servicos/nova-integracao');
   };
 
   if (isLoading) {
@@ -155,43 +120,59 @@ export default function MatrizIntegracoesPage() {
     <div className="container mx-auto py-6">
       <PageHeader
         title="Matriz de Integrações"
-        description="Controle de acesso de colaboradores às unidades industriais"
+        description="Controle de kits de documentação para acesso"
         breadcrumbs={[
           { label: "RH" },
           { label: "Integrações" },
         ]}
         actions={
-          <Button onClick={() => handleOpenDialog()}>
-            <Plus className="mr-2 h-4 w-4" />
-            Nova Integração
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => navigate('/rh/integracoes/dashboard')}>
+              <LayoutDashboard className="mr-2 h-4 w-4" />
+              Dashboard
+            </Button>
+            <Button variant="outline" onClick={() => navigate('/rh/integracoes/requisitos')}>
+              <Settings className="mr-2 h-4 w-4" />
+              Requisitos
+            </Button>
+            <Button onClick={() => navigate('/servicos/nova-integracao')}>
+              <Plus className="mr-2 h-4 w-4" />
+              Nova Integração
+            </Button>
+          </div>
         }
       />
 
       {/* Cards de Resumo */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mt-6">
         <Card>
           <CardContent className="pt-4">
             <p className="text-sm text-muted-foreground">Total</p>
-            <p className="text-2xl font-bold">{contadores.total}</p>
+            <p className="text-2xl font-bold">{stats.total}</p>
           </CardContent>
         </Card>
-        <Card className="border-green-200 bg-green-50">
+        <Card className="border-green-200 bg-green-50 dark:bg-green-950/20">
           <CardContent className="pt-4">
-            <p className="text-sm text-green-700">Ativos</p>
-            <p className="text-2xl font-bold text-green-700">{contadores.ativos}</p>
+            <p className="text-sm text-green-700 dark:text-green-400">Autorizadas</p>
+            <p className="text-2xl font-bold text-green-700 dark:text-green-400">{stats.authorized}</p>
           </CardContent>
         </Card>
-        <Card className="border-yellow-200 bg-yellow-50">
+        <Card className="border-blue-200 bg-blue-50 dark:bg-blue-950/20">
           <CardContent className="pt-4">
-            <p className="text-sm text-yellow-700">A Vencer (15d)</p>
-            <p className="text-2xl font-bold text-yellow-700">{contadores.aVencer}</p>
+            <p className="text-sm text-blue-700 dark:text-blue-400">Enviadas</p>
+            <p className="text-2xl font-bold text-blue-700 dark:text-blue-400">{stats.sent}</p>
           </CardContent>
         </Card>
-        <Card className="border-red-200 bg-red-50">
+        <Card className="border-yellow-200 bg-yellow-50 dark:bg-yellow-950/20">
           <CardContent className="pt-4">
-            <p className="text-sm text-red-700">Bloqueados/Vencidos</p>
-            <p className="text-2xl font-bold text-red-700">{contadores.bloqueados}</p>
+            <p className="text-sm text-yellow-700 dark:text-yellow-400">A Vencer (15d)</p>
+            <p className="text-2xl font-bold text-yellow-700 dark:text-yellow-400">{stats.expiringSoon}</p>
+          </CardContent>
+        </Card>
+        <Card className="border-red-200 bg-red-50 dark:bg-red-950/20">
+          <CardContent className="pt-4">
+            <p className="text-sm text-red-700 dark:text-red-400">Bloqueados</p>
+            <p className="text-2xl font-bold text-red-700 dark:text-red-400">{stats.blocked}</p>
           </CardContent>
         </Card>
       </div>
@@ -204,7 +185,7 @@ export default function MatrizIntegracoesPage() {
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input 
-                  placeholder="Buscar colaborador ou unidade..." 
+                  placeholder="Buscar cliente ou técnico..." 
                   className="pl-10"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
@@ -217,12 +198,16 @@ export default function MatrizIntegracoesPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="todos">Todos</SelectItem>
-                <SelectItem value="ATIVO">Ativos</SelectItem>
-                <SelectItem value="A_VENCER">A Vencer</SelectItem>
-                <SelectItem value="VENCIDO">Vencidos</SelectItem>
-                <SelectItem value="BLOQUEADO">Bloqueados</SelectItem>
+                <SelectItem value="authorized">Autorizados</SelectItem>
+                <SelectItem value="sent">Enviados</SelectItem>
+                <SelectItem value="blocked">Bloqueados</SelectItem>
+                <SelectItem value="expiring">A Vencer (15d)</SelectItem>
+                <SelectItem value="expired">Expirados</SelectItem>
               </SelectContent>
             </Select>
+            <Button variant="outline" size="icon" onClick={() => refetch()}>
+              <RefreshCw className="h-4 w-4" />
+            </Button>
           </div>
         </CardContent>
       </Card>
@@ -233,12 +218,12 @@ export default function MatrizIntegracoesPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Colaborador</TableHead>
-                <TableHead>Cliente/Unidade</TableHead>
-                <TableHead className="text-center">Docs Globais</TableHead>
-                <TableHead>Validade Integração</TableHead>
-                <TableHead>Status Final</TableHead>
-                <TableHead className="w-[100px]">Ações</TableHead>
+                <TableHead>Cliente</TableHead>
+                <TableHead>Técnico(s)</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Validação</TableHead>
+                <TableHead>Próx. Vencimento</TableHead>
+                <TableHead className="w-[150px]">Ações</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -254,35 +239,58 @@ export default function MatrizIntegracoesPage() {
                     <TableCell>
                       <div className="flex items-center gap-2">
                         <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
-                          <User className="h-4 w-4 text-primary" />
+                          <Building2 className="h-4 w-4 text-primary" />
                         </div>
-                        <span className="font-medium">
-                          {int.colaborador?.nome_fantasia || int.colaborador?.razao_social || 'N/A'}
-                        </span>
+                        <span className="font-medium">{int.clientName}</span>
                       </div>
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
-                        <Building2 className="h-4 w-4 text-muted-foreground" />
-                        {int.cliente?.nome_fantasia || int.cliente?.razao_social || 'N/A'}
+                        <User className="h-4 w-4 text-muted-foreground" />
+                        <span className="text-sm truncate max-w-[200px]" title={int.techNames}>
+                          {int.techNames || 'N/A'}
+                        </span>
                       </div>
                     </TableCell>
-                    <TableCell className="text-center">
-                      <DocsGlobaisIcon status={int.statusDocsGlobais} docsVencidos={int.docsVencidos} />
+                    <TableCell>
+                      <StatusBadge status={int.status} expiryDate={int.earliest_expiry_date} />
                     </TableCell>
                     <TableCell>
-                      {format(new Date(int.data_vencimento), 'dd/MM/yyyy', { locale: ptBR })}
+                      {int.validated_at ? (
+                        <span className="text-sm text-muted-foreground">
+                          {formatDistanceToNow(new Date(int.validated_at), { addSuffix: true, locale: ptBR })}
+                        </span>
+                      ) : '-'}
                     </TableCell>
                     <TableCell>
-                      <StatusBadge status={int.statusFinal} />
+                      {int.earliest_expiry_date ? (
+                        <span className="text-sm">
+                          {format(new Date(int.earliest_expiry_date), 'dd/MM/yyyy')}
+                        </span>
+                      ) : '-'}
                     </TableCell>
                     <TableCell>
                       <div className="flex gap-1">
-                        <Button variant="ghost" size="sm" onClick={() => handleOpenDialog(int)}>
-                          <Edit className="h-4 w-4" />
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          title="Revalidar"
+                          onClick={() => handleRevalidate(int)}
+                        >
+                          <RefreshCw className="h-4 w-4" />
                         </Button>
-                        <Button variant="ghost" size="sm" onClick={() => handleDelete(int.id)}>
-                          <Trash2 className="h-4 w-4 text-red-600" />
+                        {int.zip_file_name && (
+                          <Button variant="ghost" size="sm" title="Baixar ZIP">
+                            <Download className="h-4 w-4" />
+                          </Button>
+                        )}
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          onClick={() => handleDelete(int.id)}
+                          title="Remover"
+                        >
+                          <Trash2 className="h-4 w-4 text-destructive" />
                         </Button>
                       </div>
                     </TableCell>
@@ -293,115 +301,6 @@ export default function MatrizIntegracoesPage() {
           </Table>
         </CardContent>
       </Card>
-
-      {/* Dialog de Nova/Editar Integração */}
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>{editingId ? 'Renovar Integração' : 'Nova Integração'}</DialogTitle>
-            <DialogDescription>
-              {editingId ? 'Atualize a validade da integração' : 'Registre uma nova integração colaborador x unidade'}
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="grid gap-4 py-4">
-            <div className="grid gap-2">
-              <Label>Colaborador</Label>
-              <Select 
-                value={formData.colaborador_id} 
-                onValueChange={(v) => setFormData({ ...formData, colaborador_id: v })}
-                disabled={!!editingId}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione o colaborador" />
-                </SelectTrigger>
-                <SelectContent>
-                  {colaboradores.map(c => (
-                    <SelectItem key={c.id} value={c.id}>
-                      {c.nome_fantasia || c.razao_social}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Checklist automático de alertas */}
-            {formData.colaborador_id && alertasDocumentos.length > 0 && (
-              <Alert variant="destructive">
-                <AlertTriangle className="h-4 w-4" />
-                <AlertTitle>Atenção</AlertTitle>
-                <AlertDescription>
-                  {alertasDocumentos.map((a, i) => (
-                    <div key={i} className="text-sm">
-                      • {a.tipo}: {a.status.label}
-                    </div>
-                  ))}
-                </AlertDescription>
-              </Alert>
-            )}
-
-            <div className="grid gap-2">
-              <Label>Cliente/Unidade</Label>
-              <Select 
-                value={formData.cliente_id} 
-                onValueChange={(v) => setFormData({ ...formData, cliente_id: v })}
-                disabled={!!editingId}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione a unidade" />
-                </SelectTrigger>
-                <SelectContent>
-                  {clientes.map(c => (
-                    <SelectItem key={c.id} value={c.id}>
-                      {c.nome_fantasia || c.razao_social}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="grid gap-2">
-                <Label>Data Realização</Label>
-                <Input 
-                  type="date"
-                  value={formData.data_realizacao}
-                  onChange={(e) => setFormData({ ...formData, data_realizacao: e.target.value })}
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label>Validade</Label>
-                <Input 
-                  type="date"
-                  value={formData.data_vencimento}
-                  onChange={(e) => setFormData({ ...formData, data_vencimento: e.target.value })}
-                />
-              </div>
-            </div>
-
-            <div className="grid gap-2">
-              <Label>Observações</Label>
-              <Input 
-                value={formData.observacoes}
-                onChange={(e) => setFormData({ ...formData, observacoes: e.target.value })}
-                placeholder="Observações opcionais"
-              />
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>
-              Cancelar
-            </Button>
-            <Button 
-              onClick={handleSubmit}
-              disabled={!formData.colaborador_id || !formData.cliente_id || !formData.data_vencimento || createIntegracao.isPending || updateIntegracao.isPending}
-            >
-              {editingId ? 'Atualizar' : 'Registrar'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
