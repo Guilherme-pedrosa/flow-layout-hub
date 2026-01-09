@@ -162,6 +162,14 @@ serve(async (req) => {
         getBankTxSummary(supabase, companyId, thirtyDaysAgo, todayStr)
       ]);
 
+      // Debug log - mostrar resumos encontrados
+      console.log(`[financial-ai] Bank summaries for ${company.name}:`, {
+        hoje: resumoHoje?.tx_count || 0,
+        '7d': resumo7d?.tx_count || 0,
+        mes: resumoMes?.tx_count || 0,
+        '30d': resumo30d?.tx_count || 0
+      });
+
       // Fetch ALL business data in parallel
       const [
         { data: payables },
@@ -316,34 +324,32 @@ serve(async (req) => {
 - Contas Cadastradas: ${bankAccountsSynced?.length || 0}
 ${bankAccountsSynced?.map(a => `  • ${a.name} (${a.bank_name}): ${formatBRL(a.current_balance)}`).join('\n') || '  Nenhuma conta cadastrada'}
 
-### ⚠️ RESUMO HOJE (${formatDateBR(todayStr)}) - FONTE: RPC get_bank_tx_summary
-${resumoHoje && resumoHoje.tx_count > 0 ? `- Transações: ${resumoHoje.tx_count}
-- Entradas: ${formatBRL(resumoHoje.total_in)}
-- Saídas: ${formatBRL(resumoHoje.total_out)}
-- Saldo do Dia: ${formatBRL(resumoHoje.net)}
-- Período: ${formatDateBR(resumoHoje.first_date)} → ${formatDateBR(resumoHoje.last_date)}` : `⚠️ tx_count: 0 - Sem transações bancárias sincronizadas para hoje.
-É PROIBIDO inventar valores. Responda: "Não há transações bancárias sincronizadas para hoje."`}
-
-### RESUMO ÚLTIMOS 7 DIAS - FONTE: RPC get_bank_tx_summary  
-${resumo7d && resumo7d.tx_count > 0 ? `- Período: ${formatDateBR(resumo7d.first_date)} → ${formatDateBR(resumo7d.last_date)}
-- Transações: ${resumo7d.tx_count}
-- Entradas: ${formatBRL(resumo7d.total_in)}
-- Saídas: ${formatBRL(resumo7d.total_out)}
-- Saldo Período: ${formatBRL(resumo7d.net)}` : `⚠️ tx_count: 0 - Sem transações bancárias sincronizadas nos últimos 7 dias.`}
+### ✅ RESUMO ÚLTIMOS 30 DIAS (PRINCIPAL) - FONTE: RPC get_bank_tx_summary
+${resumo30d && resumo30d.tx_count > 0 ? `- Período: ${formatDateBR(resumo30d.first_date)} → ${formatDateBR(resumo30d.last_date)}
+- Transações: ${resumo30d.tx_count}
+- Entradas: ${formatBRL(resumo30d.total_in)}
+- Saídas: ${formatBRL(resumo30d.total_out)}
+- Saldo Período: ${formatBRL(resumo30d.net)}` : `tx_count: 0`}
 
 ### RESUMO MÊS ATUAL - FONTE: RPC get_bank_tx_summary
 ${resumoMes && resumoMes.tx_count > 0 ? `- Período: ${formatDateBR(resumoMes.first_date)} → ${formatDateBR(resumoMes.last_date)}
 - Transações: ${resumoMes.tx_count}
 - Entradas: ${formatBRL(resumoMes.total_in)}
 - Saídas: ${formatBRL(resumoMes.total_out)}
-- Saldo Período: ${formatBRL(resumoMes.net)}` : `⚠️ tx_count: 0 - Sem transações bancárias sincronizadas no mês atual.`}
+- Saldo Período: ${formatBRL(resumoMes.net)}` : `tx_count: 0`}
 
-### RESUMO ÚLTIMOS 30 DIAS - FONTE: RPC get_bank_tx_summary
-${resumo30d && resumo30d.tx_count > 0 ? `- Período: ${formatDateBR(resumo30d.first_date)} → ${formatDateBR(resumo30d.last_date)}
-- Transações: ${resumo30d.tx_count}
-- Entradas: ${formatBRL(resumo30d.total_in)}
-- Saídas: ${formatBRL(resumo30d.total_out)}
-- Saldo Período: ${formatBRL(resumo30d.net)}` : `⚠️ tx_count: 0 - Sem transações bancárias nos últimos 30 dias.`}
+### RESUMO ÚLTIMOS 7 DIAS - FONTE: RPC get_bank_tx_summary  
+${resumo7d && resumo7d.tx_count > 0 ? `- Período: ${formatDateBR(resumo7d.first_date)} → ${formatDateBR(resumo7d.last_date)}
+- Transações: ${resumo7d.tx_count}
+- Entradas: ${formatBRL(resumo7d.total_in)}
+- Saídas: ${formatBRL(resumo7d.total_out)}
+- Saldo Período: ${formatBRL(resumo7d.net)}` : `tx_count: 0`}
+
+### RESUMO HOJE (${formatDateBR(todayStr)}) - FONTE: RPC get_bank_tx_summary
+${resumoHoje && resumoHoje.tx_count > 0 ? `- Transações: ${resumoHoje.tx_count}
+- Entradas: ${formatBRL(resumoHoje.total_in)}
+- Saídas: ${formatBRL(resumoHoje.total_out)}
+- Saldo do Dia: ${formatBRL(resumoHoje.net)}` : `tx_count: 0 (sem transações hoje, use resumo de 30 dias ou mês)`}
 
 ### 👥 CADASTROS
 - Total de Clientes: ${clients?.length || 0}
