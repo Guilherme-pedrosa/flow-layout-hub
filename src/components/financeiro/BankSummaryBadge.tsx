@@ -164,6 +164,11 @@ export function BankSummaryBadge({ className, onRefresh }: BankSummaryBadgeProps
           </div>
         ) : (
           <div className="space-y-2">
+            {/* Legenda */}
+            <div className="text-[10px] text-muted-foreground italic mb-1">
+              Saldo líquido = Entradas − Saídas (passe o mouse para ver detalhes)
+            </div>
+
             {/* Último dia com dados (não "Hoje") */}
             <Tooltip>
               <TooltipTrigger asChild>
@@ -186,8 +191,9 @@ export function BankSummaryBadge({ className, onRefresh }: BankSummaryBadgeProps
                 </div>
               </TooltipTrigger>
               <TooltipContent side="left" className="text-xs">
-                <p>Entradas: {formatBRL(summaryHoje?.total_in)}</p>
-                <p>Saídas: {formatBRL(summaryHoje?.total_out)}</p>
+                <p className="text-green-600">↑ Entradas: {formatBRL(summaryHoje?.total_in)}</p>
+                <p className="text-red-600">↓ Saídas: {formatBRL(summaryHoje?.total_out)}</p>
+                <p className="border-t mt-1 pt-1 font-medium">= Líquido: {formatBRL(summaryHoje?.net)}</p>
               </TooltipContent>
             </Tooltip>
 
@@ -213,8 +219,9 @@ export function BankSummaryBadge({ className, onRefresh }: BankSummaryBadgeProps
                 </div>
               </TooltipTrigger>
               <TooltipContent side="left" className="text-xs">
-                <p>Entradas: {formatBRL(summary7d?.total_in)}</p>
-                <p>Saídas: {formatBRL(summary7d?.total_out)}</p>
+                <p className="text-green-600">↑ Entradas: {formatBRL(summary7d?.total_in)}</p>
+                <p className="text-red-600">↓ Saídas: {formatBRL(summary7d?.total_out)}</p>
+                <p className="border-t mt-1 pt-1 font-medium">= Líquido: {formatBRL(summary7d?.net)}</p>
               </TooltipContent>
             </Tooltip>
 
@@ -240,8 +247,9 @@ export function BankSummaryBadge({ className, onRefresh }: BankSummaryBadgeProps
                 </div>
               </TooltipTrigger>
               <TooltipContent side="left" className="text-xs">
-                <p>Entradas: {formatBRL(summaryMes?.total_in)}</p>
-                <p>Saídas: {formatBRL(summaryMes?.total_out)}</p>
+                <p className="text-green-600">↑ Entradas: {formatBRL(summaryMes?.total_in)}</p>
+                <p className="text-red-600">↓ Saídas: {formatBRL(summaryMes?.total_out)}</p>
+                <p className="border-t mt-1 pt-1 font-medium">= Líquido: {formatBRL(summaryMes?.net)}</p>
               </TooltipContent>
             </Tooltip>
           </div>
