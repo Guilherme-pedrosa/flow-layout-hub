@@ -1,3 +1,11 @@
+/**
+ * WAI Operator - Chat Financeiro
+ * 
+ * Este componente usa o prompt central definido em src/ai/systemPrompt.ts
+ * A IA é um assistente operacional do sistema, NÃO um CFO/Controller.
+ * 
+ * @see src/ai/systemPrompt.ts para regras e formatação
+ */
 import { useState, useRef, useEffect } from "react";
 import { Bot, Send, X, AlertTriangle, TrendingDown, TrendingUp, DollarSign, Clock, FileText, Users, PieChart, Loader2, ArrowLeft, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -384,7 +392,7 @@ Responda APENAS com o JSON array, sem markdown ou explicações.` }],
       {/* Header */}
       <div className="bg-gradient-to-br from-blue-600 to-purple-600 p-6">
         <div className="flex items-center justify-between mb-4">
-          <span className="text-xs font-medium text-white/80 uppercase tracking-wider">Assistente Financeiro IA</span>
+          <span className="text-xs font-medium text-white/80 uppercase tracking-wider">WAI Operator</span>
           <Button
             variant="ghost"
             size="icon"
@@ -399,8 +407,8 @@ Responda APENAS com o JSON array, sem markdown ou explicações.` }],
             <Bot className="h-8 w-8 text-white" />
           </div>
           <div>
-            <h2 className="text-xl font-bold text-white">Assistente IA</h2>
-            <p className="text-sm text-white/70">Análise financeira inteligente</p>
+            <h2 className="text-xl font-bold text-white">Assistente Financeiro</h2>
+            <p className="text-sm text-white/70">Análise baseada em dados reais</p>
           </div>
         </div>
       </div>
