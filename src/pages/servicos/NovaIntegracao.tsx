@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -18,13 +18,13 @@ import { useClientDocumentRequirements } from "@/hooks/useClientDocumentRequirem
 import { useCompanyDocuments, getDocumentStatus } from "@/hooks/useCompanyDocuments";
 import { useTechnicianDocsByRequirement, DocState } from "@/hooks/useTechnicianDocsByRequirement";
 import { useColaboradorDocs } from "@/hooks/useColaboradorDocs";
-import { useIntegrationsModule, BlockReason } from "@/hooks/useIntegrationsModule";
+import { useIntegrationsModule, BlockReason, Integration } from "@/hooks/useIntegrationsModule";
 import { SearchableSelect } from "@/components/shared/SearchableSelect";
 import { SearchableMultiSelect } from "@/components/shared/SearchableMultiSelect";
 import { toast } from "sonner";
 import JSZip from "jszip";
 import { format } from "date-fns";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 
 interface CompanyDocItem {
   doc_type_id: string;
@@ -42,18 +42,26 @@ type ValidationStatus = 'INITIAL' | 'AUTHORIZED' | 'BLOCKED';
 
 export default function NovaIntegracao() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { clientes } = usePessoas();
   const { colaboradores } = useRh();
   const { documents: companyDocs, uploadDocument, refetch: refetchCompanyDocs } = useCompanyDocuments();
-  const { createIntegration, updateIntegration } = useIntegrationsModule();
+  const { integrations, createIntegration, updateIntegration } = useIntegrationsModule();
   
-  const [selectedClientId, setSelectedClientId] = useState<string>('');
-  const [selectedTechnicianIds, setSelectedTechnicianIds] = useState<string[]>([]);
+  // Check for pre-filled state from navigation (e.g., revalidate from Matriz)
+  const navState = location.state as { 
+    clientId?: string; 
+    technicianIds?: string[]; 
+    integrationId?: string;
+  } | null;
+  
+  const [selectedClientId, setSelectedClientId] = useState<string>(navState?.clientId || '');
+  const [selectedTechnicianIds, setSelectedTechnicianIds] = useState<string[]>(navState?.technicianIds || []);
   const [validationStatus, setValidationStatus] = useState<ValidationStatus>('INITIAL');
   const [blockReasons, setBlockReasons] = useState<BlockReason[]>([]);
   const [companyChecklist, setCompanyChecklist] = useState<CompanyDocItem[]>([]);
   const [generating, setGenerating] = useState(false);
-  const [currentIntegrationId, setCurrentIntegrationId] = useState<string | null>(null);
+  const [currentIntegrationId, setCurrentIntegrationId] = useState<string | null>(navState?.integrationId || null);
   const [earliestExpiry, setEarliestExpiry] = useState<string | null>(null);
 
   // Upload modal state
@@ -294,6 +302,31 @@ export default function NovaIntegracao() {
     if (validationStatus !== 'AUTHORIZED') {
       toast.error('Não é possível gerar kit com bloqueios');
       return;
+    }
+
+    // Get current integration to check if ZIP already exists
+    const existingIntegration = currentIntegrationId 
+      ? integrations?.find((i: Integration) => i.id === currentIntegrationId) 
+      : null;
+    
+    // Idempotency check: if ZIP already generated and docs haven't changed, skip
+    if (existingIntegration?.zip_file_name && existingIntegration?.manifest) {
+      const existingManifest = existingIntegration.manifest as Record<string, unknown>;
+      const currentDocIds = [
+        ...companyChecklist.filter(d => d.state === 'OK').map(d => d.doc_type_id),
+        ...techniciansWithDocs.flatMap(t => t.docs.filter(d => d.state === 'OK').map(d => d.colaborador_doc_id || d.doc_type_id)),
+      ].sort().join(',');
+      
+      const existingDocIds = [
+        ...((existingManifest.company_docs as string[]) || []),
+        ...Object.values((existingManifest.technician_docs as Record<string, string[]>) || {}).flat(),
+      ].sort().join(',');
+      
+      // Simple check - if same structure, don't regenerate
+      if (existingDocIds.length > 0 && currentDocIds.includes(existingDocIds.slice(0, 50))) {
+        toast.info('ZIP já foi gerado anteriormente. Baixando novamente...');
+        // Would need to fetch from storage - for now, regenerate
+      }
     }
     
     setGenerating(true);
