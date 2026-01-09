@@ -22,7 +22,7 @@ function concatUint8Arrays(arrays: Uint8Array[]): Uint8Array {
 
 /**
  * Faz uma requisição HTTP sobre TLS com mTLS (certificado de cliente)
- * O Deno suporta mTLS via Deno.connectTls com certChain e privateKey
+ * O Deno suporta mTLS via Deno.connectTls com cert e key
  */
 async function makeHttpsRequest(
   method: string,
@@ -34,14 +34,32 @@ async function makeHttpsRequest(
 ): Promise<{ status: number; body: string }> {
   console.log(`[inter-mtls] Making ${method} request to ${path}`);
   
-  // Conectar com mTLS usando a API correta do Deno
-  // Deno.connectTls com cert e key para client certificate (mTLS)
+  // Validar formato do certificado e chave
+  const cleanCert = cert.trim();
+  const cleanKey = key.trim();
+  
+  console.log(`[inter-mtls] Cert starts with: ${cleanCert.substring(0, 50)}`);
+  console.log(`[inter-mtls] Key starts with: ${cleanKey.substring(0, 50)}`);
+  
+  if (!cleanCert.includes("-----BEGIN CERTIFICATE-----")) {
+    throw new Error("Certificado inválido: não contém BEGIN CERTIFICATE");
+  }
+  
+  if (!cleanKey.includes("-----BEGIN") || !cleanKey.includes("PRIVATE KEY-----")) {
+    throw new Error("Chave privada inválida: formato incorreto");
+  }
+  
+  // Verificar se a chave está encriptada (não suportado)
+  if (cleanKey.includes("ENCRYPTED")) {
+    throw new Error("Chave privada encriptada não é suportada. Use chave sem senha.");
+  }
+  
+  // Conectar com mTLS usando a API do Deno
   const conn = await Deno.connectTls({
     hostname: INTER_HOST,
     port: INTER_PORT,
-    // Para mTLS, usamos cert e key (não certChain)
-    cert: cert,
-    key: key,
+    cert: cleanCert,
+    key: cleanKey,
   });
 
   try {
