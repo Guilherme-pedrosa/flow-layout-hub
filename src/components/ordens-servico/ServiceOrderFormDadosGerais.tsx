@@ -63,11 +63,14 @@ export function ServiceOrderFormDadosGerais({ formData, onChange }: ServiceOrder
   const { syncServiceTypes, isSyncing } = useFieldServiceTypes();
 
   // Buscar todos os clientes da empresa
-  const { data: clientes = [], refetch: refetchClientes } = useQuery({
+  const { data: clientes = [], refetch: refetchClientes, isLoading: isLoadingClientes } = useQuery({
     queryKey: ['clientes-for-os', currentCompany?.id],
     queryFn: fetchClientes,
     enabled: !!currentCompany?.id,
   });
+
+  // Debug log para verificar clientes carregados
+  console.log('[ServiceOrderFormDadosGerais] Clientes carregados:', clientes.length, 'Company:', currentCompany?.id, 'Loading:', isLoadingClientes);
 
   const [showCadastrarCliente, setShowCadastrarCliente] = useState(false);
   const [showCadastrarEquipamento, setShowCadastrarEquipamento] = useState(false);
