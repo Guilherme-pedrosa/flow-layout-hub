@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { 
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter 
 } from "@/components/ui/dialog";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { 
   ShieldCheck, ShieldX, Download, Mail, Building2, Users, FileCheck, FileX, 
   CheckCircle, Clock, Loader2, Upload, AlertCircle, Save
@@ -57,6 +58,7 @@ export default function NovaIntegracao() {
   
   const [selectedClientId, setSelectedClientId] = useState<string>(navState?.clientId || '');
   const [selectedTechnicianIds, setSelectedTechnicianIds] = useState<string[]>(navState?.technicianIds || []);
+  const [docScope, setDocScope] = useState<'both' | 'company' | 'technician'>('both');
   const [validationStatus, setValidationStatus] = useState<ValidationStatus>('INITIAL');
   const [blockReasons, setBlockReasons] = useState<BlockReason[]>([]);
   const [companyChecklist, setCompanyChecklist] = useState<CompanyDocItem[]>([]);
@@ -114,6 +116,7 @@ export default function NovaIntegracao() {
   const handleSelectClient = (clientId: string) => {
     setSelectedClientId(clientId);
     setSelectedTechnicianIds([]);
+    setDocScope('both');
     setValidationStatus('INITIAL');
     setBlockReasons([]);
     setCompanyChecklist([]);
@@ -126,16 +129,21 @@ export default function NovaIntegracao() {
       toast.error('Selecione um cliente');
       return;
     }
-    if (selectedTechnicianIds.length === 0) {
+    // Só exige técnico se o escopo incluir técnicos
+    const needsTechnicians = docScope === 'both' || docScope === 'technician';
+    if (needsTechnicians && selectedTechnicianIds.length === 0) {
       toast.error('Selecione ao menos um técnico');
       return;
     }
 
     const reasons: BlockReason[] = [];
     let minExpiry: Date | null = null;
+    
+    const includeCompany = docScope === 'both' || docScope === 'company';
+    const includeTechnician = docScope === 'both' || docScope === 'technician';
 
-    // Build company checklist
-    const companyList: CompanyDocItem[] = companyRequirements.map(req => {
+    // Build company checklist (only if included)
+    const companyList: CompanyDocItem[] = includeCompany ? companyRequirements.map(req => {
       const doc = companyDocs.find(d => d.document_type_id === req.document_type_id);
       const docType = req.document_type;
       const requiresExpiry = docType?.requires_expiry ?? false;
@@ -181,10 +189,11 @@ export default function NovaIntegracao() {
         is_required: req.is_required,
         requires_expiry: requiresExpiry,
       };
-    });
+    }) : [];
 
-    // Check technician docs
-    techniciansWithDocs.forEach(tech => {
+    // Check technician docs (only if included)
+    if (includeTechnician) {
+      techniciansWithDocs.forEach(tech => {
       tech.docs.forEach(doc => {
         if (doc.is_required && doc.state !== 'OK') {
           reasons.push({
@@ -202,8 +211,9 @@ export default function NovaIntegracao() {
             minExpiry = expDate;
           }
         }
+        });
       });
-    });
+    }
 
     setCompanyChecklist(companyList);
     setBlockReasons(reasons);
@@ -451,7 +461,8 @@ export default function NovaIntegracao() {
   };
 
   const hasRequirements = companyRequirements.length > 0 || technicianRequirements.length > 0;
-  const canValidate = selectedClientId && hasRequirements && selectedTechnicianIds.length > 0;
+  const needsTechnicians = docScope === 'both' || docScope === 'technician';
+  const canValidate = selectedClientId && hasRequirements && (!needsTechnicians || selectedTechnicianIds.length > 0);
 
   return (
     <div className="container mx-auto p-6 space-y-6">
@@ -497,17 +508,51 @@ export default function NovaIntegracao() {
             )}
 
             {selectedClientId && hasRequirements && (
-              <div>
-                <Label>Técnicos</Label>
-                <SearchableMultiSelect
-                  options={technicianOptions}
-                  values={selectedTechnicianIds}
-                  onChange={setSelectedTechnicianIds}
-                  placeholder="Digite para buscar técnicos..."
-                  searchPlaceholder="Buscar por nome..."
-                  emptyMessage="Nenhum técnico encontrado"
-                />
-              </div>
+              <>
+                {/* Escopo da documentação */}
+                <div>
+                  <Label className="mb-2 block">Tipo de Documentação</Label>
+                  <RadioGroup 
+                    value={docScope} 
+                    onValueChange={(v) => setDocScope(v as 'both' | 'company' | 'technician')}
+                    className="space-y-2"
+                  >
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="both" id="scope-both" />
+                      <Label htmlFor="scope-both" className="font-normal cursor-pointer">
+                        Empresa + Técnico(s)
+                      </Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="company" id="scope-company" />
+                      <Label htmlFor="scope-company" className="font-normal cursor-pointer">
+                        Apenas Empresa
+                      </Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="technician" id="scope-technician" />
+                      <Label htmlFor="scope-technician" className="font-normal cursor-pointer">
+                        Apenas Técnico(s)
+                      </Label>
+                    </div>
+                  </RadioGroup>
+                </div>
+
+                {/* Técnicos - só exibe se o escopo incluir técnicos */}
+                {needsTechnicians && (
+                  <div>
+                    <Label>Técnicos</Label>
+                    <SearchableMultiSelect
+                      options={technicianOptions}
+                      values={selectedTechnicianIds}
+                      onChange={setSelectedTechnicianIds}
+                      placeholder="Digite para buscar técnicos..."
+                      searchPlaceholder="Buscar por nome..."
+                      emptyMessage="Nenhum técnico encontrado"
+                    />
+                  </div>
+                )}
+              </>
             )}
 
             <Button 
