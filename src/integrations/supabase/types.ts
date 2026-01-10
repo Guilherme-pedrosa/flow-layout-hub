@@ -927,6 +927,70 @@ export type Database = {
           },
         ]
       }
+      audit_log_os_custos: {
+        Row: {
+          alterado_em: string
+          alterado_por: string | null
+          alterado_por_nome: string | null
+          campo_alterado: string
+          company_id: string
+          id: string
+          motivo: string
+          os_custo_id: string
+          service_order_id: string
+          valor_anterior: string | null
+          valor_novo: string | null
+        }
+        Insert: {
+          alterado_em?: string
+          alterado_por?: string | null
+          alterado_por_nome?: string | null
+          campo_alterado: string
+          company_id: string
+          id?: string
+          motivo: string
+          os_custo_id: string
+          service_order_id: string
+          valor_anterior?: string | null
+          valor_novo?: string | null
+        }
+        Update: {
+          alterado_em?: string
+          alterado_por?: string | null
+          alterado_por_nome?: string | null
+          campo_alterado?: string
+          company_id?: string
+          id?: string
+          motivo?: string
+          os_custo_id?: string
+          service_order_id?: string
+          valor_anterior?: string | null
+          valor_novo?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "audit_log_os_custos_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "audit_log_os_custos_os_custo_id_fkey"
+            columns: ["os_custo_id"]
+            isOneToOne: false
+            referencedRelation: "os_custos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "audit_log_os_custos_service_order_id_fkey"
+            columns: ["service_order_id"]
+            isOneToOne: false
+            referencedRelation: "service_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       audit_logs: {
         Row: {
           action: string
@@ -2702,6 +2766,102 @@ export type Database = {
             columns: ["uploaded_by"]
             isOneToOne: false
             referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      config_custos_unidade: {
+        Row: {
+          aliquota_imposto_padrao_percent: number
+          aproveitamento_percent: number
+          base_horas_produtivas_empresa_mes: number
+          company_id: string
+          created_at: string
+          custo_fixo_mensal_total: number
+          custo_hora_deslocamento: number | null
+          custo_hora_tecnica_direto: number | null
+          custo_por_km: number
+          deslocamento_max_percent_receita: number
+          encargos_percent: number
+          horas_mes_base: number
+          id: string
+          iof_percent: number
+          is_active: boolean
+          margem_minima_alerta_percent: number
+          metodo_rateio: string
+          peso_hora: number | null
+          peso_os: number | null
+          prazo_recebimento_dias_padrao: number
+          salario_medio_tecnico_mensal: number | null
+          taxa_capital_mensal_percent: number
+          unit_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          aliquota_imposto_padrao_percent?: number
+          aproveitamento_percent?: number
+          base_horas_produtivas_empresa_mes?: number
+          company_id: string
+          created_at?: string
+          custo_fixo_mensal_total?: number
+          custo_hora_deslocamento?: number | null
+          custo_hora_tecnica_direto?: number | null
+          custo_por_km?: number
+          deslocamento_max_percent_receita?: number
+          encargos_percent?: number
+          horas_mes_base?: number
+          id?: string
+          iof_percent?: number
+          is_active?: boolean
+          margem_minima_alerta_percent?: number
+          metodo_rateio?: string
+          peso_hora?: number | null
+          peso_os?: number | null
+          prazo_recebimento_dias_padrao?: number
+          salario_medio_tecnico_mensal?: number | null
+          taxa_capital_mensal_percent?: number
+          unit_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          aliquota_imposto_padrao_percent?: number
+          aproveitamento_percent?: number
+          base_horas_produtivas_empresa_mes?: number
+          company_id?: string
+          created_at?: string
+          custo_fixo_mensal_total?: number
+          custo_hora_deslocamento?: number | null
+          custo_hora_tecnica_direto?: number | null
+          custo_por_km?: number
+          deslocamento_max_percent_receita?: number
+          encargos_percent?: number
+          horas_mes_base?: number
+          id?: string
+          iof_percent?: number
+          is_active?: boolean
+          margem_minima_alerta_percent?: number
+          metodo_rateio?: string
+          peso_hora?: number | null
+          peso_os?: number | null
+          prazo_recebimento_dias_padrao?: number
+          salario_medio_tecnico_mensal?: number | null
+          taxa_capital_mensal_percent?: number
+          unit_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "config_custos_unidade_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "config_custos_unidade_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "client_units"
             referencedColumns: ["id"]
           },
         ]
@@ -4564,6 +4724,132 @@ export type Database = {
             columns: ["sale_id"]
             isOneToOne: false
             referencedRelation: "sales"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      os_custos: {
+        Row: {
+          aliquota_imposto_motivo: string | null
+          aliquota_imposto_override: number | null
+          calculado_em: string | null
+          calculado_por: string | null
+          company_id: string
+          config_snapshot: Json | null
+          created_at: string
+          custo_deslocamento: number | null
+          custo_financeiro_recebimento: number | null
+          custo_fixo_alocado: number | null
+          custo_hora_tecnica_usado: number | null
+          custo_mao_obra_direta: number | null
+          custo_pecas: number
+          custo_pecas_motivo: string | null
+          custo_pecas_override: boolean
+          custo_total_real: number | null
+          desconto_concedido: number
+          diaria: number
+          estacionamento: number
+          horas_tecnicas: number
+          id: string
+          impostos_estimados: number | null
+          km_total: number
+          lucro_real: number | null
+          margem_real_percent: number | null
+          pedagio: number
+          prazo_recebimento_dias: number | null
+          receita_bruta: number | null
+          receita_liquida: number | null
+          refeicao: number
+          service_order_id: string
+          servicos_externos: number
+          tempo_deslocamento_horas: number
+          updated_at: string
+        }
+        Insert: {
+          aliquota_imposto_motivo?: string | null
+          aliquota_imposto_override?: number | null
+          calculado_em?: string | null
+          calculado_por?: string | null
+          company_id: string
+          config_snapshot?: Json | null
+          created_at?: string
+          custo_deslocamento?: number | null
+          custo_financeiro_recebimento?: number | null
+          custo_fixo_alocado?: number | null
+          custo_hora_tecnica_usado?: number | null
+          custo_mao_obra_direta?: number | null
+          custo_pecas?: number
+          custo_pecas_motivo?: string | null
+          custo_pecas_override?: boolean
+          custo_total_real?: number | null
+          desconto_concedido?: number
+          diaria?: number
+          estacionamento?: number
+          horas_tecnicas?: number
+          id?: string
+          impostos_estimados?: number | null
+          km_total?: number
+          lucro_real?: number | null
+          margem_real_percent?: number | null
+          pedagio?: number
+          prazo_recebimento_dias?: number | null
+          receita_bruta?: number | null
+          receita_liquida?: number | null
+          refeicao?: number
+          service_order_id: string
+          servicos_externos?: number
+          tempo_deslocamento_horas?: number
+          updated_at?: string
+        }
+        Update: {
+          aliquota_imposto_motivo?: string | null
+          aliquota_imposto_override?: number | null
+          calculado_em?: string | null
+          calculado_por?: string | null
+          company_id?: string
+          config_snapshot?: Json | null
+          created_at?: string
+          custo_deslocamento?: number | null
+          custo_financeiro_recebimento?: number | null
+          custo_fixo_alocado?: number | null
+          custo_hora_tecnica_usado?: number | null
+          custo_mao_obra_direta?: number | null
+          custo_pecas?: number
+          custo_pecas_motivo?: string | null
+          custo_pecas_override?: boolean
+          custo_total_real?: number | null
+          desconto_concedido?: number
+          diaria?: number
+          estacionamento?: number
+          horas_tecnicas?: number
+          id?: string
+          impostos_estimados?: number | null
+          km_total?: number
+          lucro_real?: number | null
+          margem_real_percent?: number | null
+          pedagio?: number
+          prazo_recebimento_dias?: number | null
+          receita_bruta?: number | null
+          receita_liquida?: number | null
+          refeicao?: number
+          service_order_id?: string
+          servicos_externos?: number
+          tempo_deslocamento_horas?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "os_custos_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "os_custos_service_order_id_fkey"
+            columns: ["service_order_id"]
+            isOneToOne: true
+            referencedRelation: "service_orders"
             referencedColumns: ["id"]
           },
         ]
