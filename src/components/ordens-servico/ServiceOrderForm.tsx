@@ -115,28 +115,14 @@ export function ServiceOrderForm({ onClose, initialData }: ServiceOrderFormProps
   const handleSave = async () => {
     // Validações obrigatórias
     const errors: string[] = [];
-    
-    // Carregar clientes para validação
-    const clientesList = await fetchClientes();
+    const warnings: string[] = [];
     
     if (!formData.client_id) {
       errors.push('Cliente é obrigatório');
-    } else {
-      // Verificar se cliente tem field_customer_id
-      const selectedClient = clientesList.find(c => c.id === formData.client_id);
-      if (!selectedClient?.field_customer_id) {
-        errors.push('Cliente não está sincronizado com Field Control (field_customer_id ausente)');
-      }
     }
     
     if (!formData.service_type_id) {
       errors.push('Tipo de OS é obrigatório');
-    } else {
-      // Verificar se tipo tem field_task_type_id ou field_service_id
-      const selectedType = activeServiceTypes.find(t => t.id === formData.service_type_id);
-      if (!selectedType?.field_task_type_id && !selectedType?.field_service_id) {
-        errors.push('Tipo de OS não está sincronizado com Field Control (sincronize os tipos primeiro)');
-      }
     }
     
     if (!formData.order_date) {
@@ -148,6 +134,20 @@ export function ServiceOrderForm({ onClose, initialData }: ServiceOrderFormProps
       errors.forEach(err => toast.error(err));
       return;
     }
+    
+    // Avisos opcionais (não bloqueiam)
+    const clientesList = await fetchClientes();
+    const selectedClient = clientesList.find(c => c.id === formData.client_id);
+    if (!selectedClient?.field_customer_id) {
+      warnings.push('Cliente não sincronizado com Field Control - OS será criada apenas localmente');
+    }
+    
+    const selectedType = activeServiceTypes.find(t => t.id === formData.service_type_id);
+    if (!selectedType?.field_task_type_id && !selectedType?.field_service_id) {
+      warnings.push('Tipo de OS não sincronizado com Field Control');
+    }
+    
+    warnings.forEach(w => toast.warning(w));
     
     setValidationErrors([]);
     
