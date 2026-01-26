@@ -211,9 +211,9 @@ export default function PropostaEditorPage() {
     }
   };
 
-  const handleDownloadPdf = async () => {
-    // TODO: Chamar edge function para gerar PDF
-    window.open(`/api/proposals/${id}/pdf`, "_blank");
+  const handleDownloadPdf = () => {
+    // Usa a mesma lógica de impressão - o usuário pode salvar como PDF
+    handlePrint();
   };
 
   if (isLoading || !localProposal) {
