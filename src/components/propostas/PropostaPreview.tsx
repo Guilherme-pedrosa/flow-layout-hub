@@ -1,8 +1,10 @@
-import { useMemo } from "react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Proposal, ProposalItem, ProposalTerm, ProposalCompanySettings } from "@/hooks/useProposals";
 import { formatCurrency } from "@/lib/formatters";
+
+// Imagem de capa padrão profissional
+const DEFAULT_COVER_IMAGE = "https://images.unsplash.com/photo-1497366216548-37526070297c?w=1200&h=800&fit=crop&q=80";
 
 interface PropostaPreviewProps {
   proposal: Proposal;
@@ -14,7 +16,7 @@ interface PropostaPreviewProps {
 export function PropostaPreview({ proposal, items, terms, settings }: PropostaPreviewProps) {
   const primaryColor = settings?.primary_color || "#16a34a";
   const logoUrl = settings?.logo_url;
-  const coverUrl = settings?.cover_image_url;
+  const coverUrl = settings?.cover_image_url || DEFAULT_COVER_IMAGE;
 
   const formatDate = (dateStr: string) => {
     try {
@@ -41,45 +43,51 @@ export function PropostaPreview({ proposal, items, terms, settings }: PropostaPr
         <div 
           className="relative rounded-lg overflow-hidden min-h-[500px] flex flex-col justify-end"
           style={{
-            backgroundImage: coverUrl ? `url(${coverUrl})` : `linear-gradient(135deg, ${primaryColor}, ${primaryColor}dd)`,
+            backgroundImage: `url(${coverUrl})`,
             backgroundSize: "cover",
             backgroundPosition: "center",
           }}
         >
-          {/* Overlay escuro */}
-          <div className="absolute inset-0 bg-black/40" />
+          {/* Overlay com gradiente escuro */}
+          <div 
+            className="absolute inset-0"
+            style={{
+              background: `linear-gradient(to bottom, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.6) 60%, ${primaryColor}ee 100%)`
+            }}
+          />
           
           {/* Conteúdo da capa */}
           <div className="relative z-10 p-8 text-white">
-            <h1 className="text-4xl font-bold mb-6">Proposta Comercial</h1>
+            <h1 className="text-5xl font-bold mb-2 drop-shadow-lg">Proposta</h1>
+            <h1 className="text-5xl font-bold mb-8 drop-shadow-lg">Comercial</h1>
             
-            <div className="space-y-2 text-lg">
+            <div className="space-y-2 text-base opacity-95">
               <p>
                 A seguinte proposta comercial foi elaborada em{" "}
-                <strong>{formatDate(proposal.data_emissao)}</strong> para{" "}
-                <strong>{proposal.cliente_nome || "Cliente"}</strong>.
+                <strong className="text-white">{formatDate(proposal.data_emissao)}</strong> para{" "}
+                <strong className="text-white">{proposal.cliente_nome || "Cliente"}</strong>.
               </p>
               <p>
-                A proposta é válida até <strong>{formatDate(proposal.data_validade)}</strong>.
+                A proposta é válida até <strong className="text-white">{formatDate(proposal.data_validade)}</strong>.
               </p>
               <p>
-                Número da proposta <strong>{proposal.numero}</strong>.
+                Número da proposta <strong className="text-white">{proposal.numero}</strong>.
               </p>
             </div>
           </div>
 
-          {/* Rodapé verde */}
+          {/* Rodapé verde com bordas arredondadas */}
           <div 
-            className="relative z-10 p-4 flex items-center justify-between"
+            className="relative z-10 mx-4 mb-4 p-4 rounded-lg flex items-center justify-between"
             style={{ backgroundColor: primaryColor }}
           >
             <div className="flex items-center gap-4">
               {logoUrl && (
-                <img src={logoUrl} alt="Logo" className="h-10 object-contain" />
+                <img src={logoUrl} alt="Logo" className="h-10 object-contain bg-white/20 rounded p-1" />
               )}
               <div className="text-white text-sm">
-                <p className="font-medium">{settings?.razao_social || "WeDo Serviços Técnicos"}</p>
-                <p>Tel: {settings?.telefone || "(00) 00000-0000"}</p>
+                <p className="font-semibold">{settings?.razao_social || "WeDo Serviços Técnicos"}</p>
+                <p className="opacity-90">Tel: {settings?.telefone || "(00) 00000-0000"}</p>
               </div>
             </div>
           </div>
