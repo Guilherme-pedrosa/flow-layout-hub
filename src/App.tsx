@@ -12,6 +12,10 @@ import NotFound from "./pages/NotFound";
 import Auth from "./pages/Auth";
 import LandingPage from "./pages/LandingPage";
 
+// Propostas
+import PropostasPage from "./pages/propostas/PropostasPage";
+import PropostaEditorPage from "./pages/propostas/PropostaEditorPage";
+
 // Operação
 import Vendas from "./pages/receber/Vendas";
 import ConfiguracoesVendas from "./pages/receber/ConfiguracoesVendas";
@@ -150,6 +154,10 @@ const App = () => (
             <Route path="/rh/tipos-documento" element={<TiposDocumentoPage />} />
             <Route path="/rh/documentos-empresa" element={<DocumentosEmpresaPage />} />
             <Route path="/servicos/nova-integracao" element={<NovaIntegracao />} />
+            
+            {/* Propostas */}
+            <Route path="/propostas" element={<PropostasPage />} />
+            <Route path="/propostas/:id" element={<PropostaEditorPage />} />
             
             {/* Compras */}
             <Route path="/pedidos-compra" element={<PedidosCompra />} />

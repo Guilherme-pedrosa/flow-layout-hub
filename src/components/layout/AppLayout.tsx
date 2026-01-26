@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, ReactNode } from "react";
 import { Outlet, useLocation } from "react-router-dom";
 import { AppSidebar } from "./AppSidebar";
 import { AppHeader } from "./AppHeader";
@@ -7,7 +7,11 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { AIAssistant } from "@/components/shared/AIAssistant";
 import { WaiAlertBanner } from "@/components/wai-observer/WaiAlertBanner";
 
-export function AppLayout() {
+interface AppLayoutProps {
+  children?: ReactNode;
+}
+
+export function AppLayout({ children }: AppLayoutProps) {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const isMobile = useIsMobile();
@@ -59,7 +63,7 @@ export function AppLayout() {
           <div className="mx-auto max-w-7xl space-y-4">
             {/* WAI Observer Alert Banner - Global */}
             <WaiAlertBanner className="mb-2" />
-            <Outlet />
+            {children || <Outlet />}
           </div>
         </main>
       </div>
