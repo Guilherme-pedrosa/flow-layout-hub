@@ -10414,6 +10414,10 @@ export type Database = {
         Args: { _company_id: string; _user_id: string }
         Returns: boolean
       }
+      user_has_company_access: {
+        Args: { p_company_id: string }
+        Returns: boolean
+      }
     }
     Enums: {
       account_nature: "sintetica" | "analitica"
