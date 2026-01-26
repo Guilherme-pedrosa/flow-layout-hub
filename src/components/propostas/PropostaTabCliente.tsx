@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { SearchableSelect } from "@/components/shared/SearchableSelect";
 import { useClientes } from "@/hooks/useClientes";
+import { useCompany } from "@/contexts/CompanyContext";
 import { Proposal } from "@/hooks/useProposals";
 
 interface PropostaTabClienteProps {
@@ -14,15 +15,18 @@ interface PropostaTabClienteProps {
 
 export function PropostaTabCliente({ proposal, onChange }: PropostaTabClienteProps) {
   const { fetchClientes, loading } = useClientes();
+  const { currentCompany } = useCompany();
   const [clientes, setClientes] = useState<any[]>([]);
 
   useEffect(() => {
-    fetchClientes().then(setClientes);
-  }, []);
+    if (currentCompany?.id) {
+      fetchClientes().then(setClientes);
+    }
+  }, [currentCompany?.id]);
 
   const clienteOptions = clientes?.map((c) => ({
     value: c.id,
-    label: c.razao_social || c.fantasia || "Sem nome",
+    label: c.razao_social || c.nome_fantasia || "Sem nome",
     sublabel: c.cpf_cnpj || undefined,
   })) || [];
 
@@ -32,19 +36,19 @@ export function PropostaTabCliente({ proposal, onChange }: PropostaTabClientePro
       onChange({
         ...proposal,
         cliente_id: cliente.id,
-        cliente_nome: cliente.razao_social || cliente.fantasia || "",
+        cliente_nome: cliente.razao_social || cliente.nome_fantasia || "",
         cliente_cnpj_cpf: cliente.cpf_cnpj || "",
         cliente_endereco: [
-          cliente.endereco,
+          cliente.logradouro,
           cliente.numero,
           cliente.bairro,
           cliente.cidade,
-          cliente.uf,
+          cliente.estado,
           cliente.cep,
         ].filter(Boolean).join(", "),
         cliente_email: cliente.email || "",
-        cliente_telefone: cliente.telefone || cliente.celular || "",
-        cliente_contato: cliente.contato_nome || "",
+        cliente_telefone: cliente.telefone || "",
+        cliente_contato: "",
       });
     }
   };
