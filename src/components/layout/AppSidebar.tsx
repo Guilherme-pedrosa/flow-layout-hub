@@ -95,6 +95,7 @@ const menuGroups: MenuGroup[] = [
     label: "Vendas",
     items: [
       { title: "Pedidos", icon: ShoppingCart, href: "/vendas" },
+      { title: "Propostas", icon: FileText, href: "/propostas" },
       { title: "Comissões", icon: Target, href: "/comissoes" },
       { title: "Itens Separados", icon: Package, href: "/itens-separados" },
       { title: "Configurações", icon: UserCog, href: "/vendas-config" },

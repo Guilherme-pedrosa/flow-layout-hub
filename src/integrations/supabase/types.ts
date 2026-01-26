@@ -6257,6 +6257,540 @@ export type Database = {
           },
         ]
       }
+      proposal_audit: {
+        Row: {
+          action: string
+          created_at: string
+          id: string
+          payload: Json | null
+          proposal_id: string
+          user_id: string | null
+        }
+        Insert: {
+          action: string
+          created_at?: string
+          id?: string
+          payload?: Json | null
+          proposal_id: string
+          user_id?: string | null
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          id?: string
+          payload?: Json | null
+          proposal_id?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "proposal_audit_proposal_id_fkey"
+            columns: ["proposal_id"]
+            isOneToOne: false
+            referencedRelation: "proposals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "proposal_audit_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      proposal_company_settings: {
+        Row: {
+          cargo_assinatura: string | null
+          cnpj: string | null
+          company_id: string
+          cover_image_url: string | null
+          created_at: string
+          diferenciais: string | null
+          email: string | null
+          endereco: string | null
+          fornecimento_cliente: string | null
+          fornecimento_empresa: string | null
+          id: string
+          logo_url: string | null
+          missao: string | null
+          nome_assinatura: string | null
+          prefixo_numero: string | null
+          primary_color: string | null
+          proximo_numero: number | null
+          razao_social: string | null
+          secondary_color: string | null
+          telefone: string | null
+          texto_institucional: string | null
+          updated_at: string
+          validade_dias_padrao: number | null
+          valores: string | null
+          visao: string | null
+        }
+        Insert: {
+          cargo_assinatura?: string | null
+          cnpj?: string | null
+          company_id: string
+          cover_image_url?: string | null
+          created_at?: string
+          diferenciais?: string | null
+          email?: string | null
+          endereco?: string | null
+          fornecimento_cliente?: string | null
+          fornecimento_empresa?: string | null
+          id?: string
+          logo_url?: string | null
+          missao?: string | null
+          nome_assinatura?: string | null
+          prefixo_numero?: string | null
+          primary_color?: string | null
+          proximo_numero?: number | null
+          razao_social?: string | null
+          secondary_color?: string | null
+          telefone?: string | null
+          texto_institucional?: string | null
+          updated_at?: string
+          validade_dias_padrao?: number | null
+          valores?: string | null
+          visao?: string | null
+        }
+        Update: {
+          cargo_assinatura?: string | null
+          cnpj?: string | null
+          company_id?: string
+          cover_image_url?: string | null
+          created_at?: string
+          diferenciais?: string | null
+          email?: string | null
+          endereco?: string | null
+          fornecimento_cliente?: string | null
+          fornecimento_empresa?: string | null
+          id?: string
+          logo_url?: string | null
+          missao?: string | null
+          nome_assinatura?: string | null
+          prefixo_numero?: string | null
+          primary_color?: string | null
+          proximo_numero?: number | null
+          razao_social?: string | null
+          secondary_color?: string | null
+          telefone?: string | null
+          texto_institucional?: string | null
+          updated_at?: string
+          validade_dias_padrao?: number | null
+          valores?: string | null
+          visao?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "proposal_company_settings_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: true
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      proposal_generated_files: {
+        Row: {
+          created_at: string
+          file_hash: string | null
+          file_name: string | null
+          file_size: number | null
+          file_url: string
+          generated_by: string | null
+          id: string
+          proposal_id: string
+        }
+        Insert: {
+          created_at?: string
+          file_hash?: string | null
+          file_name?: string | null
+          file_size?: number | null
+          file_url: string
+          generated_by?: string | null
+          id?: string
+          proposal_id: string
+        }
+        Update: {
+          created_at?: string
+          file_hash?: string | null
+          file_name?: string | null
+          file_size?: number | null
+          file_url?: string
+          generated_by?: string | null
+          id?: string
+          proposal_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "proposal_generated_files_generated_by_fkey"
+            columns: ["generated_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "proposal_generated_files_proposal_id_fkey"
+            columns: ["proposal_id"]
+            isOneToOne: false
+            referencedRelation: "proposals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      proposal_images: {
+        Row: {
+          created_at: string
+          id: string
+          legenda: string | null
+          ordem: number
+          pagina_destino: string | null
+          proposal_id: string
+          url: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          legenda?: string | null
+          ordem?: number
+          pagina_destino?: string | null
+          proposal_id: string
+          url: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          legenda?: string | null
+          ordem?: number
+          pagina_destino?: string | null
+          proposal_id?: string
+          url?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "proposal_images_proposal_id_fkey"
+            columns: ["proposal_id"]
+            isOneToOne: false
+            referencedRelation: "proposals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      proposal_items: {
+        Row: {
+          centro_custo: string | null
+          created_at: string
+          descricao: string
+          detalhes: string | null
+          id: string
+          observacao: string | null
+          ordem: number
+          produto_id: string | null
+          proposal_id: string
+          quantidade: number
+          servico_id: string | null
+          tipo: string
+          unidade: string | null
+          updated_at: string
+          valor_total: number | null
+          valor_unitario: number
+        }
+        Insert: {
+          centro_custo?: string | null
+          created_at?: string
+          descricao: string
+          detalhes?: string | null
+          id?: string
+          observacao?: string | null
+          ordem?: number
+          produto_id?: string | null
+          proposal_id: string
+          quantidade?: number
+          servico_id?: string | null
+          tipo: string
+          unidade?: string | null
+          updated_at?: string
+          valor_total?: number | null
+          valor_unitario?: number
+        }
+        Update: {
+          centro_custo?: string | null
+          created_at?: string
+          descricao?: string
+          detalhes?: string | null
+          id?: string
+          observacao?: string | null
+          ordem?: number
+          produto_id?: string | null
+          proposal_id?: string
+          quantidade?: number
+          servico_id?: string | null
+          tipo?: string
+          unidade?: string | null
+          updated_at?: string
+          valor_total?: number | null
+          valor_unitario?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "proposal_items_produto_id_fkey"
+            columns: ["produto_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "proposal_items_proposal_id_fkey"
+            columns: ["proposal_id"]
+            isOneToOne: false
+            referencedRelation: "proposals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "proposal_items_servico_id_fkey"
+            columns: ["servico_id"]
+            isOneToOne: false
+            referencedRelation: "services"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      proposal_sections: {
+        Row: {
+          conteudo: string | null
+          created_at: string
+          habilitado: boolean | null
+          id: string
+          imagem_url: string | null
+          ordem: number
+          proposal_id: string
+          tipo: string
+          titulo: string | null
+          updated_at: string
+        }
+        Insert: {
+          conteudo?: string | null
+          created_at?: string
+          habilitado?: boolean | null
+          id?: string
+          imagem_url?: string | null
+          ordem?: number
+          proposal_id: string
+          tipo: string
+          titulo?: string | null
+          updated_at?: string
+        }
+        Update: {
+          conteudo?: string | null
+          created_at?: string
+          habilitado?: boolean | null
+          id?: string
+          imagem_url?: string | null
+          ordem?: number
+          proposal_id?: string
+          tipo?: string
+          titulo?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "proposal_sections_proposal_id_fkey"
+            columns: ["proposal_id"]
+            isOneToOne: false
+            referencedRelation: "proposals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      proposal_term_templates: {
+        Row: {
+          chave: string
+          company_id: string
+          conteudo: string
+          created_at: string
+          id: string
+          ordem: number
+          titulo: string
+          updated_at: string
+        }
+        Insert: {
+          chave: string
+          company_id: string
+          conteudo: string
+          created_at?: string
+          id?: string
+          ordem?: number
+          titulo: string
+          updated_at?: string
+        }
+        Update: {
+          chave?: string
+          company_id?: string
+          conteudo?: string
+          created_at?: string
+          id?: string
+          ordem?: number
+          titulo?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "proposal_term_templates_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      proposal_terms: {
+        Row: {
+          chave: string
+          conteudo: string
+          created_at: string
+          habilitado: boolean | null
+          id: string
+          ordem: number
+          proposal_id: string
+          titulo: string
+          updated_at: string
+        }
+        Insert: {
+          chave: string
+          conteudo: string
+          created_at?: string
+          habilitado?: boolean | null
+          id?: string
+          ordem?: number
+          proposal_id: string
+          titulo: string
+          updated_at?: string
+        }
+        Update: {
+          chave?: string
+          conteudo?: string
+          created_at?: string
+          habilitado?: boolean | null
+          id?: string
+          ordem?: number
+          proposal_id?: string
+          titulo?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "proposal_terms_proposal_id_fkey"
+            columns: ["proposal_id"]
+            isOneToOne: false
+            referencedRelation: "proposals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      proposals: {
+        Row: {
+          cliente_cnpj_cpf: string | null
+          cliente_contato: string | null
+          cliente_email: string | null
+          cliente_endereco: string | null
+          cliente_id: string | null
+          cliente_nome: string | null
+          cliente_telefone: string | null
+          company_id: string
+          condicoes_pagamento: string | null
+          created_at: string
+          created_by: string | null
+          data_emissao: string
+          data_validade: string
+          descricao_geral: string | null
+          forma_pagamento: string | null
+          id: string
+          numero: string
+          observacoes: string | null
+          status: string | null
+          titulo: string
+          updated_at: string
+          valor_desconto: number | null
+          valor_final: number | null
+          valor_total: number | null
+        }
+        Insert: {
+          cliente_cnpj_cpf?: string | null
+          cliente_contato?: string | null
+          cliente_email?: string | null
+          cliente_endereco?: string | null
+          cliente_id?: string | null
+          cliente_nome?: string | null
+          cliente_telefone?: string | null
+          company_id: string
+          condicoes_pagamento?: string | null
+          created_at?: string
+          created_by?: string | null
+          data_emissao?: string
+          data_validade: string
+          descricao_geral?: string | null
+          forma_pagamento?: string | null
+          id?: string
+          numero: string
+          observacoes?: string | null
+          status?: string | null
+          titulo: string
+          updated_at?: string
+          valor_desconto?: number | null
+          valor_final?: number | null
+          valor_total?: number | null
+        }
+        Update: {
+          cliente_cnpj_cpf?: string | null
+          cliente_contato?: string | null
+          cliente_email?: string | null
+          cliente_endereco?: string | null
+          cliente_id?: string | null
+          cliente_nome?: string | null
+          cliente_telefone?: string | null
+          company_id?: string
+          condicoes_pagamento?: string | null
+          created_at?: string
+          created_by?: string | null
+          data_emissao?: string
+          data_validade?: string
+          descricao_geral?: string | null
+          forma_pagamento?: string | null
+          id?: string
+          numero?: string
+          observacoes?: string | null
+          status?: string | null
+          titulo?: string
+          updated_at?: string
+          valor_desconto?: number | null
+          valor_final?: number | null
+          valor_total?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "proposals_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "proposals_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "proposals_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       purchase_order_divergences: {
         Row: {
           actual_value: string | null
@@ -9806,6 +10340,10 @@ export type Database = {
           isOneToOne: false
           isSetofReturn: true
         }
+      }
+      generate_proposal_number: {
+        Args: { p_company_id: string }
+        Returns: string
       }
       get_bank_tx_summary: {
         Args: { p_company_id: string; p_date_from: string; p_date_to: string }
