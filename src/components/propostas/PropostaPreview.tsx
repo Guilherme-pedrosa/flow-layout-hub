@@ -3,8 +3,8 @@ import { ptBR } from "date-fns/locale";
 import { Proposal, ProposalItem, ProposalTerm, ProposalCompanySettings } from "@/hooks/useProposals";
 import { formatCurrency } from "@/lib/formatters";
 
-// Imagem de capa padrão profissional
-const DEFAULT_COVER_IMAGE = "https://images.unsplash.com/photo-1497366216548-37526070297c?w=1200&h=800&fit=crop&q=80";
+// Imagem de capa industrial/profissional
+const DEFAULT_COVER_IMAGE = "https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?w=1400&h=900&fit=crop&q=90";
 
 interface PropostaPreviewProps {
   proposal: Proposal;
@@ -38,56 +38,113 @@ export function PropostaPreview({ proposal, items, terms, settings }: PropostaPr
       </div>
 
       {/* Conteúdo do PDF */}
-      <div className="p-8 space-y-8" style={{ minHeight: "800px" }}>
-        {/* PÁGINA 1 - CAPA */}
+      <div className="p-6 space-y-8" style={{ minHeight: "800px" }}>
+        {/* PÁGINA 1 - CAPA PROFISSIONAL */}
         <div 
-          className="relative rounded-lg overflow-hidden min-h-[500px] flex flex-col justify-end"
-          style={{
-            backgroundImage: `url(${coverUrl})`,
-            backgroundSize: "cover",
-            backgroundPosition: "center",
-          }}
+          className="relative rounded-xl overflow-hidden"
+          style={{ minHeight: "580px" }}
         >
-          {/* Overlay com gradiente escuro */}
+          {/* Imagem de fundo */}
           <div 
             className="absolute inset-0"
             style={{
-              background: `linear-gradient(to bottom, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.6) 60%, ${primaryColor}ee 100%)`
+              backgroundImage: `url(${coverUrl})`,
+              backgroundSize: "cover",
+              backgroundPosition: "center",
             }}
           />
           
-          {/* Conteúdo da capa */}
-          <div className="relative z-10 p-8 text-white">
-            <h1 className="text-5xl font-bold mb-2 drop-shadow-lg">Proposta</h1>
-            <h1 className="text-5xl font-bold mb-8 drop-shadow-lg">Comercial</h1>
-            
-            <div className="space-y-2 text-base opacity-95">
-              <p>
-                A seguinte proposta comercial foi elaborada em{" "}
-                <strong className="text-white">{formatDate(proposal.data_emissao)}</strong> para{" "}
-                <strong className="text-white">{proposal.cliente_nome || "Cliente"}</strong>.
-              </p>
-              <p>
-                A proposta é válida até <strong className="text-white">{formatDate(proposal.data_validade)}</strong>.
-              </p>
-              <p>
-                Número da proposta <strong className="text-white">{proposal.numero}</strong>.
-              </p>
-            </div>
-          </div>
-
-          {/* Rodapé verde com bordas arredondadas */}
+          {/* Overlay gradiente escuro intenso */}
           <div 
-            className="relative z-10 mx-4 mb-4 p-4 rounded-lg flex items-center justify-between"
-            style={{ backgroundColor: primaryColor }}
-          >
-            <div className="flex items-center gap-4">
-              {logoUrl && (
-                <img src={logoUrl} alt="Logo" className="h-10 object-contain bg-white/20 rounded p-1" />
-              )}
-              <div className="text-white text-sm">
-                <p className="font-semibold">{settings?.razao_social || "WeDo Serviços Técnicos"}</p>
-                <p className="opacity-90">Tel: {settings?.telefone || "(00) 00000-0000"}</p>
+            className="absolute inset-0"
+            style={{
+              background: `linear-gradient(180deg, 
+                rgba(0,0,0,0.75) 0%, 
+                rgba(0,0,0,0.65) 40%, 
+                rgba(0,0,0,0.8) 70%,
+                ${primaryColor} 100%)`
+            }}
+          />
+
+          {/* Conteúdo da capa */}
+          <div className="relative z-10 h-full flex flex-col justify-between p-8" style={{ minHeight: "580px" }}>
+            {/* Número da proposta no topo direito */}
+            <div className="flex justify-end">
+              <div 
+                className="px-4 py-2 rounded-full text-white text-sm font-medium"
+                style={{ backgroundColor: `${primaryColor}cc` }}
+              >
+                {proposal.numero}
+              </div>
+            </div>
+
+            {/* Título principal centralizado */}
+            <div className="flex-1 flex flex-col justify-center text-center py-8">
+              <h1 
+                className="text-6xl font-black text-white mb-4 tracking-tight"
+                style={{ 
+                  textShadow: "0 4px 20px rgba(0,0,0,0.5), 0 2px 4px rgba(0,0,0,0.3)"
+                }}
+              >
+                PROPOSTA
+              </h1>
+              <h2 
+                className="text-5xl font-bold mb-8"
+                style={{ 
+                  color: primaryColor,
+                  textShadow: "0 2px 10px rgba(0,0,0,0.3)"
+                }}
+              >
+                COMERCIAL
+              </h2>
+              
+              {/* Linha decorativa */}
+              <div className="flex justify-center mb-8">
+                <div 
+                  className="h-1 w-32 rounded-full"
+                  style={{ backgroundColor: primaryColor }}
+                />
+              </div>
+
+              {/* Informações do cliente */}
+              <div className="space-y-3 text-white/90 text-lg max-w-lg mx-auto">
+                <p>
+                  Elaborada em <span className="font-bold text-white">{formatDate(proposal.data_emissao)}</span>
+                </p>
+                <p className="text-xl">
+                  para <span className="font-bold text-white text-2xl">{proposal.cliente_nome || "Cliente"}</span>
+                </p>
+                <p className="text-white/70 text-base mt-4">
+                  Válida até <span className="text-white font-semibold">{formatDate(proposal.data_validade)}</span>
+                </p>
+              </div>
+            </div>
+
+            {/* Rodapé com dados da empresa */}
+            <div 
+              className="rounded-xl p-5 flex items-center justify-between"
+              style={{ 
+                backgroundColor: primaryColor,
+                boxShadow: "0 -4px 20px rgba(0,0,0,0.3)"
+              }}
+            >
+              <div className="flex items-center gap-4">
+                {logoUrl ? (
+                  <div className="bg-white rounded-lg p-2">
+                    <img src={logoUrl} alt="Logo" className="h-10 object-contain" />
+                  </div>
+                ) : (
+                  <div className="w-12 h-12 bg-white/20 rounded-lg flex items-center justify-center">
+                    <span className="text-white font-bold text-xl">W</span>
+                  </div>
+                )}
+                <div className="text-white">
+                  <p className="font-bold text-lg">{settings?.razao_social || "WeDo Serviços Técnicos"}</p>
+                  <p className="text-white/80 text-sm">{settings?.telefone || "(00) 00000-0000"}</p>
+                </div>
+              </div>
+              <div className="text-white/80 text-right text-sm">
+                <p>{settings?.email || "contato@empresa.com"}</p>
               </div>
             </div>
           </div>
