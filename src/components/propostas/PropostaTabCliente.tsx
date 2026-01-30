@@ -19,10 +19,8 @@ export function PropostaTabCliente({ proposal, onChange }: PropostaTabClientePro
   const [clientes, setClientes] = useState<any[]>([]);
 
   useEffect(() => {
-    if (currentCompany?.id) {
-      fetchClientes().then(setClientes);
-    }
-  }, [currentCompany?.id]);
+    fetchClientes().then(setClientes);
+  }, []);
 
   const clienteOptions = clientes?.map((c) => ({
     value: c.id,

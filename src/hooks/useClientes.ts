@@ -16,14 +16,12 @@ export function useClientes() {
   const { currentCompany } = useCompany();
 
   const fetchClientes = async () => {
-    if (!currentCompany) return [];
-    
     setLoading(true);
     try {
+      // Busca todos os clientes compartilhados entre empresas
       const { data, error } = await supabase
         .from("clientes")
         .select("*")
-        .eq("company_id", currentCompany.id)
         .order("razao_social", { ascending: true });
 
       if (error) throw error;
