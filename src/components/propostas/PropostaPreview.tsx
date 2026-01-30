@@ -4,12 +4,17 @@ import { Proposal, ProposalItem, ProposalTerm, ProposalCompanySettings } from "@
 import { formatCurrency } from "@/lib/formatters";
 import logoWedo from "@/assets/logo-wedo.png";
 
-// Importar imagens industriais do PDF de referência
-import coverImg1 from "@/assets/cover-industrial-1.jpg";
-import coverImgGrid from "@/assets/cover-industrial-grid.jpg";
-import imgIndustrial2 from "@/assets/img-industrial-2.jpg";
-import imgIndustrial3 from "@/assets/img-industrial-3.jpg";
-import imgIndustrial4 from "@/assets/img-industrial-4.jpg";
+// Imagens industriais REAIS - cozinhas profissionais, equipamentos em aço inox, SEM PESSOAS
+const INDUSTRIAL_IMAGES = [
+  "https://images.unsplash.com/photo-1581783342308-f792dbdd27c5?w=400&h=300&fit=crop&q=80", // Cozinha industrial aço inox
+  "https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=400&h=300&fit=crop&q=80", // Equipamento profissional
+  "https://images.unsplash.com/photo-1600565193348-f74bd3c7ccdf?w=400&h=300&fit=crop&q=80", // Fogão industrial
+  "https://images.unsplash.com/photo-1590794056226-79ef3a8147e1?w=400&h=300&fit=crop&q=80", // Balcão refrigerado
+  "https://images.unsplash.com/photo-1565538810643-b5bdb714032a?w=400&h=300&fit=crop&q=80", // Utensílios profissionais
+  "https://images.unsplash.com/photo-1567521464027-f127ff144326?w=400&h=300&fit=crop&q=80", // Equipamentos cozinha
+  "https://images.unsplash.com/photo-1606787366850-de6330128bfc?w=400&h=300&fit=crop&q=80", // Cozinha comercial
+  "https://images.unsplash.com/photo-1574126154517-d1e0d89ef734?w=400&h=300&fit=crop&q=80", // Prep station
+];
 
 interface PropostaPreviewProps {
   proposal: Proposal;
@@ -125,20 +130,17 @@ export function PropostaPreview({ proposal, items, terms, settings }: PropostaPr
           }}
         >
           {/* Imagens em grid - replicando o padrão do PDF */}
-          {[...Array(20)].map((_, i) => {
-            const images = [coverImg1, coverImgGrid, imgIndustrial2, imgIndustrial3, imgIndustrial4];
-            return (
-              <div 
-                key={i}
-                style={{
-                  backgroundImage: `url(${images[i % 5]})`,
-                  backgroundSize: "cover",
-                  backgroundPosition: "center",
-                  borderRadius: "4px",
-                }}
-              />
-            );
-          })}
+          {[...Array(20)].map((_, i) => (
+            <div 
+              key={i}
+              style={{
+                backgroundImage: `url(${INDUSTRIAL_IMAGES[i % INDUSTRIAL_IMAGES.length]})`,
+                backgroundSize: "cover",
+                backgroundPosition: "center",
+                borderRadius: "4px",
+              }}
+            />
+          ))}
         </div>
 
         {/* Rodapé da capa */}
@@ -187,20 +189,17 @@ export function PropostaPreview({ proposal, items, terms, settings }: PropostaPr
             gap: "8px",
           }}
         >
-          {[...Array(16)].map((_, i) => {
-            const images = [coverImg1, coverImgGrid, imgIndustrial2, imgIndustrial3, imgIndustrial4];
-            return (
-              <div 
-                key={i}
-                style={{
-                  backgroundImage: `url(${images[i % 5]})`,
-                  backgroundSize: "cover",
-                  backgroundPosition: "center",
-                  borderRadius: "8px",
-                }}
-              />
-            );
-          })}
+          {[...Array(16)].map((_, i) => (
+            <div 
+              key={i}
+              style={{
+                backgroundImage: `url(${INDUSTRIAL_IMAGES[i % INDUSTRIAL_IMAGES.length]})`,
+                backgroundSize: "cover",
+                backgroundPosition: "center",
+                borderRadius: "8px",
+              }}
+            />
+          ))}
         </div>
         <GreenFooter pageNumber={2} totalPages={totalPages} />
       </div>
@@ -524,7 +523,7 @@ Incluso gestão via plataforma própria, atendimento emergencial com SLA, fornec
             gap: "16px",
           }}
         >
-          {[coverImg1, coverImgGrid, imgIndustrial2, imgIndustrial3, imgIndustrial4, coverImg1].map((img, i) => (
+          {INDUSTRIAL_IMAGES.slice(0, 6).map((img, i) => (
             <div 
               key={i}
               style={{
