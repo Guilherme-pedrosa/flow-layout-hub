@@ -205,6 +205,14 @@ export function useProposals() {
     mutationFn: async (data: Partial<Proposal>) => {
       if (!currentCompany?.id) throw new Error("Empresa não selecionada");
 
+      // Verificar se usuário está autenticado
+      const { data: { session } } = await supabase.auth.getSession();
+      console.log("[useProposals] Session check:", session ? `User: ${session.user.id}` : "NOT LOGGED IN");
+      
+      if (!session) {
+        throw new Error("Você precisa estar logado para criar propostas");
+      }
+
       // Gerar número da proposta
       const { data: numeroData, error: numeroError } = await supabase
         .rpc("generate_proposal_number", { p_company_id: currentCompany.id });
