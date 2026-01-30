@@ -4,8 +4,12 @@ import { Proposal, ProposalItem, ProposalTerm, ProposalCompanySettings } from "@
 import { formatCurrency } from "@/lib/formatters";
 import logoWedo from "@/assets/logo-wedo.png";
 
-// Imagem industrial - cozinha industrial profissional com equipamentos em aço inox
-const INDUSTRIAL_COVER = "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=1400&h=900&fit=crop&q=90";
+// Importar imagens industriais do PDF de referência
+import coverImg1 from "@/assets/cover-industrial-1.jpg";
+import coverImgGrid from "@/assets/cover-industrial-grid.jpg";
+import imgIndustrial2 from "@/assets/img-industrial-2.jpg";
+import imgIndustrial3 from "@/assets/img-industrial-3.jpg";
+import imgIndustrial4 from "@/assets/img-industrial-4.jpg";
 
 interface PropostaPreviewProps {
   proposal: Proposal;
@@ -15,20 +19,10 @@ interface PropostaPreviewProps {
 }
 
 export function PropostaPreview({ proposal, items, terms, settings }: PropostaPreviewProps) {
-  const primaryColor = settings?.primary_color || "#1e3a5f"; // Azul escuro executivo
-  const accentColor = "#b4c43d"; // Verde WeDo
+  const greenColor = "#b4c43d"; // Verde WeDo (cor principal do PDF)
   const logoUrl = settings?.logo_url || logoWedo;
-  const coverUrl = settings?.cover_image_url || INDUSTRIAL_COVER;
 
   const formatDate = (dateStr: string) => {
-    try {
-      return format(new Date(dateStr), "dd 'de' MMMM 'de' yyyy", { locale: ptBR });
-    } catch {
-      return dateStr;
-    }
-  };
-
-  const formatDateShort = (dateStr: string) => {
     try {
       return format(new Date(dateStr), "dd/MM/yyyy", { locale: ptBR });
     } catch {
@@ -39,514 +33,807 @@ export function PropostaPreview({ proposal, items, terms, settings }: PropostaPr
   const totalItens = items.reduce((sum, item) => sum + (item.quantidade * item.valor_unitario), 0);
   const enabledTerms = terms.filter((t) => t.habilitado);
 
-  // Separar termos por categoria
-  const termosContratuais = enabledTerms.filter(t => 
-    t.titulo.toLowerCase().includes('vigência') ||
-    t.titulo.toLowerCase().includes('pagamento') ||
-    t.titulo.toLowerCase().includes('cancelamento') ||
-    t.titulo.toLowerCase().includes('reajuste') ||
-    t.titulo.toLowerCase().includes('sla')
-  );
-  const outrosTermos = enabledTerms.filter(t => !termosContratuais.includes(t));
-
-  // Header padrão para páginas internas
-  const PageHeader = () => (
-    <div className="flex items-center justify-between pb-4 mb-6 border-b-2" style={{ borderColor: "#e5e7eb" }}>
-      <img src={logoUrl} alt="WeDo" className="h-10 object-contain" />
-      <div className="text-right text-sm" style={{ color: "#6b7280" }}>
-        <p className="font-semibold" style={{ color: primaryColor }}>{proposal.numero}</p>
-        <p>{formatDateShort(proposal.data_emissao)}</p>
-      </div>
+  // Footer verde arredondado padrão (igual ao PDF)
+  const GreenFooter = ({ pageNumber, totalPages }: { pageNumber: number; totalPages: number }) => (
+    <div 
+      className="mt-auto"
+      style={{
+        backgroundColor: greenColor,
+        borderTopLeftRadius: "50px",
+        borderTopRightRadius: "50px",
+        padding: "16px 40px",
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        marginLeft: "-40px",
+        marginRight: "-40px",
+        marginBottom: "-40px",
+      }}
+    >
+      <img src={logoUrl} alt="WeDo" style={{ height: "32px" }} />
+      <span style={{ color: "#1a1a1a", fontSize: "12px", fontWeight: 500 }}>
+        {proposal.numero} de {formatDate(proposal.data_emissao)} - página {pageNumber} de {totalPages}
+      </span>
     </div>
   );
 
-  // Footer padrão
-  const PageFooter = ({ pageNumber }: { pageNumber: number }) => (
-    <div className="mt-auto pt-6">
-      <div className="flex items-center justify-between text-xs" style={{ color: "#6b7280" }}>
-        <span>{settings?.razao_social || "WeDo Serviços Técnicos LTDA"}</span>
-        <span>Página {pageNumber}</span>
-      </div>
-      <div className="h-1 mt-2 rounded-full" style={{ backgroundColor: accentColor }} />
-    </div>
-  );
+  const totalPages = 7 + (items.length > 0 ? 1 : 0);
 
   return (
     <div className="bg-white rounded-lg shadow-lg overflow-hidden" style={{ fontFamily: "system-ui, -apple-system, sans-serif" }}>
       {/* Barra de info do editor */}
       <div className="bg-muted px-4 py-2 text-sm text-muted-foreground flex justify-between print:hidden">
         <span>Preview da Proposta</span>
-        <span>{proposal.numero} • {formatDateShort(proposal.data_emissao)}</span>
+        <span>{proposal.numero} • {formatDate(proposal.data_emissao)}</span>
       </div>
 
-      {/* ========== PÁGINA 1 - CAPA ========== */}
+      {/* ========== PÁGINA 1 - CAPA (IGUAL AO PDF) ========== */}
       <div 
-        className="relative overflow-hidden"
+        className="relative bg-white"
         style={{ 
-          minHeight: "700px",
+          minHeight: "800px",
           pageBreakAfter: "always",
-          backgroundColor: primaryColor
         }}
       >
-        {/* Imagem de fundo - lateral direita */}
+        {/* Header com logo e título */}
+        <div style={{ padding: "40px 40px 20px 40px" }}>
+          <div className="flex items-start justify-between mb-8">
+            <img src={logoUrl} alt="WeDo" style={{ height: "60px" }} />
+            <div style={{ 
+              backgroundColor: greenColor,
+              padding: "8px 24px",
+              borderRadius: "4px",
+            }}>
+              <span style={{ color: "#1a1a1a", fontWeight: 600, fontSize: "14px" }}>
+                Proposta Comercial
+              </span>
+            </div>
+          </div>
+
+          {/* Título grande */}
+          <h1 style={{ 
+            fontSize: "48px", 
+            fontWeight: 900,
+            color: "#1a1a1a",
+            marginBottom: "24px",
+            lineHeight: 1.1,
+          }}>
+            Proposta<br />Comercial
+          </h1>
+
+          {/* Texto introdutório */}
+          <p style={{ color: "#666", fontSize: "14px", maxWidth: "400px", lineHeight: 1.6 }}>
+            A seguinte proposta comercial foi elaborada em {formatDate(proposal.data_emissao)} para {proposal.cliente_nome || "Cliente"}.
+          </p>
+          <p style={{ color: "#666", fontSize: "14px", marginTop: "8px" }}>
+            A proposta é válida até {formatDate(proposal.data_validade)}.
+          </p>
+          <p style={{ color: "#1a1a1a", fontSize: "16px", fontWeight: 600, marginTop: "16px" }}>
+            Número da proposta {proposal.numero}.
+          </p>
+        </div>
+
+        {/* Grid de imagens industriais (IDÊNTICO AO PDF) */}
         <div 
-          className="absolute right-0 top-0 bottom-0 w-1/2"
-          style={{
-            backgroundImage: `url(${coverUrl})`,
-            backgroundSize: "cover",
-            backgroundPosition: "center",
+          style={{ 
+            display: "grid",
+            gridTemplateColumns: "repeat(5, 1fr)",
+            gridTemplateRows: "repeat(4, 80px)",
+            gap: "4px",
+            padding: "0 40px",
+            marginTop: "20px",
           }}
         >
-          <div 
-            className="absolute inset-0"
-            style={{
-              background: `linear-gradient(90deg, ${primaryColor} 0%, transparent 50%)`
-            }}
-          />
+          {/* Imagens em grid - replicando o padrão do PDF */}
+          {[...Array(20)].map((_, i) => {
+            const images = [coverImg1, coverImgGrid, imgIndustrial2, imgIndustrial3, imgIndustrial4];
+            return (
+              <div 
+                key={i}
+                style={{
+                  backgroundImage: `url(${images[i % 5]})`,
+                  backgroundSize: "cover",
+                  backgroundPosition: "center",
+                  borderRadius: "4px",
+                }}
+              />
+            );
+          })}
         </div>
 
-        {/* Conteúdo da capa */}
-        <div className="relative z-10 h-full flex flex-col p-10" style={{ minHeight: "700px" }}>
-          {/* Logo */}
-          <div className="mb-auto">
-            <img src={logoUrl} alt="WeDo" className="h-16 object-contain" />
+        {/* Rodapé da capa */}
+        <div 
+          style={{ 
+            position: "absolute",
+            bottom: 0,
+            left: 0,
+            right: 0,
+            backgroundColor: greenColor,
+            borderTopLeftRadius: "50px",
+            borderTopRightRadius: "50px",
+            padding: "20px 40px",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+          }}
+        >
+          <div>
+            <p style={{ color: "#1a1a1a", fontSize: "12px", fontWeight: 600 }}>
+              {settings?.razao_social || "WeDo Serviços Técnicos Industriais e Comerciais"}
+            </p>
+            <p style={{ color: "#1a1a1a", fontSize: "11px", marginTop: "2px" }}>
+              WEDO
+            </p>
           </div>
-
-          {/* Título centralizado */}
-          <div className="flex-1 flex flex-col justify-center">
-            <div className="max-w-md">
-              <p className="text-lg mb-2" style={{ color: accentColor }}>
-                Proposta Comercial
-              </p>
-              <h1 
-                className="text-4xl font-bold text-white leading-tight mb-6"
-                style={{ letterSpacing: "-0.01em" }}
-              >
-                {proposal.titulo || "Contrato de Manutenção"}
-              </h1>
-              
-              <div className="h-1 w-20 mb-6" style={{ backgroundColor: accentColor }} />
-              
-              <div className="space-y-2 text-white/90">
-                <p className="text-lg font-semibold text-white">
-                  {proposal.cliente_nome || "Cliente"}
-                </p>
-                <p className="text-sm">
-                  {proposal.numero}
-                </p>
-                <p className="text-sm">
-                  {formatDate(proposal.data_emissao)}
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* Rodapé da capa */}
-          <div className="mt-auto pt-8 border-t" style={{ borderColor: "rgba(255,255,255,0.2)" }}>
-            <div className="flex items-center justify-between text-sm text-white/70">
-              <div>
-                <p>{settings?.razao_social || "WeDo Serviços Técnicos LTDA"}</p>
-                <p>CNPJ: {settings?.cnpj || "00.000.000/0001-00"}</p>
-              </div>
-              <div className="text-right">
-                <p>{settings?.telefone || "(11) 0000-0000"}</p>
-                <p>{settings?.email || "contato@wedo.com.br"}</p>
-              </div>
-            </div>
+          <div style={{ textAlign: "right" }}>
+            <p style={{ color: "#1a1a1a", fontSize: "12px" }}>
+              Tel: {settings?.telefone || "(62) 99446-6458"}
+            </p>
           </div>
         </div>
       </div>
 
-      {/* ========== PÁGINA 2 - RESUMO EXECUTIVO ========== */}
+      {/* ========== PÁGINA 2 - GALERIA (igual ao PDF) ========== */}
       <div 
-        className="relative bg-white min-h-[700px] flex flex-col p-10"
-        style={{ pageBreakAfter: "always" }}
+        className="relative bg-white flex flex-col"
+        style={{ minHeight: "800px", pageBreakAfter: "always", padding: "40px" }}
       >
-        <PageHeader />
-        
-        <div className="flex-1">
-          <h1 className="text-2xl font-bold mb-6" style={{ color: primaryColor }}>
-            Resumo Executivo
-          </h1>
-
-          <div className="space-y-6 text-sm leading-relaxed" style={{ color: "#374151" }}>
-            <div className="p-4 rounded" style={{ backgroundColor: "#f8fafc", borderLeft: `4px solid ${accentColor}` }}>
-              <h3 className="font-semibold mb-2" style={{ color: primaryColor }}>Objeto do Contrato</h3>
-              <p>
-                Prestação de serviços técnicos de manutenção preventiva e corretiva em equipamentos 
-                de alimentação profissional para {proposal.cliente_nome || "o cliente"}.
-              </p>
-            </div>
-
-            <div className="grid grid-cols-2 gap-6">
-              <div className="p-4 rounded" style={{ backgroundColor: "#f8fafc" }}>
-                <h4 className="font-semibold text-xs uppercase tracking-wide mb-2" style={{ color: "#6b7280" }}>
-                  Contratante
-                </h4>
-                <p className="font-semibold" style={{ color: primaryColor }}>
-                  {proposal.cliente_nome || "—"}
-                </p>
-                <p className="text-xs" style={{ color: "#6b7280" }}>
-                  {proposal.cliente_cnpj_cpf || "—"}
-                </p>
-              </div>
-              <div className="p-4 rounded" style={{ backgroundColor: "#f8fafc" }}>
-                <h4 className="font-semibold text-xs uppercase tracking-wide mb-2" style={{ color: "#6b7280" }}>
-                  Contratada
-                </h4>
-                <p className="font-semibold" style={{ color: primaryColor }}>
-                  {settings?.razao_social || "WeDo Serviços Técnicos"}
-                </p>
-                <p className="text-xs" style={{ color: "#6b7280" }}>
-                  {settings?.cnpj || "—"}
-                </p>
-              </div>
-            </div>
-
-            <div className="p-4 rounded" style={{ backgroundColor: "#f8fafc" }}>
-              <h3 className="font-semibold mb-2" style={{ color: primaryColor }}>Escopo Resumido</h3>
-              <p className="whitespace-pre-wrap">
-                {proposal.descricao_geral || "Serviços de manutenção técnica especializada conforme especificações detalhadas neste documento."}
-              </p>
-            </div>
-
-            <div className="grid grid-cols-3 gap-4">
-              <div className="p-4 text-center rounded" style={{ backgroundColor: "#f8fafc" }}>
-                <p className="text-xs uppercase tracking-wide mb-1" style={{ color: "#6b7280" }}>Validade</p>
-                <p className="font-semibold" style={{ color: primaryColor }}>
-                  {formatDateShort(proposal.data_validade)}
-                </p>
-              </div>
-              <div className="p-4 text-center rounded" style={{ backgroundColor: "#f8fafc" }}>
-                <p className="text-xs uppercase tracking-wide mb-1" style={{ color: "#6b7280" }}>Itens</p>
-                <p className="font-semibold" style={{ color: primaryColor }}>
-                  {items.length}
-                </p>
-              </div>
-              <div className="p-4 text-center rounded" style={{ backgroundColor: accentColor }}>
-                <p className="text-xs uppercase tracking-wide mb-1" style={{ color: primaryColor }}>Valor Total</p>
-                <p className="font-bold text-lg" style={{ color: primaryColor }}>
-                  {formatCurrency(totalItens)}
-                </p>
-              </div>
-            </div>
-          </div>
+        <div 
+          className="flex-1"
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(4, 1fr)",
+            gridTemplateRows: "repeat(4, 1fr)",
+            gap: "8px",
+          }}
+        >
+          {[...Array(16)].map((_, i) => {
+            const images = [coverImg1, coverImgGrid, imgIndustrial2, imgIndustrial3, imgIndustrial4];
+            return (
+              <div 
+                key={i}
+                style={{
+                  backgroundImage: `url(${images[i % 5]})`,
+                  backgroundSize: "cover",
+                  backgroundPosition: "center",
+                  borderRadius: "8px",
+                }}
+              />
+            );
+          })}
         </div>
-
-        <PageFooter pageNumber={1} />
+        <GreenFooter pageNumber={2} totalPages={totalPages} />
       </div>
 
-      {/* ========== PÁGINA 3 - ESCOPO TÉCNICO ========== */}
+      {/* ========== PÁGINA 3 - O QUE NOS MOVE (Visão, Missão, Valores) ========== */}
       <div 
-        className="relative bg-white min-h-[700px] flex flex-col p-10"
-        style={{ pageBreakAfter: "always" }}
+        className="relative bg-white flex flex-col"
+        style={{ minHeight: "800px", pageBreakAfter: "always", padding: "40px" }}
       >
-        <PageHeader />
-        
         <div className="flex-1">
-          <h1 className="text-2xl font-bold mb-6" style={{ color: primaryColor }}>
-            Escopo Técnico
+          <h1 style={{ fontSize: "36px", fontWeight: 900, color: "#1a1a1a", marginBottom: "8px" }}>
+            O que nos move?
           </h1>
+          <p style={{ color: "#666", fontSize: "14px", marginBottom: "40px" }}>
+            Acreditamos em nossa missão e respeitamos os nossos valores.
+          </p>
 
-          <div className="space-y-6 text-sm" style={{ color: "#374151" }}>
-            {/* Descrição geral */}
-            {proposal.descricao_geral && (
-              <div className="mb-6">
-                <p className="whitespace-pre-wrap leading-relaxed">
-                  {proposal.descricao_geral}
-                </p>
-              </div>
-            )}
-
-            {/* Serviços inclusos */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "40px" }}>
+            {/* Visão */}
             <div>
-              <h3 className="font-semibold text-sm uppercase tracking-wide mb-3" style={{ color: primaryColor }}>
-                Serviços Contemplados
-              </h3>
-              <ul className="space-y-2">
-                <li className="flex items-start gap-2">
-                  <span className="w-1.5 h-1.5 rounded-full mt-1.5" style={{ backgroundColor: accentColor }} />
-                  <span>Manutenção preventiva programada</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="w-1.5 h-1.5 rounded-full mt-1.5" style={{ backgroundColor: accentColor }} />
-                  <span>Manutenção corretiva sob demanda</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="w-1.5 h-1.5 rounded-full mt-1.5" style={{ backgroundColor: accentColor }} />
-                  <span>Suporte técnico especializado</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="w-1.5 h-1.5 rounded-full mt-1.5" style={{ backgroundColor: accentColor }} />
-                  <span>Relatórios de atendimento e status dos equipamentos</span>
-                </li>
-              </ul>
+              <h2 style={{ 
+                fontSize: "24px", 
+                fontWeight: 700, 
+                color: greenColor,
+                marginBottom: "16px",
+              }}>
+                Visão
+              </h2>
+              <p style={{ color: "#444", fontSize: "14px", lineHeight: 1.7 }}>
+                Ser reconhecida na esfera nacional e internacional como uma empresa de excelência, qualidade e preço justo, em todas as áreas de atuação.
+              </p>
             </div>
 
-            {/* Abrangência */}
-            <div className="p-4 rounded" style={{ backgroundColor: "#f8fafc" }}>
-              <h3 className="font-semibold text-sm uppercase tracking-wide mb-2" style={{ color: primaryColor }}>
-                Abrangência
-              </h3>
-              <p>
-                Os serviços serão prestados nas instalações do contratante, conforme endereço 
-                indicado no cadastro. Atendimentos em localidades distintas deverão ser previamente acordados.
+            {/* Missão */}
+            <div>
+              <h2 style={{ 
+                fontSize: "24px", 
+                fontWeight: 700, 
+                color: greenColor,
+                marginBottom: "16px",
+              }}>
+                Missão
+              </h2>
+              <p style={{ color: "#444", fontSize: "14px", lineHeight: 1.7 }}>
+                Dar suporte nas fases essenciais da cadeia de suprimento dos clientes, prestando serviços de qualidade para resolução de problemas adequados à realidade do processo no qual estivermos inseridos.
               </p>
             </div>
           </div>
-        </div>
 
-        <PageFooter pageNumber={2} />
+          {/* Valores */}
+          <div style={{ marginTop: "40px" }}>
+            <h2 style={{ 
+              fontSize: "24px", 
+              fontWeight: 700, 
+              color: greenColor,
+              marginBottom: "16px",
+            }}>
+              Valores
+            </h2>
+            <ul style={{ color: "#444", fontSize: "14px", lineHeight: 2 }}>
+              <li>• Segurança;</li>
+              <li>• Pessoas;</li>
+              <li>• Meio Ambiente;</li>
+              <li>• Qualidade;</li>
+              <li>• Foco no cliente;</li>
+              <li>• Melhoria Contínua.</li>
+            </ul>
+          </div>
+
+          {/* Nossos parceiros */}
+          <div style={{ marginTop: "40px" }}>
+            <h2 style={{ 
+              fontSize: "24px", 
+              fontWeight: 700, 
+              color: greenColor,
+              marginBottom: "16px",
+            }}>
+              Nossos parceiros
+            </h2>
+            <p style={{ color: "#444", fontSize: "14px", lineHeight: 1.7 }}>
+              O sucesso é resultado da escolha de produtos de alta qualidade. Conheça abaixo os produtos e empresas com os quais trabalhamos.
+            </p>
+          </div>
+        </div>
+        <GreenFooter pageNumber={3} totalPages={totalPages} />
       </div>
 
-      {/* ========== PÁGINA 4 - EQUIPAMENTOS / ITENS ========== */}
+      {/* ========== PÁGINA 4 - LOGOS PARCEIROS ========== */}
+      <div 
+        className="relative bg-white flex flex-col"
+        style={{ minHeight: "800px", pageBreakAfter: "always", padding: "40px" }}
+      >
+        <div className="flex-1 flex items-center justify-center">
+          <div 
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(4, 1fr)",
+              gap: "24px",
+              padding: "40px",
+            }}
+          >
+            {/* Placeholder para logos de parceiros */}
+            {[...Array(16)].map((_, i) => (
+              <div 
+                key={i}
+                style={{
+                  width: "100px",
+                  height: "60px",
+                  backgroundColor: "#f5f5f5",
+                  borderRadius: "8px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  color: "#ccc",
+                  fontSize: "10px",
+                }}
+              >
+                Logo
+              </div>
+            ))}
+          </div>
+        </div>
+        <GreenFooter pageNumber={4} totalPages={totalPages} />
+      </div>
+
+      {/* ========== PÁGINA 5 - DETALHES DA PROPOSTA ========== */}
+      <div 
+        className="relative bg-white flex flex-col"
+        style={{ minHeight: "800px", pageBreakAfter: "always", padding: "40px" }}
+      >
+        <div className="flex-1">
+          <h1 style={{ fontSize: "36px", fontWeight: 900, color: "#1a1a1a", marginBottom: "32px" }}>
+            Detalhes da proposta
+          </h1>
+
+          <div style={{ 
+            backgroundColor: greenColor + "20",
+            borderLeft: `4px solid ${greenColor}`,
+            padding: "24px",
+            borderRadius: "0 8px 8px 0",
+            marginBottom: "24px",
+          }}>
+            <h2 style={{ fontSize: "20px", fontWeight: 700, color: "#1a1a1a", marginBottom: "16px" }}>
+              {proposal.titulo || "Manutenções Preventivas e Corretivas"}
+            </h2>
+            <p style={{ color: "#444", fontSize: "14px", lineHeight: 1.8, whiteSpace: "pre-wrap" }}>
+              {proposal.descricao_geral || `Serviço de manutenção preventiva e corretiva para equipamentos de cozinha industrial, incluindo câmaras frias, fornos inteligentes, coifas, refrigeradores e demais ativos críticos.
+
+As manutenções seguirão cronograma mensal fixo com controle via QR Code e relatórios técnicos digitais, realizados por técnicos qualificados e supervisionados por equipe multidisciplinar da WeDo.
+
+Incluso gestão via plataforma própria, atendimento emergencial com SLA, fornecimento de EPIs e software.`}
+            </p>
+          </div>
+        </div>
+        <GreenFooter pageNumber={5} totalPages={totalPages} />
+      </div>
+
+      {/* ========== PÁGINA 6 - OS PRODUTOS (TABELA) ========== */}
       {items.length > 0 && (
         <div 
-          className="relative bg-white min-h-[700px] flex flex-col p-10"
-          style={{ pageBreakAfter: "always" }}
+          className="relative bg-white flex flex-col"
+          style={{ minHeight: "800px", pageBreakAfter: "always", padding: "40px" }}
         >
-          <PageHeader />
-          
           <div className="flex-1">
-            <h1 className="text-2xl font-bold mb-2" style={{ color: primaryColor }}>
-              Equipamentos e Serviços
+            <h1 style={{ fontSize: "36px", fontWeight: 900, color: "#1a1a1a", marginBottom: "8px" }}>
+              Os produtos
             </h1>
-            <p className="text-sm mb-6" style={{ color: "#6b7280" }}>
-              Detalhamento dos itens contemplados nesta proposta.
+            <p style={{ color: "#666", fontSize: "14px", marginBottom: "24px" }}>
+              Lista de produtos orçados nesta proposta comercial.
             </p>
 
             {/* Tabela de itens */}
-            <table className="w-full text-sm">
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px" }}>
               <thead>
-                <tr style={{ backgroundColor: primaryColor }}>
-                  <th className="text-left py-3 px-3 text-white font-semibold">Descrição</th>
-                  <th className="text-center py-3 px-2 text-white font-semibold w-12">Un.</th>
-                  <th className="text-center py-3 px-2 text-white font-semibold w-12">Qtd</th>
-                  <th className="text-right py-3 px-3 text-white font-semibold w-24">Unit.</th>
-                  <th className="text-right py-3 px-3 text-white font-semibold w-24">Total</th>
+                <tr style={{ backgroundColor: greenColor }}>
+                  <th style={{ textAlign: "left", padding: "12px 8px", color: "#1a1a1a", fontWeight: 600 }}>
+                    Produto
+                  </th>
+                  <th style={{ textAlign: "center", padding: "12px 8px", color: "#1a1a1a", fontWeight: 600, width: "50px" }}>
+                    Unid.
+                  </th>
+                  <th style={{ textAlign: "center", padding: "12px 8px", color: "#1a1a1a", fontWeight: 600, width: "60px" }}>
+                    Qtde
+                  </th>
+                  <th style={{ textAlign: "right", padding: "12px 8px", color: "#1a1a1a", fontWeight: 600, width: "100px" }}>
+                    Valor unitário
+                  </th>
+                  <th style={{ textAlign: "right", padding: "12px 8px", color: "#1a1a1a", fontWeight: 600, width: "100px" }}>
+                    Valor total
+                  </th>
                 </tr>
               </thead>
               <tbody>
                 {items.map((item, index) => (
                   <tr 
-                    key={item.id || index} 
-                    className="border-b"
-                    style={{ 
-                      borderColor: "#e5e7eb",
-                      backgroundColor: index % 2 === 0 ? "#ffffff" : "#f9fafb"
-                    }}
+                    key={item.id || index}
+                    style={{ borderBottom: "1px solid #e5e7eb" }}
                   >
-                    <td className="py-3 px-3">
-                      <div className="font-semibold" style={{ color: primaryColor }}>
+                    <td style={{ padding: "12px 8px" }}>
+                      <div style={{ fontWeight: 600, color: "#1a1a1a" }}>
                         {item.centro_custo || item.descricao}
                       </div>
                       {item.detalhes && (
-                        <div className="text-xs mt-1" style={{ color: "#6b7280" }}>
-                          {item.detalhes.substring(0, 100)}{item.detalhes.length > 100 ? "..." : ""}
+                        <div style={{ color: "#666", fontSize: "11px", marginTop: "4px" }}>
+                          {item.detalhes}
                         </div>
                       )}
                     </td>
-                    <td className="py-3 px-2 text-center" style={{ color: "#6b7280" }}>
+                    <td style={{ textAlign: "center", padding: "12px 8px", color: "#666" }}>
                       {item.unidade}
                     </td>
-                    <td className="py-3 px-2 text-center" style={{ color: "#6b7280" }}>
-                      {item.quantidade.toFixed(0)}
+                    <td style={{ textAlign: "center", padding: "12px 8px", color: "#666" }}>
+                      {item.quantidade.toFixed(2)}
                     </td>
-                    <td className="py-3 px-3 text-right" style={{ color: "#6b7280" }}>
+                    <td style={{ textAlign: "right", padding: "12px 8px", color: "#666" }}>
                       {formatCurrency(item.valor_unitario)}
                     </td>
-                    <td className="py-3 px-3 text-right font-semibold" style={{ color: primaryColor }}>
+                    <td style={{ textAlign: "right", padding: "12px 8px", fontWeight: 600, color: "#1a1a1a" }}>
                       {formatCurrency(item.quantidade * item.valor_unitario)}
                     </td>
                   </tr>
                 ))}
               </tbody>
-              <tfoot>
-                <tr style={{ backgroundColor: accentColor }}>
-                  <td colSpan={4} className="py-3 px-3 text-right font-bold" style={{ color: primaryColor }}>
-                    VALOR TOTAL
-                  </td>
-                  <td className="py-3 px-3 text-right font-bold text-lg" style={{ color: primaryColor }}>
-                    {formatCurrency(totalItens)}
-                  </td>
-                </tr>
-              </tfoot>
             </table>
           </div>
-
-          <PageFooter pageNumber={3} />
+          <GreenFooter pageNumber={6} totalPages={totalPages} />
         </div>
       )}
 
-      {/* ========== PÁGINA 5 - CONDIÇÕES CONTRATUAIS ========== */}
+      {/* ========== PÁGINA 7 - VALOR TOTAL ========== */}
       <div 
-        className="relative bg-white min-h-[700px] flex flex-col p-10"
-        style={{ pageBreakAfter: "always" }}
+        className="relative bg-white flex flex-col"
+        style={{ minHeight: "800px", pageBreakAfter: "always", padding: "40px" }}
       >
-        <PageHeader />
-        
         <div className="flex-1">
-          <h1 className="text-2xl font-bold mb-6" style={{ color: primaryColor }}>
-            Condições Contratuais
+          <h1 style={{ fontSize: "36px", fontWeight: 900, color: "#1a1a1a", marginBottom: "8px" }}>
+            Proposta de Serviço
           </h1>
+          <h2 style={{ fontSize: "24px", fontWeight: 700, color: greenColor, marginBottom: "24px" }}>
+            Serviços
+          </h2>
 
-          <div className="space-y-4 text-sm" style={{ color: "#374151" }}>
-            {/* Vigência */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="p-4 rounded border" style={{ borderColor: "#e5e7eb" }}>
-                <h4 className="font-semibold text-xs uppercase tracking-wide mb-2" style={{ color: "#6b7280" }}>
-                  Data de Emissão
-                </h4>
-                <p className="font-semibold" style={{ color: primaryColor }}>
-                  {formatDateShort(proposal.data_emissao)}
-                </p>
-              </div>
-              <div className="p-4 rounded border" style={{ borderColor: "#e5e7eb" }}>
-                <h4 className="font-semibold text-xs uppercase tracking-wide mb-2" style={{ color: "#6b7280" }}>
-                  Validade da Proposta
-                </h4>
-                <p className="font-semibold" style={{ color: primaryColor }}>
-                  {formatDateShort(proposal.data_validade)}
-                </p>
-              </div>
-            </div>
-
-            {/* Termos contratuais */}
-            {termosContratuais.length > 0 ? (
-              <div className="space-y-4 mt-6">
-                {termosContratuais.map((term) => (
-                  <div key={term.id} className="p-4 rounded" style={{ backgroundColor: "#f8fafc" }}>
-                    <h3 className="font-semibold mb-2" style={{ color: primaryColor }}>
-                      {term.titulo}
-                    </h3>
-                    <p className="whitespace-pre-wrap leading-relaxed" style={{ color: "#374151" }}>
-                      {term.conteudo}
-                    </p>
+          {/* Resumo da tabela */}
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px", marginBottom: "40px" }}>
+            <thead>
+              <tr style={{ backgroundColor: greenColor }}>
+                <th style={{ textAlign: "left", padding: "12px 8px", color: "#1a1a1a", fontWeight: 600 }}>
+                  Produto
+                </th>
+                <th style={{ textAlign: "center", padding: "12px 8px", color: "#1a1a1a", fontWeight: 600, width: "50px" }}>
+                  Unid.
+                </th>
+                <th style={{ textAlign: "center", padding: "12px 8px", color: "#1a1a1a", fontWeight: 600, width: "60px" }}>
+                  Qtde
+                </th>
+                <th style={{ textAlign: "right", padding: "12px 8px", color: "#1a1a1a", fontWeight: 600, width: "100px" }}>
+                  Valor unitário
+                </th>
+                <th style={{ textAlign: "right", padding: "12px 8px", color: "#1a1a1a", fontWeight: 600, width: "100px" }}>
+                  Valor total
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr style={{ borderBottom: "1px solid #e5e7eb" }}>
+                <td style={{ padding: "12px 8px" }}>
+                  <div style={{ fontWeight: 600, color: "#1a1a1a" }}>
+                    Serviço de manutenção preventiva e corretiva
                   </div>
-                ))}
-              </div>
-            ) : (
-              <div className="space-y-4 mt-6">
-                <div className="p-4 rounded" style={{ backgroundColor: "#f8fafc" }}>
-                  <h3 className="font-semibold mb-2" style={{ color: primaryColor }}>Vigência</h3>
-                  <p>
-                    O contrato terá vigência de 12 (doze) meses, podendo ser renovado 
-                    mediante acordo entre as partes.
-                  </p>
-                </div>
-                <div className="p-4 rounded" style={{ backgroundColor: "#f8fafc" }}>
-                  <h3 className="font-semibold mb-2" style={{ color: primaryColor }}>Forma de Pagamento</h3>
-                  <p>
-                    Pagamento mensal via boleto bancário com vencimento até o dia 10 do mês subsequente.
-                  </p>
-                </div>
-                <div className="p-4 rounded" style={{ backgroundColor: "#f8fafc" }}>
-                  <h3 className="font-semibold mb-2" style={{ color: primaryColor }}>Reajuste</h3>
-                  <p>
-                    Os valores serão reajustados anualmente pelo IGPM/FGV ou índice substituto.
-                  </p>
-                </div>
-              </div>
-            )}
+                  <div style={{ color: "#666", fontSize: "11px", marginTop: "4px" }}>
+                    {proposal.titulo || "Conforme escopo detalhado nesta proposta"}
+                  </div>
+                </td>
+                <td style={{ textAlign: "center", padding: "12px 8px", color: "#666" }}>
+                  SV
+                </td>
+                <td style={{ textAlign: "center", padding: "12px 8px", color: "#666" }}>
+                  {items.reduce((sum, item) => sum + item.quantidade, 0).toFixed(2)}
+                </td>
+                <td style={{ textAlign: "right", padding: "12px 8px", color: "#666" }}>
+                  —
+                </td>
+                <td style={{ textAlign: "right", padding: "12px 8px", fontWeight: 600, color: "#1a1a1a" }}>
+                  {formatCurrency(totalItens)}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+
+          {/* Valor total destacado */}
+          <div style={{ 
+            backgroundColor: greenColor,
+            padding: "24px 32px",
+            borderRadius: "8px",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+          }}>
+            <span style={{ fontSize: "20px", fontWeight: 700, color: "#1a1a1a" }}>
+              Valor total da proposta:
+            </span>
+            <span style={{ fontSize: "32px", fontWeight: 900, color: "#1a1a1a" }}>
+              {formatCurrency(totalItens)}
+            </span>
           </div>
         </div>
-
-        <PageFooter pageNumber={4} />
+        <GreenFooter pageNumber={7} totalPages={totalPages} />
       </div>
 
-      {/* ========== PÁGINA 6 - TERMOS ADICIONAIS (se houver) ========== */}
-      {outrosTermos.length > 0 && (
+      {/* ========== PÁGINA 8 - GALERIA INTERNA ========== */}
+      <div 
+        className="relative bg-white flex flex-col"
+        style={{ minHeight: "800px", pageBreakAfter: "always", padding: "40px" }}
+      >
         <div 
-          className="relative bg-white min-h-[700px] flex flex-col p-10"
-          style={{ pageBreakAfter: "always" }}
+          className="flex-1"
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(3, 1fr)",
+            gridTemplateRows: "repeat(2, 1fr)",
+            gap: "16px",
+          }}
         >
-          <PageHeader />
-          
-          <div className="flex-1">
-            <h1 className="text-2xl font-bold mb-6" style={{ color: primaryColor }}>
-              Termos e Condições Gerais
-            </h1>
+          {[coverImg1, coverImgGrid, imgIndustrial2, imgIndustrial3, imgIndustrial4, coverImg1].map((img, i) => (
+            <div 
+              key={i}
+              style={{
+                backgroundImage: `url(${img})`,
+                backgroundSize: "cover",
+                backgroundPosition: "center",
+                borderRadius: "12px",
+              }}
+            />
+          ))}
+        </div>
+        <GreenFooter pageNumber={8} totalPages={totalPages} />
+      </div>
 
-            <div className="space-y-4 text-sm" style={{ color: "#374151" }}>
-              {outrosTermos.map((term) => (
-                <div key={term.id} className="p-4 rounded border-l-2" style={{ backgroundColor: "#f8fafc", borderColor: accentColor }}>
-                  <h3 className="font-semibold mb-2" style={{ color: primaryColor }}>
-                    {term.titulo}
-                  </h3>
-                  <p className="whitespace-pre-wrap leading-relaxed">
-                    {term.conteudo}
-                  </p>
-                </div>
-              ))}
+      {/* ========== PÁGINA 9 - TERMOS E CONDIÇÕES ========== */}
+      <div 
+        className="relative bg-white flex flex-col"
+        style={{ minHeight: "800px", pageBreakAfter: "always", padding: "40px" }}
+      >
+        <div className="flex-1">
+          <h1 style={{ fontSize: "36px", fontWeight: 900, color: "#1a1a1a", marginBottom: "8px" }}>
+            Termos e Condições
+          </h1>
+          <p style={{ color: "#666", fontSize: "14px", marginBottom: "24px" }}>
+            Os dados abaixo descrevem os termos e condições para fornecimento dos produtos e serviços descritos nesta proposta comercial.
+          </p>
+
+          {/* Tabela de termos */}
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px" }}>
+            <thead>
+              <tr style={{ backgroundColor: greenColor }}>
+                <th style={{ textAlign: "left", padding: "12px 16px", color: "#1a1a1a", fontWeight: 600, width: "200px" }}>
+                  Item
+                </th>
+                <th style={{ textAlign: "left", padding: "12px 16px", color: "#1a1a1a", fontWeight: 600 }}>
+                  Descrição
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {enabledTerms.length > 0 ? (
+                enabledTerms.map((termo, index) => (
+                  <tr key={termo.id || index} style={{ borderBottom: "1px solid #e5e7eb" }}>
+                    <td style={{ padding: "16px", verticalAlign: "top", fontWeight: 600, color: "#1a1a1a" }}>
+                      {termo.titulo}
+                    </td>
+                    <td style={{ padding: "16px", color: "#444", lineHeight: 1.6, whiteSpace: "pre-wrap" }}>
+                      {termo.conteudo}
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <>
+                  <tr style={{ borderBottom: "1px solid #e5e7eb" }}>
+                    <td style={{ padding: "16px", verticalAlign: "top", fontWeight: 600, color: "#1a1a1a" }}>
+                      PREVENTIVA EM CÂMARAS
+                    </td>
+                    <td style={{ padding: "16px", color: "#444", lineHeight: 1.6 }}>
+                      O valor do contrato contempla manutenções trimestrais em fornos inteligentes e semestrais em câmaras frias. As horas demandadas para a atuação em tais serviços serão contabilizadas normalmente conforme contrato.
+                    </td>
+                  </tr>
+                  <tr style={{ borderBottom: "1px solid #e5e7eb" }}>
+                    <td style={{ padding: "16px", verticalAlign: "top", fontWeight: 600, color: "#1a1a1a" }}>
+                      VIGÊNCIA
+                    </td>
+                    <td style={{ padding: "16px", color: "#444", lineHeight: 1.6 }}>
+                      O fornecimento do serviço desta proposta terá início dia {formatDate(proposal.data_emissao)}, e terá vigência por 12 (doze) meses, podendo ser prorrogado de comum acordo entre as partes.
+                    </td>
+                  </tr>
+                  <tr style={{ borderBottom: "1px solid #e5e7eb" }}>
+                    <td style={{ padding: "16px", verticalAlign: "top", fontWeight: 600, color: "#1a1a1a" }}>
+                      CANCELAMENTO
+                    </td>
+                    <td style={{ padding: "16px", color: "#444", lineHeight: 1.6 }}>
+                      Cancelamentos por ambas as partes são isentos de multa, desde que seja avisado com 30 dias de antecedência.
+                    </td>
+                  </tr>
+                  <tr style={{ borderBottom: "1px solid #e5e7eb" }}>
+                    <td style={{ padding: "16px", verticalAlign: "top", fontWeight: 600, color: "#1a1a1a" }}>
+                      TURNO DE TRABALHO
+                    </td>
+                    <td style={{ padding: "16px", color: "#444", lineHeight: 1.6 }}>
+                      O turno de trabalho será de segunda a sexta-feira, em horário comercial, condições que diferem destes termos terão que ser alinhadas entre as partes.
+                    </td>
+                  </tr>
+                  <tr style={{ borderBottom: "1px solid #e5e7eb" }}>
+                    <td style={{ padding: "16px", verticalAlign: "top", fontWeight: 600, color: "#1a1a1a" }}>
+                      HORAS EXTRAORDINÁRIAS
+                    </td>
+                    <td style={{ padding: "16px", color: "#444", lineHeight: 1.6 }}>
+                      Caso seja necessário a realização de visitas emergenciais, a visita subsequente poderá ser adiantada. Caso não seja possível, deverá haver uma negociação prévia para a execução de tal serviço.
+                    </td>
+                  </tr>
+                </>
+              )}
+            </tbody>
+          </table>
+        </div>
+        <GreenFooter pageNumber={9} totalPages={totalPages} />
+      </div>
+
+      {/* ========== PÁGINA 10 - ESCOPO TÉCNICO ========== */}
+      <div 
+        className="relative bg-white flex flex-col"
+        style={{ minHeight: "800px", pageBreakAfter: "always", padding: "40px" }}
+      >
+        <div className="flex-1">
+          <div style={{ display: "grid", gridTemplateColumns: "200px 1fr", gap: "0" }}>
+            <div style={{ 
+              backgroundColor: greenColor, 
+              padding: "16px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontWeight: 700,
+            }}>
+              Item
+            </div>
+            <div style={{ 
+              backgroundColor: greenColor, 
+              padding: "16px",
+              fontWeight: 700,
+            }}>
+              Descrição
+            </div>
+            <div style={{ 
+              padding: "16px",
+              fontWeight: 600,
+              borderBottom: "1px solid #e5e7eb",
+            }}>
+              ESCOPO TÉCNICO
+            </div>
+            <div style={{ 
+              padding: "16px",
+              color: "#444",
+              fontSize: "13px",
+              lineHeight: 1.8,
+              borderBottom: "1px solid #e5e7eb",
+            }}>
+              <ul style={{ margin: 0, paddingLeft: "20px" }}>
+                <li>Elaboração de manutenção preventiva mensal, com todas as revisões e procedimentos com o intuito de manter os equipamentos em devidas condições de uso;</li>
+                <li>Limpeza de evaporadores e condensadores;</li>
+                <li>Aferição de temperaturas por equipamentos, quente e frio bem como pressão em equipamentos de pressão.</li>
+                <li>Verificar e corrigir ruídos e vibrações mecânicas existentes.</li>
+                <li>Reaperto de mancais e suportes.</li>
+                <li>Verificação de tensões e correntes efetivas.</li>
+                <li>Reaperto das conexões elétricas de alimentação e comandos.</li>
+                <li>Verificação do comando e termostato de controle.</li>
+                <li>Verificar a serpentina quanto a danos físicos e restrições do fluxo de ar.</li>
+                <li>Verificar a temperatura do motor de ventilação, testes de atuação e ajustes dos relés térmicos.</li>
+                <li>Verificar pressões de compressores e cargas de gás refrigerante.</li>
+                <li>Limpeza e manutenção preventiva dos fogões e fornos a gás;</li>
+                <li>Verificação e troca de tomadas e interruptores.</li>
+                <li>Correção de torque, em conexões e terminais elétricos.</li>
+                <li>Aplicar correções com normas e padrões, visando custo e benefício.</li>
+                <li>Regulagem e limpeza em fogões e caldeiras;</li>
+              </ul>
             </div>
           </div>
 
-          <PageFooter pageNumber={5} />
-        </div>
-      )}
-
-      {/* ========== PÁGINA FINAL - ACEITE ========== */}
-      <div className="relative bg-white min-h-[700px] flex flex-col p-10">
-        <PageHeader />
-        
-        <div className="flex-1 flex flex-col justify-center">
-          <div className="max-w-xl mx-auto w-full">
-            <h1 className="text-2xl font-bold mb-6 text-center" style={{ color: primaryColor }}>
-              Aceite da Proposta
-            </h1>
-
-            <p className="text-sm text-center mb-10" style={{ color: "#6b7280" }}>
-              Para manifestação de interesse e formalização do contrato, 
-              solicitamos a assinatura das partes abaixo.
+          <div style={{ marginTop: "24px", padding: "16px", backgroundColor: "#f8f9fa", borderRadius: "8px" }}>
+            <p style={{ color: "#444", fontSize: "13px", lineHeight: 1.7 }}>
+              Para que o trabalho seja executado com todo o padrão de Qualidade, além dos colaboradores acima representados, também serão disponibilizados, <strong>SEM CUSTO</strong> Adicional:
             </p>
+            <ul style={{ color: "#444", fontSize: "13px", lineHeight: 1.8, marginTop: "12px", paddingLeft: "20px" }}>
+              <li><strong>Gestor de Operações (Sócio da empresa):</strong> É responsável pelo atendimento direto ao cliente, oferecendo soluções Just in time, possibilitando a resolução imediata de diversos problemas, devido ao poder de decisão por parte da contratada.</li>
+            </ul>
+          </div>
+        </div>
+        <GreenFooter pageNumber={10} totalPages={totalPages} />
+      </div>
 
-            <div className="grid grid-cols-2 gap-12 mt-12">
-              {/* Contratada */}
-              <div className="text-center">
-                <div className="h-20 mb-2" /> {/* Espaço para assinatura */}
-                <div className="border-t-2 pt-3" style={{ borderColor: primaryColor }}>
-                  <p className="font-semibold text-sm" style={{ color: primaryColor }}>
-                    {settings?.razao_social || "WeDo Serviços Técnicos"}
-                  </p>
-                  <p className="text-xs" style={{ color: "#6b7280" }}>
-                    CNPJ: {settings?.cnpj || "—"}
-                  </p>
-                  {settings?.nome_assinatura && (
-                    <p className="text-xs mt-2" style={{ color: "#374151" }}>
-                      {settings.nome_assinatura}
-                    </p>
-                  )}
-                  {settings?.cargo_assinatura && (
-                    <p className="text-xs" style={{ color: "#6b7280" }}>
-                      {settings.cargo_assinatura}
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              {/* Contratante */}
-              <div className="text-center">
-                <div className="h-20 mb-2" /> {/* Espaço para assinatura */}
-                <div className="border-t-2 pt-3" style={{ borderColor: primaryColor }}>
-                  <p className="font-semibold text-sm" style={{ color: primaryColor }}>
-                    {proposal.cliente_nome || "Contratante"}
-                  </p>
-                  <p className="text-xs" style={{ color: "#6b7280" }}>
-                    {proposal.cliente_cnpj_cpf || "CPF/CNPJ"}
-                  </p>
-                </div>
-              </div>
+      {/* ========== PÁGINA 11 - FORNECIMENTO WEDO ========== */}
+      <div 
+        className="relative bg-white flex flex-col"
+        style={{ minHeight: "800px", pageBreakAfter: "always", padding: "40px" }}
+      >
+        <div className="flex-1">
+          <div style={{ display: "grid", gridTemplateColumns: "200px 1fr", gap: "0" }}>
+            <div style={{ 
+              backgroundColor: greenColor, 
+              padding: "16px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontWeight: 700,
+            }}>
+              Item
             </div>
+            <div style={{ 
+              backgroundColor: greenColor, 
+              padding: "16px",
+              fontWeight: 700,
+            }}>
+              Descrição
+            </div>
+            <div style={{ 
+              padding: "16px",
+              fontWeight: 600,
+              borderBottom: "1px solid #e5e7eb",
+            }}>
+              FORNECIMENTO WEDO
+            </div>
+            <div style={{ 
+              padding: "16px",
+              color: "#444",
+              fontSize: "13px",
+              lineHeight: 1.8,
+              borderBottom: "1px solid #e5e7eb",
+            }}>
+              <ul style={{ margin: 0, paddingLeft: "20px" }}>
+                <li>Zelo e guarda dos materiais fornecidos pelo cliente;</li>
+                <li>Software de controle e lançamento em tempo real de serviços;</li>
+                <li>Relatórios detalhados de cada serviço realizado;</li>
+                <li>Software para abertura de chamados para o cliente, com acompanhamento das ações;</li>
+              </ul>
+            </div>
+            <div style={{ 
+              padding: "16px",
+              fontWeight: 600,
+              borderBottom: "1px solid #e5e7eb",
+            }}>
+              FORNECIMENTO CLIENTE
+            </div>
+            <div style={{ 
+              padding: "16px",
+              color: "#444",
+              fontSize: "13px",
+              lineHeight: 1.8,
+              borderBottom: "1px solid #e5e7eb",
+            }}>
+              <ul style={{ margin: 0, paddingLeft: "20px" }}>
+                <li>EPIs completos e em ótimas condições de uso, conforme atividades a serem desenvolvidas.</li>
+                <li>Uniformes completos;</li>
+                <li>Refeições de acordo com o turno trabalhado (Café da manhã, Almoço, Jantar, Ceia);</li>
+                <li>Água potável e banheiros;</li>
+                <li>Possibilidade de acesso às instalações elétricas e hidráulicas;</li>
+                <li>Acompanhamento técnico quando requisitado;</li>
+                <li>Área destinada a execução dos serviços, com disponibilidade de pontos de energia elétrica 220v, interruptores, iluminação;</li>
+              </ul>
+            </div>
+            <div style={{ 
+              padding: "16px",
+              fontWeight: 600,
+              borderBottom: "1px solid #e5e7eb",
+            }}>
+              REAJUSTE DE PREÇO
+            </div>
+            <div style={{ 
+              padding: "16px",
+              color: "#444",
+              fontSize: "13px",
+              lineHeight: 1.8,
+              borderBottom: "1px solid #e5e7eb",
+            }}>
+              O Preço poderá ser reajustado anualmente conforme os índices IGPM da FGV e IPCA do IBGE ou por outro índice oficial que venha a substituí-lo, ou conforme alinhamento com o cliente.
+            </div>
+          </div>
 
-            <div className="mt-12 text-center">
-              <p className="text-xs" style={{ color: "#9ca3af" }}>
-                Local e Data: _________________________________, ____/____/________
-              </p>
+          {/* Aceite */}
+          <div style={{ marginTop: "40px", padding: "24px", backgroundColor: "#f8f9fa", borderRadius: "8px" }}>
+            <p style={{ color: "#444", fontSize: "13px", lineHeight: 1.7, marginBottom: "24px" }}>
+              Estando de acordo com os produtos, valores e termos relatados nesta proposta e por estarem assim justos e contratados, {settings?.razao_social || "WeDo Serviços Técnicos Industriais e Comerciais"} e o(a) {proposal.cliente_nome || "Cliente"} firmam a proposta.
+            </p>
+            <div style={{ 
+              display: "grid", 
+              gridTemplateColumns: "1fr 1fr", 
+              gap: "40px",
+              marginTop: "32px",
+            }}>
+              <div style={{ textAlign: "center" }}>
+                <div style={{ borderBottom: "1px solid #1a1a1a", marginBottom: "8px", paddingBottom: "40px" }}></div>
+                <p style={{ fontSize: "12px", fontWeight: 600, color: "#1a1a1a" }}>
+                  {settings?.razao_social || "WeDo Serviços Técnicos"}
+                </p>
+                <p style={{ fontSize: "11px", color: "#666" }}>
+                  {settings?.cnpj || "00.000.000/0001-00"}
+                </p>
+              </div>
+              <div style={{ textAlign: "center" }}>
+                <div style={{ borderBottom: "1px solid #1a1a1a", marginBottom: "8px", paddingBottom: "40px" }}></div>
+                <p style={{ fontSize: "12px", fontWeight: 600, color: "#1a1a1a" }}>
+                  {proposal.cliente_nome || "Contratante"}
+                </p>
+                <p style={{ fontSize: "11px", color: "#666" }}>
+                  {proposal.cliente_cnpj_cpf || "—"}
+                </p>
+              </div>
             </div>
           </div>
         </div>
+        <GreenFooter pageNumber={11} totalPages={totalPages} />
+      </div>
 
-        <PageFooter pageNumber={outrosTermos.length > 0 ? 6 : 5} />
+      {/* ========== PÁGINA FINAL - CONTRACAPA ========== */}
+      <div 
+        className="relative flex flex-col items-center justify-center"
+        style={{ 
+          minHeight: "800px",
+          backgroundColor: greenColor,
+        }}
+      >
+        <img src={logoUrl} alt="WeDo" style={{ height: "80px", marginBottom: "24px" }} />
+        <p style={{ color: "#1a1a1a", fontSize: "14px" }}>
+          {settings?.telefone || "(62) 99446-6458"}
+        </p>
+        <p style={{ color: "#1a1a1a", fontSize: "14px", marginTop: "4px" }}>
+          {settings?.email || "contato@wedo.com.br"}
+        </p>
       </div>
     </div>
   );
