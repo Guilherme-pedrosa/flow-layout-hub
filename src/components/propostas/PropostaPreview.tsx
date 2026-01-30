@@ -4,8 +4,8 @@ import { Proposal, ProposalItem, ProposalTerm, ProposalCompanySettings } from "@
 import { formatCurrency } from "@/lib/formatters";
 import logoWedo from "@/assets/logo-wedo.png";
 
-// Imagem industrial - equipamentos profissionais em aço inox (SEM PESSOAS)
-const INDUSTRIAL_COVER = "https://images.unsplash.com/photo-1571204829887-3b8d69e4094d?w=1400&h=900&fit=crop&q=90";
+// Imagem industrial - cozinha industrial profissional com equipamentos em aço inox
+const INDUSTRIAL_COVER = "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=1400&h=900&fit=crop&q=90";
 
 interface PropostaPreviewProps {
   proposal: Proposal;
