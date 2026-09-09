@@ -1,3 +1,5 @@
+import { forceGcApiUserInUrl } from "../_shared/gc-user.ts";
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
 
@@ -17,7 +19,7 @@ async function fetchGestaoClick(
   accessToken: string,
   secretToken: string
 ): Promise<any> {
-  const url = `${GC_BASE_URL}/${endpoint}?pagina=${page}`;
+  const url = forceGcApiUserInUrl(`${GC_BASE_URL}/${endpoint}?pagina=${page}`);
   console.log(`[GC] Fetch: ${url}`);
   
   const response = await fetch(url, {
